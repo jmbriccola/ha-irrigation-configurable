@@ -1,0 +1,69 @@
+[project]
+name = "irrigation-maestro"
+version = "1.0.0"
+description = "Weather-aware irrigation orchestration for Home Assistant"
+readme = "README.md"
+license = { text = "MIT" }
+authors = [{ name = "Jacopo Maria Briccola" }]
+requires-python = ">=3.13"
+
+[dependency-groups]
+dev = [
+    "pytest-homeassistant-custom-component",
+    "ruff>=0.8",
+    "mypy>=1.14",
+]
+
+[tool.ruff]
+target-version = "py313"
+line-length = 100
+src = ["custom_components", "tests"]
+
+[tool.ruff.lint]
+select = [
+    "A",      # builtins shadowing
+    "ASYNC",  # async correctness
+    "B",      # bugbear
+    "C4",     # comprehensions
+    "DTZ",    # naive datetimes
+    "E",
+    "F",
+    "I",      # isort
+    "N",      # pep8-naming
+    "PL",     # pylint
+    "RET",
+    "RUF",
+    "SIM",
+    "TID",
+    "UP",     # pyupgrade
+    "W",
+]
+ignore = [
+    "PLR0911", # too many return statements — decision trees are clearer flat
+    "PLR0912", # too many branches
+    "PLR0913", # too many arguments — HA callbacks and dataclasses
+    "PLR0915", # too many statements
+    "PLR2004", # magic values in tests/formulas
+]
+
+[tool.ruff.lint.per-file-ignores]
+# Tests: naive datetimes are deliberate (the engine is timezone-agnostic and
+# receives the clock as a parameter); dict()/class-attr idioms aid fixtures.
+"tests/**" = ["SLF001", "PLC0415", "DTZ001", "C408", "RUF012"]
+
+[tool.mypy]
+python_version = "3.13"
+strict = true
+show_error_codes = true
+warn_unreachable = true
+packages = ["custom_components.irrigation_maestro"]
+explicit_package_bases = true
+
+[[tool.mypy.overrides]]
+module = "homeassistant.*"
+follow_imports = "normal"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+addopts = "-q"

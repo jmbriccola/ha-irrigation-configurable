@@ -1,0 +1,51 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.14"
+      - name: Install dev dependencies
+        run: uv pip install --system pytest-homeassistant-custom-component ruff mypy
+      - name: Ruff (lint)
+        run: ruff check .
+      - name: Ruff (format)
+        run: ruff format --check .
+      - name: Mypy (strict)
+        run: mypy
+
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.14"
+      - name: Install dev dependencies
+        run: uv pip install --system pytest-homeassistant-custom-component
+      - name: Run tests
+        run: python -m pytest tests -v
+
+  card:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: card/package-lock.json
+      - name: Build card
+        working-directory: card
+        run: |
+          npm ci
+          npm run build
+      - name: Committed bundle is up to date
+        run: git diff --exit-code custom_components/irrigation_maestro/frontend/
