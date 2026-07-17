@@ -1,0 +1,370 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Irrigation Maestro",
+        "description": "Scegli la sorgente meteo e, se vuoi, i sensori e la valvola master. Tutto è modificabile in seguito dalle opzioni; le zone si aggiungono dopo, come sotto-voci.",
+        "data": {
+          "weather_entity": "Entità meteo",
+          "rain_sensor": "Sensore pioggia",
+          "outdoor_temp_sensor": "Sensore temperatura esterna",
+          "line_flow_sensor": "Sensore di portata di linea",
+          "master_valve": "Valvola master"
+        },
+        "data_description": {
+          "weather_entity": "Fornisce temperature e previsioni di pioggia per le decisioni di irrigazione.",
+          "rain_sensor": "Sensore di pioggia cumulata giornaliera (mm). Se assente, la pioggia viene stimata dalle previsioni meteo.",
+          "outdoor_temp_sensor": "Sostituisce la temperatura dell'entità meteo per il tracciamento delle massime giornaliere.",
+          "line_flow_sensor": "Contatore di portata condiviso sulla linea (L/min), usato dalle zone senza contatore proprio.",
+          "master_valve": "Valvola o interruttore aperto prima di qualsiasi zona e chiuso dopo l'ultima."
+        }
+      }
+    },
+    "abort": {
+      "single_instance_allowed": "Già configurato. È possibile una sola istanza di Irrigation Maestro."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Opzioni di Irrigation Maestro",
+        "menu_options": {
+          "general": "Generale (sensori, valvola master, concorrenza)",
+          "safety": "Sicurezza e tempistiche",
+          "engine_advanced": "Motore decisionale (avanzato)",
+          "restrictions": "Restrizioni di calendario",
+          "notifications": "Notifiche",
+          "consumption_budget": "Budget di consumo"
+        }
+      },
+      "general": {
+        "title": "Generale",
+        "data": {
+          "weather_entity": "Entità meteo",
+          "rain_sensor": "Sensore pioggia",
+          "outdoor_temp_sensor": "Sensore temperatura esterna",
+          "line_flow_sensor": "Sensore di portata di linea",
+          "master_valve": "Valvola master",
+          "master_pre_open_s": "Anticipo apertura valvola master",
+          "master_post_close_s": "Ritardo chiusura valvola master",
+          "max_concurrent": "Zone contemporanee al massimo",
+          "compatibility_groups": "Gruppi di compatibilità"
+        },
+        "data_description": {
+          "weather_entity": "Fornisce temperature e previsioni di pioggia per le decisioni di irrigazione.",
+          "rain_sensor": "Sensore di pioggia cumulata giornaliera (mm). Se assente, la pioggia viene stimata dalle previsioni meteo.",
+          "outdoor_temp_sensor": "Sostituisce la temperatura dell'entità meteo per il tracciamento delle massime giornaliere.",
+          "line_flow_sensor": "Contatore di portata condiviso sulla linea (L/min), usato dalle zone senza contatore proprio.",
+          "master_valve": "Valvola o interruttore aperto prima di qualsiasi zona e chiuso dopo l'ultima.",
+          "master_pre_open_s": "Secondi di apertura della valvola master prima della prima zona.",
+          "master_post_close_s": "Secondi in cui la valvola master resta aperta dopo la chiusura dell'ultima zona.",
+          "max_concurrent": "Quante zone possono irrigare contemporaneamente.",
+          "compatibility_groups": "Nomi di gruppo separati da virgola; solo zone dello stesso gruppo possono irrigare insieme."
+        }
+      },
+      "safety": {
+        "title": "Sicurezza e tempistiche",
+        "data": {
+          "settle_pause_s": "Pausa di assestamento tra le zone",
+          "manual_block_min": "Blocco dopo uno stop manuale",
+          "watchdog_max_min": "Limite watchdog per zona",
+          "open_confirm_s": "Timeout conferma apertura valvola",
+          "close_confirm_s": "Timeout conferma chiusura valvola",
+          "switch_confirm_s": "Ritardo di conferma per interruttori",
+          "wait_free_min": "Attesa di uno slot libero",
+          "startup_valve_timeout_s": "Timeout disponibilità valvole all'avvio",
+          "sentinel_time": "Orario del controllo sentinella giornaliero",
+          "session_max_min": "Durata massima della sessione",
+          "must_finish_by": "La sessione deve terminare entro"
+        },
+        "data_description": {
+          "settle_pause_s": "Secondi di pausa tra la chiusura di una zona e l'apertura della successiva.",
+          "manual_block_min": "Minuti in cui l'irrigazione automatica resta bloccata dopo uno stop manuale.",
+          "watchdog_max_min": "Una zona attiva più a lungo di così viene chiusa e segnalata.",
+          "open_confirm_s": "Annulla la zona se la valvola non risulta aperta entro questo tempo.",
+          "close_confirm_s": "Escalation se la valvola non risulta chiusa entro questo tempo.",
+          "switch_confirm_s": "Attesa ottimistica dopo il comando per valvole basate su interruttore.",
+          "wait_free_min": "Minuti che un ciclo in scadenza può attendere uno slot compatibile prima di essere saltato.",
+          "startup_valve_timeout_s": "Quanto attendere che le entità valvola tornino disponibili dopo un riavvio.",
+          "sentinel_time": "Orario del controllo di coerenza giornaliero.",
+          "session_max_min": "Lascia vuoto per nessun limite.",
+          "must_finish_by": "I cicli che finirebbero oltre quest'ora non vengono avviati. Lascia vuoto per nessun limite."
+        }
+      },
+      "engine_advanced": {
+        "title": "Motore decisionale (avanzato)",
+        "description": "Pesi e soglie del motore che decide se e quanto irrigare. Modificali solo se sai cosa stai facendo: \"Ripristina valori predefiniti\" riporta i valori validati sul campo.",
+        "data": {
+          "temp_weights": "Pesi delle temperature",
+          "rain_weights": "Pesi della pioggia passata",
+          "forecast_credit_weights": "Pesi del credito previsionale",
+          "forecast_credit_cap_mm": "Tetto del credito previsionale (mm)",
+          "hot_credit_halving_temp_c": "Temperatura di dimezzamento del credito nei giorni caldi (°C)",
+          "threshold_base_mm": "Base della soglia di salto (mm)",
+          "threshold_slope_mm_per_c": "Pendenza della soglia di salto (mm/°C)",
+          "threshold_knee_c": "Ginocchio della soglia di salto (°C)",
+          "threshold_max_mm": "Massimo della soglia di salto (mm)",
+          "freeze_skip_c": "Temperatura di salto per gelo (°C)",
+          "cold_day_skip_c": "Temperatura di salto per giornata fredda (°C)",
+          "wind_skip_enabled": "Salta con vento forte",
+          "wind_skip_kmh": "Velocità del vento per il salto (km/h)",
+          "staged_rain_weight": "Peso della pioggia stimata",
+          "stage_commit_minute": "Minuto di consolidamento della pioggia stimata",
+          "daily_rain_cap_mm": "Tetto della pioggia giornaliera (mm)",
+          "hourly_staging_cap_mm": "Tetto orario della pioggia stimata (mm)",
+          "season_months": "Mesi della stagione",
+          "stale_weather_max_h": "Dati meteo obsoleti dopo",
+          "stale_weather_policy": "Comportamento con dati meteo obsoleti",
+          "reset_to_defaults": "Ripristina valori predefiniti"
+        },
+        "data_description": {
+          "temp_weights": "Cinque pesi separati da virgola: giorno −3, giorno −2, ieri, oggi, domani.",
+          "rain_weights": "Quattro pesi separati da virgola: oggi, ieri, giorno −2, giorno −3.",
+          "forecast_credit_weights": "Due pesi separati da virgola: pioggia prevista 0–24 h e 24–48 h.",
+          "season_months": "Mesi in cui l'irrigazione viene presa in considerazione. Le zone possono derogare.",
+          "stale_weather_max_h": "Ore senza aggiornamenti meteo prima che i dati siano considerati obsoleti.",
+          "stale_weather_policy": "fail_open irriga nonostante i dati obsoleti, fail_closed salta.",
+          "reset_to_defaults": "Scarta tutti i valori di questa pagina e ripristina i predefiniti integrati."
+        }
+      },
+      "restrictions": {
+        "title": "Restrizioni di calendario",
+        "data": {
+          "allowed_weekdays": "Giorni della settimana consentiti",
+          "parity": "Parità del giorno del mese",
+          "forbidden_windows": "Fasce orarie vietate"
+        },
+        "data_description": {
+          "allowed_weekdays": "Lascia vuoto per consentire tutti i giorni. 0 = lunedì … 6 = domenica.",
+          "parity": "Limita l'irrigazione ai giorni pari o dispari del mese.",
+          "forbidden_windows": "Fasce separate da virgola, ad esempio '08:00-10:30, 22:00-23:15'. Lascia vuoto per nessuna."
+        }
+      },
+      "notifications": {
+        "title": "Notifiche",
+        "description": "Scegli l'evento da configurare; nel passaggio successivo ne imposti destinatari e priorità.",
+        "data": {
+          "event": "Evento"
+        }
+      },
+      "notifications_event": {
+        "title": "Impostazioni di notifica",
+        "description": "Impostazioni di recapito per l'evento \"{event}\".",
+        "data": {
+          "enabled": "Abilitato",
+          "services": "Servizi di notifica",
+          "priority": "Priorità"
+        },
+        "data_description": {
+          "services": "Uno o più servizi notify che ricevono questo evento."
+        }
+      },
+      "consumption_budget": {
+        "title": "Budget di consumo",
+        "data": {
+          "liters_per_month": "Budget mensile (litri)",
+          "action": "Azione al superamento",
+          "reduce_pct": "Percentuale di riduzione"
+        },
+        "data_description": {
+          "liters_per_month": "Lascia vuoto per disattivare il budget.",
+          "action": "notify si limita a segnalare, reduce accorcia le irrigazioni, suspend le sospende fino al periodo successivo.",
+          "reduce_pct": "Di quanto vengono accorciate le irrigazioni quando l'azione è \"reduce\"."
+        }
+      }
+    },
+    "error": {
+      "invalid_temp_weights": "Inserisci esattamente cinque numeri separati da virgola.",
+      "invalid_rain_weights": "Inserisci esattamente quattro numeri separati da virgola.",
+      "invalid_forecast_weights": "Inserisci esattamente due numeri separati da virgola.",
+      "invalid_time_window": "Le fasce devono avere la forma '08:00-10:30', separate da virgola."
+    }
+  },
+  "config_subentries": {
+    "zone": {
+      "entry_type": "Zona",
+      "initiate_flow": {
+        "user": "Aggiungi zona",
+        "reconfigure": "Configura zona"
+      },
+      "step": {
+        "user": {
+          "title": "Nuova zona",
+          "description": "Valvola, misurazione della portata e pianificazione di una zona di irrigazione. I cicli si aggiungono nel passaggio successivo.",
+          "data": {
+            "name": "Nome",
+            "icon": "Icona",
+            "valve_entity": "Entità valvola",
+            "flow_sensor": "Sensore di portata",
+            "nominal_flow_lpm": "Portata nominale (L/min)",
+            "flow_tolerance_pct": "Tolleranza di portata",
+            "area_m2": "Superficie (m²)",
+            "adjustment_pct": "Correzione",
+            "order": "Ordine",
+            "interval_days": "Intervallo di irrigazione (giorni)",
+            "compatibility_group": "Gruppo di compatibilità",
+            "season_months": "Deroga ai mesi della stagione"
+          },
+          "data_description": {
+            "valve_entity": "Valvola o interruttore che apre questa zona.",
+            "flow_sensor": "Contatore di portata della zona (L/min); se vuoto viene usato il contatore di linea, quando disponibile.",
+            "nominal_flow_lpm": "Portata attesa durante l'irrigazione, usata per rilevare anomalie.",
+            "flow_tolerance_pct": "Scostamento ammesso dalla portata nominale prima di segnalare un'anomalia.",
+            "area_m2": "Abilita le conversioni di visualizzazione tra minuti e mm.",
+            "adjustment_pct": "Scala il risultato della curva, applicata prima dei limiti. 100% = invariato.",
+            "order": "Le zone irrigano in ordine crescente.",
+            "interval_days": "Irriga al più ogni N giorni (1–60).",
+            "season_months": "Deroga alla stagione dell'hub per questa zona. Lascia vuoto per usare il valore dell'hub."
+          }
+        },
+        "edit_zone": {
+          "title": "Modifica zona",
+          "data": {
+            "name": "Nome",
+            "icon": "Icona",
+            "valve_entity": "Entità valvola",
+            "flow_sensor": "Sensore di portata",
+            "nominal_flow_lpm": "Portata nominale (L/min)",
+            "flow_tolerance_pct": "Tolleranza di portata",
+            "area_m2": "Superficie (m²)",
+            "adjustment_pct": "Correzione",
+            "order": "Ordine",
+            "interval_days": "Intervallo di irrigazione (giorni)",
+            "compatibility_group": "Gruppo di compatibilità",
+            "season_months": "Deroga ai mesi della stagione"
+          },
+          "data_description": {
+            "valve_entity": "Valvola o interruttore che apre questa zona.",
+            "flow_sensor": "Contatore di portata della zona (L/min); se vuoto viene usato il contatore di linea, quando disponibile.",
+            "nominal_flow_lpm": "Portata attesa durante l'irrigazione, usata per rilevare anomalie.",
+            "flow_tolerance_pct": "Scostamento ammesso dalla portata nominale prima di segnalare un'anomalia.",
+            "area_m2": "Abilita le conversioni di visualizzazione tra minuti e mm.",
+            "adjustment_pct": "Scala il risultato della curva, applicata prima dei limiti. 100% = invariato.",
+            "order": "Le zone irrigano in ordine crescente.",
+            "interval_days": "Irriga al più ogni N giorni (1–60).",
+            "season_months": "Deroga alla stagione dell'hub per questa zona. Lascia vuoto per usare il valore dell'hub."
+          }
+        },
+        "cycle_menu": {
+          "title": "Cicli di {zone_name}",
+          "description": "Cicli configurati: {cycles}. Serve almeno un ciclo.",
+          "menu_options": {
+            "add_cycle": "Aggiungi un ciclo",
+            "finish": "Termina e crea la zona"
+          }
+        },
+        "cycle": {
+          "title": "Ciclo",
+          "data": {
+            "name": "Nome",
+            "kind": "Tipo di attivazione",
+            "months_override": "Deroga ai mesi"
+          },
+          "data_description": {
+            "kind": "Avvio relativo ad alba/tramonto oppure a un orario fisso.",
+            "months_override": "Limita questo ciclo ad alcuni mesi. Lascia vuoto per seguire la zona."
+          }
+        },
+        "cycle_sun": {
+          "title": "Attivazione solare",
+          "data": {
+            "event": "Evento solare",
+            "offset_min": "Scostamento (minuti)"
+          },
+          "data_description": {
+            "offset_min": "Negativo = prima dell'evento, positivo = dopo. Al massimo ±360 minuti."
+          }
+        },
+        "cycle_time": {
+          "title": "Attivazione a orario",
+          "data": {
+            "at": "Orario di avvio"
+          }
+        },
+        "cycle_curve": {
+          "title": "Curva di irrigazione",
+          "description": "Come la quantità d'acqua segue la temperatura pesata.",
+          "data": {
+            "source": "Curva",
+            "soak_max_run_min": "Assorbimento: durata massima (minuti)",
+            "soak_pause_min": "Assorbimento: pausa (minuti)",
+            "volume_safety_timeout_min": "Timeout di sicurezza per volume (minuti)"
+          },
+          "data_description": {
+            "soak_max_run_min": "Suddivide il ciclo in tratte non più lunghe di così. Lascia vuoto per irrigare in un'unica soluzione.",
+            "soak_pause_min": "Pausa tra le tratte di assorbimento.",
+            "volume_safety_timeout_min": "Solo per curve a volume: arresto forzato se il volume obiettivo non viene mai raggiunto."
+          }
+        },
+        "cycle_curve_custom": {
+          "title": "Curva personalizzata",
+          "data": {
+            "points": "Punti di controllo",
+            "min_value": "Minimo",
+            "max_value": "Massimo",
+            "kind": "Uscita della curva"
+          },
+          "data_description": {
+            "points": "Coppie 'temperatura:valore' separate da virgola, con temperature crescenti, ad esempio '10:5, 25:15, 35:30'.",
+            "min_value": "Limite inferiore applicato dopo il fattore di correzione.",
+            "max_value": "Limite superiore applicato dopo il fattore di correzione.",
+            "kind": "Minuti (durata) o litri (volume). Il volume richiede un contatore di portata utilizzabile."
+          }
+        },
+        "cycle_curve_copy": {
+          "title": "Copia curva",
+          "data": {
+            "source": "Copia da"
+          }
+        },
+        "reconfigure": {
+          "title": "Zona {zone_name}",
+          "menu_options": {
+            "edit_zone": "Modifica impostazioni della zona",
+            "manage_cycles": "Gestisci i cicli",
+            "done": "Salva e chiudi"
+          }
+        },
+        "manage_cycles": {
+          "title": "Gestione cicli",
+          "description": "Cicli configurati: {cycles}.",
+          "menu_options": {
+            "add_cycle": "Aggiungi un ciclo",
+            "edit_cycle": "Modifica un ciclo",
+            "remove_cycle": "Rimuovi un ciclo",
+            "back": "Indietro"
+          }
+        },
+        "edit_cycle": {
+          "title": "Modifica ciclo",
+          "data": {
+            "cycle": "Ciclo"
+          }
+        },
+        "remove_cycle": {
+          "title": "Rimuovi ciclo",
+          "data": {
+            "cycle": "Ciclo"
+          }
+        }
+      },
+      "error": {
+        "interval_out_of_range": "L'intervallo deve essere compreso tra 1 e 60 giorni.",
+        "offset_out_of_range": "Lo scostamento deve rientrare in ±360 minuti.",
+        "invalid_points_format": "Usa coppie 'temperatura:valore' separate da virgola, ad esempio '10:5, 25:15'.",
+        "curve_empty": "Inserisci almeno un punto di controllo.",
+        "curve_negative_value": "I valori dei punti non possono essere negativi.",
+        "curve_temps_not_increasing": "Le temperature dei punti devono essere strettamente crescenti.",
+        "min_above_max": "Il minimo non può superare il massimo.",
+        "negative_clamp": "Il minimo non può essere negativo.",
+        "duration_out_of_range": "Le durate devono essere comprese tra 1 e 1440 minuti.",
+        "volume_requires_flow": "Le curve a volume richiedono un sensore di portata di zona o di linea sull'hub.",
+        "soak_pause_without_max": "La pausa di assorbimento richiede anche una durata massima.",
+        "copy_source_missing": "Quel ciclo non esiste più: scegline un altro."
+      },
+      "abort": {
+        "reconfigure_successful": "Zona aggiornata."
+      }
+    }
+  }
+}

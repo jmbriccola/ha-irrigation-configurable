@@ -1,0 +1,370 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Irrigation Maestro",
+        "description": "Pick the weather source and, optionally, the sensors and master valve. Everything can be changed later in the options; zones are added afterwards as subentries.",
+        "data": {
+          "weather_entity": "Weather entity",
+          "rain_sensor": "Rain sensor",
+          "outdoor_temp_sensor": "Outdoor temperature sensor",
+          "line_flow_sensor": "Line flow sensor",
+          "master_valve": "Master valve"
+        },
+        "data_description": {
+          "weather_entity": "Provides temperatures and precipitation forecasts for the watering decisions.",
+          "rain_sensor": "Cumulative daily rain sensor (mm). If not set, rain is estimated from the weather forecasts.",
+          "outdoor_temp_sensor": "Overrides the weather entity's temperature for daily maximum tracking.",
+          "line_flow_sensor": "Shared flow meter on the supply line (L/min), used by zones without their own meter.",
+          "master_valve": "Valve or switch opened before any zone and closed after the last one."
+        }
+      }
+    },
+    "abort": {
+      "single_instance_allowed": "Already configured. Only a single instance of Irrigation Maestro is possible."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Irrigation Maestro options",
+        "menu_options": {
+          "general": "General (sensors, master valve, concurrency)",
+          "safety": "Safety & timing",
+          "engine_advanced": "Engine (advanced)",
+          "restrictions": "Calendar restrictions",
+          "notifications": "Notifications",
+          "consumption_budget": "Consumption budget"
+        }
+      },
+      "general": {
+        "title": "General",
+        "data": {
+          "weather_entity": "Weather entity",
+          "rain_sensor": "Rain sensor",
+          "outdoor_temp_sensor": "Outdoor temperature sensor",
+          "line_flow_sensor": "Line flow sensor",
+          "master_valve": "Master valve",
+          "master_pre_open_s": "Master valve pre-open delay",
+          "master_post_close_s": "Master valve post-close delay",
+          "max_concurrent": "Maximum concurrent zones",
+          "compatibility_groups": "Compatibility groups"
+        },
+        "data_description": {
+          "weather_entity": "Provides temperatures and precipitation forecasts for the watering decisions.",
+          "rain_sensor": "Cumulative daily rain sensor (mm). If not set, rain is estimated from the weather forecasts.",
+          "outdoor_temp_sensor": "Overrides the weather entity's temperature for daily maximum tracking.",
+          "line_flow_sensor": "Shared flow meter on the supply line (L/min), used by zones without their own meter.",
+          "master_valve": "Valve or switch opened before any zone and closed after the last one.",
+          "master_pre_open_s": "Seconds the master valve is opened before the first zone.",
+          "master_post_close_s": "Seconds the master valve stays open after the last zone closes.",
+          "max_concurrent": "How many zones may water at the same time.",
+          "compatibility_groups": "Comma-separated group names; only zones in the same group may run together."
+        }
+      },
+      "safety": {
+        "title": "Safety & timing",
+        "data": {
+          "settle_pause_s": "Settle pause between zones",
+          "manual_block_min": "Block after manual stop",
+          "watchdog_max_min": "Watchdog limit per zone",
+          "open_confirm_s": "Valve open confirmation timeout",
+          "close_confirm_s": "Valve close confirmation timeout",
+          "switch_confirm_s": "Switch confirmation delay",
+          "wait_free_min": "Wait for a free slot",
+          "startup_valve_timeout_s": "Valve availability timeout at startup",
+          "sentinel_time": "Daily sentinel check time",
+          "session_max_min": "Session duration limit",
+          "must_finish_by": "Session must finish by"
+        },
+        "data_description": {
+          "settle_pause_s": "Seconds of pause between one zone closing and the next one opening.",
+          "manual_block_min": "Minutes automatic watering stays blocked after a manual stop.",
+          "watchdog_max_min": "A zone running longer than this is closed and reported.",
+          "open_confirm_s": "Cancel the zone if the valve does not report open within this time.",
+          "close_confirm_s": "Escalate if the valve does not report closed within this time.",
+          "switch_confirm_s": "Optimistic wait after commanding switch-based valves.",
+          "wait_free_min": "Minutes a due cycle may wait for a compatible free slot before being skipped.",
+          "startup_valve_timeout_s": "How long to wait for valve entities to become available after a restart.",
+          "sentinel_time": "Time of the daily consistency check.",
+          "session_max_min": "Leave empty for no limit.",
+          "must_finish_by": "Cycles that would end after this time are not started. Leave empty for no limit."
+        }
+      },
+      "engine_advanced": {
+        "title": "Engine (advanced)",
+        "description": "Weights and thresholds of the watering decision engine. Only change these if you know what you are doing — 'Reset to defaults' restores the field-validated values.",
+        "data": {
+          "temp_weights": "Temperature weights",
+          "rain_weights": "Past rain weights",
+          "forecast_credit_weights": "Forecast credit weights",
+          "forecast_credit_cap_mm": "Forecast credit cap (mm)",
+          "hot_credit_halving_temp_c": "Hot-day credit halving temperature (°C)",
+          "threshold_base_mm": "Skip threshold base (mm)",
+          "threshold_slope_mm_per_c": "Skip threshold slope (mm/°C)",
+          "threshold_knee_c": "Skip threshold knee (°C)",
+          "threshold_max_mm": "Skip threshold maximum (mm)",
+          "freeze_skip_c": "Frost skip temperature (°C)",
+          "cold_day_skip_c": "Cold-day skip temperature (°C)",
+          "wind_skip_enabled": "Skip on strong wind",
+          "wind_skip_kmh": "Wind skip speed (km/h)",
+          "staged_rain_weight": "Staged rain weight",
+          "stage_commit_minute": "Rain staging commit minute",
+          "daily_rain_cap_mm": "Daily rain cap (mm)",
+          "hourly_staging_cap_mm": "Hourly rain staging cap (mm)",
+          "season_months": "Season months",
+          "stale_weather_max_h": "Stale weather after",
+          "stale_weather_policy": "Stale weather policy",
+          "reset_to_defaults": "Reset to defaults"
+        },
+        "data_description": {
+          "temp_weights": "Five comma-separated weights: day −3, day −2, yesterday, today, tomorrow.",
+          "rain_weights": "Four comma-separated weights: today, yesterday, day −2, day −3.",
+          "forecast_credit_weights": "Two comma-separated weights: rain forecast 0–24 h and 24–48 h.",
+          "season_months": "Months in which watering is considered at all. Zones can override this.",
+          "stale_weather_max_h": "Hours without weather updates before the data counts as stale.",
+          "stale_weather_policy": "fail_open waters despite stale data, fail_closed skips.",
+          "reset_to_defaults": "Discard every value on this page and restore the built-in defaults."
+        }
+      },
+      "restrictions": {
+        "title": "Calendar restrictions",
+        "data": {
+          "allowed_weekdays": "Allowed weekdays",
+          "parity": "Day-of-month parity",
+          "forbidden_windows": "Forbidden time windows"
+        },
+        "data_description": {
+          "allowed_weekdays": "Leave empty to allow every day. 0 = Monday … 6 = Sunday.",
+          "parity": "Restrict watering to odd or even days of the month.",
+          "forbidden_windows": "Comma-separated windows such as '08:00-10:30, 22:00-23:15'. Leave empty for none."
+        }
+      },
+      "notifications": {
+        "title": "Notifications",
+        "description": "Pick the event to configure; the next step sets its targets and priority.",
+        "data": {
+          "event": "Event"
+        }
+      },
+      "notifications_event": {
+        "title": "Notification settings",
+        "description": "Delivery settings for the '{event}' event.",
+        "data": {
+          "enabled": "Enabled",
+          "services": "Notify services",
+          "priority": "Priority"
+        },
+        "data_description": {
+          "services": "One or more notify services that receive this event."
+        }
+      },
+      "consumption_budget": {
+        "title": "Consumption budget",
+        "data": {
+          "liters_per_month": "Monthly budget (liters)",
+          "action": "Action when exceeded",
+          "reduce_pct": "Reduction percentage"
+        },
+        "data_description": {
+          "liters_per_month": "Leave empty to disable the budget.",
+          "action": "notify only reports, reduce shortens watering, suspend stops it until the next period.",
+          "reduce_pct": "How much watering is shortened when the action is 'reduce'."
+        }
+      }
+    },
+    "error": {
+      "invalid_temp_weights": "Enter exactly five comma-separated numbers.",
+      "invalid_rain_weights": "Enter exactly four comma-separated numbers.",
+      "invalid_forecast_weights": "Enter exactly two comma-separated numbers.",
+      "invalid_time_window": "Windows must look like '08:00-10:30', separated by commas."
+    }
+  },
+  "config_subentries": {
+    "zone": {
+      "entry_type": "Zone",
+      "initiate_flow": {
+        "user": "Add zone",
+        "reconfigure": "Configure zone"
+      },
+      "step": {
+        "user": {
+          "title": "New zone",
+          "description": "Valve, flow metering and scheduling for one irrigation zone. Cycles are added in the next step.",
+          "data": {
+            "name": "Name",
+            "icon": "Icon",
+            "valve_entity": "Valve entity",
+            "flow_sensor": "Flow sensor",
+            "nominal_flow_lpm": "Nominal flow (L/min)",
+            "flow_tolerance_pct": "Flow tolerance",
+            "area_m2": "Area (m²)",
+            "adjustment_pct": "Adjustment",
+            "order": "Order",
+            "interval_days": "Watering interval (days)",
+            "compatibility_group": "Compatibility group",
+            "season_months": "Season months override"
+          },
+          "data_description": {
+            "valve_entity": "Valve or switch that opens this zone.",
+            "flow_sensor": "Per-zone flow meter (L/min); if empty, the shared line meter is used when available.",
+            "nominal_flow_lpm": "Expected flow while watering, used for anomaly detection.",
+            "flow_tolerance_pct": "Allowed deviation from the nominal flow before an anomaly is reported.",
+            "area_m2": "Enables minutes ↔ mm display conversions.",
+            "adjustment_pct": "Scales the curve output, applied before the clamps. 100% = unchanged.",
+            "order": "Zones water in ascending order.",
+            "interval_days": "Water at most every N days (1–60).",
+            "season_months": "Overrides the hub season for this zone. Leave empty to use the hub default."
+          }
+        },
+        "edit_zone": {
+          "title": "Edit zone",
+          "data": {
+            "name": "Name",
+            "icon": "Icon",
+            "valve_entity": "Valve entity",
+            "flow_sensor": "Flow sensor",
+            "nominal_flow_lpm": "Nominal flow (L/min)",
+            "flow_tolerance_pct": "Flow tolerance",
+            "area_m2": "Area (m²)",
+            "adjustment_pct": "Adjustment",
+            "order": "Order",
+            "interval_days": "Watering interval (days)",
+            "compatibility_group": "Compatibility group",
+            "season_months": "Season months override"
+          },
+          "data_description": {
+            "valve_entity": "Valve or switch that opens this zone.",
+            "flow_sensor": "Per-zone flow meter (L/min); if empty, the shared line meter is used when available.",
+            "nominal_flow_lpm": "Expected flow while watering, used for anomaly detection.",
+            "flow_tolerance_pct": "Allowed deviation from the nominal flow before an anomaly is reported.",
+            "area_m2": "Enables minutes ↔ mm display conversions.",
+            "adjustment_pct": "Scales the curve output, applied before the clamps. 100% = unchanged.",
+            "order": "Zones water in ascending order.",
+            "interval_days": "Water at most every N days (1–60).",
+            "season_months": "Overrides the hub season for this zone. Leave empty to use the hub default."
+          }
+        },
+        "cycle_menu": {
+          "title": "Cycles of {zone_name}",
+          "description": "Configured cycles: {cycles}. At least one cycle is required.",
+          "menu_options": {
+            "add_cycle": "Add a cycle",
+            "finish": "Finish and create the zone"
+          }
+        },
+        "cycle": {
+          "title": "Cycle",
+          "data": {
+            "name": "Name",
+            "kind": "Trigger type",
+            "months_override": "Months override"
+          },
+          "data_description": {
+            "kind": "Start relative to sunrise/sunset, or at a fixed time.",
+            "months_override": "Restrict this cycle to certain months. Leave empty to follow the zone."
+          }
+        },
+        "cycle_sun": {
+          "title": "Sun trigger",
+          "data": {
+            "event": "Sun event",
+            "offset_min": "Offset (minutes)"
+          },
+          "data_description": {
+            "offset_min": "Negative = before the event, positive = after. At most ±360 minutes."
+          }
+        },
+        "cycle_time": {
+          "title": "Time trigger",
+          "data": {
+            "at": "Start time"
+          }
+        },
+        "cycle_curve": {
+          "title": "Watering curve",
+          "description": "How the watering amount follows the weighted temperature.",
+          "data": {
+            "source": "Curve",
+            "soak_max_run_min": "Soak: maximum run (minutes)",
+            "soak_pause_min": "Soak: pause (minutes)",
+            "volume_safety_timeout_min": "Volume safety timeout (minutes)"
+          },
+          "data_description": {
+            "soak_max_run_min": "Split the cycle into runs of at most this length. Leave empty to water in one go.",
+            "soak_pause_min": "Pause between soak runs.",
+            "volume_safety_timeout_min": "For volume curves only: hard stop if the target volume is never reached."
+          }
+        },
+        "cycle_curve_custom": {
+          "title": "Custom curve",
+          "data": {
+            "points": "Control points",
+            "min_value": "Minimum",
+            "max_value": "Maximum",
+            "kind": "Curve output"
+          },
+          "data_description": {
+            "points": "Comma-separated 'temperature:value' pairs with increasing temperatures, e.g. '10:5, 25:15, 35:30'.",
+            "min_value": "Lower clamp applied after the adjustment factor.",
+            "max_value": "Upper clamp applied after the adjustment factor.",
+            "kind": "Minutes (duration) or liters (volume). Volume needs a usable flow meter."
+          }
+        },
+        "cycle_curve_copy": {
+          "title": "Copy curve",
+          "data": {
+            "source": "Copy from"
+          }
+        },
+        "reconfigure": {
+          "title": "Zone {zone_name}",
+          "menu_options": {
+            "edit_zone": "Edit zone settings",
+            "manage_cycles": "Manage cycles",
+            "done": "Save and close"
+          }
+        },
+        "manage_cycles": {
+          "title": "Manage cycles",
+          "description": "Configured cycles: {cycles}.",
+          "menu_options": {
+            "add_cycle": "Add a cycle",
+            "edit_cycle": "Edit a cycle",
+            "remove_cycle": "Remove a cycle",
+            "back": "Back"
+          }
+        },
+        "edit_cycle": {
+          "title": "Edit cycle",
+          "data": {
+            "cycle": "Cycle"
+          }
+        },
+        "remove_cycle": {
+          "title": "Remove cycle",
+          "data": {
+            "cycle": "Cycle"
+          }
+        }
+      },
+      "error": {
+        "interval_out_of_range": "The interval must be between 1 and 60 days.",
+        "offset_out_of_range": "The offset must be within ±360 minutes.",
+        "invalid_points_format": "Use comma-separated 'temperature:value' pairs, e.g. '10:5, 25:15'.",
+        "curve_empty": "Enter at least one control point.",
+        "curve_negative_value": "Point values must not be negative.",
+        "curve_temps_not_increasing": "Point temperatures must be strictly increasing.",
+        "min_above_max": "The minimum must not exceed the maximum.",
+        "negative_clamp": "The minimum must not be negative.",
+        "duration_out_of_range": "Durations must be between 1 and 1440 minutes.",
+        "volume_requires_flow": "Volume curves need a zone flow sensor or a line flow sensor on the hub.",
+        "soak_pause_without_max": "A soak pause needs a maximum run time as well.",
+        "copy_source_missing": "That cycle no longer exists — pick another one."
+      },
+      "abort": {
+        "reconfigure_successful": "Zone updated."
+      }
+    }
+  }
+}
