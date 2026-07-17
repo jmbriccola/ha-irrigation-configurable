@@ -3,20 +3,20 @@
     "step": {
       "user": {
         "title": "Irrigation Maestro",
-        "description": "Pick the weather source and, optionally, the sensors and master valve. Everything can be changed later in the options; zones are added afterwards as subentries.",
+        "description": "Let's start with the basics. Only a weather entity is required — you can skip the optional sensors and add them later. After this you'll add your zones one by one.",
         "data": {
           "weather_entity": "Weather entity",
-          "rain_sensor": "Rain sensor",
-          "outdoor_temp_sensor": "Outdoor temperature sensor",
-          "line_flow_sensor": "Line flow sensor",
-          "master_valve": "Master valve"
+          "rain_sensor": "Rain sensor (optional)",
+          "outdoor_temp_sensor": "Outdoor temperature sensor (optional)",
+          "line_flow_sensor": "Line flow sensor (optional)",
+          "master_valve": "Master valve / pump (optional)"
         },
         "data_description": {
-          "weather_entity": "Provides temperatures and precipitation forecasts for the watering decisions.",
-          "rain_sensor": "Cumulative daily rain sensor (mm). If not set, rain is estimated from the weather forecasts.",
-          "outdoor_temp_sensor": "Overrides the weather entity's temperature for daily maximum tracking.",
-          "line_flow_sensor": "Shared flow meter on the supply line (L/min), used by zones without their own meter.",
-          "master_valve": "Valve or switch opened before any zone and closed after the last one."
+          "weather_entity": "Required. A weather.* entity that provides temperature and precipitation forecasts (e.g. Met.no).",
+          "rain_sensor": "A sensor reporting today's total rainfall in mm. If empty, rainfall is estimated from the forecast.",
+          "outdoor_temp_sensor": "Use a real thermometer instead of the weather entity for the daily temperature maxima.",
+          "line_flow_sensor": "A single flow meter (L/min) on the manifold, shared by zones that don't have their own.",
+          "master_valve": "A valve or switch (e.g. a pump relay) opened before the first zone and closed after the last."
         }
       }
     },
@@ -39,31 +39,33 @@
       },
       "general": {
         "title": "General",
+        "description": "The weather source and optional hardware shared by every zone. Only the weather entity is required; leave the rest empty if you don't have it.",
         "data": {
           "weather_entity": "Weather entity",
-          "rain_sensor": "Rain sensor",
-          "outdoor_temp_sensor": "Outdoor temperature sensor",
-          "line_flow_sensor": "Line flow sensor",
-          "master_valve": "Master valve",
-          "master_pre_open_s": "Master valve pre-open delay",
-          "master_post_close_s": "Master valve post-close delay",
+          "rain_sensor": "Rain sensor (optional)",
+          "outdoor_temp_sensor": "Outdoor temperature sensor (optional)",
+          "line_flow_sensor": "Line flow sensor (optional)",
+          "master_valve": "Master valve / pump (optional)",
+          "master_pre_open_s": "Master valve pre-open delay (seconds)",
+          "master_post_close_s": "Master valve post-close delay (seconds)",
           "max_concurrent": "Maximum concurrent zones",
           "compatibility_groups": "Compatibility groups"
         },
         "data_description": {
-          "weather_entity": "Provides temperatures and precipitation forecasts for the watering decisions.",
-          "rain_sensor": "Cumulative daily rain sensor (mm). If not set, rain is estimated from the weather forecasts.",
-          "outdoor_temp_sensor": "Overrides the weather entity's temperature for daily maximum tracking.",
-          "line_flow_sensor": "Shared flow meter on the supply line (L/min), used by zones without their own meter.",
-          "master_valve": "Valve or switch opened before any zone and closed after the last one.",
-          "master_pre_open_s": "Seconds the master valve is opened before the first zone.",
-          "master_post_close_s": "Seconds the master valve stays open after the last zone closes.",
-          "max_concurrent": "How many zones may water at the same time.",
-          "compatibility_groups": "Comma-separated group names; only zones in the same group may run together."
+          "weather_entity": "Required. A weather.* entity that provides temperature and precipitation forecasts (e.g. Met.no).",
+          "rain_sensor": "A sensor reporting today's total rainfall in mm. If empty, rainfall is estimated from the forecast.",
+          "outdoor_temp_sensor": "Use a real thermometer instead of the weather entity for the daily temperature maxima.",
+          "line_flow_sensor": "A single flow meter (L/min) on the manifold, shared by zones that don't have their own.",
+          "master_valve": "A valve or switch (e.g. a pump relay) opened before the first zone and closed after the last.",
+          "master_pre_open_s": "How long the master valve/pump runs before the first zone opens, to build pressure. Default 5.",
+          "master_post_close_s": "How long the master valve/pump keeps running after the last zone closes. Default 5.",
+          "max_concurrent": "How many zones may water together. Keep 1 unless your water pressure can feed more at once.",
+          "compatibility_groups": "Only needed if the maximum above is more than 1. Comma-separated names (e.g. 'drip, lawn'); only zones you assign to the same group may run together."
         }
       },
       "safety": {
         "title": "Safety & timing",
+        "description": "Timeouts and safety windows for opening and closing valves. The defaults are safe for most setups — change them only if your hardware needs it.",
         "data": {
           "settle_pause_s": "Settle pause between zones",
           "manual_block_min": "Block after manual stop",
@@ -78,17 +80,17 @@
           "must_finish_by": "Session must finish by"
         },
         "data_description": {
-          "settle_pause_s": "Seconds of pause between one zone closing and the next one opening.",
-          "manual_block_min": "Minutes automatic watering stays blocked after a manual stop.",
-          "watchdog_max_min": "A zone running longer than this is closed and reported.",
-          "open_confirm_s": "Cancel the zone if the valve does not report open within this time.",
-          "close_confirm_s": "Escalate if the valve does not report closed within this time.",
-          "switch_confirm_s": "Optimistic wait after commanding switch-based valves.",
-          "wait_free_min": "Minutes a due cycle may wait for a compatible free slot before being skipped.",
-          "startup_valve_timeout_s": "How long to wait for valve entities to become available after a restart.",
-          "sentinel_time": "Time of the daily consistency check.",
-          "session_max_min": "Leave empty for no limit.",
-          "must_finish_by": "Cycles that would end after this time are not started. Leave empty for no limit."
+          "settle_pause_s": "Pause between one zone closing and the next opening, to let pressure settle. Default 120.",
+          "manual_block_min": "After you stop watering by hand, automatic cycles stay blocked for this long. Default 60.",
+          "watchdog_max_min": "Safety cap: a valve open longer than this is force-closed and reported. Default 70.",
+          "open_confirm_s": "If a valve doesn't report 'open' within this time, the cycle is cancelled. Default 120.",
+          "close_confirm_s": "If a valve doesn't confirm 'closed' within this time, it retries and alerts you. Default 120.",
+          "switch_confirm_s": "For switch-based valves (no position feedback): assumed open/closed after this delay. Default 10.",
+          "wait_free_min": "A due cycle waits at most this long for the other valves to be free before being skipped. Default 10.",
+          "startup_valve_timeout_s": "After a restart, how long to wait for valves to come back online before reporting one unreachable. Default 300.",
+          "sentinel_time": "Time of the daily check that alerts you if a scheduled cycle never ran. Default 12:00.",
+          "session_max_min": "Optional. Skip any zones still queued once a watering session has run this many minutes. Empty = no limit.",
+          "must_finish_by": "Optional. Don't start a cycle that would finish after this time of day. Empty = no limit."
         }
       },
       "engine_advanced": {
@@ -118,26 +120,41 @@
           "reset_to_defaults": "Reset to defaults"
         },
         "data_description": {
-          "temp_weights": "Five comma-separated weights: day −3, day −2, yesterday, today, tomorrow.",
-          "rain_weights": "Four comma-separated weights: today, yesterday, day −2, day −3.",
-          "forecast_credit_weights": "Two comma-separated weights: rain forecast 0–24 h and 24–48 h.",
-          "season_months": "Months in which watering is considered at all. Zones can override this.",
-          "stale_weather_max_h": "Hours without weather updates before the data counts as stale.",
-          "stale_weather_policy": "fail_open waters despite stale data, fail_closed skips.",
-          "reset_to_defaults": "Discard every value on this page and restore the built-in defaults."
+          "temp_weights": "Five comma-separated weights: day −3, day −2, yesterday, today, tomorrow. Default 0.05, 0.15, 0.3, 0.35, 0.15.",
+          "rain_weights": "Four comma-separated weights: today, yesterday, day −2, day −3. Default 0.85, 0.5, 0.2, 0.05.",
+          "forecast_credit_weights": "Two comma-separated weights: rain forecast 0–24 h and 24–48 h. Default 0.6, 0.25.",
+          "forecast_credit_cap_mm": "Most credit forecast rain can contribute to the budget. Default 5.",
+          "hot_credit_halving_temp_c": "At or above this weighted temperature, forecast rain credit is halved (summer storms often miss). Default 30.",
+          "threshold_base_mm": "Base rain amount that makes a session skip. Default 3.",
+          "threshold_slope_mm_per_c": "How much the skip threshold rises per °C above the knee below. Default 0.5.",
+          "threshold_knee_c": "Weighted temperature above which the threshold starts rising. Default 28.",
+          "threshold_max_mm": "Upper cap for the skip threshold. Default 6.",
+          "freeze_skip_c": "Skip watering when the current temperature is below this (frost risk). Default 2.",
+          "cold_day_skip_c": "Skip when today's effective maximum stays below this. Default 10.",
+          "wind_skip_enabled": "Also skip watering when the wind is above the speed below. Off by default.",
+          "wind_skip_kmh": "Wind speed that triggers a skip when the option above is on. Default 30.",
+          "staged_rain_weight": "Forecast-only rain is counted at this fraction (never full weight). Default 0.8.",
+          "stage_commit_minute": "Minute of each hour when the ending hour's forecast rain is committed. Default 55.",
+          "daily_rain_cap_mm": "Safety cap on the tracked daily rainfall. Default 200.",
+          "hourly_staging_cap_mm": "Safety cap on a single hour's estimated rainfall. Default 50.",
+          "season_months": "Months in which watering is considered at all. Default March–October. Zones can override this.",
+          "stale_weather_max_h": "Hours without a weather update before the data counts as stale. Default 6.",
+          "stale_weather_policy": "When weather is stale: 'Water anyway' uses the last known temperature (budget 0); 'Skip watering' skips.",
+          "reset_to_defaults": "Discard every value on this page and restore the built-in, field-validated defaults."
         }
       },
       "restrictions": {
         "title": "Calendar restrictions",
+        "description": "Optional rules for municipal or consortium watering ordinances. Leave everything empty if you have no restrictions. Zones can override these individually.",
         "data": {
           "allowed_weekdays": "Allowed weekdays",
           "parity": "Day-of-month parity",
           "forbidden_windows": "Forbidden time windows"
         },
         "data_description": {
-          "allowed_weekdays": "Leave empty to allow every day. 0 = Monday … 6 = Sunday.",
-          "parity": "Restrict watering to odd or even days of the month.",
-          "forbidden_windows": "Comma-separated windows such as '08:00-10:30, 22:00-23:15'. Leave empty for none."
+          "allowed_weekdays": "Water only on the selected days. Leave empty to allow every day.",
+          "parity": "Restrict watering to odd or even days of the month (some ordinances alternate by house number).",
+          "forbidden_windows": "Times when watering is not allowed, e.g. '08:00-10:30, 22:00-23:15'. Empty = no forbidden times. A running cycle is cut short rather than run into one."
         }
       },
       "notifications": {
@@ -151,25 +168,28 @@
         "title": "Notification settings",
         "description": "Delivery settings for the \"{event}\" event.",
         "data": {
-          "enabled": "Enabled",
+          "enabled": "Send notifications for this event",
           "services": "Notify services",
           "priority": "Priority"
         },
         "data_description": {
-          "services": "One or more notify services that receive this event."
+          "enabled": "Turn off to keep this event silent.",
+          "services": "One or more notify.* services (e.g. your phone app) that receive this event.",
+          "priority": "High marks urgent events (anomalies, watchdog) as high-importance on supported apps."
         }
       },
       "consumption_budget": {
         "title": "Consumption budget",
+        "description": "Optional monthly water cap. Leave the budget empty to disable it entirely.",
         "data": {
           "liters_per_month": "Monthly budget (liters)",
           "action": "Action when exceeded",
           "reduce_pct": "Reduction percentage"
         },
         "data_description": {
-          "liters_per_month": "Leave empty to disable the budget.",
-          "action": "notify only reports, reduce shortens watering, suspend stops it until the next period.",
-          "reduce_pct": "How much watering is shortened when the action is 'reduce'."
+          "liters_per_month": "Total litres allowed per calendar month. Empty = no budget. Needs a flow meter, or nominal flow rates to estimate use.",
+          "action": "What happens once the budget is used up: notify only warns, reduce shortens every cycle, suspend stops watering until next month.",
+          "reduce_pct": "By how much each cycle is shortened when the action is 'Reduce watering'. Default 50."
         }
       }
     },
@@ -190,59 +210,65 @@
       "step": {
         "user": {
           "title": "New zone",
-          "description": "Valve, flow metering and scheduling for one irrigation zone. Cycles are added in the next step.",
+          "description": "One irrigation circuit: its valve and how often it waters. Only the name and the valve are required — you'll set the watering amount (the curve) after adding a cycle in the next step.",
           "data": {
             "name": "Name",
-            "icon": "Icon",
-            "valve_entity": "Valve entity",
-            "flow_sensor": "Flow sensor",
-            "nominal_flow_lpm": "Nominal flow (L/min)",
-            "flow_tolerance_pct": "Flow tolerance",
-            "area_m2": "Area (m²)",
-            "adjustment_pct": "Adjustment",
+            "icon": "Icon (optional)",
+            "valve_entity": "Valve",
+            "flow_sensor": "Flow sensor (optional)",
+            "nominal_flow_lpm": "Nominal flow (L/min, optional)",
+            "flow_tolerance_pct": "Flow tolerance (%)",
+            "area_m2": "Area (m², optional)",
+            "adjustment_pct": "Adjustment (%)",
             "order": "Order",
             "interval_days": "Watering interval (days)",
-            "compatibility_group": "Compatibility group",
-            "season_months": "Season months override"
+            "compatibility_group": "Compatibility group (optional)",
+            "season_months": "Season months override (optional)"
           },
           "data_description": {
-            "valve_entity": "Valve or switch that opens this zone.",
-            "flow_sensor": "Per-zone flow meter (L/min); if empty, the shared line meter is used when available.",
-            "nominal_flow_lpm": "Expected flow while watering, used for anomaly detection.",
-            "flow_tolerance_pct": "Allowed deviation from the nominal flow before an anomaly is reported.",
-            "area_m2": "Enables minutes ↔ mm display conversions.",
-            "adjustment_pct": "Scales the curve output, applied before the clamps. 100% = unchanged.",
-            "order": "Zones water in ascending order.",
-            "interval_days": "Water at most every N days (1–60).",
-            "season_months": "Overrides the hub season for this zone. Leave empty to use the hub default."
+            "name": "A friendly name for this circuit, e.g. 'Vegetable beds' or 'Front lawn'.",
+            "icon": "Icon shown for this zone's device. Leave empty for the default.",
+            "valve_entity": "Required. The valve.* or switch.* entity that opens this circuit — any device or helper, not only Zigbee.",
+            "flow_sensor": "This zone's own flow meter (L/min). If empty, the shared line meter is used when available.",
+            "nominal_flow_lpm": "Expected flow while watering; enables leak / no-flow / out-of-range detection. Needs a flow meter.",
+            "flow_tolerance_pct": "How far the real flow may stray from the nominal value before it's flagged. Default 25.",
+            "area_m2": "Circuit surface, used only to show minutes ↔ mm conversions. Optional.",
+            "adjustment_pct": "Scales every watering time up or down (e.g. 70 for a shaded bed, 130 for a sunny one). 100 = unchanged.",
+            "order": "Watering sequence: lower numbers water first. Default 100.",
+            "interval_days": "Water at most every N days (1–60). 1 = every day, 3 = every third day. Default 3.",
+            "compatibility_group": "Only used when the hub allows more than one concurrent zone. Zones in the same group may run together.",
+            "season_months": "Water only in these months, overriding the hub season. Empty = follow the hub (March–October)."
           }
         },
         "edit_zone": {
           "title": "Edit zone",
           "data": {
             "name": "Name",
-            "icon": "Icon",
-            "valve_entity": "Valve entity",
-            "flow_sensor": "Flow sensor",
-            "nominal_flow_lpm": "Nominal flow (L/min)",
-            "flow_tolerance_pct": "Flow tolerance",
-            "area_m2": "Area (m²)",
-            "adjustment_pct": "Adjustment",
+            "icon": "Icon (optional)",
+            "valve_entity": "Valve",
+            "flow_sensor": "Flow sensor (optional)",
+            "nominal_flow_lpm": "Nominal flow (L/min, optional)",
+            "flow_tolerance_pct": "Flow tolerance (%)",
+            "area_m2": "Area (m², optional)",
+            "adjustment_pct": "Adjustment (%)",
             "order": "Order",
             "interval_days": "Watering interval (days)",
-            "compatibility_group": "Compatibility group",
-            "season_months": "Season months override"
+            "compatibility_group": "Compatibility group (optional)",
+            "season_months": "Season months override (optional)"
           },
           "data_description": {
-            "valve_entity": "Valve or switch that opens this zone.",
-            "flow_sensor": "Per-zone flow meter (L/min); if empty, the shared line meter is used when available.",
-            "nominal_flow_lpm": "Expected flow while watering, used for anomaly detection.",
-            "flow_tolerance_pct": "Allowed deviation from the nominal flow before an anomaly is reported.",
-            "area_m2": "Enables minutes ↔ mm display conversions.",
-            "adjustment_pct": "Scales the curve output, applied before the clamps. 100% = unchanged.",
-            "order": "Zones water in ascending order.",
-            "interval_days": "Water at most every N days (1–60).",
-            "season_months": "Overrides the hub season for this zone. Leave empty to use the hub default."
+            "name": "A friendly name for this circuit, e.g. 'Vegetable beds' or 'Front lawn'.",
+            "icon": "Icon shown for this zone's device. Leave empty for the default.",
+            "valve_entity": "Required. The valve.* or switch.* entity that opens this circuit — any device or helper, not only Zigbee.",
+            "flow_sensor": "This zone's own flow meter (L/min). If empty, the shared line meter is used when available.",
+            "nominal_flow_lpm": "Expected flow while watering; enables leak / no-flow / out-of-range detection. Needs a flow meter.",
+            "flow_tolerance_pct": "How far the real flow may stray from the nominal value before it's flagged. Default 25.",
+            "area_m2": "Circuit surface, used only to show minutes ↔ mm conversions. Optional.",
+            "adjustment_pct": "Scales every watering time up or down (e.g. 70 for a shaded bed, 130 for a sunny one). 100 = unchanged.",
+            "order": "Watering sequence: lower numbers water first. Default 100.",
+            "interval_days": "Water at most every N days (1–60). 1 = every day, 3 = every third day. Default 3.",
+            "compatibility_group": "Only used when the hub allows more than one concurrent zone. Zones in the same group may run together.",
+            "season_months": "Water only in these months, overriding the hub season. Empty = follow the hub (March–October)."
           }
         },
         "cycle_menu": {
@@ -255,49 +281,59 @@
         },
         "cycle": {
           "title": "Cycle",
+          "description": "A cycle is one daily watering run for this zone. A zone can have several (e.g. one in the morning and one in the evening), each with its own start time and curve.",
           "data": {
             "name": "Name",
-            "kind": "Trigger type",
-            "months_override": "Months override"
+            "kind": "When it starts",
+            "months_override": "Months override (optional)"
           },
           "data_description": {
-            "kind": "Start relative to sunrise/sunset, or at a fixed time.",
-            "months_override": "Restrict this cycle to certain months. Leave empty to follow the zone."
+            "name": "A name for this run, e.g. 'Morning' or 'Evening'.",
+            "kind": "Start at sunrise/sunset (with an offset) or at a fixed clock time.",
+            "months_override": "Run this cycle only in certain months. Empty = follow the zone's season."
           }
         },
         "cycle_sun": {
           "title": "Sun trigger",
+          "description": "Start this cycle relative to sunrise or sunset — it follows the season automatically through the year.",
           "data": {
             "event": "Sun event",
             "offset_min": "Offset (minutes)"
           },
           "data_description": {
-            "offset_min": "Negative = before the event, positive = after. At most ±360 minutes."
+            "event": "Anchor the start to sunrise or to sunset.",
+            "offset_min": "Minutes before (negative) or after (positive) the event. E.g. −60 = one hour before sunrise. Max ±360."
           }
         },
         "cycle_time": {
           "title": "Time trigger",
+          "description": "Start this cycle at the same clock time every day.",
           "data": {
             "at": "Start time"
+          },
+          "data_description": {
+            "at": "The time of day this cycle starts, e.g. 06:30."
           }
         },
         "cycle_curve": {
           "title": "Watering curve",
-          "description": "How the watering amount follows the weighted temperature.",
+          "description": "The curve decides how long (or how much) to water based on the weighted temperature: hotter days water more. Start from a ready-made preset, copy one from another cycle, or build your own.",
           "data": {
             "source": "Curve",
-            "soak_max_run_min": "Soak: maximum run (minutes)",
-            "soak_pause_min": "Soak: pause (minutes)",
+            "soak_max_run_min": "Cycle-and-soak: maximum run (minutes, optional)",
+            "soak_pause_min": "Cycle-and-soak: pause (minutes)",
             "volume_safety_timeout_min": "Volume safety timeout (minutes)"
           },
           "data_description": {
-            "soak_max_run_min": "Split the cycle into runs of at most this length. Leave empty to water in one go.",
-            "soak_pause_min": "Pause between soak runs.",
-            "volume_safety_timeout_min": "For volume curves only: hard stop if the target volume is never reached."
+            "source": "'Potted plants' and 'Lawn' are ready-made presets; 'Custom' lets you enter your own points; 'Copy' reuses a curve from an existing cycle.",
+            "soak_max_run_min": "Optional. To avoid runoff on slow-draining soil, split watering into runs no longer than this. Empty = water in one go.",
+            "soak_pause_min": "Absorption pause between those runs; other zones can water in the meantime.",
+            "volume_safety_timeout_min": "Volume curves only: force the valve closed after this long if the target litres are never measured."
           }
         },
         "cycle_curve_custom": {
           "title": "Custom curve",
+          "description": "Define control points mapping weighted temperature to a watering amount. Between points the value is interpolated; outside them it stays flat.",
           "data": {
             "points": "Control points",
             "min_value": "Minimum",
@@ -305,16 +341,19 @@
             "kind": "Curve output"
           },
           "data_description": {
-            "points": "Comma-separated 'temperature:value' pairs with increasing temperatures, e.g. '10:5, 25:15, 35:30'.",
-            "min_value": "Lower clamp applied after the adjustment factor.",
-            "max_value": "Upper clamp applied after the adjustment factor.",
-            "kind": "Minutes (duration) or liters (volume). Volume needs a usable flow meter."
+            "points": "'temperature:value' pairs with increasing temperatures, e.g. '10:5, 25:15, 35:30' means 5 min at 10°C up to 30 min at 35°C.",
+            "min_value": "Never water less than this (applied after the zone adjustment).",
+            "max_value": "Never water more than this (applied after the zone adjustment).",
+            "kind": "What the values mean: minutes (duration) or litres (volume). Volume needs a usable flow meter."
           }
         },
         "cycle_curve_copy": {
           "title": "Copy curve",
           "data": {
             "source": "Copy from"
+          },
+          "data_description": {
+            "source": "Pick an existing zone/cycle to copy its curve into this cycle. You can adjust it afterwards."
           }
         },
         "reconfigure": {
