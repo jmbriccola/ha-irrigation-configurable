@@ -23,7 +23,7 @@ let Le = class {
     return this.cssText;
   }
 };
-const Xe = (n) => new Le(typeof n == "string" ? n : n + "", void 0, fe), Z = (n, ...e) => {
+const Xe = (n) => new Le(typeof n == "string" ? n : n + "", void 0, fe), W = (n, ...e) => {
   const t = n.length === 1 ? n[0] : e.reduce((o, s, i) => o + ((r) => {
     if (r._$cssResult$ === !0) return r.cssText;
     if (typeof r == "number") return r;
@@ -256,7 +256,7 @@ I.elementStyles = [], I.shadowRootOptions = { mode: "open" }, I[j("elementProper
 const me = globalThis, Ce = (n) => n, se = me.trustedTypes, Pe = se ? se.createPolicy("lit-html", { createHTML: (n) => n }) : void 0, je = "$lit$", A = `lit$${Math.random().toFixed(9).slice(2)}$`, Be = "?" + A, at = `<${Be}>`, C = document, B = () => C.createComment(""), F = (n) => n === null || typeof n != "object" && typeof n != "function", ge = Array.isArray, lt = (n) => ge(n) || typeof n?.[Symbol.iterator] == "function", de = `[ 	
 \f\r]`, H = /<(?:(!--|\/[^a-zA-Z])|(\/?[a-zA-Z][^>\s]*)|(\/?$))/g, Te = /-->/g, Me = />/g, S = RegExp(`>|${de}(?:([^\\s"'>=/]+)(${de}*=${de}*(?:[^ 	
 \f\r"'\`<>=]|("|')|))|$)`, "g"), Ne = /'/g, Ie = /"/g, Fe = /^(?:script|style|textarea|title)$/i, Ve = (n) => (e, ...t) => ({ _$litType$: n, strings: e, values: t }), d = Ve(1), X = Ve(2), O = /* @__PURE__ */ Symbol.for("lit-noChange"), c = /* @__PURE__ */ Symbol.for("lit-nothing"), Oe = /* @__PURE__ */ new WeakMap(), k = C.createTreeWalker(C, 129);
-function We(n, e) {
+function Ze(n, e) {
   if (!ge(n) || !n.hasOwnProperty("raw")) throw Error("invalid template strings array");
   return Pe !== void 0 ? Pe.createHTML(e) : e;
 }
@@ -270,7 +270,7 @@ const ct = (n, e) => {
     const m = r === S && n[l + 1].startsWith("/>") ? " " : "";
     i += r === H ? a + at : h >= 0 ? (o.push(p), a.slice(0, h) + je + a.slice(h) + A + m) : a + A + (h === -2 ? l : m);
   }
-  return [We(n, i + (n[t] || "<?>") + (e === 2 ? "</svg>" : e === 3 ? "</math>" : "")), o];
+  return [Ze(n, i + (n[t] || "<?>") + (e === 2 ? "</svg>" : e === 3 ? "</math>" : "")), o];
 };
 class V {
   constructor({ strings: e, _$litType$: t }, o) {
@@ -374,7 +374,7 @@ class G {
     this._$AH !== c && F(this._$AH) ? this._$AA.nextSibling.data = e : this.T(C.createTextNode(e)), this._$AH = e;
   }
   $(e) {
-    const { values: t, _$litType$: o } = e, s = typeof o == "number" ? this._$AC(e) : (o.el === void 0 && (o.el = V.createElement(We(o.h, o.h[0]), this.options)), o);
+    const { values: t, _$litType$: o } = e, s = typeof o == "number" ? this._$AC(e) : (o.el === void 0 && (o.el = V.createElement(Ze(o.h, o.h[0]), this.options)), o);
     if (this._$AH?._$AD === s) this._$AH.p(t);
     else {
       const i = new dt(s, this), r = i.u(this.options);
@@ -580,7 +580,7 @@ const yt = {
   zone_order: "orderNumber",
   zone_suspend_until: "suspendUntil"
 };
-function Ze(n) {
+function We(n) {
   const e = {}, t = /* @__PURE__ */ new Map(), o = [];
   for (const i of Object.values(n.states)) {
     const r = g(i.attributes.maestro_role);
@@ -673,7 +673,10 @@ const w = {
   "reason.no_flow": "No water flow detected",
   "reason.flow_out_of_range": "Flow out of range",
   "reason.close_failed": "Valve failed to close",
-  "reason.restart": "Home Assistant restarted",
+  "reason.watchdog": "Closed by the safety watchdog",
+  "reason.zone_removed": "Zone removed",
+  "reason.shutdown": "Integration shut down",
+  "reason.cancelled": "Cancelled",
   // Degraded-feature keys
   "degraded.switch_valve": "Valve without position feedback",
   "degraded.no_flow_meter": "No flow meter",
@@ -738,11 +741,11 @@ const w = {
   "card.no_zones": "Nessuna zona configurata. Aggiungi le zone dalle opzioni dell'integrazione Irrigation Maestro.",
   "card.unavailable": "non disponibile",
   // Intestazione
-  "header.water_budget": "Bilancio idrico",
+  "header.water_budget": "Budget idrico",
   "header.skip_threshold": "Soglia di salto",
-  "header.weighted_temp": "Temperatura ponderata",
+  "header.weighted_temp": "Temperatura pesata",
   "header.session": "Sessione",
-  "header.global_pause": "Pausa globale",
+  "header.global_pause": "In pausa globale",
   "header.stale_weather": "Dati meteo non aggiornati",
   "header.consumption_left": "Acqua residua",
   // Stati sessione
@@ -757,11 +760,11 @@ const w = {
   "zone_state.paused": "In pausa",
   "zone_state.suspended": "Sospesa",
   "zone_state.disabled": "Disabilitata",
-  // Stati ultimo esito
-  "outcome.completed": "Completata",
-  "outcome.skipped": "Saltata",
-  "outcome.interrupted": "Interrotta",
-  "outcome.cancelled": "Annullata",
+  // Stati ultimo esito (riferiti al "ciclo", maschile)
+  "outcome.completed": "Completato",
+  "outcome.skipped": "Saltato",
+  "outcome.interrupted": "Interrotto",
+  "outcome.cancelled": "Annullato",
   "outcome.none": "Nessuna irrigazione finora",
   // Motivi di salto / esito
   "reason.out_of_season": "Fuori stagione",
@@ -769,7 +772,7 @@ const w = {
   "reason.frost_risk": "Rischio di gelo",
   "reason.cold_day": "Giornata troppo fredda",
   "reason.wind": "Troppo vento",
-  "reason.budget_sufficient": "Bilancio idrico sufficiente",
+  "reason.budget_sufficient": "Budget idrico sufficiente",
   "reason.not_due": "Non ancora in programma",
   "reason.calendar_restricted": "Limitazione di calendario",
   "reason.zone_disabled": "Zona disabilitata",
@@ -789,7 +792,10 @@ const w = {
   "reason.no_flow": "Nessun flusso d'acqua rilevato",
   "reason.flow_out_of_range": "Flusso fuori dai limiti",
   "reason.close_failed": "Chiusura della valvola non riuscita",
-  "reason.restart": "Riavvio di Home Assistant",
+  "reason.watchdog": "Chiusa dal watchdog di sicurezza",
+  "reason.zone_removed": "Zona rimossa",
+  "reason.shutdown": "Integrazione arrestata",
+  "reason.cancelled": "Annullato",
   // Funzionalità degradate
   "degraded.switch_valve": "Valvola senza conferma di posizione",
   "degraded.no_flow_meter": "Nessun contatore di flusso",
@@ -834,7 +840,7 @@ const w = {
   "controls.stop_all": "Ferma tutto",
   "controls.confirm_stop_all": "Fermare subito tutta l'irrigazione?",
   "controls.evaluate_now": "Valuta ora",
-  "controls.pause_global": "Pausa globale",
+  "controls.pause_global": "Metti in pausa tutto",
   "controls.resume_global": "Riprendi tutto",
   // Editor
   "editor.title": "Titolo",
@@ -1019,7 +1025,7 @@ const $e = class $e extends x {
     `;
   }
 };
-$e.styles = Z`
+$e.styles = W`
     :host {
       display: inline-block;
       line-height: 0;
@@ -1319,7 +1325,7 @@ const ye = class ye extends x {
     `;
   }
 };
-ye.styles = Z`
+ye.styles = W`
     :host {
       display: block;
       color: var(--primary-text-color);
@@ -1617,7 +1623,7 @@ const xe = class xe extends x {
     `;
   }
 };
-xe.styles = Z`
+xe.styles = W`
     :host {
       display: block;
     }
@@ -1922,7 +1928,7 @@ const we = class we extends x {
   render() {
     const e = this._config, t = this.hass;
     if (!e || !t) return c;
-    const o = Ge(t), s = Ze(t);
+    const o = Ge(t), s = We(t);
     this._model = s, this._relevantIds = s.entityIds, this._statesCount = Object.keys(t.states).length;
     const i = e.title ? d`<h1 class="card-title">${e.title}</h1>` : c;
     if (!s.found)
@@ -1959,7 +1965,7 @@ const we = class we extends x {
     `;
   }
 };
-we.styles = Z`
+we.styles = W`
     :host {
       display: block;
     }
@@ -2170,7 +2176,7 @@ const Bt = [
   render() {
     const e = this._config, t = this.hass;
     if (!e || !t) return c;
-    const o = Ge(t), s = Ze(t).zones, i = new Set(e.zones ?? []);
+    const o = Ge(t), s = We(t).zones, i = new Set(e.zones ?? []);
     return d`
       <div class="form">
         <label class="field">
@@ -2218,7 +2224,7 @@ const Bt = [
     `;
   }
 };
-ze.styles = Z`
+ze.styles = W`
     :host {
       display: block;
       color: var(--primary-text-color);
@@ -2278,14 +2284,14 @@ ze.styles = Z`
       opacity: 0.9;
     }
   `;
-let W = ze;
+let Z = ze;
 Qe([
   $({ attribute: !1 })
-], W.prototype, "hass");
+], Z.prototype, "hass");
 Qe([
   K()
-], W.prototype, "_config");
-Q("irrigation-maestro-card-editor", W);
+], Z.prototype, "_config");
+Q("irrigation-maestro-card-editor", Z);
 window.customCards = window.customCards ?? [];
 window.customCards.some((n) => n.type === "irrigation-maestro-card") || window.customCards.push({
   type: "irrigation-maestro-card",

@@ -16,11 +16,11 @@ export const it: Record<keyof typeof en, string> = {
   "card.unavailable": "non disponibile",
 
   // Intestazione
-  "header.water_budget": "Bilancio idrico",
+  "header.water_budget": "Budget idrico",
   "header.skip_threshold": "Soglia di salto",
-  "header.weighted_temp": "Temperatura ponderata",
+  "header.weighted_temp": "Temperatura pesata",
   "header.session": "Sessione",
-  "header.global_pause": "Pausa globale",
+  "header.global_pause": "In pausa globale",
   "header.stale_weather": "Dati meteo non aggiornati",
   "header.consumption_left": "Acqua residua",
 
@@ -38,11 +38,11 @@ export const it: Record<keyof typeof en, string> = {
   "zone_state.suspended": "Sospesa",
   "zone_state.disabled": "Disabilitata",
 
-  // Stati ultimo esito
-  "outcome.completed": "Completata",
-  "outcome.skipped": "Saltata",
-  "outcome.interrupted": "Interrotta",
-  "outcome.cancelled": "Annullata",
+  // Stati ultimo esito (riferiti al "ciclo", maschile)
+  "outcome.completed": "Completato",
+  "outcome.skipped": "Saltato",
+  "outcome.interrupted": "Interrotto",
+  "outcome.cancelled": "Annullato",
   "outcome.none": "Nessuna irrigazione finora",
 
   // Motivi di salto / esito
@@ -51,7 +51,7 @@ export const it: Record<keyof typeof en, string> = {
   "reason.frost_risk": "Rischio di gelo",
   "reason.cold_day": "Giornata troppo fredda",
   "reason.wind": "Troppo vento",
-  "reason.budget_sufficient": "Bilancio idrico sufficiente",
+  "reason.budget_sufficient": "Budget idrico sufficiente",
   "reason.not_due": "Non ancora in programma",
   "reason.calendar_restricted": "Limitazione di calendario",
   "reason.zone_disabled": "Zona disabilitata",
@@ -71,7 +71,10 @@ export const it: Record<keyof typeof en, string> = {
   "reason.no_flow": "Nessun flusso d'acqua rilevato",
   "reason.flow_out_of_range": "Flusso fuori dai limiti",
   "reason.close_failed": "Chiusura della valvola non riuscita",
-  "reason.restart": "Riavvio di Home Assistant",
+  "reason.watchdog": "Chiusa dal watchdog di sicurezza",
+  "reason.zone_removed": "Zona rimossa",
+  "reason.shutdown": "Integrazione arrestata",
+  "reason.cancelled": "Annullato",
 
   // Funzionalità degradate
   "degraded.switch_valve": "Valvola senza conferma di posizione",
@@ -122,7 +125,7 @@ export const it: Record<keyof typeof en, string> = {
   "controls.stop_all": "Ferma tutto",
   "controls.confirm_stop_all": "Fermare subito tutta l'irrigazione?",
   "controls.evaluate_now": "Valuta ora",
-  "controls.pause_global": "Pausa globale",
+  "controls.pause_global": "Metti in pausa tutto",
   "controls.resume_global": "Riprendi tutto",
 
   // Editor

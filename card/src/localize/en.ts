@@ -69,7 +69,10 @@ export const en = {
   "reason.no_flow": "No water flow detected",
   "reason.flow_out_of_range": "Flow out of range",
   "reason.close_failed": "Valve failed to close",
-  "reason.restart": "Home Assistant restarted",
+  "reason.watchdog": "Closed by the safety watchdog",
+  "reason.zone_removed": "Zone removed",
+  "reason.shutdown": "Integration shut down",
+  "reason.cancelled": "Cancelled",
 
   // Degraded-feature keys
   "degraded.switch_valve": "Valve without position feedback",
