@@ -13,13 +13,15 @@ jobs:
         with:
           python-version: "3.14"
       - name: Install dev dependencies
-        run: uv pip install --system pytest-homeassistant-custom-component ruff mypy
+        run: |
+          uv venv
+          uv pip install pytest-homeassistant-custom-component ruff mypy
       - name: Ruff (lint)
-        run: ruff check .
+        run: .venv/bin/ruff check .
       - name: Ruff (format)
-        run: ruff format --check .
+        run: .venv/bin/ruff format --check .
       - name: Mypy (strict)
-        run: mypy
+        run: .venv/bin/mypy
 
   test:
     runs-on: ubuntu-latest
@@ -29,9 +31,11 @@ jobs:
         with:
           python-version: "3.14"
       - name: Install dev dependencies
-        run: uv pip install --system pytest-homeassistant-custom-component
+        run: |
+          uv venv
+          uv pip install pytest-homeassistant-custom-component
       - name: Run tests
-        run: python -m pytest tests -v
+        run: .venv/bin/python -m pytest tests -v
 
   card:
     runs-on: ubuntu-latest
@@ -49,3 +53,48 @@ jobs:
           npm run build
       - name: Committed bundle is up to date
         run: git diff --exit-code custom_components/irrigation_maestro/frontend/
+
+  release:
+    # Auto-release: on a push to main, if the manifest version has not been
+    # released yet, tag it and publish a GitHub release (HACS installs from
+    # releases). Gated on the quality jobs, so only green commits ship. To cut
+    # a release, bump "version" in manifest.json and merge to main.
+    needs: [lint, test, card]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Read manifest version
+        id: manifest
+        run: |
+          version="$(jq -r .version custom_components/irrigation_maestro/manifest.json)"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+      - name: Release if the version is new
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.manifest.outputs.version }}
+          SHA: ${{ github.sha }}
+        run: |
+          tag="v${VERSION}"
+          if gh release view "$tag" >/dev/null 2>&1; then
+            echo "Release $tag already exists — nothing to do."
+            exit 0
+          fi
+          # Release notes: the matching CHANGELOG section, or a default line.
+          awk -v ver="$VERSION" '
+            /^## \[/ { if (found) exit; if (index($0, "[" ver "]")) { found = 1; next } }
+            found { print }
+          ' CHANGELOG.md > notes.md
+          if [ ! -s notes.md ]; then
+            printf "Irrigation Maestro %s\n" "$VERSION" > notes.md
+          fi
+          if git rev-parse "$tag" >/dev/null 2>&1; then
+            gh release create "$tag" --title "Irrigation Maestro ${VERSION}" --notes-file notes.md
+          else
+            gh release create "$tag" --target "$SHA" \
+              --title "Irrigation Maestro ${VERSION}" --notes-file notes.md
+          fi

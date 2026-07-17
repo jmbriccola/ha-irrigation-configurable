@@ -149,7 +149,7 @@
       },
       "notifications_event": {
         "title": "Notification settings",
-        "description": "Delivery settings for the '{event}' event.",
+        "description": "Delivery settings for the \"{event}\" event.",
         "data": {
           "enabled": "Enabled",
           "services": "Notify services",
