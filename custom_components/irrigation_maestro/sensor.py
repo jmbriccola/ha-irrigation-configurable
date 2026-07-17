@@ -19,6 +19,7 @@ from homeassistant.util import dt as dt_util
 
 from . import IrrigationConfigEntry
 from .const import TRIGGER_KIND_SUN, TRIGGER_KIND_TIME
+from .engine.curves import CurveKind
 from .entity import (
     MaestroHubEntity,
     MaestroZoneEntity,
@@ -47,8 +48,9 @@ async def async_setup_entry(
         HubWeightedTempSensor(runtime),
         HubSessionSensor(runtime),
     ]
-    if runtime.hub.consumption_budget_liters is not None:
-        hub_entities.append(HubConsumptionLeftSensor(runtime))
+    # Always created: it reports "unavailable" until a budget is configured,
+    # so enabling the budget later via options needs no reload.
+    hub_entities.append(HubConsumptionLeftSensor(runtime))
     async_add_entities(hub_entities)
 
     def _zone_sensors(zone_id: str) -> list[Entity]:
@@ -169,7 +171,7 @@ class HubSessionSensor(MaestroHubEntity, SensorEntity):
 
 
 class HubConsumptionLeftSensor(MaestroHubEntity, SensorEntity):
-    """Liters left in the monthly budget (only created when configured)."""
+    """Liters left in the monthly budget; unavailable when none is configured."""
 
     _attr_device_class = SensorDeviceClass.VOLUME
     _attr_native_unit_of_measurement = UnitOfVolume.LITERS
@@ -177,6 +179,10 @@ class HubConsumptionLeftSensor(MaestroHubEntity, SensorEntity):
 
     def __init__(self, runtime: IrrigationRuntime) -> None:
         super().__init__(runtime, "hub_consumption_left")
+
+    @property
+    def available(self) -> bool:
+        return self._runtime.hub.consumption_budget_liters is not None
 
     @property
     def native_value(self) -> float | None:
@@ -250,13 +256,10 @@ class ZoneStateSensor(MaestroZoneEntity, SensorEntity):
             attributes["active_cycle_id"] = active.cycle_id
             if active.phase == PHASE_WATERING and active.started_at is not None:
                 attributes["run_started_at"] = active.started_at.isoformat()
-                attributes["run_duration_min"] = active.duration_min
-                attributes["run_planned_runs"] = [active.duration_min] + [
-                    segment["duration_min"]
-                    for segment in runtime.session.queue_snapshot()
-                    if segment["zone_id"] == self._zone_id
-                    and segment["cycle_id"] == active.cycle_id
-                ]
+                # Frozen at plan time (contract): the full-run total and its
+                # soak split, not a live-derived estimate.
+                attributes["run_duration_min"] = active.run_total_min
+                attributes["run_planned_runs"] = list(active.planned_runs)
         return attributes
 
     def _degraded(self) -> list[str]:
@@ -267,10 +270,15 @@ class ZoneStateSensor(MaestroZoneEntity, SensorEntity):
         degraded: list[str] = []
         if config.is_switch:
             degraded.append("switch_valve")
-        if not runtime.zone_has_flow_meter(config):
+        has_meter = runtime.zone_has_flow_meter(config)
+        if not has_meter:
             degraded.append("no_flow_meter")
         elif config.flow_sensor is None and runtime.hub.line_flow_sensor is not None:
             degraded.append("line_meter_shared")
+        # A volume-target cycle needs a usable meter; without one it silently
+        # degrades to a timed run (see the degradation matrix).
+        if not has_meter and any(cycle.curve.kind is CurveKind.VOLUME for cycle in config.cycles):
+            degraded.append("volume_mode_unavailable")
         snapshot = runtime.weather.last_snapshot
         if snapshot is not None and not snapshot.hourly:
             degraded.append("no_hourly_forecast")

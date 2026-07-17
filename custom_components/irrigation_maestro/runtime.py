@@ -154,6 +154,10 @@ class IrrigationRuntime:
     async def async_config_updated(self) -> None:
         """Apply config changes in place — never reload mid-cycle (§5)."""
         old_zone_ids = set(self.zones)
+        old_cycles = {
+            zone_id: {cycle.cycle_id for cycle in zone.config.cycles}
+            for zone_id, zone in self.zones.items()
+        }
         self.hub = HubConfig.from_options(dict(self.entry.options))
         self._build_zones()
         removed = old_zone_ids - set(self.zones)
@@ -164,7 +168,14 @@ class IrrigationRuntime:
         self._schedule_triggers()
         self.sentinel.start()  # re-arm at the (possibly new) sentinel time
         self.state.schedule_save()
-        if removed or (set(self.zones) - old_zone_ids):
+        # Signal the platforms to add/remove entities when the zone set OR any
+        # zone's cycle set changed (new/removed cycle => new/removed switch),
+        # so a reconfigure needs no reload.
+        cycles_changed = any(
+            old_cycles.get(zone_id, set()) != {cycle.cycle_id for cycle in zone.config.cycles}
+            for zone_id, zone in self.zones.items()
+        )
+        if removed or (set(self.zones) - old_zone_ids) or cycles_changed:
             async_dispatcher_send(self.hass, SIGNAL_ZONES_CHANGED, self.entry.entry_id)
         self.dispatch_update()
 
@@ -541,10 +552,7 @@ class IrrigationRuntime:
             zone.cycles[0] if zone.cycles else None,
         )
         if duration_min is None:
-            if (
-                cycle is not None
-                and cycle.curve.kind is CurveKind.VOLUME
-            ):
+            if cycle is not None and cycle.curve.kind is CurveKind.VOLUME:
                 # A volume curve yields liters, not minutes: run for the
                 # cycle's safety timeout instead of misreading the target.
                 duration_min = cycle.volume_safety_timeout_min or 10

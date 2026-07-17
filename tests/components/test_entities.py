@@ -7,8 +7,10 @@ Entities are located exactly the way the card does it: by their
 from datetime import timedelta
 
 import pytest
+from custom_components.irrigation_maestro.const import DOMAIN
 from freezegun.api import FrozenDateTimeFactory
 from homeassistant.core import HomeAssistant, State
+from homeassistant.helpers import entity_registry as er
 from homeassistant.util import dt as dt_util
 
 from .mocks import MockValvePark
@@ -271,15 +273,74 @@ async def test_datetime_set_suspends_zone(
     assert suspend.state != "unknown"
 
 
-async def test_consumption_sensor_absent_without_budget(
+async def test_switch_zone_declares_switch_valve_degradation(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    freezer.move_to(START)
+    park = MockValvePark(hass)
+    park.add("switch.pots")
+    mock_weather(hass)
+    entry = await setup_hub(hass, [zone_data("Pots", "switch.pots")])
+    zone_id = entry.runtime_data.zone_ids[0]
+
+    state = role_state(hass, "zone_state", zone_id)
+    assert state is not None
+    assert "switch_valve" in state.attributes["degraded"]
+
+
+async def test_volume_cycle_without_meter_declares_degradation(
     hass: HomeAssistant, freezer: FrozenDateTimeFactory
 ) -> None:
     freezer.move_to(START)
     park = MockValvePark(hass)
     park.add("valve.pots")
     mock_weather(hass)
-    await setup_hub(hass, [zone_data("Pots", "valve.pots")])
-    assert role_state(hass, "hub_consumption_left") is None
+    zone = zone_data(
+        "Pots",
+        "valve.pots",
+        cycles=[
+            {
+                "id": "cy_vol",
+                "name": "Volume",
+                "enabled": True,
+                "trigger": {"kind": "time", "at": "05:30"},
+                "curve": {
+                    "points": [[20.0, 20.0]],
+                    "min_value": 5.0,
+                    "max_value": 90.0,
+                    "kind": "volume",
+                },
+                "volume_safety_timeout_min": 20,
+            }
+        ],
+    )
+    entry = await setup_hub(hass, [zone])
+    zone_id = entry.runtime_data.zone_ids[0]
+
+    state = role_state(hass, "zone_state", zone_id)
+    assert state is not None
+    assert "volume_mode_unavailable" in state.attributes["degraded"]
+    assert "no_flow_meter" in state.attributes["degraded"]
+
+
+async def test_consumption_sensor_unavailable_without_budget(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    freezer.move_to(START)
+    park = MockValvePark(hass)
+    park.add("valve.pots")
+    mock_weather(hass)
+    entry = await setup_hub(hass, [zone_data("Pots", "valve.pots")])
+    # The sensor exists (so enabling the budget later needs no reload) but is
+    # unavailable until a budget is configured. An unavailable entity has its
+    # attributes stripped, so it is looked up by unique_id, not by role.
+    registry = er.async_get(hass)
+    unique_id = f"{entry.entry_id}_hub_consumption_left"
+    entity_id = registry.async_get_entity_id("sensor", DOMAIN, unique_id)
+    assert entity_id is not None
+    state = hass.states.get(entity_id)
+    assert state is not None
+    assert state.state == "unavailable"
 
 
 async def test_consumption_sensor_present_with_budget(

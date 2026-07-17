@@ -9,11 +9,14 @@ from __future__ import annotations
 from typing import Any
 
 from homeassistant.components.switch import SwitchEntity
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
+from homeassistant.helpers import entity_registry as er
+from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.entity import Entity
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
 from . import IrrigationConfigEntry
+from .const import DOMAIN
 from .entity import (
     MaestroHubEntity,
     MaestroZoneEntity,
@@ -21,7 +24,7 @@ from .entity import (
     async_ensure_hub_device,
 )
 from .models import CycleConfig
-from .runtime import IrrigationRuntime
+from .runtime import SIGNAL_ZONES_CHANGED, IrrigationRuntime
 
 
 async def async_setup_entry(
@@ -43,6 +46,50 @@ async def async_setup_entry(
         return entities
 
     async_add_zone_entities(hass, entry, async_add_entities, _zone_switches)
+
+    # A reconfigure that adds or removes a cycle must add/remove its enable
+    # switch in place (no reload). Track the cycle ids we have already created
+    # per zone and reconcile on every zone-change signal.
+    known_cycles: dict[str, set[str]] = {
+        zone_id: {cycle.cycle_id for cycle in runtime.zones[zone_id].config.cycles}
+        for zone_id in runtime.zone_ids
+    }
+
+    @callback
+    def _sync_cycles(_entry_id: str | None = None) -> None:
+        registry = er.async_get(hass)
+        for zone_id in runtime.zone_ids:
+            zone = runtime.zones.get(zone_id)
+            if zone is None:
+                continue
+            current = {cycle.cycle_id for cycle in zone.config.cycles}
+            if zone_id not in known_cycles:
+                # A brand-new zone: its switches (including cycle switches) are
+                # created by async_add_zone_entities on this same signal — just
+                # record the set so we don't add them twice.
+                known_cycles[zone_id] = current
+                continue
+            previous = known_cycles[zone_id]
+            new_ids = current - previous
+            if new_ids:
+                async_add_entities(
+                    [
+                        CycleEnabledSwitch(runtime, zone_id, cycle)
+                        for cycle in zone.config.cycles
+                        if cycle.cycle_id in new_ids
+                    ],
+                    config_subentry_id=zone_id,
+                )
+            for cycle_id in previous - current:
+                unique_id = f"{zone_id}_cycle_{cycle_id}"
+                entity_id = registry.async_get_entity_id("switch", DOMAIN, unique_id)
+                if entity_id is not None:
+                    registry.async_remove(entity_id)
+            known_cycles[zone_id] = current
+        for gone in set(known_cycles) - set(runtime.zone_ids):
+            known_cycles.pop(gone, None)
+
+    entry.async_on_unload(async_dispatcher_connect(hass, SIGNAL_ZONES_CHANGED, _sync_cycles))
 
 
 class HubPauseSwitch(MaestroHubEntity, SwitchEntity):

@@ -737,11 +737,13 @@ class ZoneSubentryFlowHandler(ConfigSubentryFlow):
                 min_value=1, max_value=100, unit="%"
             ),
             vol.Optional(const.CONF_AREA_M2): _number(min_value=0, step="any", unit="m²"),
+            # Ranges match the zone number entities and the set_zone_order
+            # service (order 1-1000, adjustment 10-300%).
             vol.Required(const.CONF_ADJUSTMENT_PCT, default=const.DEFAULT_ADJUSTMENT_PCT): _number(
-                min_value=0, max_value=500, unit="%"
+                min_value=10, max_value=300, unit="%"
             ),
             vol.Required(const.CONF_ORDER, default=const.DEFAULT_ORDER): _number(
-                min_value=0, max_value=10000
+                min_value=1, max_value=1000
             ),
             # Range enforced in code so the user gets a friendly error.
             vol.Required(const.CONF_INTERVAL_DAYS, default=const.DEFAULT_INTERVAL_DAYS): _number(
