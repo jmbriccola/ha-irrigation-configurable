@@ -347,6 +347,10 @@ class SessionRunner:
 
     async def _run(self) -> None:
         self._start_surveillance()
+        self._runtime.fire_event(
+            "session_started",
+            {"queued": [segment.zone_id for segment in self._queue]},
+        )
         try:
             # Coalescing window: triggers scheduled for the same instant all
             # join the queue before the first pick, so zone priority wins over
@@ -380,6 +384,10 @@ class SessionRunner:
             self._queue.clear()
             self.evaluation = None
             self.started_at = None
+            self._runtime.fire_event(
+                "session_finished",
+                {"aborted": self._stopping, "reason": self._abort_reason},
+            )
             await self._runtime.async_save_state()
             self._runtime.dispatch_update()
 
