@@ -275,9 +275,7 @@ async def _async_import_config(call: ServiceCall) -> None:
         hub_config = HubConfig.from_options(options)
         for zone_id, data in zones.items():
             if isinstance(data, dict):
-                ZoneConfig.from_subentry(
-                    str(zone_id), data, templates=hub_config.curve_templates
-                )
+                ZoneConfig.from_subentry(str(zone_id), data, templates=hub_config.curve_templates)
     except Exception as err:
         raise _invalid_payload() from err
     for zone_id, data in zones.items():

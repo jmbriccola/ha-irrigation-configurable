@@ -136,10 +136,7 @@ class Watchdog:
         for controller in runtime.all_valve_controllers():
             if not controller.is_open:
                 continue
-            if (
-                controller.entity_id == master
-                and runtime.session.active
-            ):
+            if controller.entity_id == master and runtime.session.active:
                 # The master legitimately stays open for the whole session,
                 # which can exceed the per-valve maximum with many zones in a
                 # serial queue; the zone valves keep their individual caps and
