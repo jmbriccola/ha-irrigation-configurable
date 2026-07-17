@@ -252,12 +252,17 @@ class SessionRunner:
         self._last_zone = None
 
     def enqueue(self, runs: Iterable[PlannedRun], *, manual: bool) -> None:
-        """Expand runs into segments and make sure the runner task lives."""
+        """Queue each run's first segment and make sure the runner task lives.
+
+        Later cycle-and-soak segments are queued by ``_execute`` when the
+        previous one completes, carrying the soak-pause ``earliest`` time.
+        """
         for run in runs:
-            for index, minutes in enumerate(run.runs):
-                self._queue.append(
-                    QueuedSegment(run=run, segment_index=index, duration_min=minutes, manual=manual)
-                )
+            if not run.runs:
+                continue
+            self._queue.append(
+                QueuedSegment(run=run, segment_index=0, duration_min=run.runs[0], manual=manual)
+            )
         # The queue is priority-ordered: triggers firing in the same instant
         # arrive in arbitrary callback order, but zones must run in the
         # configured sequence (§1).

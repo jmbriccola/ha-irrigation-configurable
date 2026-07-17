@@ -106,6 +106,14 @@ details harvested from it (kept as engine behaviour):
   TTL 300 s; unledgered transitions during a session = manual → abort all.
 - Session evaluation cached 120 s so near-simultaneous triggers share one
   weather fetch; the frozen evaluation lives for the whole session.
+- Queue is priority-sorted at every enqueue (zone order, name, id) plus a 2 s
+  gather window at session start: simultaneous triggers arrive in arbitrary
+  callback order, but zones must run in the configured sequence.
+- Cycle-and-soak: only a run's FIRST segment is enqueued; each completed
+  segment queues the next one with `earliest = now + soak_pause` (bug found
+  by test: pre-expanding all segments made slice 2 start immediately).
+- Brands PR assets generated in docs/brands/irrigation_maestro/ (droplet over
+  field, Pillow-generated placeholder — replaceable with real artwork).
 
 ## Progress log
 
