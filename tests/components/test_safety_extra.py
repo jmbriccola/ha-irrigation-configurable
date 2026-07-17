@@ -223,6 +223,42 @@ async def test_zero_flow_interrupts_cycle(
     assert outcome["reason_key"] == "no_flow"
 
 
+async def test_max_concurrent_two_same_group_run_together(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    """With max_concurrent=2, zones sharing a compatibility group coexist;
+    a zone without a group never joins them."""
+    freezer.move_to(START)
+    park = MockValvePark(hass)
+    for entity in ("valve.a", "valve.b", "valve.c"):
+        park.add(entity)
+    mock_weather(hass)
+    entry = await setup_hub(
+        hass,
+        [
+            zone_data("Alpha", "valve.a", order=1, minutes=5, compatibility_group="drip"),
+            zone_data("Beta", "valve.b", order=2, minutes=5, compatibility_group="drip"),
+            zone_data("Gamma", "valve.c", order=3, minutes=3),
+        ],
+        options={"max_concurrent": 2, "compatibility_groups": ["drip"], "settle_pause_s": 30},
+    )
+
+    await advance(hass, freezer, 32 * 60)
+    # Alpha and Beta (same group) water together; Gamma must wait.
+    assert hass.states.get("valve.a").state == "open"
+    assert hass.states.get("valve.b").state == "open"
+    assert hass.states.get("valve.c").state == "closed"
+
+    await advance(hass, freezer, 10 * 60)
+    assert hass.states.get("valve.a").state == "closed"
+    assert hass.states.get("valve.b").state == "closed"
+    # Gamma ran alone afterwards.
+    assert ("open_valve", "valve.c") in park.commands
+    runtime = entry.runtime_data
+    for zone_id in runtime.zone_ids:
+        assert runtime.state.last_outcome(zone_id)["result"] == "completed"
+
+
 async def test_soak_interleaves_other_zone(
     hass: HomeAssistant, freezer: FrozenDateTimeFactory
 ) -> None:

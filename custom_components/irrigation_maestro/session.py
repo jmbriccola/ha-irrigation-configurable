@@ -315,6 +315,36 @@ class SessionRunner:
                 return self._queue.pop(index)
         return None
 
+    def _gather_batch(self, first: QueuedSegment) -> list[QueuedSegment]:
+        """Segments allowed to run together with ``first``.
+
+        Only zones sharing the same (non-empty) compatibility group may
+        coexist, up to ``max_concurrent``; the pressure-safe default of 1
+        keeps everything strictly serial.
+        """
+        limit = self._runtime.hub.max_concurrent
+        if limit <= 1:
+            return [first]
+        first_zone = self._runtime.zones.get(first.zone_id)
+        group = first_zone.config.compatibility_group if first_zone else None
+        if not group:
+            return [first]
+        batch = [first]
+        now = dt_util.utcnow()
+        for candidate in list(self._queue):
+            if len(batch) >= limit:
+                break
+            if candidate.earliest is not None and candidate.earliest > now:
+                continue
+            if candidate.zone_id in {item.zone_id for item in batch}:
+                continue
+            zone = self._runtime.zones.get(candidate.zone_id)
+            if zone is None or zone.config.compatibility_group != group:
+                continue
+            self._queue.remove(candidate)
+            batch.append(candidate)
+        return batch
+
     async def _run(self) -> None:
         self._start_surveillance()
         try:
@@ -335,7 +365,11 @@ class SessionRunner:
                 if self._session_expired():
                     self._skip_remaining(segment)
                     break
-                await self._execute(segment)
+                batch = self._gather_batch(segment)
+                if len(batch) == 1:
+                    await self._execute(segment)
+                else:
+                    await asyncio.gather(*(self._execute(item) for item in batch))
             if self._stopping:
                 self._cancel_queue()
         finally:

@@ -45,10 +45,19 @@ async def async_register_frontend(hass: HomeAssistant) -> None:
     await _async_register_resource(hass, url)
 
 
+def _lovelace_mode(lovelace: object) -> str | None:
+    # LovelaceData grew a `resource_mode` attribute (older versions exposed
+    # `mode`); support the whole 2025.7+ range.
+    mode = getattr(lovelace, "resource_mode", None) or getattr(lovelace, "mode", None)
+    if mode is None and isinstance(lovelace, dict):
+        mode = lovelace.get("mode")
+    return mode
+
+
 async def _async_register_resource(hass: HomeAssistant, url: str) -> None:
     lovelace = hass.data.get("lovelace")
     resources = getattr(lovelace, "resources", None)
-    if resources is None or getattr(lovelace, "mode", "yaml") != "storage":
+    if resources is None or _lovelace_mode(lovelace) != "storage":
         _LOGGER.info(
             "Lovelace is not in storage mode; add %s as a dashboard resource manually",
             url,
