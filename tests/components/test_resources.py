@@ -1,10 +1,9 @@
 """Tests for card serving and automatic Lovelace resource registration."""
 
+from custom_components.irrigation_maestro.const import CARD_FILENAME, FRONTEND_URL_BASE
 from freezegun.api import FrozenDateTimeFactory
 from homeassistant.core import HomeAssistant
 from homeassistant.setup import async_setup_component
-
-from custom_components.irrigation_maestro.const import CARD_FILENAME, FRONTEND_URL_BASE
 
 from .mocks import MockValvePark
 from .test_session import START, mock_weather, setup_hub, zone_data
@@ -32,9 +31,7 @@ async def test_yaml_mode_skips_resource_registration(
 ) -> None:
     freezer.move_to(START)
     assert await async_setup_component(hass, "http", {})
-    assert await async_setup_component(
-        hass, "lovelace", {"lovelace": {"mode": "yaml"}}
-    )
+    assert await async_setup_component(hass, "lovelace", {"lovelace": {"mode": "yaml"}})
     park = MockValvePark(hass)
     park.add("valve.a")
     mock_weather(hass)

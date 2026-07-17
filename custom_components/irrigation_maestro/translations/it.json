@@ -366,5 +366,358 @@
         "reconfigure_successful": "Zona aggiornata."
       }
     }
+  },
+  "entity": {
+    "sensor": {
+      "hub_water_budget": {
+        "name": "Bilancio idrico"
+      },
+      "hub_skip_threshold": {
+        "name": "Soglia di salto"
+      },
+      "hub_weighted_temp": {
+        "name": "Temperatura pesata"
+      },
+      "hub_session": {
+        "name": "Sessione",
+        "state": {
+          "idle": "Inattiva",
+          "evaluating": "In valutazione",
+          "running": "In corso"
+        }
+      },
+      "hub_consumption_left": {
+        "name": "Budget di consumo residuo"
+      },
+      "zone_state": {
+        "name": "Stato",
+        "state": {
+          "idle": "Inattiva",
+          "queued": "In coda",
+          "watering": "In irrigazione",
+          "soaking": "In assorbimento",
+          "paused": "In pausa",
+          "suspended": "Sospesa",
+          "disabled": "Disabilitata",
+          "waiting": "In attesa",
+          "settling": "In assestamento",
+          "opening": "In apertura",
+          "closing": "In chiusura"
+        }
+      },
+      "zone_next_run": {
+        "name": "Prossima irrigazione"
+      },
+      "zone_last_outcome": {
+        "name": "Ultimo esito",
+        "state": {
+          "completed": "Completato",
+          "skipped": "Saltato",
+          "interrupted": "Interrotto",
+          "cancelled": "Annullato",
+          "none": "Nessuno"
+        }
+      }
+    },
+    "switch": {
+      "zone_enabled": {
+        "name": "Abilitata"
+      },
+      "hub_pause": {
+        "name": "Pausa"
+      }
+    },
+    "number": {
+      "zone_order": {
+        "name": "Ordine"
+      },
+      "zone_interval": {
+        "name": "Intervallo"
+      },
+      "zone_adjustment": {
+        "name": "Correzione"
+      }
+    },
+    "button": {
+      "hub_evaluate": {
+        "name": "Valuta ora"
+      },
+      "hub_stop_all": {
+        "name": "Ferma tutto"
+      }
+    },
+    "datetime": {
+      "zone_suspend_until": {
+        "name": "Sospesa fino a"
+      }
+    }
+  },
+  "services": {
+    "run_zone": {
+      "name": "Irriga zona",
+      "description": "Irriga subito una zona. Le condizioni decisionali (cadenza, bilancio, stagione) vengono ignorate; le protezioni di sicurezza restano attive.",
+      "fields": {
+        "zone_id": {
+          "name": "Zona",
+          "description": "L'id della zona (l'attributo zone_id delle entità della zona)."
+        },
+        "duration": {
+          "name": "Durata",
+          "description": "Durata dell'irrigazione in minuti. Se omessa, decide la curva del ciclo."
+        }
+      }
+    },
+    "run_all": {
+      "name": "Irriga tutte le zone",
+      "description": "Irriga subito ogni zona abilitata e non sospesa, nell'ordine configurato."
+    },
+    "skip_today": {
+      "name": "Salta oggi",
+      "description": "Salta i cicli programmati rimanenti di oggi.",
+      "fields": {
+        "zone_id": {
+          "name": "Zona",
+          "description": "La zona da saltare. Ometti per saltare tutte le zone."
+        }
+      }
+    },
+    "pause": {
+      "name": "Pausa",
+      "description": "Mette in pausa l'irrigazione automatica per un numero di ore.",
+      "fields": {
+        "hours": {
+          "name": "Ore",
+          "description": "Durata della pausa."
+        },
+        "zone_id": {
+          "name": "Zona",
+          "description": "La zona da mettere in pausa. Ometti per una pausa globale."
+        }
+      }
+    },
+    "suspend_until": {
+      "name": "Sospendi fino a",
+      "description": "Sospende l'irrigazione automatica fino a una data e ora.",
+      "fields": {
+        "until": {
+          "name": "Fino a",
+          "description": "Quando termina la sospensione."
+        },
+        "zone_id": {
+          "name": "Zona",
+          "description": "La zona da sospendere. Ometti per sospendere tutte le zone."
+        }
+      }
+    },
+    "resume": {
+      "name": "Riprendi",
+      "description": "Rimuove pause e sospensioni.",
+      "fields": {
+        "zone_id": {
+          "name": "Zona",
+          "description": "La zona da riattivare. Ometti per rimuovere la pausa globale e quelle di tutte le zone."
+        }
+      }
+    },
+    "stop_all": {
+      "name": "Ferma tutto",
+      "description": "Chiude tutte le valvole, annulla la coda e blocca l'irrigazione automatica per la finestra configurata."
+    },
+    "evaluate": {
+      "name": "Valuta",
+      "description": "Esegue una valutazione del motore decisionale e restituisce il piano di irrigazione completo come risposta."
+    },
+    "set_zone_order": {
+      "name": "Imposta ordine zona",
+      "description": "Cambia la priorità di irrigazione di una zona (le zone irrigano in ordine crescente).",
+      "fields": {
+        "zone_id": {
+          "name": "Zona",
+          "description": "La zona da riordinare."
+        },
+        "order": {
+          "name": "Ordine",
+          "description": "Il nuovo valore di priorità."
+        }
+      }
+    },
+    "set_curve": {
+      "name": "Imposta curva",
+      "description": "Sostituisce la curva di irrigazione di un ciclo con punti di controllo espliciti.",
+      "fields": {
+        "zone_id": {
+          "name": "Zona",
+          "description": "La zona a cui appartiene il ciclo."
+        },
+        "cycle_id": {
+          "name": "Ciclo",
+          "description": "Il ciclo la cui curva viene sostituita."
+        },
+        "points": {
+          "name": "Punti di controllo",
+          "description": "Elenco di coppie [temperatura, valore] con temperature strettamente crescenti."
+        },
+        "min_value": {
+          "name": "Minimo",
+          "description": "Limite inferiore. Se omesso, viene mantenuto il minimo attuale."
+        },
+        "max_value": {
+          "name": "Massimo",
+          "description": "Limite superiore. Se omesso, viene mantenuto il massimo attuale."
+        }
+      }
+    },
+    "export_config": {
+      "name": "Esporta configurazione",
+      "description": "Restituisce le opzioni dell'hub e la configurazione di ogni zona come stringa JSON."
+    },
+    "import_config": {
+      "name": "Importa configurazione",
+      "description": "Applica una configurazione esportata in precedenza all'hub e alle sue zone esistenti.",
+      "fields": {
+        "payload": {
+          "name": "Payload",
+          "description": "La stringa JSON prodotta da export_config."
+        }
+      }
+    }
+  },
+  "issues": {
+    "weather_unavailable": {
+      "title": "Dati meteo non disponibili",
+      "description": "Non è stato possibile recuperare i dati meteo al momento della valutazione. È stata applicata la politica configurata per i dati obsoleti. Controlla l'integrazione meteo e l'entità meteo configurata."
+    },
+    "close_failed": {
+      "title": "La valvola non si è chiusa",
+      "description": "La valvola {entity_id} non ha confermato la chiusura dopo un nuovo tentativo. Il watchdog continua a provare; se l'acqua scorre ancora, chiudi manualmente il rubinetto e controlla la valvola."
+    },
+    "valve_unreachable": {
+      "title": "Valvola irraggiungibile",
+      "description": "La valvola {entity_id} è rimasta non disponibile troppo a lungo. Le zone che la usano non possono irrigare; controlla alimentazione e connessione radio."
+    },
+    "sentinel_missing_outcome": {
+      "title": "Irrigazione programmata non eseguita",
+      "description": "Oggi non è stato registrato alcun esito per: {cycles}. Probabilmente l'attivazione non è mai scattata (Home Assistant spento all'orario previsto, o un errore imprevisto)."
+    }
+  },
+  "exceptions": {
+    "hub_not_loaded": {
+      "message": "Irrigation Maestro non è caricato."
+    },
+    "unknown_zone": {
+      "message": "Zona sconosciuta: {zone_id}."
+    },
+    "unknown_cycle": {
+      "message": "Ciclo sconosciuto: {cycle_id}."
+    },
+    "invalid_points": {
+      "message": "Punti della curva non validi ({error}): le temperature devono essere strettamente crescenti e i valori non negativi."
+    },
+    "min_above_max": {
+      "message": "Il minimo non può superare il massimo."
+    },
+    "invalid_payload": {
+      "message": "Il payload non è una configurazione esportata valida."
+    },
+    "unknown_import_zone": {
+      "message": "Il payload fa riferimento a una zona inesistente: {zone_id}."
+    }
+  },
+  "selector": {
+    "month": {
+      "options": {
+        "1": "Gennaio",
+        "2": "Febbraio",
+        "3": "Marzo",
+        "4": "Aprile",
+        "5": "Maggio",
+        "6": "Giugno",
+        "7": "Luglio",
+        "8": "Agosto",
+        "9": "Settembre",
+        "10": "Ottobre",
+        "11": "Novembre",
+        "12": "Dicembre"
+      }
+    },
+    "weekday": {
+      "options": {
+        "0": "Lunedì",
+        "1": "Martedì",
+        "2": "Mercoledì",
+        "3": "Giovedì",
+        "4": "Venerdì",
+        "5": "Sabato",
+        "6": "Domenica"
+      }
+    },
+    "parity": {
+      "options": {
+        "none": "Nessuna restrizione",
+        "odd": "Solo giorni dispari",
+        "even": "Solo giorni pari"
+      }
+    },
+    "stale_weather_policy": {
+      "options": {
+        "fail_open": "Irriga comunque (fail open)",
+        "fail_closed": "Salta l'irrigazione (fail closed)"
+      }
+    },
+    "notify_event": {
+      "options": {
+        "completed": "Ciclo completato",
+        "skipped": "Ciclo saltato",
+        "interrupted": "Ciclo interrotto",
+        "cancelled": "Ciclo annullato",
+        "anomaly": "Anomalia",
+        "watchdog": "Intervento del watchdog",
+        "sentinel": "Sentinella: irrigazione non eseguita",
+        "session_overrun": "Limite di durata della sessione raggiunto",
+        "consumption_budget": "Budget di consumo superato"
+      }
+    },
+    "notify_priority": {
+      "options": {
+        "normal": "Normale",
+        "high": "Alta"
+      }
+    },
+    "trigger_kind": {
+      "options": {
+        "sun": "Evento solare",
+        "time": "Orario fisso"
+      }
+    },
+    "sun_event": {
+      "options": {
+        "sunrise": "Alba",
+        "sunset": "Tramonto"
+      }
+    },
+    "curve_kind": {
+      "options": {
+        "duration": "Durata (minuti)",
+        "volume": "Volume (litri)"
+      }
+    },
+    "budget_action": {
+      "options": {
+        "notify": "Solo notifica",
+        "reduce": "Riduci l'irrigazione",
+        "suspend": "Sospendi l'irrigazione"
+      }
+    },
+    "curve_source": {
+      "options": {
+        "preset_pots": "Preset: piante in vaso",
+        "preset_lawn": "Preset: prato",
+        "custom": "Curva personalizzata",
+        "copy": "Copia da un ciclo esistente"
+      }
+    },
+    "copy_source": {
+      "options": {}
+    }
   }
 }

@@ -1,0 +1,104 @@
+{
+  "entity": {
+    "sensor": {
+      "hub_water_budget": {
+        "default": "mdi:water"
+      },
+      "hub_skip_threshold": {
+        "default": "mdi:water-percent"
+      },
+      "hub_session": {
+        "default": "mdi:sprinkler-variant",
+        "state": {
+          "running": "mdi:sprinkler"
+        }
+      },
+      "hub_consumption_left": {
+        "default": "mdi:cup-water"
+      },
+      "zone_state": {
+        "default": "mdi:sprinkler",
+        "state": {
+          "watering": "mdi:water",
+          "soaking": "mdi:water-opacity",
+          "paused": "mdi:pause",
+          "suspended": "mdi:sleep",
+          "disabled": "mdi:cancel"
+        }
+      },
+      "zone_last_outcome": {
+        "default": "mdi:history"
+      }
+    },
+    "switch": {
+      "zone_enabled": {
+        "default": "mdi:sprinkler"
+      },
+      "hub_pause": {
+        "default": "mdi:pause-octagon"
+      }
+    },
+    "number": {
+      "zone_order": {
+        "default": "mdi:sort-numeric-ascending"
+      },
+      "zone_interval": {
+        "default": "mdi:calendar-refresh"
+      },
+      "zone_adjustment": {
+        "default": "mdi:percent"
+      }
+    },
+    "button": {
+      "hub_evaluate": {
+        "default": "mdi:refresh"
+      },
+      "hub_stop_all": {
+        "default": "mdi:stop"
+      }
+    },
+    "datetime": {
+      "zone_suspend_until": {
+        "default": "mdi:calendar-remove"
+      }
+    }
+  },
+  "services": {
+    "run_zone": {
+      "service": "mdi:play"
+    },
+    "run_all": {
+      "service": "mdi:play-circle"
+    },
+    "skip_today": {
+      "service": "mdi:debug-step-over"
+    },
+    "pause": {
+      "service": "mdi:pause"
+    },
+    "suspend_until": {
+      "service": "mdi:calendar-remove"
+    },
+    "resume": {
+      "service": "mdi:play-pause"
+    },
+    "stop_all": {
+      "service": "mdi:stop"
+    },
+    "evaluate": {
+      "service": "mdi:calculator"
+    },
+    "set_zone_order": {
+      "service": "mdi:sort"
+    },
+    "set_curve": {
+      "service": "mdi:chart-bell-curve"
+    },
+    "export_config": {
+      "service": "mdi:export"
+    },
+    "import_config": {
+      "service": "mdi:import"
+    }
+  }
+}

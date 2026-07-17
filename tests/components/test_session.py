@@ -5,6 +5,7 @@ calls, time is frozen and advanced step by step, and every scenario asserts
 on actual entity states and issued commands.
 """
 
+import asyncio
 from datetime import timedelta
 from typing import Any
 
@@ -125,14 +126,24 @@ async def advance(
         freezer.tick(timedelta(seconds=tick))
         async_fire_time_changed(hass)
         await hass.async_block_till_done()
+        # block_till_done only tracks foreground tasks; the session runner is
+        # a *background* task whose chain of already-completed awaits still
+        # needs loop passes. Drain a bounded number of ready batches so its
+        # progress does not depend on scheduling luck.
+        for _ in range(25):
+            await asyncio.sleep(0)
+        await hass.async_block_till_done()
         remaining -= tick
 
 
 def open_valves(hass: HomeAssistant) -> set[str]:
+    """Mock park valves currently open. The integration's own switch
+    entities (zone/cycle enable, pause) live in the switch domain too and
+    must not be mistaken for water valves."""
     return {
         state.entity_id
         for state in hass.states.async_all(("valve", "switch"))
-        if state.state in ("open", "on")
+        if state.state in ("open", "on") and "maestro_role" not in state.attributes
     }
 
 

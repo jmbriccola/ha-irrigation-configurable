@@ -366,5 +366,358 @@
         "reconfigure_successful": "Zone updated."
       }
     }
+  },
+  "entity": {
+    "sensor": {
+      "hub_water_budget": {
+        "name": "Water budget"
+      },
+      "hub_skip_threshold": {
+        "name": "Skip threshold"
+      },
+      "hub_weighted_temp": {
+        "name": "Weighted temperature"
+      },
+      "hub_session": {
+        "name": "Session",
+        "state": {
+          "idle": "Idle",
+          "evaluating": "Evaluating",
+          "running": "Running"
+        }
+      },
+      "hub_consumption_left": {
+        "name": "Consumption budget left"
+      },
+      "zone_state": {
+        "name": "State",
+        "state": {
+          "idle": "Idle",
+          "queued": "Queued",
+          "watering": "Watering",
+          "soaking": "Soaking",
+          "paused": "Paused",
+          "suspended": "Suspended",
+          "disabled": "Disabled",
+          "waiting": "Waiting",
+          "settling": "Settling",
+          "opening": "Opening",
+          "closing": "Closing"
+        }
+      },
+      "zone_next_run": {
+        "name": "Next run"
+      },
+      "zone_last_outcome": {
+        "name": "Last outcome",
+        "state": {
+          "completed": "Completed",
+          "skipped": "Skipped",
+          "interrupted": "Interrupted",
+          "cancelled": "Cancelled",
+          "none": "None"
+        }
+      }
+    },
+    "switch": {
+      "zone_enabled": {
+        "name": "Enabled"
+      },
+      "hub_pause": {
+        "name": "Pause"
+      }
+    },
+    "number": {
+      "zone_order": {
+        "name": "Order"
+      },
+      "zone_interval": {
+        "name": "Interval"
+      },
+      "zone_adjustment": {
+        "name": "Adjustment"
+      }
+    },
+    "button": {
+      "hub_evaluate": {
+        "name": "Evaluate now"
+      },
+      "hub_stop_all": {
+        "name": "Stop all"
+      }
+    },
+    "datetime": {
+      "zone_suspend_until": {
+        "name": "Suspended until"
+      }
+    }
+  },
+  "services": {
+    "run_zone": {
+      "name": "Run zone",
+      "description": "Waters one zone now. Decision gates (cadence, budget, season) are bypassed; safety gates still apply.",
+      "fields": {
+        "zone_id": {
+          "name": "Zone",
+          "description": "The zone id (the zone_id attribute of the zone's entities)."
+        },
+        "duration": {
+          "name": "Duration",
+          "description": "Watering duration in minutes. If omitted, the cycle curve decides."
+        }
+      }
+    },
+    "run_all": {
+      "name": "Run all zones",
+      "description": "Waters every enabled, non-suspended zone now, in the configured order."
+    },
+    "skip_today": {
+      "name": "Skip today",
+      "description": "Skips today's remaining scheduled cycles.",
+      "fields": {
+        "zone_id": {
+          "name": "Zone",
+          "description": "The zone to skip. Omit to skip every zone."
+        }
+      }
+    },
+    "pause": {
+      "name": "Pause",
+      "description": "Pauses automatic watering for a number of hours.",
+      "fields": {
+        "hours": {
+          "name": "Hours",
+          "description": "How long to pause."
+        },
+        "zone_id": {
+          "name": "Zone",
+          "description": "The zone to pause. Omit to pause globally."
+        }
+      }
+    },
+    "suspend_until": {
+      "name": "Suspend until",
+      "description": "Suspends automatic watering until a date and time.",
+      "fields": {
+        "until": {
+          "name": "Until",
+          "description": "When the suspension ends."
+        },
+        "zone_id": {
+          "name": "Zone",
+          "description": "The zone to suspend. Omit to suspend every zone."
+        }
+      }
+    },
+    "resume": {
+      "name": "Resume",
+      "description": "Clears pauses and suspensions.",
+      "fields": {
+        "zone_id": {
+          "name": "Zone",
+          "description": "The zone to resume. Omit to clear the global pause and every zone."
+        }
+      }
+    },
+    "stop_all": {
+      "name": "Stop all",
+      "description": "Closes every valve, cancels the queue and blocks automatic watering for the configured window."
+    },
+    "evaluate": {
+      "name": "Evaluate",
+      "description": "Runs one engine evaluation and returns the full watering plan as the response."
+    },
+    "set_zone_order": {
+      "name": "Set zone order",
+      "description": "Changes a zone's watering priority (zones water in ascending order).",
+      "fields": {
+        "zone_id": {
+          "name": "Zone",
+          "description": "The zone to reorder."
+        },
+        "order": {
+          "name": "Order",
+          "description": "The new priority value."
+        }
+      }
+    },
+    "set_curve": {
+      "name": "Set curve",
+      "description": "Replaces a cycle's watering curve with inline control points.",
+      "fields": {
+        "zone_id": {
+          "name": "Zone",
+          "description": "The zone owning the cycle."
+        },
+        "cycle_id": {
+          "name": "Cycle",
+          "description": "The cycle whose curve is replaced."
+        },
+        "points": {
+          "name": "Control points",
+          "description": "List of [temperature, value] pairs with strictly increasing temperatures."
+        },
+        "min_value": {
+          "name": "Minimum",
+          "description": "Lower clamp. If omitted, the current minimum is kept."
+        },
+        "max_value": {
+          "name": "Maximum",
+          "description": "Upper clamp. If omitted, the current maximum is kept."
+        }
+      }
+    },
+    "export_config": {
+      "name": "Export configuration",
+      "description": "Returns the hub options and every zone's configuration as a JSON string."
+    },
+    "import_config": {
+      "name": "Import configuration",
+      "description": "Applies a previously exported configuration to the hub and its existing zones.",
+      "fields": {
+        "payload": {
+          "name": "Payload",
+          "description": "The JSON string produced by export_config."
+        }
+      }
+    }
+  },
+  "issues": {
+    "weather_unavailable": {
+      "title": "Weather data unavailable",
+      "description": "The weather data could not be fetched at evaluation time. The configured stale-weather policy was applied. Check the weather integration and the configured weather entity."
+    },
+    "close_failed": {
+      "title": "Valve did not close",
+      "description": "The valve {entity_id} did not confirm closure after a retry. The watchdog keeps trying; if water still flows, close the supply manually and check the valve hardware."
+    },
+    "valve_unreachable": {
+      "title": "Valve unreachable",
+      "description": "The valve {entity_id} has been unavailable for too long. Zones using it cannot water; check its power and radio connection."
+    },
+    "sentinel_missing_outcome": {
+      "title": "Scheduled watering did not run",
+      "description": "No outcome was recorded today for: {cycles}. The trigger probably never fired (Home Assistant was off at trigger time, or an unexpected error occurred)."
+    }
+  },
+  "exceptions": {
+    "hub_not_loaded": {
+      "message": "Irrigation Maestro is not loaded."
+    },
+    "unknown_zone": {
+      "message": "Unknown zone: {zone_id}."
+    },
+    "unknown_cycle": {
+      "message": "Unknown cycle: {cycle_id}."
+    },
+    "invalid_points": {
+      "message": "Invalid curve points ({error}): temperatures must be strictly increasing and values must not be negative."
+    },
+    "min_above_max": {
+      "message": "The minimum must not exceed the maximum."
+    },
+    "invalid_payload": {
+      "message": "The payload is not a valid exported configuration."
+    },
+    "unknown_import_zone": {
+      "message": "The payload references a zone that does not exist: {zone_id}."
+    }
+  },
+  "selector": {
+    "month": {
+      "options": {
+        "1": "January",
+        "2": "February",
+        "3": "March",
+        "4": "April",
+        "5": "May",
+        "6": "June",
+        "7": "July",
+        "8": "August",
+        "9": "September",
+        "10": "October",
+        "11": "November",
+        "12": "December"
+      }
+    },
+    "weekday": {
+      "options": {
+        "0": "Monday",
+        "1": "Tuesday",
+        "2": "Wednesday",
+        "3": "Thursday",
+        "4": "Friday",
+        "5": "Saturday",
+        "6": "Sunday"
+      }
+    },
+    "parity": {
+      "options": {
+        "none": "No restriction",
+        "odd": "Odd days only",
+        "even": "Even days only"
+      }
+    },
+    "stale_weather_policy": {
+      "options": {
+        "fail_open": "Water anyway (fail open)",
+        "fail_closed": "Skip watering (fail closed)"
+      }
+    },
+    "notify_event": {
+      "options": {
+        "completed": "Cycle completed",
+        "skipped": "Cycle skipped",
+        "interrupted": "Cycle interrupted",
+        "cancelled": "Cycle cancelled",
+        "anomaly": "Anomaly",
+        "watchdog": "Watchdog intervention",
+        "sentinel": "Sentinel: watering did not run",
+        "session_overrun": "Session time limit reached",
+        "consumption_budget": "Consumption budget exceeded"
+      }
+    },
+    "notify_priority": {
+      "options": {
+        "normal": "Normal",
+        "high": "High"
+      }
+    },
+    "trigger_kind": {
+      "options": {
+        "sun": "Sun event",
+        "time": "Fixed time"
+      }
+    },
+    "sun_event": {
+      "options": {
+        "sunrise": "Sunrise",
+        "sunset": "Sunset"
+      }
+    },
+    "curve_kind": {
+      "options": {
+        "duration": "Duration (minutes)",
+        "volume": "Volume (liters)"
+      }
+    },
+    "budget_action": {
+      "options": {
+        "notify": "Notify only",
+        "reduce": "Reduce watering",
+        "suspend": "Suspend watering"
+      }
+    },
+    "curve_source": {
+      "options": {
+        "preset_pots": "Preset: potted plants",
+        "preset_lawn": "Preset: lawn",
+        "custom": "Custom curve",
+        "copy": "Copy from an existing cycle"
+      }
+    },
+    "copy_source": {
+      "options": {}
+    }
   }
 }

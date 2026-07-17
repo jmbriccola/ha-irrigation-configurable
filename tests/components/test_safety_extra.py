@@ -2,12 +2,11 @@
 
 from typing import Any
 
+from custom_components.irrigation_maestro.const import DOMAIN
 from freezegun.api import FrozenDateTimeFactory
 from homeassistant.core import HomeAssistant, ServiceCall
 from homeassistant.helpers import issue_registry as ir
 from homeassistant.util import dt as dt_util
-
-from custom_components.irrigation_maestro.const import DOMAIN
 
 from .mocks import MockValvePark
 from .test_session import START, advance, mock_weather, setup_hub, zone_data
@@ -64,9 +63,7 @@ async def test_sentinel_reports_missing_outcome(
     entry = await setup_hub(
         hass,
         [zone_data("Alpha", "valve.a")],
-        options={
-            "notifications": {"sentinel": {"enabled": True, "services": ["test_target"]}}
-        },
+        options={"notifications": {"sentinel": {"enabled": True, "services": ["test_target"]}}},
     )
     runtime = entry.runtime_data
     events: list[Any] = []
@@ -205,7 +202,10 @@ async def test_zero_flow_interrupts_cycle(
         hass,
         [
             zone_data(
-                "Alpha", "valve.a", minutes=10, flow_sensor="sensor.flow",
+                "Alpha",
+                "valve.a",
+                minutes=10,
+                flow_sensor="sensor.flow",
                 nominal_flow_lpm=10.0,
             )
         ],

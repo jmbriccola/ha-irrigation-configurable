@@ -168,6 +168,11 @@ class IrrigationRuntime:
     # Introspection ------------------------------------------------------------
 
     @property
+    def last_evaluation(self) -> SessionEvaluation | None:
+        """The most recent engine evaluation, if any (hub sensors)."""
+        return None if self._last_evaluation is None else self._last_evaluation[1]
+
+    @property
     def zone_ids(self) -> list[str]:
         return list(self.zones)
 

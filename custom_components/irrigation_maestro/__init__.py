@@ -10,10 +10,17 @@ from homeassistant.core import HomeAssistant
 
 from .resources import async_register_frontend
 from .runtime import IrrigationRuntime
+from .services import async_setup_services
 
 _LOGGER = logging.getLogger(__name__)
 
-PLATFORMS: list[Platform] = []
+PLATFORMS: list[Platform] = [
+    Platform.BUTTON,
+    Platform.DATETIME,
+    Platform.NUMBER,
+    Platform.SENSOR,
+    Platform.SWITCH,
+]
 
 type IrrigationConfigEntry = ConfigEntry[IrrigationRuntime]
 
@@ -25,6 +32,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: IrrigationConfigEntry) -
     entry.runtime_data = runtime
 
     await async_register_frontend(hass)
+    async_setup_services(hass)
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     entry.async_on_unload(entry.add_update_listener(_async_update_listener))
     return True

@@ -1,0 +1,130 @@
+# Field selectors only — names and descriptions live in translations
+# ("services" section of translations/*.json).
+
+run_zone:
+  fields:
+    zone_id:
+      required: true
+      example: 1b2f3c4d5e6f
+      selector:
+        text:
+    duration:
+      example: 15
+      selector:
+        number:
+          min: 1
+          max: 1440
+          step: 1
+          unit_of_measurement: min
+          mode: box
+
+run_all:
+
+skip_today:
+  fields:
+    zone_id:
+      example: 1b2f3c4d5e6f
+      selector:
+        text:
+
+pause:
+  fields:
+    hours:
+      required: true
+      example: 6
+      selector:
+        number:
+          min: 0.5
+          max: 8760
+          step: 0.5
+          unit_of_measurement: h
+          mode: box
+    zone_id:
+      example: 1b2f3c4d5e6f
+      selector:
+        text:
+
+suspend_until:
+  fields:
+    until:
+      required: true
+      example: "2026-08-01 06:00:00"
+      selector:
+        datetime:
+    zone_id:
+      example: 1b2f3c4d5e6f
+      selector:
+        text:
+
+resume:
+  fields:
+    zone_id:
+      example: 1b2f3c4d5e6f
+      selector:
+        text:
+
+stop_all:
+
+evaluate:
+
+set_zone_order:
+  fields:
+    zone_id:
+      required: true
+      example: 1b2f3c4d5e6f
+      selector:
+        text:
+    order:
+      required: true
+      example: 10
+      selector:
+        number:
+          min: 1
+          max: 1000
+          step: 1
+          mode: box
+
+set_curve:
+  fields:
+    zone_id:
+      required: true
+      example: 1b2f3c4d5e6f
+      selector:
+        text:
+    cycle_id:
+      required: true
+      example: a1b2c3d4
+      selector:
+        text:
+    points:
+      required: true
+      example: "[[10, 5], [25, 15], [35, 30]]"
+      selector:
+        object:
+    min_value:
+      example: 5
+      selector:
+        number:
+          min: 0
+          max: 10000
+          step: 0.1
+          mode: box
+    max_value:
+      example: 55
+      selector:
+        number:
+          min: 0
+          max: 10000
+          step: 0.1
+          mode: box
+
+export_config:
+
+import_config:
+  fields:
+    payload:
+      required: true
+      example: '{"options": {}, "zones": {}}'
+      selector:
+        text:
+          multiline: true
