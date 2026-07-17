@@ -141,3 +141,21 @@ details harvested from it (kept as engine behaviour):
   (loading the real switch platform replaces plain service registrations);
   advance() drains the ready queue 25× per tick (background-task starvation
   under async_block_till_done caused ~10% flakes at baseline).
+- 2026-07-17 (final): adversarial review workflow (6 lenses × verify, 42
+  agents) surfaced 35 confirmed findings; ALL fixed. Notably: (safety) the
+  surveillance ledger now retires an entry on its own command echo — stale
+  entries no longer mask a later manual intervention (TTL 60 s + discard on
+  unconfirmed commands); level-2 check includes the zone's own valve; no
+  zone valve opens after an abort during master pre-open; recurring
+  zero-flow/volume checks; watchdog exempts the master during a session.
+  (engine) volume cycles never soak-split (was n-fold overwater) and never
+  reuse liters as minutes; per-cycle season extensions survive hub
+  out-of-season. (ha) import_config validates through the typed models;
+  hub_consumption_left always exists; reconfigure adds/removes cycle switches
+  live. (contract) zone_state emits only the 7 contract states; frozen
+  run_duration_min/run_planned_runs; cycle_started + session_overrun events.
+  (i18n) card IT: budget idrico, temperatura pesata, masculine outcomes,
+  disambiguated global-pause. Final state: **222 tests pass**, ruff + mypy
+  strict clean (31 files), card typecheck+build green, all translations
+  complete & consistent, manifest/services/icons validated, all modules
+  import. Ready for a 1.0.0 tag.
