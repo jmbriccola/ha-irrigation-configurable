@@ -95,6 +95,9 @@ class ActiveRun:
     segment_index: int = 0
     total_segments: int = 1
     liters: float = 0.0
+    # Frozen at plan time (card contract: run_duration_min / run_planned_runs).
+    run_total_min: int = 0
+    planned_runs: tuple[int, ...] = ()
 
 
 class FlowMonitor:
@@ -123,6 +126,8 @@ class FlowMonitor:
         self.liters = 0.0
         self._last_at: datetime | None = None
         self._last_lpm = 0.0
+        self._liters_at_last_check = 0.0
+        self._periodic_unsub: CALLBACK_TYPE | None = None
         self._out_of_range_since: datetime | None = None
         self._range_notified = False
         self._unsubs: list[CALLBACK_TYPE] = []
@@ -140,12 +145,17 @@ class FlowMonitor:
         now = dt_util.utcnow()
         self._last_at = now
         self._last_lpm = self._read()
+        self._liters_at_last_check = 0.0
         self._unsubs.append(
             async_track_state_change_event(self._runtime.hass, [self._sensor], self._on_state)
         )
-        self._unsubs.append(
-            async_call_later(self._runtime.hass, self.ZERO_FLOW_GRACE_S, self._check_zero)
+        self._schedule_periodic_check()
+
+    def _schedule_periodic_check(self) -> None:
+        self._periodic_unsub = async_call_later(
+            self._runtime.hass, self.ZERO_FLOW_GRACE_S, self._periodic_check
         )
+        self._unsubs.append(self._periodic_unsub)
 
     def stop(self) -> float:
         self._integrate(dt_util.utcnow())
@@ -171,10 +181,23 @@ class FlowMonitor:
         self._check_range(now)
 
     @callback
-    def _check_zero(self, _now: Any) -> None:
+    def _periodic_check(self, _now: Any) -> None:
+        """Recurring guard: supply failure mid-run and steady-sensor volume.
+
+        A sensor that stops emitting events would otherwise defeat both the
+        zero-flow detection (only checked once) and the volume target (only
+        checked in the state callback).
+        """
         self._integrate(dt_util.utcnow())
-        if self.liters < self.ZERO_FLOW_EPSILON_L:
+        if self._volume_target is not None and self.liters >= self._volume_target:
+            self._on_volume_reached()
+            return
+        delta = self.liters - self._liters_at_last_check
+        self._liters_at_last_check = self.liters
+        if delta < self.ZERO_FLOW_EPSILON_L:
             self._on_no_flow()
+            return
+        self._schedule_periodic_check()
 
     def _check_range(self, now: datetime) -> None:
         expected = self._expected_lpm()
@@ -305,7 +328,14 @@ class SessionRunner:
             if elapsed >= hub.session_max_min:
                 return True
         if hub.must_finish_by is not None:
-            return dt_util.now().time() >= hub.must_finish_by
+            if dt_util.now().time() >= hub.must_finish_by:
+                return True
+            # A session that crossed midnight has certainly missed a same-day
+            # must-finish-by deadline, even though the clock time reads early.
+            return (
+                self.started_at is not None
+                and dt_util.as_local(self.started_at).date() != dt_util.now().date()
+            )
         return False
 
     def _pick(self) -> QueuedSegment | None:
@@ -379,6 +409,10 @@ class SessionRunner:
         finally:
             self._stop_surveillance()
             await self._close_master()
+            # A run enqueued during this teardown must not vanish silently:
+            # record an outcome so the sentinel never sees a gap.
+            for leftover in list(self._queue):
+                self._record(leftover, RESULT_CANCELLED, self._abort_reason or RESULT_CANCELLED)
             await self._flush_cancel_notices()
             self._active.clear()
             self._queue.clear()
@@ -406,26 +440,30 @@ class SessionRunner:
 
     @callback
     def _on_valve_change(self, event: Event[EventStateChangedData]) -> None:
-        if self._stopping:
-            return
         entity_id = event.data["entity_id"]
         new_state = event.data["new_state"]
         if new_state is None:
             return
         is_open = new_state.state in ("open", "on")
         is_closed = new_state.state in ("closed", "off")
+        # Consume our own command echo FIRST, expected or not: every internal
+        # command registers a ledger entry and its resulting transition must
+        # retire it, otherwise stale entries would mask a real manual
+        # intervention later (the entries only exist to tell ours apart).
+        if is_open and self._runtime.ledger_consume(entity_id, "open"):
+            return
+        if is_closed and self._runtime.ledger_consume(entity_id, "close"):
+            return
+        if self._stopping:
+            return
         expected_open = {self._runtime.zones[zone_id].valve.entity_id for zone_id in self._active}
         master = self._runtime.hub.master_valve
         if master is not None and self._master_open:
             expected_open.add(master)
 
         if is_open and entity_id not in expected_open:
-            if self._runtime.ledger_consume(entity_id, "open"):
-                return
             self._trigger_manual_abort(REASON_FOREIGN_VALVE)
         elif is_closed and entity_id in expected_open:
-            if self._runtime.ledger_consume(entity_id, "close"):
-                return
             self._trigger_manual_abort(REASON_MANUAL)
 
     @callback
@@ -477,12 +515,24 @@ class SessionRunner:
     async def _wait_until(self, when: datetime) -> bool:
         return await self._sleep((when - dt_util.utcnow()).total_seconds())
 
-    async def _wait_valves_closed(self, *, timeout_s: float) -> str | None:
-        """Wait for every managed valve (except active ones) to be closed.
+    async def _wait_valves_closed(
+        self, *, timeout_s: float, own_zone_id: str | None = None
+    ) -> str | None:
+        """Wait for every managed valve to be confirmed closed.
+
+        Concurrently-active *other* zones (and the master while a session
+        runs) are exempt; the calling zone's OWN valve is checked too — a
+        valve found open before its command was ever sent means a manual
+        intervention or a failed earlier close, and must cancel, not be
+        silently absorbed (§3 level 2).
 
         Returns None when free, or a cancellation reason on timeout.
         """
-        excluded = {self._runtime.zones[zone_id].valve.entity_id for zone_id in self._active}
+        excluded = {
+            self._runtime.zones[zone_id].valve.entity_id
+            for zone_id in self._active
+            if zone_id != own_zone_id
+        }
         master = self._runtime.hub.master_valve
         if master is not None and self._master_open:
             excluded.add(master)
@@ -541,6 +591,8 @@ class SessionRunner:
         await master.async_open()
         confirm = hub.switch_confirm_s if master.is_switch else hub.open_confirm_s
         if not await master.async_wait_until(open_=True, timeout_s=confirm):
+            self._runtime.ledger_discard(master.entity_id, "open")
+            self._runtime.ledger_expect(master.entity_id, "close")
             await master.async_close()
             return False
         self._master_open = True
@@ -630,6 +682,7 @@ class SessionRunner:
             if segment.run.zone_name not in names:
                 names.append(segment.run.zone_name)
         if names:
+            self._runtime.fire_event("session_overrun", {"zones": names})
             self._runtime.entry.async_create_background_task(
                 self._runtime.hass,
                 self._runtime.notify_session_overrun(names),
@@ -676,9 +729,12 @@ class SessionRunner:
             return
         truncated = allowed_min < segment.duration_min
 
-        # Safety level 2: every managed valve confirmed closed.
+        # Safety level 2: every managed valve confirmed closed — including
+        # this zone's own valve (open before its command = manual/stuck).
         self._set_active(segment, PHASE_WAITING)
-        reason = await self._wait_valves_closed(timeout_s=hub.wait_free_min * 60)
+        reason = await self._wait_valves_closed(
+            timeout_s=hub.wait_free_min * 60, own_zone_id=segment.zone_id
+        )
         if reason is not None:
             self._clear_active(segment)
             if self._stopping:
@@ -694,7 +750,7 @@ class SessionRunner:
                 self._clear_active(segment)
                 self._record(segment, RESULT_INTERRUPTED, self._abort_reason or REASON_MANUAL)
                 return
-            reason = await self._wait_valves_closed(timeout_s=1)
+            reason = await self._wait_valves_closed(timeout_s=1, own_zone_id=segment.zone_id)
             if reason is not None:
                 self._clear_active(segment)
                 self._record(segment, RESULT_CANCELLED, REASON_FOREIGN_VALVE)
@@ -707,6 +763,12 @@ class SessionRunner:
             self._stopping = True
             self._abort_reason = REASON_OPEN_FAILED
             return
+        if self._abort.is_set():
+            # Aborted during the master pre-open pause: never open the zone
+            # valve after a stop ("cancel and notify, never open anyway").
+            self._clear_active(segment)
+            self._record(segment, RESULT_INTERRUPTED, self._abort_reason or REASON_MANUAL)
+            return
 
         # Open with confirmation.
         self._set_active(segment, PHASE_OPENING)
@@ -714,6 +776,9 @@ class SessionRunner:
         await valve.async_open()
         confirm_s = hub.switch_confirm_s if valve.is_switch else hub.open_confirm_s
         if not await valve.async_wait_until(open_=True, timeout_s=confirm_s):
+            # The unconfirmed command's ledger entry must not linger: it could
+            # absorb a genuine manual open later.
+            runtime.ledger_discard(valve.entity_id, "open")
             runtime.ledger_expect(valve.entity_id, "close")
             await valve.async_close()
             self._clear_active(segment)
@@ -724,6 +789,16 @@ class SessionRunner:
             return
 
         # Watering.
+        runtime.fire_event(
+            "cycle_started",
+            {
+                "zone_id": segment.zone_id,
+                "zone_name": segment.run.zone_name,
+                "cycle_id": segment.run.cycle_id,
+                "segment_index": segment.segment_index,
+                "duration_min": allowed_min,
+            },
+        )
         watering_result, liters, elapsed_min = await self._water(segment, zone, allowed_min)
 
         # Close with confirmation and one retry (always, whatever happened).
@@ -840,6 +915,8 @@ class SessionRunner:
             duration_min=duration_min or segment.duration_min,
             segment_index=segment.segment_index,
             total_segments=len(segment.run.runs),
+            run_total_min=segment.run.duration_min,
+            planned_runs=segment.run.runs,
         )
         self._runtime.dispatch_update()
 

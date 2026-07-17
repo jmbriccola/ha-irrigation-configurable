@@ -35,6 +35,7 @@ class Watchdog:
     def __init__(self, runtime: IrrigationRuntime) -> None:
         self._runtime = runtime
         self._unsubs: list[CALLBACK_TYPE] = []
+        self._started_unsub: CALLBACK_TYPE | None = None
         self._startup_done = False
 
     def start(self) -> None:
@@ -43,17 +44,23 @@ class Watchdog:
         if hass.state is CoreState.running:
             self._schedule_startup()
         else:
-            self._unsubs.append(
-                hass.bus.async_listen_once(EVENT_HOMEASSISTANT_STARTED, self._on_started)
+            self._started_unsub = hass.bus.async_listen_once(
+                EVENT_HOMEASSISTANT_STARTED, self._on_started
             )
 
     def stop(self) -> None:
         for unsub in self._unsubs:
             unsub()
         self._unsubs.clear()
+        if self._started_unsub is not None:
+            self._started_unsub()
+            self._started_unsub = None
 
     @callback
     def _on_started(self, _event: Any) -> None:
+        # The listen-once subscription is consumed by firing; drop our handle
+        # so stop() does not unsubscribe it a second time.
+        self._started_unsub = None
         self._schedule_startup()
 
     def _schedule_startup(self) -> None:
@@ -71,6 +78,7 @@ class Watchdog:
         deadline = dt_util.utcnow() + timedelta(seconds=timeout_s)
         pending = list(runtime.all_valve_controllers())
         closed_any = False
+        close_failed: list[str] = []
         unreachable: list[str] = []
         while pending:
             still_pending = []
@@ -80,10 +88,19 @@ class Watchdog:
                         _LOGGER.warning("Startup: %s found open, closing", controller.entity_id)
                         runtime.ledger_expect(controller.entity_id, "close")
                         await controller.async_close()
-                        await controller.async_wait_until(
+                        confirmed = await controller.async_wait_until(
                             open_=False, timeout_s=runtime.hub.close_confirm_s
                         )
-                        closed_any = True
+                        if not confirmed:
+                            runtime.ledger_expect(controller.entity_id, "close")
+                            await controller.async_close()
+                            confirmed = await controller.async_wait_until(
+                                open_=False, timeout_s=runtime.hub.close_confirm_s
+                            )
+                        if confirmed:
+                            closed_any = True
+                        else:
+                            close_failed.append(controller.entity_id)
                 else:
                     still_pending.append(controller)
             pending = still_pending
@@ -94,6 +111,8 @@ class Watchdog:
                 break
             await runtime.async_sleep(AVAILABILITY_POLL_S)
 
+        for entity_id in close_failed:
+            await runtime.report_close_failure(entity_id, entity_id)
         if closed_any:
             await runtime.notify_watchdog(
                 "A valve was found open at Home Assistant start and was closed "
@@ -112,9 +131,20 @@ class Watchdog:
         runtime = self._runtime
         max_delta = timedelta(minutes=runtime.hub.watchdog_max_min)
         now = dt_util.utcnow()
+        master = runtime.hub.master_valve
         overdue = []
         for controller in runtime.all_valve_controllers():
             if not controller.is_open:
+                continue
+            if (
+                controller.entity_id == master
+                and runtime.session.active
+            ):
+                # The master legitimately stays open for the whole session,
+                # which can exceed the per-valve maximum with many zones in a
+                # serial queue; the zone valves keep their individual caps and
+                # the master falls back under watchdog control the moment the
+                # session ends.
                 continue
             state = runtime.hass.states.get(controller.entity_id)
             if state is not None and now - state.last_changed > max_delta:

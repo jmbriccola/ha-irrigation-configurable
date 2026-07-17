@@ -16,6 +16,8 @@ from .curves import Curve, CurveKind, curve_value
 from .model import EngineParams, SessionEvaluation, SkipReason
 from .scheduling import CalendarRestrictions, day_allowed, is_due, split_soak
 
+_DEFAULT_VOLUME_TIMEOUT_MIN = 30
+
 
 @dataclass(frozen=True, slots=True)
 class CycleSpec:
@@ -118,17 +120,22 @@ def _cycle_target(
     weighted_temp: float,
     duration_factor: float,
 ) -> tuple[int, int | None, int]:
-    """Frozen (duration_min, volume_l, safety_timeout_min) for one cycle."""
+    """Frozen (duration_min, volume_l, safety_timeout_min) for one cycle.
+
+    ``duration_min`` is always MINUTES: for volume cycles it is the safety
+    timeout (liters are the separate ``volume_l`` target and must never leak
+    into the time domain — soak splits, truncation and watchdog all reason
+    in minutes).
+    """
     value = curve_value(cycle.curve, weighted_temp, zone.adjustment_pct)
     target = max(round(value * duration_factor), 1)
-    if cycle.curve.kind is CurveKind.VOLUME and zone.has_flow_meter:
-        timeout = cycle.volume_safety_timeout_min or target  # minutes fallback
-        return target, target, timeout
     if cycle.curve.kind is CurveKind.VOLUME:
+        timeout = cycle.volume_safety_timeout_min or _DEFAULT_VOLUME_TIMEOUT_MIN
+        if zone.has_flow_meter:
+            return timeout, target, timeout
         # Degradation: volume cycle without a usable meter runs as a plain
         # duration cycle for its safety timeout (documented in the matrix).
-        duration = cycle.volume_safety_timeout_min or target
-        return duration, None, duration
+        return timeout, None, timeout
     return target, None, target
 
 
@@ -159,6 +166,17 @@ def build_session_plan(
                 reason = SkipReason.CYCLE_DISABLED
             elif now.month not in months:
                 reason = SkipReason.OUT_OF_SEASON
+            elif evaluation.skip_reason is SkipReason.OUT_OF_SEASON:
+                # The session-level season check uses the HUB months; this
+                # cycle's own months include the current month (zone/cycle
+                # season extensions), so re-derive the decision from the
+                # already-computed budget instead of inheriting the skip.
+                if evaluation.weighted_temp is None:
+                    reason = SkipReason.WEATHER_UNAVAILABLE
+                elif evaluation.water_budget >= evaluation.skip_threshold:
+                    reason = SkipReason.BUDGET_SUFFICIENT
+                else:
+                    reason = None
             elif evaluation.skip_reason is not None:
                 reason = evaluation.skip_reason
             elif evaluation.weighted_temp is None:
@@ -174,13 +192,16 @@ def build_session_plan(
             duration, volume, timeout = _cycle_target(
                 cycle, zone, evaluation.weighted_temp, duration_factor
             )
+            # Volume cycles are never soak-split: the target is a single
+            # metered quantity, and splitting would deliver it once per slice.
+            soak_max = None if volume is not None else cycle.soak_max_run_min
             planned = PlannedRun(
                 zone_id=zone.zone_id,
                 zone_name=zone.name,
                 cycle_id=cycle.cycle_id,
                 duration_min=duration,
                 volume_l=volume,
-                runs=split_soak(duration, max_run_min=cycle.soak_max_run_min),
+                runs=split_soak(duration, max_run_min=soak_max),
                 soak_pause_min=cycle.soak_pause_min,
                 safety_timeout_min=timeout,
                 order=zone.order,

@@ -30,7 +30,7 @@ from .const import (
     DOMAIN,
     SUBENTRY_TYPE_ZONE,
 )
-from .engine.curves import curve_value
+from .engine.curves import CurveKind, curve_value
 from .engine.evaluate import evaluate_session
 from .engine.model import SessionEvaluation, SkipReason
 from .engine.planner import PlannedRun, build_session_plan
@@ -66,7 +66,10 @@ _LOGGER = logging.getLogger(__name__)
 SIGNAL_UPDATE = f"{DOMAIN}_update"
 SIGNAL_ZONES_CHANGED = f"{DOMAIN}_zones_changed"
 
-_LEDGER_TTL_S = 300
+# Fallback expiry only: entries are normally retired by their own state
+# transition (see SessionRunner._on_valve_change). Keep it short so an entry
+# whose command never actuated cannot mask a later manual intervention.
+_LEDGER_TTL_S = 60
 _EVALUATION_REUSE_S = 120
 _SKIP_NOTICE_DEBOUNCE_S = 5
 _TEMP_TRACK_MINUTES = 10
@@ -220,7 +223,14 @@ class IrrigationRuntime:
     def zone_status(self, zone_id: str) -> str:
         active = self.session.active_runs.get(zone_id)
         if active is not None:
-            return "watering" if active.phase in ("watering", "opening") else active.phase
+            # Map internal phases onto the card-contract state set:
+            # waiting/settling are pre-watering queue states; opening/closing
+            # bracket the actual watering.
+            if active.phase in ("watering", "opening", "closing"):
+                return "watering"
+            if active.phase in ("waiting", "settling"):
+                return "queued"
+            return active.phase  # soaking
         if any(segment_zone == zone_id for segment_zone in self.session.queued_zone_ids):
             queued = [
                 segment
@@ -260,6 +270,11 @@ class IrrigationRuntime:
         fresh.pop(0)
         self._ledger[(entity_id, action)] = fresh
         return True
+
+    def ledger_discard(self, entity_id: str, action: str) -> None:
+        """Drop pending entries for a command that never actuated, so they
+        cannot absorb a genuine manual transition later."""
+        self._ledger.pop((entity_id, action), None)
 
     async def async_close_all_valves(self) -> None:
         """Close every managed valve, ledger-registered (not 'manual')."""
@@ -526,7 +541,14 @@ class IrrigationRuntime:
             zone.cycles[0] if zone.cycles else None,
         )
         if duration_min is None:
-            if cycle is not None and evaluation.weighted_temp is not None:
+            if (
+                cycle is not None
+                and cycle.curve.kind is CurveKind.VOLUME
+            ):
+                # A volume curve yields liters, not minutes: run for the
+                # cycle's safety timeout instead of misreading the target.
+                duration_min = cycle.volume_safety_timeout_min or 10
+            elif cycle is not None and evaluation.weighted_temp is not None:
                 duration_min = max(
                     round(curve_value(cycle.curve, evaluation.weighted_temp, zone.adjustment_pct)),
                     1,
@@ -558,7 +580,7 @@ class IrrigationRuntime:
         if manual:
             self.state.set_manual_stop(dt_util.utcnow())
             self.state.schedule_save()
-        await self.session.async_stop_all(reason="manual_stop", manual=manual)
+        await self.session.async_stop_all(reason="manual_intervention", manual=manual)
         self.dispatch_update()
 
     def skip_today(self, zone_id: str | None) -> None:

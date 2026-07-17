@@ -26,6 +26,7 @@ from homeassistant.util import dt as dt_util
 from . import const
 from .const import DOMAIN, SUBENTRY_TYPE_ZONE
 from .engine.curves import CurveError, validate_points
+from .models import HubConfig, ZoneConfig
 from .runtime import IrrigationRuntime
 
 SERVICE_RUN_ZONE: Final = "run_zone"
@@ -268,6 +269,17 @@ async def _async_import_config(call: ServiceCall) -> None:
     if not isinstance(options, dict) or not isinstance(zones, dict):
         raise _invalid_payload()
     # Validate everything before touching anything: import is all-or-nothing.
+    # Parsing through the typed models is the same code path setup uses, so a
+    # payload that passes here cannot break the entry afterwards.
+    try:
+        hub_config = HubConfig.from_options(options)
+        for zone_id, data in zones.items():
+            if isinstance(data, dict):
+                ZoneConfig.from_subentry(
+                    str(zone_id), data, templates=hub_config.curve_templates
+                )
+    except Exception as err:
+        raise _invalid_payload() from err
     for zone_id, data in zones.items():
         subentry = entry.subentries.get(zone_id)
         if subentry is None or subentry.subentry_type != SUBENTRY_TYPE_ZONE:
