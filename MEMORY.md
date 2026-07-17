@@ -127,3 +127,17 @@ details harvested from it (kept as engine behaviour):
   config/options/config_subentries en+it). Storage, valve controller,
   weather client, session runner, watchdog, sentinel, runtime, __init__
   implemented; session safety tests in progress.
+- 2026-07-17 (later): 12 session safety scenarios + 9 extra (master valve,
+  sentinel, stale weather fail-open/closed, volume mode, zero-flow, soak
+  interleave, max_concurrent=2 batching) green. Lovelace resource
+  auto-registration fixed (`resource_mode` attr) + tested (storage & yaml).
+  Entities/services/diagnostics/translations built by subagent per the card
+  contract: full suite **217 passed**, ruff clean, mypy strict clean
+  (31 files). Card bundle build verified reproducible. Docs written (README
+  with degradation matrix, INSTRUCTIONS.md, docs/it/guida-rapida.md,
+  docs/it/istruzioni.md, CHANGELOG, brands PR guide + assets). Final
+  adversarial review workflow (6 lenses + refutation) launched.
+- Test-harness notes: MockValvePark now reacts to the call_service EVENT
+  (loading the real switch platform replaces plain service registrations);
+  advance() drains the ready queue 25× per tick (background-task starvation
+  under async_block_till_done caused ~10% flakes at baseline).
