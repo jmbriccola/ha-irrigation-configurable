@@ -1,0 +1,530 @@
+notifica_irrigazione_saltata:
+  alias: Notifica irrigazione saltata
+  description: >-
+    Registra in input_text.irrigazione_esito_<zona> il motivo per cui
+    l'irrigazione della zona non è stata eseguita (o è stata interrotta) e
+    invia una notifica push al telefono di Jacopo. Usato dalle automazioni
+    di irrigazione e dallo script esegui_ciclo_zona.
+  fields:
+    motivo:
+      description: Motivo per cui l'irrigazione non è stata eseguita
+      required: true
+      example: Budget idrico sufficiente
+      selector:
+        text:
+    zona:
+      description: Zona interessata ('vasi' o 'giardino'), determina l'input_text
+        dell'esito e il tag della notifica
+      required: true
+      example: vasi
+      selector:
+        select:
+          options:
+          - vasi
+          - giardino
+  sequence:
+  - action: input_text.set_value
+    target:
+      entity_id: 'input_text.irrigazione_esito_{{ zona }}'
+    data:
+      value: '{{ ((now().date() | string) ~ '': '' ~ motivo)[:250] }}'
+  - action: notify.mobile_app_pixel_10_pro_xl
+    data:
+      title: '💧 Irrigazione {{ zona }} non eseguita'
+      message: '{{ motivo }}'
+      data:
+        tag: 'irrigazione_{{ zona }}'
+        channel: Irrigazione
+  - action: persistent_notification.create
+    data:
+      notification_id: 'irrigazione_esito_{{ zona }}'
+      title: '💧 Irrigazione {{ zona }} non eseguita'
+      message: '{{ now().strftime(''%d/%m alle %H:%M'') }} — {{ motivo }}'
+  mode: queued
+valuta_condizioni_irrigazione:
+  alias: Valuta condizioni irrigazione
+  description: >-
+    Logica decisionale comune alle automazioni "Irrigazione vasi" e
+    "Irrigazione giardino". Controlli di salto in ordine: stagione
+    (marzo-ottobre), precipitazioni in corso, rischio gelo (<2°C),
+    giornata fredda (massima <10°C), budget idrico >= soglia.
+    Budget idrico pesato: pioggia passata (oggi x0.85, ieri x0.5, 2gg fa
+    x0.2, 3gg fa x0.05) + previsioni scontate (0-24h x0.6, 24-48h x0.25,
+    tetto 5 mm, dimezzate se temp pesata >= 30°C: i temporali estivi
+    previsti spesso non arrivano). Soglia di salto dinamica: 3 mm + 0.5
+    mm/°C sopra 28°C di temp pesata, max 6 mm. Temperatura pesata: 3gg fa
+    x0.05, 2gg fa x0.15, ieri x0.30, oggi x0.35, domani x0.15. Durata vasi
+    10-55 min (1 min/°C, +1 min/°C extra sopra 30°C). Durata giardino 8-25
+    min: obiettivo 4 mm a 25°C +0.3 mm/°C (max 8 mm), convertito in minuti
+    con la portata misurata dal flussometro (0.45 m³/h su 20 mq = 0.375
+    mm/min, tre Gardena SD30 a 3 bar).
+    Restituisce (response_variable) un dizionario con esito ('ok' o
+    'salta'), notifica (false per i salti silenziosi, come il fuori
+    stagione), motivo (testo per la notifica push), dettaglio (testo
+    tecnico per il logbook, per l'esito ok è il riepilogo dei calcoli) e
+    le durate calcolate durata_vasi e durata_giardino.
+  mode: parallel
+  max: 5
+  sequence:
+  - if:
+    - condition: template
+      value_template: '{{ now().month not in range(3, 11) }}'
+    then:
+    - variables:
+        risultato:
+          esito: salta
+          notifica: false
+          motivo: Fuori stagione (novembre-febbraio).
+          dettaglio: Fuori stagione (novembre-febbraio).
+    - stop: Fuori stagione
+      response_variable: risultato
+  - if:
+    - condition: state
+      entity_id: weather.forecast_casa
+      state:
+      - rainy
+      - pouring
+      - lightning-rainy
+      - snowy
+      - snowy-rainy
+    then:
+    - variables:
+        risultato:
+          esito: salta
+          notifica: true
+          motivo: 'Ciclo saltato: precipitazioni in corso (stato meteo: {{
+            states(''weather.forecast_casa'') }}).'
+          dettaglio: 'Ciclo saltato: precipitazioni in corso ({{
+            states(''weather.forecast_casa'') }}).'
+    - stop: Precipitazioni in corso
+      response_variable: risultato
+  - if:
+    - condition: numeric_state
+      entity_id: weather.forecast_casa
+      attribute: temperature
+      below: 2
+    then:
+    - variables:
+        risultato:
+          esito: salta
+          notifica: true
+          motivo: 'Ciclo saltato: temperatura attuale {{ state_attr(''weather.forecast_casa'',
+            ''temperature'') }}°C, rischio gelo.'
+          dettaglio: 'Ciclo saltato: temperatura attuale {{ state_attr(''weather.forecast_casa'',
+            ''temperature'') }}°C, rischio gelo.'
+    - stop: Rischio gelo
+      response_variable: risultato
+  - action: weather.get_forecasts
+    target:
+      entity_id: weather.forecast_casa
+    data:
+      type: hourly
+    response_variable: previsione
+  - variables:
+      dati_orari: "{{ previsione['weather.forecast_casa'].forecast }}"
+      temp_max_oggi_eff: >-
+        {% set osservata = states('input_number.temp_max_oggi') | float(0) %}
+        {% set inizio = now().timestamp() | int %}
+        {% set fine = now().replace(hour=23, minute=59, second=59).timestamp() | int %}
+        {% set ns = namespace(max_t=osservata) %}
+        {% for h in dati_orari %}
+          {% set ts = as_timestamp(h.datetime, 0) | int %}
+          {% if inizio <= ts <= fine %}
+            {% if h.temperature | default(0) | float > ns.max_t %}
+              {% set ns.max_t = h.temperature | float %}
+            {% endif %}
+          {% endif %}
+        {% endfor %}
+        {{ [ns.max_t, state_attr('weather.forecast_casa', 'temperature') | float(0)] | max | round(1) }}
+      temp_max_domani: >-
+        {% set inizio = (now().replace(hour=0, minute=0, second=0, microsecond=0).timestamp() + 86400) | int %}
+        {% set fine = (inizio + 86400 - 1) | int %}
+        {% set ns = namespace(max_t=-99) %}
+        {% for h in dati_orari %}
+          {% set ts = as_timestamp(h.datetime, 0) | int %}
+          {% if inizio <= ts <= fine %}
+            {% if h.temperature | default(-99) | float(-99) > ns.max_t %}
+              {% set ns.max_t = h.temperature | float %}
+            {% endif %}
+          {% endif %}
+        {% endfor %}
+        {{ (ns.max_t if ns.max_t > -99 else state_attr('weather.forecast_casa', 'temperature') | float(25)) | round(1) }}
+      temp_pesata: >-
+        {{ ((states('input_number.temp_max_3gg_fa') | float(25)) * 0.05
+          + (states('input_number.temp_max_2gg_fa') | float(25)) * 0.15
+          + (states('input_number.temp_max_ieri') | float(25)) * 0.30
+          + (temp_max_oggi_eff | float(25)) * 0.35
+          + (temp_max_domani | float(25)) * 0.15) | round(1) }}
+      pioggia_oggi_corretta: >-
+        {% set base = states('input_number.pioggia_oggi') | float(0) %}
+        {% set staging = states('input_number.pioggia_ora_staging') | float(0) %}
+        {{ (base + (staging * 0.8 if now().minute < 55 else 0)) | round(1) }}
+      pioggia_prossime_24h: >-
+        {% set inizio = (now().replace(minute=0, second=0, microsecond=0).timestamp() + 3600) | int %}
+        {% set fine = (now().timestamp() + 86400) | int %}
+        {% set ns = namespace(tot=0) %}
+        {% for h in dati_orari %}
+          {% set ts = as_timestamp(h.datetime, 0) | int %}
+          {% if inizio <= ts <= fine %}
+            {% set ns.tot = ns.tot + (h.precipitation | default(0) | float) %}
+          {% endif %}
+        {% endfor %}
+        {{ ns.tot | round(1) }}
+      pioggia_24_48h_future: >-
+        {% set inizio = (now().timestamp() + 86400) | int %}
+        {% set fine = (now().timestamp() + 172800) | int %}
+        {% set ns = namespace(tot=0) %}
+        {% for h in dati_orari %}
+          {% set ts = as_timestamp(h.datetime, 0) | int %}
+          {% if inizio < ts <= fine %}
+            {% set ns.tot = ns.tot + (h.precipitation | default(0) | float) %}
+          {% endif %}
+        {% endfor %}
+        {{ ns.tot | round(1) }}
+      credito_previsioni: >-
+        {% set grezzo = (pioggia_prossime_24h | float(0)) * 0.6
+          + (pioggia_24_48h_future | float(0)) * 0.25 %}
+        {% set con_tetto = [grezzo, 5] | min %}
+        {% set fattore = 0.5 if (temp_pesata | float(25)) >= 30 else 1.0 %}
+        {{ (con_tetto * fattore) | round(2) }}
+      budget_idrico: >-
+        {{ ((pioggia_oggi_corretta | float(0)) * 0.85
+          + (states('input_number.pioggia_ieri') | float(0)) * 0.5
+          + (states('input_number.pioggia_2gg_fa') | float(0)) * 0.2
+          + (states('input_number.pioggia_3gg_fa') | float(0)) * 0.05
+          + (credito_previsioni | float(0))) | round(2) }}
+      soglia_salto: >-
+        {% set extra = (temp_pesata | float(25)) - 28 %}
+        {% set extra = extra if extra > 0 else 0 %}
+        {{ [3 + extra * 0.5, 6] | min | round(2) }}
+      durata_vasi: >-
+        {% set t = temp_pesata | float(25) %}
+        {% set bonus = (t - 30) if t > 30 else 0 %}
+        {{ [[(t + bonus) | round(0) | int, 55] | min, 10] | max }}
+      durata_giardino: >-
+        {% set t = temp_pesata | float(25) %}
+        {% set mm_obiettivo = [[4 + 0.3 * (t - 25), 8] | min, 3] | max %}
+        {{ [[(mm_obiettivo / 0.375) | round(0) | int, 25] | min, 8] | max }}
+  - if:
+    - condition: template
+      value_template: '{{ temp_max_oggi_eff | float(0) < 10 }}'
+    then:
+    - variables:
+        risultato:
+          esito: salta
+          notifica: true
+          motivo: 'Ciclo saltato: massima odierna prevista {{ temp_max_oggi_eff
+            }}°C, troppo bassa per irrigare.'
+          dettaglio: 'Ciclo saltato: massima odierna prevista {{ temp_max_oggi_eff
+            }}°C, troppo bassa per irrigare.'
+    - stop: Giornata troppo fredda
+      response_variable: risultato
+  - if:
+    - condition: template
+      value_template: '{{ budget_idrico | float(0) >= soglia_salto | float(3) }}'
+    then:
+    - variables:
+        risultato:
+          esito: salta
+          notifica: true
+          motivo: >-
+            Ciclo saltato: le piante hanno già abbastanza acqua. Budget idrico
+            {{ budget_idrico }} mm >= soglia {{ soglia_salto }} mm
+            (pioggia oggi: {{ pioggia_oggi_corretta }} mm,
+            ieri: {{ states('input_number.pioggia_ieri') }} mm,
+            previsioni prossime 24h: {{ pioggia_prossime_24h }} mm).
+          dettaglio: >-
+            Ciclo saltato: budget idrico {{ budget_idrico }} mm >= soglia
+            {{ soglia_salto }} mm
+            (oggi: {{ pioggia_oggi_corretta }} mm x0.85,
+            ieri: {{ states('input_number.pioggia_ieri') }} mm x0.5,
+            2gg fa: {{ states('input_number.pioggia_2gg_fa') }} mm x0.2,
+            credito previsioni: {{ credito_previsioni }} mm
+            [prossime 24h: {{ pioggia_prossime_24h }} mm,
+            24-48h: {{ pioggia_24_48h_future }} mm]).
+            Temperatura pesata: {{ temp_pesata }}°C.
+    - stop: Budget idrico sufficiente
+      response_variable: risultato
+  - variables:
+      risultato:
+        esito: ok
+        notifica: false
+        motivo: ''
+        dettaglio: >-
+          Budget idrico: {{ budget_idrico }} mm / soglia {{ soglia_salto }} mm
+          (oggi: {{ pioggia_oggi_corretta }} mm,
+          ieri: {{ states('input_number.pioggia_ieri') }} mm,
+          credito previsioni: {{ credito_previsioni }} mm
+          [prossime 24h: {{ pioggia_prossime_24h }} mm,
+          24-48h: {{ pioggia_24_48h_future }} mm]).
+          Temperatura pesata: {{ temp_pesata }}°C
+          (3gg fa: {{ states('input_number.temp_max_3gg_fa') }}°C,
+          2gg fa: {{ states('input_number.temp_max_2gg_fa') }}°C,
+          ieri: {{ states('input_number.temp_max_ieri') }}°C,
+          oggi max: {{ temp_max_oggi_eff }}°C,
+          domani max: {{ temp_max_domani }}°C).
+        durata_vasi: '{{ durata_vasi }}'
+        durata_giardino: '{{ durata_giardino }}'
+        budget_idrico: '{{ budget_idrico }}'
+        soglia_salto: '{{ soglia_salto }}'
+        temp_pesata: '{{ temp_pesata }}'
+  - stop: Valutazione completata
+    response_variable: risultato
+esegui_ciclo_zona:
+  alias: Esegui ciclo zona irrigazione
+  description: >-
+    Meccanica comune di un ciclo di irrigazione, usata dalle automazioni
+    "Irrigazione vasi" e "Irrigazione giardino". Con mode queued le
+    richieste simultanee si accodano: vasi e giardino condividono la linea
+    e non devono mai irrigare in contemporanea. Sequenza: annulla subito se
+    un ciclo è stato interrotto a mano da meno di un'ora
+    (input_datetime.irrigazione_ultimo_stop_manuale: un ciclo accodato non
+    deve riaprire l'acqua dopo uno stop manuale), attende che entrambe le
+    valvole siano chiuse, rispetta l'eventuale pausa di assestamento, apre
+    la valvola della zona e verifica che si apra davvero, sorveglia il
+    ciclo (un intervento manuale su una valvola lo interrompe con chiusura
+    di sicurezza di entrambe e registra lo stop manuale) e chiude al
+    termine, verificando che la valvola risulti chiusa (un tentativo di
+    ripetizione, poi notifica urgente). Logbook e notifiche dei cicli
+    annullati o interrotti sono gestiti qui; restituisce
+    (response_variable) esito 'completato', 'annullato' o 'interrotto'. La
+    chiusura di sicurezza di ultima istanza resta nel "Watchdog
+    irrigazione", indipendente da automazioni e script.
+  mode: queued
+  max: 5
+  fields:
+    zona:
+      description: Nome della zona ('vasi' o 'giardino'), usato per logbook,
+        notifiche ed esito
+      required: true
+      example: vasi
+      selector:
+        select:
+          options:
+          - vasi
+          - giardino
+    valvola:
+      description: Entità valve della zona
+      required: true
+      example: valve.irrigazione_vasi
+      selector:
+        entity:
+          domain: valve
+    durata:
+      description: Durata del ciclo in minuti
+      required: true
+      example: 20
+      selector:
+        number:
+          min: 1
+          max: 60
+          unit_of_measurement: min
+    attesa_libera_min:
+      description: Attesa massima in minuti perché entrambe le valvole risultino
+        chiuse prima di annullare il ciclo (default 10)
+      required: false
+      default: 10
+      selector:
+        number:
+          min: 1
+          max: 90
+          unit_of_measurement: min
+    pausa_pre_min:
+      description: Pausa di assestamento in minuti tra valvole libere e apertura
+        (default 0)
+      required: false
+      default: 0
+      selector:
+        number:
+          min: 0
+          max: 10
+          unit_of_measurement: min
+  sequence:
+  - variables:
+      altra_valvola: >-
+        {{ 'valve.irrigazione_giardino' if valvola == 'valve.irrigazione_vasi'
+           else 'valve.irrigazione_vasi' }}
+      attesa: '{{ attesa_libera_min | default(10) }}'
+      pausa: '{{ pausa_pre_min | default(0) }}'
+  - if:
+    - condition: template
+      value_template: '{{ (now().timestamp() - state_attr(''input_datetime.irrigazione_ultimo_stop_manuale'',
+        ''timestamp'') | float(0)) < 3600 }}'
+    then:
+    - action: script.notifica_irrigazione_saltata
+      data:
+        zona: '{{ zona }}'
+        motivo: 'Ciclo {{ zona }} annullato: un ciclo è stato interrotto
+          manualmente meno di un''ora fa, l''impianto resta fermo fino al
+          prossimo orario programmato.'
+    - variables:
+        risultato:
+          esito: annullato
+    - stop: Stop manuale recente, ciclo annullato
+      response_variable: risultato
+  - wait_template: '{{ is_state(''valve.irrigazione_vasi'', ''closed'') and
+      is_state(''valve.irrigazione_giardino'', ''closed'') }}'
+    timeout:
+      minutes: '{{ attesa }}'
+    continue_on_timeout: true
+  - if:
+    - condition: template
+      value_template: '{{ not (is_state(''valve.irrigazione_vasi'', ''closed'')
+        and is_state(''valve.irrigazione_giardino'', ''closed'')) }}'
+    then:
+    - action: script.notifica_irrigazione_saltata
+      data:
+        zona: '{{ zona }}'
+        motivo: >-
+          Ciclo {{ zona }} annullato dopo {{ attesa }} minuti di attesa.
+          Stato valvole — vasi: {{ states('valve.irrigazione_vasi') }},
+          giardino: {{ states('valve.irrigazione_giardino') }}.
+          {% if 'open' in [states('valve.irrigazione_vasi'),
+          states('valve.irrigazione_giardino')] %}Una valvola risulta ancora
+          aperta: i due circuiti non possono funzionare insieme.{% else
+          %}Una valvola non risponde (unavailable/unknown): irrigazione
+          saltata per sicurezza, controlla la rete Zigbee.{% endif %}
+    - variables:
+        risultato:
+          esito: annullato
+    - stop: Valvola aperta o non disponibile, ciclo annullato
+      response_variable: risultato
+  - if:
+    - condition: template
+      value_template: '{{ pausa | int(0) > 0 }}'
+    then:
+    - delay:
+        minutes: '{{ pausa }}'
+    - if:
+      - condition: template
+        value_template: '{{ not (is_state(''valve.irrigazione_vasi'', ''closed'')
+          and is_state(''valve.irrigazione_giardino'', ''closed'')) }}'
+      then:
+      - action: script.notifica_irrigazione_saltata
+        data:
+          zona: '{{ zona }}'
+          motivo: 'Ciclo {{ zona }} annullato: una valvola è stata aperta
+            fuori sequenza durante la pausa di assestamento.'
+      - variables:
+          risultato:
+            esito: annullato
+      - stop: Valvola aperta fuori sequenza, ciclo annullato
+        response_variable: risultato
+  - action: valve.open_valve
+    target:
+      entity_id: '{{ valvola }}'
+  - wait_template: '{{ is_state(valvola, ''open'') }}'
+    timeout:
+      minutes: 2
+    continue_on_timeout: true
+  - if:
+    - condition: template
+      value_template: '{{ not is_state(valvola, ''open'') }}'
+    then:
+    - action: valve.close_valve
+      continue_on_error: true
+      target:
+        entity_id: '{{ valvola }}'
+    - action: script.notifica_irrigazione_saltata
+      data:
+        zona: '{{ zona }}'
+        motivo: 'Ciclo {{ zona }} annullato: la valvola non si è aperta entro
+          2 minuti dal comando (stato: {{ states(valvola) }}). Controlla la
+          rete Zigbee.'
+    - variables:
+        risultato:
+          esito: annullato
+    - stop: Valvola non aperta, ciclo annullato
+      response_variable: risultato
+  - wait_template: '{{ is_state(valvola, ''closed'') or is_state(altra_valvola,
+      ''open'') }}'
+    timeout:
+      minutes: '{{ durata }}'
+    continue_on_timeout: true
+  - action: valve.close_valve
+    target:
+      entity_id: '{{ valvola }}'
+  - if:
+    - condition: template
+      value_template: '{{ wait.completed }}'
+    then:
+    - action: input_datetime.set_datetime
+      target:
+        entity_id: input_datetime.irrigazione_ultimo_stop_manuale
+      data:
+        timestamp: '{{ now().timestamp() | int }}'
+    - action: valve.close_valve
+      target:
+        entity_id:
+        - valve.irrigazione_vasi
+        - valve.irrigazione_giardino
+    - action: logbook.log
+      data:
+        name: 'Irrigazione {{ zona }}'
+        message: 'Ciclo interrotto: intervento manuale su una valvola durante
+          il ciclo {{ zona }}. Valvole chiuse per sicurezza; eventuali cicli
+          in coda annullati per la prossima ora.'
+    - action: script.notifica_irrigazione_saltata
+      data:
+        zona: '{{ zona }}'
+        motivo: 'Ciclo {{ zona }} interrotto: intervento manuale su una
+          valvola. Valvole chiuse per sicurezza; eventuali cicli in coda
+          annullati per la prossima ora.'
+    - variables:
+        risultato:
+          esito: interrotto
+    - stop: Intervento manuale, ciclo interrotto
+      response_variable: risultato
+  - wait_template: '{{ is_state(valvola, ''closed'') }}'
+    timeout:
+      minutes: 2
+    continue_on_timeout: true
+  - if:
+    - condition: template
+      value_template: '{{ not is_state(valvola, ''closed'') }}'
+    then:
+    - action: valve.close_valve
+      continue_on_error: true
+      target:
+        entity_id: '{{ valvola }}'
+    - wait_template: '{{ is_state(valvola, ''closed'') }}'
+      timeout:
+        minutes: 2
+      continue_on_timeout: true
+    - if:
+      - condition: template
+        value_template: '{{ not is_state(valvola, ''closed'') }}'
+      then:
+      - action: notify.mobile_app_pixel_10_pro_xl
+        data:
+          title: '🚨 Irrigazione {{ zona }}, chiusura non confermata'
+          message: 'Il ciclo {{ zona }} è terminato ma la valvola non risulta
+            chiusa (stato: {{ states(valvola) }}). Il watchdog riproverà; se
+            l''acqua scorre ancora, chiudi il rubinetto.'
+          data:
+            tag: 'irrigazione_{{ zona }}'
+            channel: Irrigazione
+            importance: high
+            priority: high
+            ttl: 0
+  - variables:
+      risultato:
+        esito: completato
+  - stop: Ciclo completato
+    response_variable: risultato
+pulizia_completa_casa:
+  sequence:
+  - action: vacuum.clean_area
+    metadata: {}
+    data:
+      cleaning_area_id:
+      - bagno_grande
+      - bagno_piccolo
+      - camera_da_letto
+      - cameretta
+      - corridoio
+      - cucina
+      - salotto
+      - studio
+  alias: Pulizia Completa Casa
+  description: ''

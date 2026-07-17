@@ -62,6 +62,7 @@ class PlannedRun:
     runs: tuple[int, ...]
     soak_pause_min: int
     safety_timeout_min: int
+    order: int = 100  # zone priority; the queue is kept sorted by it
 
 
 @dataclass(frozen=True, slots=True)
@@ -182,6 +183,7 @@ def build_session_plan(
                 runs=split_soak(duration, max_run_min=cycle.soak_max_run_min),
                 soak_pause_min=cycle.soak_pause_min,
                 safety_timeout_min=timeout,
+                order=zone.order,
             )
             runs.append((zone.order, zone.name.casefold(), zone.zone_id, planned))
 

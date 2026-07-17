@@ -1,0 +1,601 @@
+- id: '1763314847849'
+  alias: Luci di natale
+  description: Accende la luce 6:30–8:30 e da 1h prima del tramonto a mezzanotte
+  triggers:
+  - at: 06:45:00
+    id: mattina_settimana_on
+    trigger: time
+    weekday:
+    - mon
+    - tue
+    - wed
+    - thu
+    - fri
+  - at: 08:00:00
+    id: mattina__settimana_off
+    trigger: time
+    weekday:
+    - mon
+    - tue
+    - wed
+    - thu
+    - fri
+  - event: sunset
+    offset: -00:15:00
+    id: sera_on
+    trigger: sun
+  - at: '23:30:00'
+    id: notte_off
+    trigger: time
+  - trigger: time
+    at: 08:00:00
+    weekday:
+    - sat
+    - sun
+    id: mattina_weekend_on
+  - trigger: time
+    at: '10:30:00'
+    id: mattina_weekend_off
+    weekday:
+    - sat
+    - sun
+  actions:
+  - choose:
+    - conditions:
+      - condition: trigger
+        id:
+        - mattina_settimana_on
+        - mattina_weekend_on
+      sequence:
+      - action: light.turn_on
+        data: {}
+        target:
+          entity_id:
+          - light.albero_di_natale
+          - light.ghirlanda
+    - conditions:
+      - condition: trigger
+        id:
+        - mattina__settimana_off
+        - mattina_weekend_off
+      sequence:
+      - action: light.turn_off
+        data: {}
+        target:
+          entity_id:
+          - light.albero_di_natale
+          - light.ghirlanda
+    - conditions:
+      - condition: trigger
+        id: sera_on
+      sequence:
+      - action: light.turn_on
+        data: {}
+        target:
+          entity_id:
+          - light.albero_di_natale
+          - light.ghirlanda
+          - light.luminarie
+    - conditions:
+      - condition: trigger
+        id: notte_off
+      sequence:
+      - action: light.turn_off
+        data: {}
+        target:
+          entity_id:
+          - light.albero_di_natale
+          - light.ghirlanda
+          - light.luminarie
+  mode: single
+- id: '1771698065050'
+  alias: Controlla Luci Corridoio Da Soggiorno
+  description: ''
+  triggers:
+  - trigger: state
+    entity_id:
+    - switch.ripetitore_luci_corridoio
+  conditions: []
+  actions:
+  - action: switch.toggle
+    data: {}
+    target:
+      entity_id: switch.shelly_mini1_3
+  mode: single
+- id: irrigazione_vasi
+  alias: Irrigazione vasi
+  description: >-
+    Irriga i vasi all'alba (-1h) e nel tardo pomeriggio (tramonto -3h).
+    La logica decisionale comune (stagione, meteo, budget idrico pesato,
+    durate) è nello script valuta_condizioni_irrigazione; la meccanica del
+    ciclo (attesa valvole libere, verifica apertura, interventi manuali,
+    chiusure di sicurezza) è nello script esegui_ciclo_zona, che con mode
+    queued garantisce che vasi e giardino non irrighino mai in
+    contemporanea. Durata vasi 10-55 min (1 min/°C di temperatura pesata,
+    +1 min/°C extra sopra 30°C). Ogni salto o interruzione invia una
+    notifica push con il motivo e registra l'esito in
+    input_text.irrigazione_esito_vasi, controllato a mezzogiorno dalla
+    "Sentinella irrigazione". La chiusura di sicurezza è nell'automazione
+    separata "Watchdog irrigazione", che sopravvive a reload e riavvii.
+  triggers:
+  - trigger: sun
+    event: sunrise
+    offset: -01:00:00
+    id: avvio_mattina
+  - trigger: sun
+    event: sunset
+    offset: -03:00:00
+    id: avvio_sera
+  actions:
+  - action: script.valuta_condizioni_irrigazione
+    response_variable: valutazione
+  - if:
+    - condition: template
+      value_template: '{{ valutazione.esito == ''salta'' }}'
+    then:
+    - if:
+      - condition: template
+        value_template: '{{ valutazione.notifica }}'
+      then:
+      - action: logbook.log
+        data:
+          name: Irrigazione vasi
+          message: '{{ valutazione.dettaglio }}'
+      - action: script.notifica_irrigazione_saltata
+        data:
+          zona: vasi
+          motivo: '{{ valutazione.motivo }}'
+    - stop: Condizioni non soddisfatte, ciclo vasi saltato
+  - action: script.esegui_ciclo_zona
+    data:
+      zona: vasi
+      valvola: valve.irrigazione_vasi
+      durata: '{{ valutazione.durata_vasi }}'
+    response_variable: ciclo
+  - if:
+    - condition: template
+      value_template: '{{ ciclo.esito != ''completato'' }}'
+    then:
+    - stop: Ciclo vasi non completato (esito e notifica gestiti dallo script)
+  - action: logbook.log
+    data:
+      name: Irrigazione vasi
+      message: 'Ciclo vasi completato ({{ valutazione.durata_vasi }} min).
+        {{ valutazione.dettaglio }}'
+  - action: input_text.set_value
+    target:
+      entity_id: input_text.irrigazione_esito_vasi
+    data:
+      value: '{{ (now().date() | string) }}: ciclo {{ ''mattutino'' if
+        trigger.id | default('''') == ''avvio_mattina'' else ''serale'' }}
+        completato ({{ valutazione.durata_vasi }} min)'
+  mode: single
+- id: irrigazione_giardino
+  alias: Irrigazione giardino
+  description: >-
+    Irriga il giardino al mattino (alba -55 min: cinque minuti dopo il
+    trigger dei vasi, così il ciclo vasi entra per primo nella coda dello
+    script esegui_ciclo_zona e il giardino parte in sequenza, mai in
+    contemporanea), solo se dall'ultimo ciclo completato sono passati
+    almeno i giorni impostati in
+    input_number.irrigazione_giardino_intervallo_giorni (default 3). Se il
+    giorno previsto il ciclo salta (pioggia, gelo, budget idrico), ritenta
+    ogni mattina successiva finché non completa. Durata 8-25 min: obiettivo
+    4 mm a 25°C +0.3 mm/°C (max 8 mm), convertito in minuti con la portata
+    misurata dal flussometro (0.375 mm/min). Logica decisionale e meccanica
+    del ciclo negli script comuni (vedi "Irrigazione vasi"). Esito in
+    input_text.irrigazione_esito_giardino; la data dell'ultimo ciclo
+    completato è in input_datetime.irrigazione_giardino_ultimo_ciclo,
+    aggiornata a fine ciclo. Pausa di assestamento di 2 minuti prima di
+    aprire la valvola.
+  triggers:
+  - trigger: sun
+    event: sunrise
+    offset: -00:55:00
+    id: avvio_mattina
+  actions:
+  - condition: template
+    value_template: >-
+      {% set ultimo = states('input_datetime.irrigazione_giardino_ultimo_ciclo') | as_datetime %}
+      {% set intervallo = states('input_number.irrigazione_giardino_intervallo_giorni') | int(3) %}
+      {{ ultimo is none or (now().date() - ultimo.date()).days >= intervallo }}
+  - action: script.valuta_condizioni_irrigazione
+    response_variable: valutazione
+  - if:
+    - condition: template
+      value_template: '{{ valutazione.esito == ''salta'' }}'
+    then:
+    - if:
+      - condition: template
+        value_template: '{{ valutazione.notifica }}'
+      then:
+      - action: logbook.log
+        data:
+          name: Irrigazione giardino
+          message: '{{ valutazione.dettaglio }}'
+      - action: script.notifica_irrigazione_saltata
+        data:
+          zona: giardino
+          motivo: '{{ valutazione.motivo }}'
+    - stop: Condizioni non soddisfatte, ciclo giardino saltato
+  - action: script.esegui_ciclo_zona
+    data:
+      zona: giardino
+      valvola: valve.irrigazione_giardino
+      durata: '{{ valutazione.durata_giardino }}'
+      pausa_pre_min: 2
+    response_variable: ciclo
+  - if:
+    - condition: template
+      value_template: '{{ ciclo.esito != ''completato'' }}'
+    then:
+    - stop: Ciclo giardino non completato (esito e notifica gestiti dallo script)
+  - action: logbook.log
+    data:
+      name: Irrigazione giardino
+      message: 'Ciclo giardino completato ({{ valutazione.durata_giardino }}
+        min). {{ valutazione.dettaglio }}'
+  - action: input_text.set_value
+    target:
+      entity_id: input_text.irrigazione_esito_giardino
+    data:
+      value: '{{ (now().date() | string) }}: ciclo completato ({{
+        valutazione.durata_giardino }} min)'
+  - action: input_datetime.set_datetime
+    target:
+      entity_id: input_datetime.irrigazione_giardino_ultimo_ciclo
+    data:
+      date: '{{ now().date() }}'
+  mode: single
+- id: 'watchdog_irrigazione_backstop'
+  alias: Watchdog irrigazione
+  description: >-
+    Chiusura di sicurezza indipendente dall'automazione principale, quindi
+    sopravvive a modifiche, reload e riavvii: ogni 10 minuti chiude qualsiasi
+    valvola di irrigazione aperta da oltre 70 minuti; all'avvio di Home
+    Assistant chiude le valvole trovate aperte (nessun ciclo legittimo
+    sopravvive a un riavvio). Verifica che la chiusura sia avvenuta, ritenta
+    una volta e in caso di fallimento avvisa anche via email.
+  triggers:
+  - trigger: time_pattern
+    minutes: /10
+    id: periodico
+  - trigger: homeassistant
+    event: start
+    id: avvio
+  conditions:
+  - condition: or
+    conditions:
+    - condition: trigger
+      id:
+      - avvio
+    - condition: template
+      value_template: >-
+        {{ (is_state('valve.irrigazione_vasi', 'open')
+            and (now() - states['valve.irrigazione_vasi'].last_changed) > timedelta(minutes=70))
+           or (is_state('valve.irrigazione_giardino', 'open')
+            and (now() - states['valve.irrigazione_giardino'].last_changed) > timedelta(minutes=70)) }}
+  actions:
+  - choose:
+    - conditions:
+      - condition: trigger
+        id:
+        - avvio
+      sequence:
+      - wait_template: >-
+          {{ states('valve.irrigazione_vasi') not in ['unavailable', 'unknown']
+             and states('valve.irrigazione_giardino') not in ['unavailable', 'unknown'] }}
+        timeout:
+          minutes: 5
+        continue_on_timeout: true
+      - if:
+        - condition: or
+          conditions:
+          - condition: state
+            entity_id: valve.irrigazione_vasi
+            state: open
+          - condition: state
+            entity_id: valve.irrigazione_giardino
+            state: open
+        then:
+        - action: valve.close_valve
+          continue_on_error: true
+          target:
+            entity_id:
+            - valve.irrigazione_vasi
+            - valve.irrigazione_giardino
+        - action: persistent_notification.create
+          data:
+            title: ⚠️ Irrigazione
+            message: Valvola trovata aperta all'avvio di Home Assistant e chiusa
+              per sicurezza.
+        - action: notify.mobile_app_pixel_10_pro_xl
+          data:
+            title: ⚠️ Irrigazione
+            message: Valvola trovata aperta all'avvio di Home Assistant e chiusa
+              per sicurezza. Il ciclo di oggi potrebbe essere stato interrotto
+              da un riavvio.
+            data:
+              tag: irrigazione
+              channel: Irrigazione
+    default:
+    - variables:
+        da_chiudere: >-
+          {% set ns = namespace(l=[]) %}
+          {% for v in ['valve.irrigazione_vasi', 'valve.irrigazione_giardino'] %}
+            {% if is_state(v, 'open') and (now() - states[v].last_changed) > timedelta(minutes=70) %}
+              {% set ns.l = ns.l + [v] %}
+            {% endif %}
+          {% endfor %}
+          {{ ns.l }}
+    - condition: template
+      value_template: '{{ da_chiudere | count > 0 }}'
+    - action: valve.close_valve
+      continue_on_error: true
+      target:
+        entity_id: '{{ da_chiudere }}'
+    - wait_template: '{{ da_chiudere | select(''is_state'', ''open'') | list |
+        count == 0 }}'
+      timeout:
+        minutes: 2
+      continue_on_timeout: true
+    - if:
+      - condition: template
+        value_template: '{{ da_chiudere | select(''is_state'', ''open'') | list
+          | count > 0 }}'
+      then:
+      - action: valve.close_valve
+        continue_on_error: true
+        target:
+          entity_id: '{{ da_chiudere }}'
+      - wait_template: '{{ da_chiudere | select(''is_state'', ''open'') | list |
+          count == 0 }}'
+        timeout:
+          minutes: 2
+        continue_on_timeout: true
+    - if:
+      - condition: template
+        value_template: '{{ da_chiudere | select(''is_state'', ''open'') | list
+          | count > 0 }}'
+      then:
+      - action: persistent_notification.create
+        data:
+          title: 🚨 Irrigazione, chiusura fallita
+          message: >-
+            Il watchdog non è riuscito a chiudere
+            {{ da_chiudere | join(', ') }} dopo 2 tentativi: la valvola
+            potrebbe essere ancora aperta. Chiudere manualmente il rubinetto.
+      - action: notify.mobile_app_pixel_10_pro_xl
+        data:
+          title: 🚨 Irrigazione, chiusura FALLITA
+          message: >-
+            Il watchdog non è riuscito a chiudere
+            {{ da_chiudere | join(', ') }} dopo 2 tentativi: la valvola
+            potrebbe essere ancora aperta. Chiudere manualmente il rubinetto!
+          data:
+            tag: irrigazione
+            channel: Irrigazione
+            importance: high
+            priority: high
+            ttl: 0
+      - action: notify.casabrangi
+        data:
+          title: 'IRRIGAZIONE: chiusura valvola FALLITA'
+          message: >-
+            Il watchdog non è riuscito a chiudere
+            {{ da_chiudere | join(', ') }} (2 tentativi). Stato attuale —
+            vasi: {{ states('valve.irrigazione_vasi') }}, giardino:
+            {{ states('valve.irrigazione_giardino') }}. Intervento manuale
+            necessario.
+      else:
+      - action: persistent_notification.create
+        data:
+          title: ⚠️ Irrigazione
+          message: >-
+            Watchdog: {{ da_chiudere | join(', ') }} aperta da oltre 70
+            minuti, chiusa forzatamente (chiusura verificata). Verifica il
+            sistema.
+      - action: notify.mobile_app_pixel_10_pro_xl
+        data:
+          title: ⚠️ Irrigazione
+          message: >-
+            Watchdog: {{ da_chiudere | join(', ') }} aperta da oltre 70
+            minuti, chiusa forzatamente (chiusura verificata). Verifica il
+            sistema.
+          data:
+            tag: irrigazione
+            channel: Irrigazione
+  mode: single
+- id: 'accumulo_pioggia_orario'
+  alias: Accumulo pioggia orario
+  description: >-
+    Stage-and-commit al minuto 55 di ogni ora: prima consolida in
+    input_number.pioggia_oggi la pioggia dell'ora quasi conclusa (il valore
+    messo da parte un'ora prima, pesato x0.8 perché è una stima del modello
+    Met.no e non una misura), poi mette da parte in
+    input_number.pioggia_ora_staging la previsione per l'ora successiva.
+    Senza pluviometro è il dato più fresco disponibile: evita di contare
+    come pioggia caduta i temporali previsti che poi non arrivano (il
+    vecchio schema registrava a inizio ora pioggia futura a peso pieno).
+  triggers:
+  - trigger: time_pattern
+    minutes: '55'
+  actions:
+  - action: input_number.set_value
+    target:
+      entity_id: input_number.pioggia_oggi
+    data:
+      value: >-
+        {{ [[0, (states('input_number.pioggia_oggi') | float(0))
+          + (states('input_number.pioggia_ora_staging') | float(0)) * 0.8] | max, 200] | min | round(1) }}
+  - action: weather.get_forecasts
+    target:
+      entity_id: weather.forecast_casa
+    data:
+      type: hourly
+    response_variable: previsione
+  - variables:
+      mm_prossima_ora: >-
+        {% set ts_prossima = (now().replace(minute=0, second=0, microsecond=0).timestamp() + 3600) | int %}
+        {% set ns = namespace(prec=0) %}
+        {% for h in previsione['weather.forecast_casa'].forecast %}
+          {% if (as_timestamp(h.datetime, 0) | int) == ts_prossima %}
+            {% set ns.prec = h.precipitation | default(0) | float %}
+          {% endif %}
+        {% endfor %}
+        {{ ns.prec | round(1) }}
+  - action: input_number.set_value
+    target:
+      entity_id: input_number.pioggia_ora_staging
+    data:
+      value: '{{ [[0, mm_prossima_ora | float(0)] | max, 50] | min }}'
+  mode: single
+- id: 'rotazione_pioggia_giornaliera'
+  alias: Rotazione pioggia giornaliera
+  description: >-
+    A mezzanotte ruota i contatori giornalieri di precipitazione:
+    3gg←2gg, 2gg←ieri, ieri←oggi, oggi←0.
+  triggers:
+  - trigger: time
+    at: '00:01:00'
+  actions:
+  - action: input_number.set_value
+    target:
+      entity_id: input_number.pioggia_3gg_fa
+    data:
+      value: "{{ states('input_number.pioggia_2gg_fa') | float(0) | round(1) }}"
+  - action: input_number.set_value
+    target:
+      entity_id: input_number.pioggia_2gg_fa
+    data:
+      value: "{{ states('input_number.pioggia_ieri') | float(0) | round(1) }}"
+  - action: input_number.set_value
+    target:
+      entity_id: input_number.pioggia_ieri
+    data:
+      value: "{{ states('input_number.pioggia_oggi') | float(0) | round(1) }}"
+  - action: input_number.set_value
+    target:
+      entity_id: input_number.pioggia_oggi
+    data:
+      value: 0
+  mode: single
+- id: 'tracciamento_temp_max_orario'
+  alias: Tracciamento temperatura massima oraria
+  description: >-
+    Ogni ora aggiorna input_number.temp_max_oggi se la temperatura corrente
+    supera il massimo giornaliero registrato finora. Usato dall'automazione
+    di irrigazione per calcolare la durata dinamica.
+  triggers:
+  - trigger: time_pattern
+    minutes: '10'
+  actions:
+  - variables:
+      temp_corrente: "{{ state_attr('weather.forecast_casa', 'temperature') | float(0) }}"
+  - if:
+    - condition: template
+      value_template: "{{ temp_corrente > states('input_number.temp_max_oggi') | float(-20) }}"
+    then:
+    - action: input_number.set_value
+      target:
+        entity_id: input_number.temp_max_oggi
+      data:
+        value: "{{ temp_corrente | round(1) }}"
+  mode: single
+- id: 'rotazione_temp_giornaliera'
+  alias: Rotazione temperatura giornaliera
+  description: >-
+    A mezzanotte ruota i massimi giornalieri di temperatura:
+    3gg←2gg, 2gg←ieri, ieri←oggi, oggi←0.
+  triggers:
+  - trigger: time
+    at: '00:02:00'
+  actions:
+  - action: input_number.set_value
+    target:
+      entity_id: input_number.temp_max_3gg_fa
+    data:
+      value: "{{ states('input_number.temp_max_2gg_fa') | float(0) | round(1) }}"
+  - action: input_number.set_value
+    target:
+      entity_id: input_number.temp_max_2gg_fa
+    data:
+      value: "{{ states('input_number.temp_max_ieri') | float(0) | round(1) }}"
+  - action: input_number.set_value
+    target:
+      entity_id: input_number.temp_max_ieri
+    data:
+      value: "{{ states('input_number.temp_max_oggi') | float(0) | round(1) }}"
+  - action: input_number.set_value
+    target:
+      entity_id: input_number.temp_max_oggi
+    data:
+      value: 0
+  mode: single
+- id: 'sentinella_irrigazione'
+  alias: Sentinella irrigazione
+  description: >-
+    Ogni giorno a mezzogiorno (in stagione, marzo-ottobre) controlla che i
+    cicli mattutini previsti abbiano lasciato un esito: i vasi ogni giorno
+    in input_text.irrigazione_esito_vasi, il giardino solo nei giorni in
+    cui il ciclo era previsto (in base a
+    input_datetime.irrigazione_giardino_ultimo_ciclo e all'intervallo in
+    input_number.irrigazione_giardino_intervallo_giorni) in
+    input_text.irrigazione_esito_giardino. Sia i cicli completati sia
+    quelli saltati con motivo scrivono l'esito: se manca, l'automazione
+    non è proprio partita (HA spento all'orario del trigger, automazione
+    disattivata, errore inatteso) e arriva una notifica sul telefono.
+    Copre i casi che le notifiche interne alle automazioni non possono
+    coprire.
+  triggers:
+  - trigger: time
+    at: '12:00:00'
+  conditions:
+  - condition: template
+    value_template: '{{ now().month in range(3, 11) }}'
+  actions:
+  - variables:
+      giardino_previsto: >-
+        {% set ultimo = states('input_datetime.irrigazione_giardino_ultimo_ciclo') | as_datetime %}
+        {% set intervallo = states('input_number.irrigazione_giardino_intervallo_giorni') | int(3) %}
+        {{ ultimo is none or (now().date() - ultimo.date()).days >= intervallo }}
+      zone_mancanti: >-
+        {% set oggi = now().date() | string %}
+        {% set z = [] %}
+        {% if not states('input_text.irrigazione_esito_vasi').startswith(oggi) %}
+          {% set z = z + ['vasi'] %}
+        {% endif %}
+        {% if giardino_previsto and not
+          states('input_text.irrigazione_esito_giardino').startswith(oggi) %}
+          {% set z = z + ['giardino'] %}
+        {% endif %}
+        {{ z }}
+  - condition: template
+    value_template: '{{ zone_mancanti | count > 0 }}'
+  - action: notify.mobile_app_pixel_10_pro_xl
+    data:
+      title: ⚠️ Irrigazione non eseguita
+      message: >-
+        Oggi l'irrigazione ({{ zone_mancanti | join(' e ') }}) non risulta
+        né completata né saltata per un motivo noto: probabilmente
+        l'automazione non è proprio partita (Home Assistant spento
+        all'orario del trigger, automazione disattivata o errore inatteso).
+        Automazione vasi: {{ states('automation.irrigazione_vasi') }},
+        ultima esecuzione {{ state_attr('automation.irrigazione_vasi',
+        'last_triggered') }}. Automazione giardino: {{
+        states('automation.irrigazione_giardino') }}, ultima esecuzione {{
+        state_attr('automation.irrigazione_giardino', 'last_triggered') }}.
+        Esito vasi: {{ states('input_text.irrigazione_esito_vasi') }}.
+        Esito giardino: {{ states('input_text.irrigazione_esito_giardino') }}.
+      data:
+        tag: irrigazione_sentinella
+        channel: Irrigazione
+        importance: high
+  - action: persistent_notification.create
+    data:
+      title: ⚠️ Irrigazione non eseguita
+      message: >-
+        Nessun esito registrato oggi per: {{ zone_mancanti | join(', ') }}.
+        Controlla che le automazioni siano attive e che HA fosse acceso
+        all'alba.
+  mode: single

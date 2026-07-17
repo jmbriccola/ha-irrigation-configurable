@@ -65,8 +65,57 @@ details harvested from it (kept as engine behaviour):
 7. Presets `preset_pots` / `preset_lawn` = §8 reference curves, shipped as
    read-only curve templates.
 
+## Facts established during development
+
+- Current stable HA at dev time: **2026.7.2** (Python ≥ 3.14.2);
+  pytest-homeassistant-custom-component 0.13.346 tracks it. Dev venv:
+  Python 3.14 (uv). Min supported HA in hacs.json: **2025.7.0** (floor:
+  subentries+reconfigure ≥ 2025.4, sync static-path API removed in 2025.7).
+- Subentry APIs confirmed on core dev: `async_get_supported_subentry_types`,
+  `ConfigSubentryFlow` with `_get_entry()` / `_get_reconfigure_subentry()` /
+  `async_update_and_abort`; subentries have reconfigure but NO options flow.
+- `hass.data["lovelace"]` is a LovelaceData object (`.resources`,
+  `resource_mode`); resource auto-registration only in storage mode.
+- mypy `python_version = 3.14` (must parse installed HA sources); our code
+  stays 3.13-syntax (ruff target py313) for HA 2025.7 compatibility.
+- **Test-harness gotcha**: a plain (non-`@callback`, non-coroutine) function
+  passed to `async_call_later` runs in the executor thread → touching futures
+  from it raises "Non-thread-safe operation…". All timer callbacks must be
+  `@callback`-decorated. Probe tests in tests/components/test_timer_probe.py.
+
+## Deliberate design decisions (beyond the spec)
+
+- Manual runs (`run_zone`/`run_all`) bypass decision gates (cadence, budget,
+  season, restrictions) AND the manual-stop block — user intent is explicit;
+  safety gates (valves free, confirmations, surveillance) always apply.
+  Manual completions do NOT update the cadence counter (`last_completed`).
+- Volume-mode cycle whose meter disappears degrades to a duration run of its
+  volume-safety-timeout minutes (never guesses liters).
+- Flow out-of-range → anomaly notification only; zero-flow → interrupt.
+  Leak check (flow with all valves closed) piggybacks the watchdog interval.
+- Forbidden-window truncation → outcome `completed` with `partial: true`.
+- Queued runs landing in a forbidden window slide to `next_allowed_start`,
+  still subject to session limits (`session_overrun`).
+- Consumption budget: notify once per period; `reduce` multiplies durations
+  (after clamps, min 1 min); `suspend` marks sessions `consumption_budget`.
+- Zone/cycle enable flags and suspensions are runtime state (Store), not
+  config; number entities (order/interval/adjustment) write back to subentry
+  data because they are config.
+- Command ledger distinguishes our valve commands from manual intervention
+  (surveillance): every internal open/close registers (entity, action) with
+  TTL 300 s; unledgered transitions during a session = manual → abort all.
+- Session evaluation cached 120 s so near-simultaneous triggers share one
+  weather fetch; the frozen evaluation lives for the whole session.
+
 ## Progress log
 
 - 2026-07-17: Repo recon (LICENSE only + source YAML). §8 math verified by
   script. Domain collision check done (free). Architecture doc written.
-  Dev env: uv + Python 3.13 venv; HA test framework installing.
+- 2026-07-17: Engine complete (124 pure tests, §8 exact). Scaffold + engine
+  committed. Card built by subagent (Lit3+TS+Vite, bundle committed in
+  frontend/, i18n it/en, editor, typecheck+build green). Config flow built by
+  subagent (hub flow, options menu 6 sections, zone subentry flow with cycle
+  loop + curve step + copy/presets, reconfigure; 16 tests green; translations
+  config/options/config_subentries en+it). Storage, valve controller,
+  weather client, session runner, watchdog, sentinel, runtime, __init__
+  implemented; session safety tests in progress.

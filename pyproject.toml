@@ -52,7 +52,10 @@ ignore = [
 "tests/**" = ["SLF001", "PLC0415", "DTZ001", "C408", "RUF012"]
 
 [tool.mypy]
-python_version = "3.13"
+# 3.14: mypy must parse the installed HA (2026.7) sources, which use 3.14-only
+# syntax. Our own code stays 3.13-compatible (ruff target-version py313) so it
+# runs on the minimum supported HA (2025.7, Python 3.13).
+python_version = "3.14"
 strict = true
 show_error_codes = true
 warn_unreachable = true
