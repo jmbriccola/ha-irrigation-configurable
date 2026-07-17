@@ -14,7 +14,7 @@ jobs:
           python-version: "3.14"
       - name: Install dev dependencies
         run: |
-          uv venv
+          uv venv --clear
           uv pip install pytest-homeassistant-custom-component ruff mypy
       - name: Ruff (lint)
         run: .venv/bin/ruff check .
@@ -32,7 +32,7 @@ jobs:
           python-version: "3.14"
       - name: Install dev dependencies
         run: |
-          uv venv
+          uv venv --clear
           uv pip install pytest-homeassistant-custom-component
       - name: Run tests
         run: .venv/bin/python -m pytest tests -v
