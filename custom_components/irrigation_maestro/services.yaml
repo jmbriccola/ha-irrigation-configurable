@@ -177,3 +177,137 @@ import_config:
       selector:
         text:
           multiline: true
+
+set_program_schedule:
+  fields:
+    zone_id:
+      required: true
+      example: 1b2f3c4d5e6f
+      selector:
+        text:
+    program_id:
+      required: true
+      example: a1b2c3d4
+      selector:
+        text:
+    days:
+      example: "[0, 2, 4]"
+      selector:
+        select:
+          multiple: true
+          options:
+            - value: "0"
+              label: Mon
+            - value: "1"
+              label: Tue
+            - value: "2"
+              label: Wed
+            - value: "3"
+              label: Thu
+            - value: "4"
+              label: Fri
+            - value: "5"
+              label: Sat
+            - value: "6"
+              label: Sun
+    start_kind:
+      required: true
+      example: sun
+      selector:
+        select:
+          options:
+            - time
+            - sun
+    start_time:
+      example: "06:00:00"
+      selector:
+        time:
+    start_event:
+      example: sunrise
+      selector:
+        select:
+          options:
+            - sunrise
+            - sunset
+    start_offset_min:
+      example: -15
+      selector:
+        number:
+          min: -360
+          max: 360
+          step: 1
+          unit_of_measurement: min
+          mode: box
+
+set_program_minutes:
+  fields:
+    zone_id:
+      required: true
+      example: 1b2f3c4d5e6f
+      selector:
+        text:
+    program_id:
+      required: true
+      example: a1b2c3d4
+      selector:
+        text:
+    minutes:
+      example: 15
+      selector:
+        number:
+          min: 1
+          max: 1440
+          step: 1
+          unit_of_measurement: min
+          mode: box
+    day_minutes:
+      example: '{"0": 15, "2": 20}'
+      selector:
+        object:
+
+add_program:
+  fields:
+    zone_id:
+      required: true
+      example: 1b2f3c4d5e6f
+      selector:
+        text:
+    name:
+      example: Morning
+      selector:
+        text:
+    copy_from:
+      example: a1b2c3d4
+      selector:
+        text:
+
+remove_program:
+  fields:
+    zone_id:
+      required: true
+      example: 1b2f3c4d5e6f
+      selector:
+        text:
+    program_id:
+      required: true
+      example: a1b2c3d4
+      selector:
+        text:
+
+rename_program:
+  fields:
+    zone_id:
+      required: true
+      example: 1b2f3c4d5e6f
+      selector:
+        text:
+    program_id:
+      required: true
+      example: a1b2c3d4
+      selector:
+        text:
+    name:
+      required: true
+      example: Morning
+      selector:
+        text:

@@ -631,6 +631,55 @@
           "description": "La stringa JSON prodotta da export_config."
         }
       }
+    },
+    "set_program_schedule": {
+      "name": "Imposta la programmazione",
+      "description": "Imposta i giorni e l'orario di partenza di un programma.",
+      "fields": {
+        "zone_id": { "name": "Zona", "description": "La zona a cui appartiene il programma." },
+        "program_id": { "name": "Programma", "description": "Il programma da modificare." },
+        "days": { "name": "Giorni", "description": "Giorni della settimana in cui parte (lunedì–domenica). Lascia vuoto per tutti i giorni." },
+        "start_kind": { "name": "Tipo di partenza", "description": "Orario fisso oppure alba/tramonto." },
+        "start_time": { "name": "Orario di partenza", "description": "L'orario di partenza, per una partenza a orario fisso." },
+        "start_event": { "name": "Evento solare", "description": "Alba o tramonto, per una partenza solare." },
+        "start_offset_min": { "name": "Scarto (min)", "description": "Minuti prima (−) o dopo (+) l'evento solare." }
+      }
+    },
+    "set_program_minutes": {
+      "name": "Imposta i minuti del programma",
+      "description": "Imposta i minuti di irrigazione di un programma, uguali ogni giorno oppure per singolo giorno della settimana. Non disponibile per i cicli a volume target.",
+      "fields": {
+        "zone_id": { "name": "Zona", "description": "La zona a cui appartiene il programma." },
+        "program_id": { "name": "Programma", "description": "Il programma da modificare." },
+        "minutes": { "name": "Minuti", "description": "Stessi minuti di irrigazione in ogni giorno programmato. Esclusivo rispetto ai minuti per giorno." },
+        "day_minutes": { "name": "Minuti per giorno", "description": "Minuti per giorno della settimana, es. {\"0\": 15, \"2\": 20} per lunedì e mercoledì. Esclusivo rispetto a minuti." }
+      }
+    },
+    "add_program": {
+      "name": "Aggiungi programma",
+      "description": "Aggiunge un nuovo programma a una zona, eventualmente copiato da uno esistente.",
+      "fields": {
+        "zone_id": { "name": "Zona", "description": "La zona a cui aggiungere il programma." },
+        "name": { "name": "Nome", "description": "Il nome del nuovo programma. Il valore predefinito è \"Program\", oppure \"<origine> (copy)\" se copiato." },
+        "copy_from": { "name": "Copia da", "description": "Un programma esistente sulla stessa zona da cui copiare programmazione e curva." }
+      }
+    },
+    "remove_program": {
+      "name": "Rimuovi programma",
+      "description": "Rimuove un programma da una zona. Una zona deve mantenere almeno un programma.",
+      "fields": {
+        "zone_id": { "name": "Zona", "description": "La zona a cui appartiene il programma." },
+        "program_id": { "name": "Programma", "description": "Il programma da rimuovere." }
+      }
+    },
+    "rename_program": {
+      "name": "Rinomina programma",
+      "description": "Rinomina un programma.",
+      "fields": {
+        "zone_id": { "name": "Zona", "description": "La zona a cui appartiene il programma." },
+        "program_id": { "name": "Programma", "description": "Il programma da rinominare." },
+        "name": { "name": "Nome", "description": "Il nuovo nome del programma." }
+      }
     }
   },
   "issues": {
