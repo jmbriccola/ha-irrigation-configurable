@@ -21,6 +21,9 @@ export const en = {
   "panel.per_day_minutes": "Different duration per day",
   "panel.minutes_value": "{min} min",
   "panel.edit_program": "Edit",
+  "panel.rename_program": "Rename",
+  "panel.delete_program": "Delete",
+  "panel.confirm_delete_program": 'Delete "{name}"?',
   "panel.weather_line": "Today ({day}) ≈ {min} min. Skips if it rains.",
   "panel.pick_a_day": "Pick at least one day",
 

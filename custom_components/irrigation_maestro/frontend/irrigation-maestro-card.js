@@ -4,7 +4,7 @@
  * Copyright (c) Jacopo Maria Briccola
  * @license MIT
  */
-const he = globalThis, Se = he.ShadowRoot && (he.ShadyCSS === void 0 || he.ShadyCSS.nativeShadow) && "adoptedStyleSheets" in Document.prototype && "replace" in CSSStyleSheet.prototype, Ee = /* @__PURE__ */ Symbol(), Re = /* @__PURE__ */ new WeakMap();
+const he = globalThis, Se = he.ShadowRoot && (he.ShadyCSS === void 0 || he.ShadyCSS.nativeShadow) && "adoptedStyleSheets" in Document.prototype && "replace" in CSSStyleSheet.prototype, Ee = /* @__PURE__ */ Symbol(), He = /* @__PURE__ */ new WeakMap();
 let at = class {
   constructor(e, t, o) {
     if (this._$cssResult$ = !0, o !== Ee) throw Error("CSSResult is not constructable. Use `unsafeCSS` or `css` instead.");
@@ -15,7 +15,7 @@ let at = class {
     const t = this.t;
     if (Se && e === void 0) {
       const o = t !== void 0 && t.length === 1;
-      o && (e = Re.get(t)), e === void 0 && ((this.o = e = new CSSStyleSheet()).replaceSync(this.cssText), o && Re.set(t, e));
+      o && (e = He.get(t)), e === void 0 && ((this.o = e = new CSSStyleSheet()).replaceSync(this.cssText), o && He.set(t, e));
     }
     return e;
   }
@@ -253,9 +253,9 @@ let B = class extends HTMLElement {
   }
 };
 B.elementStyles = [], B.shadowRootOptions = { mode: "open" }, B[ie("elementProperties")] = /* @__PURE__ */ new Map(), B[ie("finalized")] = /* @__PURE__ */ new Map(), Tt?.({ ReactiveElement: B }), (ge.reactiveElementVersions ??= []).push("2.1.2");
-const Te = globalThis, Be = (n) => n, _e = Te.trustedTypes, Ve = _e ? _e.createPolicy("lit-html", { createHTML: (n) => n }) : void 0, rt = "$lit$", M = `lit$${Math.random().toFixed(9).slice(2)}$`, lt = "?" + M, Mt = `<${lt}>`, R = document, ne = () => R.createComment(""), se = (n) => n === null || typeof n != "object" && typeof n != "function", Me = Array.isArray, Nt = (n) => Me(n) || typeof n?.[Symbol.iterator] == "function", xe = `[ 	
+const Te = globalThis, Be = (n) => n, _e = Te.trustedTypes, Ve = _e ? _e.createPolicy("lit-html", { createHTML: (n) => n }) : void 0, rt = "$lit$", M = `lit$${Math.random().toFixed(9).slice(2)}$`, lt = "?" + M, Mt = `<${lt}>`, H = document, ne = () => H.createComment(""), se = (n) => n === null || typeof n != "object" && typeof n != "function", Me = Array.isArray, Nt = (n) => Me(n) || typeof n?.[Symbol.iterator] == "function", xe = `[ 	
 \f\r]`, J = /<(?:(!--|\/[^a-zA-Z])|(\/?[a-zA-Z][^>\s]*)|(\/?$))/g, We = /-->/g, Ze = />/g, O = RegExp(`>|${xe}(?:([^\\s"'>=/]+)(${xe}*=${xe}*(?:[^ 	
-\f\r"'\`<>=]|("|')|))|$)`, "g"), Ge = /'/g, Qe = /"/g, ct = /^(?:script|style|textarea|title)$/i, dt = (n) => (e, ...t) => ({ _$litType$: n, strings: e, values: t }), u = dt(1), D = dt(2), G = /* @__PURE__ */ Symbol.for("lit-noChange"), d = /* @__PURE__ */ Symbol.for("lit-nothing"), Xe = /* @__PURE__ */ new WeakMap(), q = R.createTreeWalker(R, 129);
+\f\r"'\`<>=]|("|')|))|$)`, "g"), Ge = /'/g, Qe = /"/g, ct = /^(?:script|style|textarea|title)$/i, dt = (n) => (e, ...t) => ({ _$litType$: n, strings: e, values: t }), u = dt(1), D = dt(2), G = /* @__PURE__ */ Symbol.for("lit-noChange"), d = /* @__PURE__ */ Symbol.for("lit-nothing"), Xe = /* @__PURE__ */ new WeakMap(), q = H.createTreeWalker(H, 129);
 function ut(n, e) {
   if (!Me(n) || !n.hasOwnProperty("raw")) throw Error("invalid template strings array");
   return Ve !== void 0 ? Ve.createHTML(e) : e;
@@ -305,7 +305,7 @@ class ae {
     }
   }
   static createElement(e, t) {
-    const o = R.createElement("template");
+    const o = H.createElement("template");
     return o.innerHTML = e, o;
   }
 }
@@ -326,7 +326,7 @@ class It {
     return this._$AM._$AU;
   }
   u(e) {
-    const { el: { content: t }, parts: o } = this._$AD, i = (e?.creationScope ?? R).importNode(t, !0);
+    const { el: { content: t }, parts: o } = this._$AD, i = (e?.creationScope ?? H).importNode(t, !0);
     q.currentNode = i;
     let s = q.nextNode(), a = 0, l = 0, r = o[0];
     for (; r !== void 0; ) {
@@ -336,7 +336,7 @@ class It {
       }
       a !== r?.index && (s = q.nextNode(), a++);
     }
-    return q.currentNode = R, i;
+    return q.currentNode = H, i;
   }
   p(e) {
     let t = 0;
@@ -371,7 +371,7 @@ class le {
     this._$AH !== e && (this._$AR(), this._$AH = this.O(e));
   }
   _(e) {
-    this._$AH !== d && se(this._$AH) ? this._$AA.nextSibling.data = e : this.T(R.createTextNode(e)), this._$AH = e;
+    this._$AH !== d && se(this._$AH) ? this._$AA.nextSibling.data = e : this.T(H.createTextNode(e)), this._$AH = e;
   }
   $(e) {
     const { values: t, _$litType$: o } = e, i = typeof o == "number" ? this._$AC(e) : (o.el === void 0 && (o.el = ae.createElement(ut(o.h, o.h[0]), this.options)), o);
@@ -467,9 +467,9 @@ class Ut {
     Q(this, e);
   }
 }
-const Ht = Te.litHtmlPolyfillSupport;
-Ht?.(ae, le), (Te.litHtmlVersions ??= []).push("3.3.3");
-const Rt = (n, e, t) => {
+const Rt = Te.litHtmlPolyfillSupport;
+Rt?.(ae, le), (Te.litHtmlVersions ??= []).push("3.3.3");
+const Ht = (n, e, t) => {
   const o = t?.renderBefore ?? e;
   let i = o._$litPart$;
   if (i === void 0) {
@@ -489,7 +489,7 @@ class S extends B {
   }
   update(e) {
     const t = this.render();
-    this.hasUpdated || (this.renderOptions.isConnected = this.isConnected), super.update(e), this._$Do = Rt(t, this.renderRoot, this.renderOptions);
+    this.hasUpdated || (this.renderOptions.isConnected = this.isConnected), super.update(e), this._$Do = Ht(t, this.renderRoot, this.renderOptions);
   }
   connectedCallback() {
     super.connectedCallback(), this._$Do?.setConnected(!0);
@@ -628,6 +628,9 @@ const C = {
   "panel.per_day_minutes": "Different duration per day",
   "panel.minutes_value": "{min} min",
   "panel.edit_program": "Edit",
+  "panel.rename_program": "Rename",
+  "panel.delete_program": "Delete",
+  "panel.confirm_delete_program": 'Delete "{name}"?',
   "panel.weather_line": "Today ({day}) ≈ {min} min. Skips if it rains.",
   "panel.pick_a_day": "Pick at least one day",
   // Program editor (panel)
@@ -797,6 +800,9 @@ const C = {
   "panel.per_day_minutes": "Durata diversa per giorno",
   "panel.minutes_value": "{min} min",
   "panel.edit_program": "Modifica",
+  "panel.rename_program": "Rinomina",
+  "panel.delete_program": "Elimina",
+  "panel.confirm_delete_program": "Eliminare «{name}»?",
   "panel.weather_line": "Oggi ({day}) ≈ {min} min. Salta se piove.",
   "panel.pick_a_day": "Scegli almeno un giorno",
   // Editor programma (pannello)
@@ -1069,7 +1075,7 @@ function to(n, e) {
   const t = b(n.at) ?? b(n.time);
   return t ? c(e, "trigger.at", { time: t }) : b(n.kind) ?? "";
 }
-const V = 12, H = 25, W = 35, mt = 3, _t = 45, ft = 0, gt = 30, oo = (H - V) / 10;
+const V = 12, R = 25, W = 35, mt = 3, _t = 45, ft = 0, gt = 30, oo = (R - V) / 10;
 function tt(n, e, t) {
   return Math.max(e, Math.min(t, n));
 }
@@ -1081,7 +1087,7 @@ function ot(n, e) {
   const t = Math.max(0, N(n - oo * e));
   return [
     [V, t],
-    [H, n],
+    [R, n],
     [W, n + e]
   ];
 }
@@ -1109,7 +1115,7 @@ function Z(n, e, t, o) {
   return t !== void 0 && (a = Math.max(a, t)), o !== void 0 && (a = Math.min(a, o)), a;
 }
 function it(n, e, t) {
-  const o = Z(n, H, e, t), i = Z(n, W, e, t);
+  const o = Z(n, R, e, t), i = Z(n, W, e, t);
   return {
     amount: tt(N(o), mt, _t),
     heat: tt(N(i - o), ft, gt)
@@ -1232,7 +1238,7 @@ const we = 320, z = 170, ee = 34, st = 12, te = 16, A = 24, pe = 5, ze = 40, Oe 
     const o = g(e?.min) ?? 1, i = g(e?.max) ?? 120, { amount: s, heat: a } = it(t, o, i);
     this._amount = s, this._heat = a, this._min = o, this._max = i, this._dragged = !1, this._points = [
       [V, N(Z(t, V))],
-      [H, N(Z(t, H))],
+      [R, N(Z(t, R))],
       [W, N(Z(t, W))]
     ];
   }
@@ -1344,7 +1350,7 @@ const we = 320, z = 170, ee = 34, st = 12, te = 16, A = 24, pe = 5, ze = 40, Oe 
 
       <div class="examples">
         ${this._exampleTile(c(e, "editor.example.cool"), this._clampedValue(V))}
-        ${this._exampleTile(c(e, "editor.example.mild"), this._clampedValue(H))}
+        ${this._exampleTile(c(e, "editor.example.mild"), this._clampedValue(R))}
         ${this._exampleTile(c(e, "editor.example.hot"), this._clampedValue(W))}
       </div>
 
@@ -1410,7 +1416,7 @@ const we = 320, z = 170, ee = 34, st = 12, te = 16, A = 24, pe = 5, ze = 40, Oe 
         <line class="axis" x1=${ee} y1=${te} x2=${ee} y2=${z - A}></line>
         <line class="axis" x1=${ee} y1=${z - A} x2=${we - st} y2=${z - A}></line>
         <text class="tick" x=${this._sx(V)} y=${z - A + 12} text-anchor="middle">12°</text>
-        <text class="tick" x=${this._sx(H)} y=${z - A + 12} text-anchor="middle">25°</text>
+        <text class="tick" x=${this._sx(R)} y=${z - A + 12} text-anchor="middle">25°</text>
         <text class="tick" x=${this._sx(W)} y=${z - A + 12} text-anchor="middle">35°</text>
         ${s ? D`<line class="today" x1=${this._sx(i)} y1=${te} x2=${this._sx(i)} y2=${z - A}></line>
               <text class="today-text" x=${this._sx(i)} y=${te - 4} text-anchor="middle">${c(e, "editor.graph.today", { temp: Math.round(i) })}</text>` : d}
@@ -2776,7 +2782,7 @@ const _o = [
   { key: "show_queue", label: "editor.show_queue", fallback: !0 },
   { key: "show_controls", label: "editor.show_controls", fallback: !0 },
   { key: "compact", label: "editor.compact", fallback: !1 }
-], He = class He extends S {
+], Re = class Re extends S {
   setConfig(e) {
     this._config = { ...e };
   }
@@ -2857,7 +2863,7 @@ const _o = [
     `;
   }
 };
-He.styles = Y`
+Re.styles = Y`
     :host {
       display: block;
       color: var(--primary-text-color);
@@ -2917,7 +2923,7 @@ He.styles = Y`
       opacity: 0.9;
     }
   `;
-let re = He;
+let re = Re;
 $t([
   $({ attribute: !1 })
 ], re.prototype, "hass");

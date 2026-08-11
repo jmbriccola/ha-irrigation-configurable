@@ -10,6 +10,11 @@ import type {
   ProgramMinutesSaveDetail,
   ProgramScheduleSaveDetail,
 } from "./program-editor";
+import type {
+  ProgramRemoveDetail,
+  ProgramRenameDetail,
+  ProgramToggleDetail,
+} from "./program-list";
 
 /**
  * Sidebar panel shell: zone tabs + the selected zone's read-only program
@@ -83,6 +88,30 @@ export class IrrigationMaestroPanel extends LitElement {
         ? { zone_id: d.zoneId, program_id: d.programId, day_minutes: d.dayMinutes }
         : { zone_id: d.zoneId, program_id: d.programId, minutes: d.minutes },
     );
+  }
+
+  private _onProgramToggle(ev: CustomEvent<ProgramToggleDetail>): void {
+    const d = ev.detail;
+    void this._call("switch", d.enabled ? "turn_on" : "turn_off", {
+      entity_id: d.entityId,
+    });
+  }
+
+  private _onProgramRename(ev: CustomEvent<ProgramRenameDetail>): void {
+    const d = ev.detail;
+    void this._call("irrigation_maestro", "rename_program", {
+      zone_id: d.zoneId,
+      program_id: d.programId,
+      name: d.name,
+    });
+  }
+
+  private _onProgramRemove(ev: CustomEvent<ProgramRemoveDetail>): void {
+    const d = ev.detail;
+    void this._call("irrigation_maestro", "remove_program", {
+      zone_id: d.zoneId,
+      program_id: d.programId,
+    });
   }
 
   /* ------------------------------------------------------------ */
@@ -182,6 +211,9 @@ export class IrrigationMaestroPanel extends LitElement {
         @imc-program-save-schedule=${this._onSaveSchedule}
         @imc-program-save-minutes=${this._onSaveMinutes}
         @imc-program-cancel=${() => undefined}
+        @imc-program-toggle=${this._onProgramToggle}
+        @imc-program-rename=${this._onProgramRename}
+        @imc-program-remove=${this._onProgramRemove}
       >
         <header><h1>${localize(lang, "panel.title")}</h1></header>
         ${this._error ? html`<div class="error">${this._error}</div>` : nothing}
