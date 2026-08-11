@@ -28,6 +28,7 @@ export const it: Record<keyof typeof en, string> = {
   "panel.confirm_delete_program": 'Eliminare «{name}»?',
   "panel.weather_line": "Oggi ({day}) ≈ {min} min. Salta se piove.",
   "panel.pick_a_day": "Scegli almeno un giorno",
+  "panel.add_program": "Aggiungi programma",
 
   // Editor programma (pannello)
   "program_editor.days": "Giorni",
@@ -37,6 +38,18 @@ export const it: Record<keyof typeof en, string> = {
   "program_editor.start_sunset": "Tramonto",
   "program_editor.duration_per_day": "Durata per giorno",
   "program_editor.same_duration": "Stessa durata per tutti i giorni",
+
+  // Wizard "nuovo programma" (pannello)
+  "wizard.step1_title": "In che giorni?",
+  "wizard.step2_title": "Quando parte?",
+  "wizard.step3_title": "Per quanto tempo?",
+  "wizard.preset_every_day": "Ogni giorno",
+  "wizard.preset_alternate": "Giorni alterni",
+  "wizard.preset_weekend": "Solo weekend",
+  "wizard.done_prefix": "✓ Fatto!",
+  "wizard.back": "Indietro",
+  "wizard.next": "Avanti",
+  "wizard.finish": "Fatto",
 
   // Intestazione
   "header.water_budget": "Budget idrico",

@@ -1,4 +1,5 @@
 import { LitElement, html, css, nothing, type TemplateResult } from "lit";
+import type { PropertyValues } from "lit";
 import { property, state } from "lit/decorators.js";
 import type { HassEntity, HomeAssistant } from "../types";
 import { asString, defineElement } from "../types";
@@ -8,6 +9,7 @@ import { readCycles, type ZoneBundle } from "../discovery";
 import { describeTrigger } from "../format";
 import { weekdayLabels, everyDay } from "../schedule-math";
 import "./program-editor";
+import "./program-wizard";
 
 /** `imc-program-toggle`: enable/disable a program's `cycle_enabled` switch. */
 export interface ProgramToggleDetail {
@@ -44,6 +46,15 @@ export class ImcProgramList extends LitElement {
   @property({ attribute: false }) weightedTemp?: number;
 
   @state() private _editingId?: string;
+  @state() private _wizardOpen = false;
+
+  /** Closing the wizard/editor on zone switch avoids a stale add-program
+   *  flow (targeting the previous zone) surviving a tab change. */
+  protected override willUpdate(changed: PropertyValues<this>): void {
+    if (changed.has("zone")) {
+      this._wizardOpen = false;
+    }
+  }
 
   static override styles = css`
     .prog {
@@ -137,6 +148,24 @@ export class ImcProgramList extends LitElement {
     .switch.on::after {
       left: 16px;
     }
+    .add-row {
+      margin-top: 4px;
+    }
+    .add-btn {
+      width: 100%;
+      border: 1px dashed var(--divider-color, rgba(127, 127, 127, 0.4));
+      border-radius: 12px;
+      background: transparent;
+      color: var(--imc-accent, #3a6df0);
+      font: inherit;
+      font-size: 13px;
+      font-weight: 600;
+      padding: 10px 14px;
+      cursor: pointer;
+    }
+    .add-btn:hover {
+      opacity: 0.85;
+    }
   `;
 
   override render(): TemplateResult {
@@ -145,9 +174,38 @@ export class ImcProgramList extends LitElement {
     if (!hass || !zone) return html``;
     const lang = pickLanguage(hass);
     const cycles: CycleInfo[] = readCycles(zone);
-    if (cycles.length === 0) {
-      return html`<div class="meta">${localize(lang, "panel.no_programs")}</div>`;
-    }
+    return html`
+      ${cycles.length === 0
+        ? html`<div class="meta">${localize(lang, "panel.no_programs")}</div>`
+        : this._renderCycles(lang, hass, zone, cycles)}
+      ${this._renderAddProgram(lang, hass, zone)}
+    `;
+  }
+
+  private _renderAddProgram(lang: string, hass: HomeAssistant, zone: ZoneBundle): TemplateResult {
+    return html`
+      <div class="add-row">
+        ${this._wizardOpen
+          ? html`<imc-program-wizard
+              .hass=${hass}
+              .zoneId=${zone.zoneId}
+              .weightedTemp=${this.weightedTemp}
+              @imc-wizard-finish=${() => (this._wizardOpen = false)}
+              @imc-wizard-cancel=${() => (this._wizardOpen = false)}
+            ></imc-program-wizard>`
+          : html`<button class="add-btn" @click=${() => (this._wizardOpen = true)}>
+              ＋ ${localize(lang, "panel.add_program")}
+            </button>`}
+      </div>
+    `;
+  }
+
+  private _renderCycles(
+    lang: string,
+    hass: HomeAssistant,
+    zone: ZoneBundle,
+    cycles: CycleInfo[],
+  ): TemplateResult {
     const labels = weekdayLabels(lang);
     return html`${cycles.map((c) => {
       const on = c.days ?? [];

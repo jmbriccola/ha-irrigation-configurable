@@ -26,6 +26,7 @@ export const en = {
   "panel.confirm_delete_program": 'Delete "{name}"?',
   "panel.weather_line": "Today ({day}) ≈ {min} min. Skips if it rains.",
   "panel.pick_a_day": "Pick at least one day",
+  "panel.add_program": "Add program",
 
   // Program editor (panel)
   "program_editor.days": "Days",
@@ -35,6 +36,18 @@ export const en = {
   "program_editor.start_sunset": "Sunset",
   "program_editor.duration_per_day": "Duration per day",
   "program_editor.same_duration": "Same duration every day",
+
+  // Add-program wizard (panel)
+  "wizard.step1_title": "Which days?",
+  "wizard.step2_title": "When does it start?",
+  "wizard.step3_title": "For how long?",
+  "wizard.preset_every_day": "Every day",
+  "wizard.preset_alternate": "Alternate days",
+  "wizard.preset_weekend": "Weekends",
+  "wizard.done_prefix": "✓ Done!",
+  "wizard.back": "Back",
+  "wizard.next": "Next",
+  "wizard.finish": "Done",
 
   // Header
   "header.water_budget": "Water budget",

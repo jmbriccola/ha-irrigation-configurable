@@ -15,6 +15,7 @@ import type {
   ProgramRenameDetail,
   ProgramToggleDetail,
 } from "./program-list";
+import type { WizardFinishDetail } from "./program-wizard";
 
 /**
  * Sidebar panel shell: zone tabs + the selected zone's read-only program
@@ -88,6 +89,43 @@ export class IrrigationMaestroPanel extends LitElement {
         ? { zone_id: d.zoneId, program_id: d.programId, day_minutes: d.dayMinutes }
         : { zone_id: d.zoneId, program_id: d.programId, minutes: d.minutes },
     );
+  }
+
+  /**
+   * Add-program wizard finish: chain `add_program` → `set_program_schedule`
+   * → `set_program_minutes` for the freshly created program. `add_program`
+   * is a response service — its id comes back **nested** under
+   * `res.response["program_id"]` (the frontend `callService(...,
+   * returnResponse=true)` resolves to `{ context, response }`), never
+   * `res.program_id`. If the response is missing the id, `_call` has
+   * already surfaced `_error` on a hard failure; either way we abort the
+   * chain rather than write a schedule/minutes against an unknown program.
+   */
+  private async _onWizardFinish(ev: CustomEvent<WizardFinishDetail>): Promise<void> {
+    const d = ev.detail;
+    const res = await this._call(
+      "irrigation_maestro",
+      "add_program",
+      { zone_id: d.zoneId, ...(d.name ? { name: d.name } : {}) },
+      /* returnResponse */ true,
+    );
+    const programId = res?.response?.["program_id"];
+    if (typeof programId !== "string" || !programId) return;
+
+    await this._call("irrigation_maestro", "set_program_schedule", {
+      zone_id: d.zoneId,
+      program_id: programId,
+      days: d.days,
+      start_kind: d.start.kind,
+      ...(d.start.kind === "time"
+        ? { start_time: d.start.at }
+        : { start_event: d.start.event, start_offset_min: d.start.offset_min ?? 0 }),
+    });
+    await this._call("irrigation_maestro", "set_program_minutes", {
+      zone_id: d.zoneId,
+      program_id: programId,
+      minutes: d.minutes,
+    });
   }
 
   private _onProgramToggle(ev: CustomEvent<ProgramToggleDetail>): void {
@@ -214,6 +252,8 @@ export class IrrigationMaestroPanel extends LitElement {
         @imc-program-toggle=${this._onProgramToggle}
         @imc-program-rename=${this._onProgramRename}
         @imc-program-remove=${this._onProgramRemove}
+        @imc-wizard-finish=${this._onWizardFinish}
+        @imc-wizard-cancel=${() => undefined}
       >
         <header><h1>${localize(lang, "panel.title")}</h1></header>
         ${this._error ? html`<div class="error">${this._error}</div>` : nothing}

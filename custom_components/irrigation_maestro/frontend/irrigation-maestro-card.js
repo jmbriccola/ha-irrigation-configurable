@@ -23,7 +23,7 @@ let at = class {
     return this.cssText;
   }
 };
-const yt = (n) => new at(typeof n == "string" ? n : n + "", void 0, Ee), Y = (n, ...e) => {
+const $t = (n) => new at(typeof n == "string" ? n : n + "", void 0, Ee), Y = (n, ...e) => {
   const t = n.length === 1 ? n[0] : e.reduce((o, i, s) => o + ((a) => {
     if (a._$cssResult$ === !0) return a.cssText;
     if (typeof a == "number") return a;
@@ -39,7 +39,7 @@ const yt = (n) => new at(typeof n == "string" ? n : n + "", void 0, Ee), Y = (n,
 }, Le = Se ? (n) => n : (n) => n instanceof CSSStyleSheet ? ((e) => {
   let t = "";
   for (const o of e.cssRules) t += o.cssText;
-  return yt(t);
+  return $t(t);
 })(n) : n;
 const { is: wt, defineProperty: zt, getOwnPropertyDescriptor: At, getOwnPropertyNames: kt, getOwnPropertySymbols: St, getPrototypeOf: Et } = Object, ge = globalThis, Fe = ge.trustedTypes, Ct = Fe ? Fe.emptyScript : "", Tt = ge.reactiveElementPolyfillSupport, ie = (n, e) => n, me = { toAttribute(n, e) {
   switch (e) {
@@ -285,8 +285,8 @@ class ae {
     for (; (i = q.nextNode()) !== null && r.length < l; ) {
       if (i.nodeType === 1) {
         if (i.hasAttributes()) for (const m of i.getAttributeNames()) if (m.endsWith(rt)) {
-          const _ = h[a++], f = i.getAttribute(m).split(M), y = /([.?@])?(.*)/.exec(_);
-          r.push({ type: 1, index: s, name: y[2], strings: f, ctor: y[1] === "." ? Ot : y[1] === "?" ? Dt : y[1] === "@" ? qt : ve }), i.removeAttribute(m);
+          const _ = h[a++], f = i.getAttribute(m).split(M), $ = /([.?@])?(.*)/.exec(_);
+          r.push({ type: 1, index: s, name: $[2], strings: f, ctor: $[1] === "." ? Ot : $[1] === "?" ? Dt : $[1] === "@" ? qt : ve }), i.removeAttribute(m);
         } else m.startsWith(M) && (r.push({ type: 6, index: s }), i.removeAttribute(m));
         if (ct.test(i.tagName)) {
           const m = i.textContent.split(M), _ = m.length - 1;
@@ -526,14 +526,14 @@ const Ft = { attribute: !0, type: String, converter: me, reflect: !1, hasChanged
   }
   throw Error("Unsupported decorator location: " + o);
 };
-function $(n) {
+function y(n) {
   return (e, t) => typeof t == "object" ? jt(n, e, t) : ((o, i, s) => {
     const a = i.hasOwnProperty(s);
     return i.constructor.createProperty(s, o), a ? Object.getOwnPropertyDescriptor(i, s) : void 0;
   })(n, e, t);
 }
 function w(n) {
-  return $({ ...n, state: !0, attribute: !1 });
+  return y({ ...n, state: !0, attribute: !1 });
 }
 const Bt = {
   show_header: !0,
@@ -633,6 +633,7 @@ const C = {
   "panel.confirm_delete_program": 'Delete "{name}"?',
   "panel.weather_line": "Today ({day}) ≈ {min} min. Skips if it rains.",
   "panel.pick_a_day": "Pick at least one day",
+  "panel.add_program": "Add program",
   // Program editor (panel)
   "program_editor.days": "Days",
   "program_editor.start": "When does it start?",
@@ -641,6 +642,17 @@ const C = {
   "program_editor.start_sunset": "Sunset",
   "program_editor.duration_per_day": "Duration per day",
   "program_editor.same_duration": "Same duration every day",
+  // Add-program wizard (panel)
+  "wizard.step1_title": "Which days?",
+  "wizard.step2_title": "When does it start?",
+  "wizard.step3_title": "For how long?",
+  "wizard.preset_every_day": "Every day",
+  "wizard.preset_alternate": "Alternate days",
+  "wizard.preset_weekend": "Weekends",
+  "wizard.done_prefix": "✓ Done!",
+  "wizard.back": "Back",
+  "wizard.next": "Next",
+  "wizard.finish": "Done",
   // Header
   "header.water_budget": "Water budget",
   "header.skip_threshold": "Skip threshold",
@@ -805,6 +817,7 @@ const C = {
   "panel.confirm_delete_program": "Eliminare «{name}»?",
   "panel.weather_line": "Oggi ({day}) ≈ {min} min. Salta se piove.",
   "panel.pick_a_day": "Scegli almeno un giorno",
+  "panel.add_program": "Aggiungi programma",
   // Editor programma (pannello)
   "program_editor.days": "Giorni",
   "program_editor.start": "Orario di partenza",
@@ -813,6 +826,17 @@ const C = {
   "program_editor.start_sunset": "Tramonto",
   "program_editor.duration_per_day": "Durata per giorno",
   "program_editor.same_duration": "Stessa durata per tutti i giorni",
+  // Wizard "nuovo programma" (pannello)
+  "wizard.step1_title": "In che giorni?",
+  "wizard.step2_title": "Quando parte?",
+  "wizard.step3_title": "Per quanto tempo?",
+  "wizard.preset_every_day": "Ogni giorno",
+  "wizard.preset_alternate": "Giorni alterni",
+  "wizard.preset_weekend": "Solo weekend",
+  "wizard.done_prefix": "✓ Fatto!",
+  "wizard.back": "Indietro",
+  "wizard.next": "Avanti",
+  "wizard.finish": "Fatto",
   // Intestazione
   "header.water_budget": "Budget idrico",
   "header.skip_threshold": "Soglia di salto",
@@ -1144,14 +1168,14 @@ const F = 150, j = 44, ue = 6, nt = 6, Ie = class Ie extends S {
     o !== void 0 && a.push(o), i !== void 0 && a.push(i);
     let l = Math.min(...s), r = Math.max(...s), p = Math.min(...a), h = Math.max(...a);
     r - l < 1e-9 && (l -= 1, r += 1), h - p < 1e-9 && (p -= 1, h += 1);
-    const m = (v) => ue + (v - l) / (r - l) * (F - 2 * ue), _ = (v) => j - nt - (v - p) / (h - p) * (j - 2 * nt), f = t.map((v, ye) => `${ye === 0 ? "M" : "L"}${m(v[0]).toFixed(1)},${_(v[1]).toFixed(1)}`).join(" "), y = (v, ye) => D`
+    const m = (v) => ue + (v - l) / (r - l) * (F - 2 * ue), _ = (v) => j - nt - (v - p) / (h - p) * (j - 2 * nt), f = t.map((v, $e) => `${$e === 0 ? "M" : "L"}${m(v[0]).toFixed(1)},${_(v[1]).toFixed(1)}`).join(" "), $ = (v, $e) => D`
       <line
         class="clamp"
         x1="0" x2="${F}"
         y1="${_(v).toFixed(1)}" y2="${_(v).toFixed(1)}"
       ></line>
       <text class="clamp-label" x="${F - 2}" text-anchor="end"
-        y="${(_(v) - 2).toFixed(1)}">${ye}</text>
+        y="${(_(v) - 2).toFixed(1)}">${$e}</text>
     `, I = t[0], T = t[t.length - 1];
     return u`
       <svg
@@ -1161,8 +1185,8 @@ const F = 150, j = 44, ue = 6, nt = 6, Ie = class Ie extends S {
         role="img"
         aria-hidden="true"
       >
-        ${o !== void 0 ? y(o, String(o)) : d}
-        ${i !== void 0 ? y(i, String(i)) : d}
+        ${o !== void 0 ? $(o, String(o)) : d}
+        ${i !== void 0 ? $(i, String(i)) : d}
         <path class="line" d="${f}"></path>
         ${t.map(
       (v) => D`<circle class="dot" r="2"
@@ -1214,7 +1238,7 @@ Ie.styles = Y`
   `;
 let fe = Ie;
 no([
-  $({ attribute: !1 })
+  y({ attribute: !1 })
 ], fe.prototype, "curve");
 K("imc-curve-sparkline", fe);
 var so = Object.defineProperty, E = (n, e, t, o) => {
@@ -1599,13 +1623,13 @@ Oe.styles = Y`
   `;
 let x = Oe;
 E([
-  $()
+  y()
 ], x.prototype, "language");
 E([
-  $({ attribute: !1 })
+  y({ attribute: !1 })
 ], x.prototype, "cycle");
 E([
-  $({ attribute: !1 })
+  y({ attribute: !1 })
 ], x.prototype, "weightedTemp");
 E([
   w()
@@ -1837,12 +1861,12 @@ const De = class De extends S {
     ), h !== void 0 && _.push(
       `${c(t, "curve.clamp_max")} ${h} ${m}`
     );
-    const f = r?.kind === "volume", y = !!i && this._editingCycle === i, I = f || !i ? d : u`<button
+    const f = r?.kind === "volume", $ = !!i && this._editingCycle === i, I = f || !i ? d : u`<button
             class="link-btn"
-            @click=${() => this._editingCycle = y ? void 0 : i}
+            @click=${() => this._editingCycle = $ ? void 0 : i}
           >
             ${c(t, "editor.edit_curve")}
-          </button>`, T = y ? u`<imc-curve-editor
+          </button>`, T = $ ? u`<imc-curve-editor
           .language=${t}
           .cycle=${e}
           .weightedTemp=${this.weightedTemp}
@@ -2171,22 +2195,22 @@ De.styles = Y`
   `;
 let k = De;
 P([
-  $({ attribute: !1 })
+  y({ attribute: !1 })
 ], k.prototype, "zone");
 P([
-  $()
+  y()
 ], k.prototype, "language");
 P([
-  $({ attribute: !1 })
+  y({ attribute: !1 })
 ], k.prototype, "now");
 P([
-  $({ type: Boolean, reflect: !0 })
+  y({ type: Boolean, reflect: !0 })
 ], k.prototype, "compact");
 P([
-  $({ type: Boolean })
+  y({ type: Boolean })
 ], k.prototype, "showControls");
 P([
-  $({ attribute: !1 })
+  y({ attribute: !1 })
 ], k.prototype, "weightedTemp");
 P([
   w()
@@ -2280,16 +2304,16 @@ qe.styles = Y`
   `;
 let X = qe;
 Pe([
-  $()
+  y()
 ], X.prototype, "language");
 Pe([
-  $({ type: Boolean })
+  y({ type: Boolean })
 ], X.prototype, "paused");
 Pe([
-  $({ type: Boolean })
+  y({ type: Boolean })
 ], X.prototype, "hasPauseSwitch");
 K("imc-global-controls", X);
-var uo = Object.defineProperty, $e = (n, e, t, o) => {
+var uo = Object.defineProperty, ye = (n, e, t, o) => {
   for (var i = void 0, s = n.length - 1, a; s >= 0; s--)
     (a = n[s]) && (i = a(e, t, i) || i);
   return i && uo(e, t, i), i;
@@ -2464,7 +2488,7 @@ const Ue = class Ue extends S {
     const o = e.hub, i = U(o.waterBudget) ? void 0 : g(o.waterBudget?.state), s = U(o.skipThreshold) ? void 0 : g(o.skipThreshold?.state);
     let a = d;
     if (i !== void 0 || s !== void 0) {
-      const y = Math.max(i ?? 0, s ?? 0, 1e-3), I = ke((i ?? 0) / y, 0, 1), T = s !== void 0 ? ke(s / y, 0, 1) : void 0, v = i !== void 0 && s !== void 0 && i >= s;
+      const $ = Math.max(i ?? 0, s ?? 0, 1e-3), I = ke((i ?? 0) / $, 0, 1), T = s !== void 0 ? ke(s / $, 0, 1) : void 0, v = i !== void 0 && s !== void 0 && i >= s;
       a = u`
         <div
           class="budget"
@@ -2759,20 +2783,20 @@ Ue.styles = Y`
     }
   `;
 let L = Ue;
-$e([
-  $({ attribute: !1 })
+ye([
+  y({ attribute: !1 })
 ], L.prototype, "hass");
-$e([
+ye([
   w()
 ], L.prototype, "_config");
-$e([
+ye([
   w()
 ], L.prototype, "_now");
-$e([
+ye([
   w()
 ], L.prototype, "_error");
 K("irrigation-maestro-card", L);
-var mo = Object.defineProperty, $t = (n, e, t, o) => {
+var mo = Object.defineProperty, yt = (n, e, t, o) => {
   for (var i = void 0, s = n.length - 1, a; s >= 0; s--)
     (a = n[s]) && (i = a(e, t, i) || i);
   return i && mo(e, t, i), i;
@@ -2924,10 +2948,10 @@ Re.styles = Y`
     }
   `;
 let re = Re;
-$t([
-  $({ attribute: !1 })
+yt([
+  y({ attribute: !1 })
 ], re.prototype, "hass");
-$t([
+yt([
   w()
 ], re.prototype, "_config");
 K("irrigation-maestro-card-editor", re);
