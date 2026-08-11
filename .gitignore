@@ -10,3 +10,4 @@ node_modules/
 card/dist/
 *.log
 .DS_Store
+.superpowers/
