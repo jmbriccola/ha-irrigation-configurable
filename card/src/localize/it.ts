@@ -31,6 +31,9 @@ export const it: Record<keyof typeof en, string> = {
   "panel.add_program": "Aggiungi programma",
   "panel.advanced": "Impostazioni avanzate",
   "panel.heat_response": "Reattività al caldo",
+  "panel.weather_temp": "meteo: {temp}°",
+  "panel.budget_ok": "budget acqua OK",
+  "panel.budget_low": "budget acqua basso",
 
   // Editor programma (pannello)
   "program_editor.days": "Giorni",

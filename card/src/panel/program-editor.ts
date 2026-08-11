@@ -118,6 +118,7 @@ export class ImcProgramEditor extends LitElement {
     .days {
       display: flex;
       gap: 6px;
+      flex-wrap: wrap;
     }
     .day {
       width: 34px;
@@ -145,6 +146,7 @@ export class ImcProgramEditor extends LitElement {
     }
     .seg {
       display: inline-flex;
+      flex-wrap: wrap;
       background: var(--secondary-background-color, #26262e);
       border-radius: 10px;
       padding: 3px;

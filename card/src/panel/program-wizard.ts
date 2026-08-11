@@ -168,6 +168,7 @@ export class ImcProgramWizard extends LitElement {
     }
     .seg {
       display: flex;
+      flex-wrap: wrap;
       background: var(--secondary-background-color, #26262e);
       border-radius: 10px;
       padding: 3px;

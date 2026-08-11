@@ -81,6 +81,7 @@ export class ImcProgramList extends LitElement {
     .days {
       display: flex;
       gap: 5px;
+      flex-wrap: wrap;
       margin: 6px 0;
     }
     .day {
@@ -132,6 +133,11 @@ export class ImcProgramList extends LitElement {
       color: var(--secondary-text-color);
       cursor: pointer;
       user-select: none;
+    }
+    .toggle-row:focus-visible {
+      outline: 2px solid var(--primary-color, #03a9f4);
+      outline-offset: 2px;
+      border-radius: 4px;
     }
     .switch {
       width: 34px;
@@ -242,7 +248,12 @@ export class ImcProgramList extends LitElement {
           ${cycleSwitch
             ? html`<div
                 class="toggle-row"
+                role="switch"
+                tabindex="0"
+                aria-checked=${switchOn ? "true" : "false"}
                 @click=${() => this._onToggle(zone.zoneId, c, cycleSwitch)}
+                @keydown=${(ev: KeyboardEvent) =>
+                  this._onToggleKeydown(ev, zone.zoneId, c, cycleSwitch)}
               >
                 <span class="switch ${switchOn ? "on" : ""}"></span>
                 <span
@@ -306,6 +317,19 @@ export class ImcProgramList extends LitElement {
       entityId: entity.entity_id,
       enabled: entity.state !== "on",
     });
+  }
+
+  /** Enter/Space activate the toggle, mirroring zone-row.ts's header keydown pattern. */
+  private _onToggleKeydown(
+    ev: KeyboardEvent,
+    zoneId: string,
+    c: CycleInfo,
+    entity: HassEntity,
+  ): void {
+    if (ev.key === "Enter" || ev.key === " ") {
+      ev.preventDefault();
+      this._onToggle(zoneId, c, entity);
+    }
   }
 
   private _onRename(lang: string, zoneId: string, c: CycleInfo): void {

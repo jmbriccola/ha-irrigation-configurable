@@ -29,6 +29,9 @@ export const en = {
   "panel.add_program": "Add program",
   "panel.advanced": "Advanced settings",
   "panel.heat_response": "Heat response",
+  "panel.weather_temp": "weather: {temp}°",
+  "panel.budget_ok": "water budget OK",
+  "panel.budget_low": "water budget low",
 
   // Program editor (panel)
   "program_editor.days": "Days",

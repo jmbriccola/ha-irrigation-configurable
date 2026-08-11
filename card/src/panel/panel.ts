@@ -2,8 +2,9 @@ import { LitElement, html, css, nothing, type TemplateResult } from "lit";
 import type { PropertyValues } from "lit";
 import { property, state } from "lit/decorators.js";
 import type { HomeAssistant } from "../types";
-import { asNumber, defineElement } from "../types";
+import { asNumber, isUnavailable, defineElement } from "../types";
 import { pickLanguage, localize } from "../localize/localize";
+import { formatNumber } from "../format";
 import { discover, type MaestroModel, type ZoneBundle } from "../discovery";
 import "./program-list";
 import type {
@@ -212,22 +213,35 @@ export class IrrigationMaestroPanel extends LitElement {
       max-width: 760px;
       margin: 0 auto;
       padding: 16px;
+      box-sizing: border-box;
+    }
+    .wrap.narrow {
+      padding: 10px;
     }
     header {
       display: flex;
       align-items: center;
+      flex-wrap: wrap;
       gap: 8px;
-      margin-bottom: 12px;
+      margin-bottom: 4px;
     }
     header h1 {
       font-size: 20px;
       font-weight: 600;
+    }
+    .meteo {
+      font-size: 12.5px;
+      color: var(--secondary-text-color);
+      margin: 0 0 14px;
     }
     .tabs {
       display: flex;
       gap: 6px;
       flex-wrap: wrap;
       margin-bottom: 14px;
+    }
+    .wrap.narrow .tabs {
+      gap: 4px;
     }
     .tab {
       font-size: 13px;
@@ -252,6 +266,7 @@ export class IrrigationMaestroPanel extends LitElement {
       font-size: 12px;
       background: var(--error-color, #db4437);
       color: var(--text-primary-color, #fff);
+      overflow-wrap: anywhere;
     }
   `;
 
@@ -273,10 +288,12 @@ export class IrrigationMaestroPanel extends LitElement {
     }
 
     const selected = this._resolveSelected(model.zones);
-    const weightedTemp = asNumber(model.hub.weightedTemp?.state);
+    const weightedTemp = !isUnavailable(model.hub.weightedTemp)
+      ? asNumber(model.hub.weightedTemp?.state)
+      : undefined;
     return html`
       <div
-        class="wrap"
+        class="wrap ${this.narrow ? "narrow" : ""}"
         @imc-program-save-schedule=${this._onSaveSchedule}
         @imc-program-save-minutes=${this._onSaveMinutes}
         @imc-curve-save=${this._onCurveSave}
@@ -288,6 +305,7 @@ export class IrrigationMaestroPanel extends LitElement {
         @imc-wizard-cancel=${() => undefined}
       >
         <header><h1>${localize(lang, "panel.title")}</h1></header>
+        ${this._renderWeatherContext(model, lang, weightedTemp)}
         ${this._error ? html`<div class="error">${this._error}</div>` : nothing}
         <div class="tabs">
           ${model.zones.map(
@@ -312,6 +330,41 @@ export class IrrigationMaestroPanel extends LitElement {
 
   private _resolveSelected(zones: ZoneBundle[]): ZoneBundle {
     return zones.find((z) => z.zoneId === this._selectedZoneId) ?? zones[0]!;
+  }
+
+  /**
+   * Header weather line — "meteo: 32° · budget acqua OK" (spec §1.1: "Header
+   * shows live context: current weighted temperature and water-budget
+   * status"). Degrades gracefully: no weighted-temp reading (sensor
+   * missing/unavailable) hides the whole line; a temperature without a
+   * clean budget/threshold pair (either sensor missing/unavailable) shows
+   * just the temperature. The sufficiency check mirrors card.ts's
+   * `_renderHeader` budget meter (`budget >= threshold`).
+   */
+  private _renderWeatherContext(
+    model: MaestroModel,
+    lang: string,
+    weightedTemp: number | undefined,
+  ): TemplateResult | typeof nothing {
+    if (weightedTemp === undefined) return nothing;
+    const budget = !isUnavailable(model.hub.waterBudget)
+      ? asNumber(model.hub.waterBudget?.state)
+      : undefined;
+    const threshold = !isUnavailable(model.hub.skipThreshold)
+      ? asNumber(model.hub.skipThreshold?.state)
+      : undefined;
+    const budgetKey =
+      budget !== undefined && threshold !== undefined
+        ? budget >= threshold
+          ? "panel.budget_ok"
+          : "panel.budget_low"
+        : undefined;
+    return html`
+      <div class="meteo">
+        ${localize(lang, "panel.weather_temp", { temp: formatNumber(weightedTemp, 1) ?? "" })}
+        ${budgetKey ? html` · ${localize(lang, budgetKey)}` : nothing}
+      </div>
+    `;
   }
 }
 
