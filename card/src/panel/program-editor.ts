@@ -12,6 +12,10 @@ import {
 import { localize, pickLanguage } from "../localize/localize";
 import { asNumber, clamp, defineElement } from "../types";
 import type { CycleInfo, HomeAssistant } from "../types";
+// Side-effect import: registers <imc-curve-editor>, reused verbatim as the
+// "heat response" control inside the advanced drawer below.
+import "../curve-editor";
+import type { CurveSavePayload } from "../curve-editor";
 
 /**
  * The program editor: the heart of the editing UX (spec §1.2). Loads a
@@ -41,6 +45,21 @@ export interface ProgramMinutesSaveDetail {
   programId: string;
   minutes?: number;
   dayMinutes?: Record<string, number>;
+}
+
+/**
+ * `imc-curve-save`, re-dispatched by this editor. The embedded
+ * `imc-curve-editor` (reused verbatim — see curve-editor.ts) emits its own
+ * `imc-curve-save` with a `CurveSavePayload` detail that has no notion of
+ * which zone it belongs to. We intercept that raw event, stop it from
+ * bubbling further, and re-dispatch under the same event name with the
+ * `zoneId` this editor already knows (mirrors how the schedule/minutes save
+ * events above carry `zoneId` directly), so the panel's single listener has
+ * everything it needs to call the curve services.
+ */
+export interface ProgramCurveSaveDetail {
+  zoneId: string;
+  curve: CurveSavePayload;
 }
 
 interface StepperOptions {
@@ -74,6 +93,7 @@ export class ImcProgramEditor extends LitElement {
   @state() private _uniformMinutes = DEFAULT_MINUTES;
   @state() private _dayMinutes: Record<string, number> = {};
   @state() private _sameForAll = true;
+  @state() private _advancedOpen = false;
 
   private _seededCycleId?: string;
 
@@ -235,6 +255,10 @@ export class ImcProgramEditor extends LitElement {
       font-size: 12px;
       color: var(--error-color, #db4437);
     }
+    .advanced-toggle {
+      cursor: pointer;
+      user-select: none;
+    }
     .buttons {
       display: flex;
       gap: 10px;
@@ -361,6 +385,14 @@ export class ImcProgramEditor extends LitElement {
         ? html`<div class="hint">${localize(lang, "panel.pick_a_day")}</div>`
         : nothing}
 
+      <div
+        class="section-label advanced-toggle"
+        @click=${() => (this._advancedOpen = !this._advancedOpen)}
+      >
+        ${this._advancedOpen ? "▾" : "▸"} ${localize(lang, "panel.advanced")}
+      </div>
+      ${this._advancedOpen ? this._renderAdvanced(lang) : nothing}
+
       <div class="buttons">
         <button class="primary" ?disabled=${this._days.length === 0} @click=${this._save}>
           ${localize(lang, "editor.save")}
@@ -373,6 +405,36 @@ export class ImcProgramEditor extends LitElement {
   private _setSun(event: "sunrise" | "sunset"): void {
     this._startKind = "sun";
     this._startEvent = event;
+  }
+
+  private _renderAdvanced(lang: string): TemplateResult {
+    return html`
+      <div class="section-label">${localize(lang, "panel.heat_response")}</div>
+      <imc-curve-editor
+        .cycle=${this.cycle}
+        .weightedTemp=${this.weightedTemp}
+        .language=${pickLanguage(this.hass)}
+        @imc-curve-save=${this._onCurveSave}
+        @imc-curve-cancel=${() => (this._advancedOpen = false)}
+      ></imc-curve-editor>
+    `;
+  }
+
+  /**
+   * Intercepts the embedded curve editor's `imc-curve-save` (raw
+   * `CurveSavePayload`, no zoneId) and re-dispatches under the same event
+   * name with `zoneId` attached — see the `ProgramCurveSaveDetail` doc
+   * comment above for why. `curve-editor.ts` itself is never modified.
+   */
+  private _onCurveSave(ev: CustomEvent<CurveSavePayload>): void {
+    ev.stopPropagation();
+    this.dispatchEvent(
+      new CustomEvent<ProgramCurveSaveDetail>("imc-curve-save", {
+        detail: { zoneId: this.zoneId, curve: ev.detail },
+        bubbles: true,
+        composed: true,
+      }),
+    );
   }
 
   private _renderDurations(lang: string, labels: string[]): TemplateResult {

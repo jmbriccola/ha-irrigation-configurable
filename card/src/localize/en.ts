@@ -27,6 +27,8 @@ export const en = {
   "panel.weather_line": "Today ({day}) ≈ {min} min. Skips if it rains.",
   "panel.pick_a_day": "Pick at least one day",
   "panel.add_program": "Add program",
+  "panel.advanced": "Advanced settings",
+  "panel.heat_response": "Heat response",
 
   // Program editor (panel)
   "program_editor.days": "Days",

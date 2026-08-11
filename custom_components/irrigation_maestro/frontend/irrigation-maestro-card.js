@@ -634,6 +634,8 @@ const C = {
   "panel.weather_line": "Today ({day}) ≈ {min} min. Skips if it rains.",
   "panel.pick_a_day": "Pick at least one day",
   "panel.add_program": "Add program",
+  "panel.advanced": "Advanced settings",
+  "panel.heat_response": "Heat response",
   // Program editor (panel)
   "program_editor.days": "Days",
   "program_editor.start": "When does it start?",
@@ -818,6 +820,8 @@ const C = {
   "panel.weather_line": "Oggi ({day}) ≈ {min} min. Salta se piove.",
   "panel.pick_a_day": "Scegli almeno un giorno",
   "panel.add_program": "Aggiungi programma",
+  "panel.advanced": "Impostazioni avanzate",
+  "panel.heat_response": "Reattività al caldo",
   // Editor programma (pannello)
   "program_editor.days": "Giorni",
   "program_editor.start": "Orario di partenza",

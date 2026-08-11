@@ -7,6 +7,7 @@ import { pickLanguage, localize } from "../localize/localize";
 import { discover, type MaestroModel, type ZoneBundle } from "../discovery";
 import "./program-list";
 import type {
+  ProgramCurveSaveDetail,
   ProgramMinutesSaveDetail,
   ProgramScheduleSaveDetail,
 } from "./program-editor";
@@ -89,6 +90,36 @@ export class IrrigationMaestroPanel extends LitElement {
         ? { zone_id: d.zoneId, program_id: d.programId, day_minutes: d.dayMinutes }
         : { zone_id: d.zoneId, program_id: d.programId, minutes: d.minutes },
     );
+  }
+
+  /**
+   * `imc-curve-save`, re-dispatched by `program-editor.ts` with `zoneId`
+   * attached (the embedded `imc-curve-editor`'s own event has no zoneId —
+   * see the doc comment on `ProgramCurveSaveDetail`). The curve services use
+   * DIFFERENT field names than the schedule/minutes services above:
+   * `cycle_id` (not `program_id`) and `min_value`/`max_value` (not
+   * `min`/`max`) — mirrors the dashboard card's handler at `card.ts:213-231`.
+   */
+  private _onCurveSave(ev: CustomEvent<ProgramCurveSaveDetail>): void {
+    const { zoneId, curve } = ev.detail;
+    if (curve.mode === "simple") {
+      void this._call("irrigation_maestro", "set_simple_curve", {
+        zone_id: zoneId,
+        cycle_id: curve.cycleId,
+        amount: curve.amount,
+        heat: curve.heat,
+        min_value: curve.min,
+        max_value: curve.max,
+      });
+    } else {
+      void this._call("irrigation_maestro", "set_curve", {
+        zone_id: zoneId,
+        cycle_id: curve.cycleId,
+        points: curve.points,
+        min_value: curve.min,
+        max_value: curve.max,
+      });
+    }
   }
 
   /**
@@ -248,6 +279,7 @@ export class IrrigationMaestroPanel extends LitElement {
         class="wrap"
         @imc-program-save-schedule=${this._onSaveSchedule}
         @imc-program-save-minutes=${this._onSaveMinutes}
+        @imc-curve-save=${this._onCurveSave}
         @imc-program-cancel=${() => undefined}
         @imc-program-toggle=${this._onProgramToggle}
         @imc-program-rename=${this._onProgramRename}
