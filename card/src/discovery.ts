@@ -1,5 +1,5 @@
-import type { HassEntity, HomeAssistant } from "./types";
-import { asNumber, asString } from "./types";
+import type { CycleInfo, HassEntity, HomeAssistant } from "./types";
+import { asArray, asNumber, asString } from "./types";
 
 /**
  * Attribute-based entity discovery, per the card contract: iterate
@@ -117,4 +117,38 @@ export function discover(hass: HomeAssistant): MaestroModel {
   );
 
   return { found: entityIds.length > 0, hub, zones, entityIds };
+}
+
+/** Read a zone's programs (cycles) from its state entity attribute, typed. */
+export function readCycles(zone: ZoneBundle): CycleInfo[] {
+  const raw = asArray(zone.state?.attributes?.["cycles"]);
+  const out: CycleInfo[] = [];
+  for (const item of raw) {
+    if (typeof item !== "object" || item === null) continue;
+    const c = item as Record<string, unknown>;
+    const info: CycleInfo = {
+      cycle_id: asString(c["cycle_id"]),
+      name: asString(c["name"]),
+      enabled: typeof c["enabled"] === "boolean" ? (c["enabled"] as boolean) : undefined,
+      trigger: (c["trigger"] as CycleInfo["trigger"]) ?? undefined,
+      curve: (c["curve"] as CycleInfo["curve"]) ?? undefined,
+    };
+    const days = c["days"];
+    if (Array.isArray(days)) {
+      info.days = days.map((d) => asNumber(d)).filter((d): d is number => d !== undefined);
+    }
+    const dm = c["day_minutes"];
+    if (dm && typeof dm === "object") {
+      const map: Record<string, number> = {};
+      for (const [k, v] of Object.entries(dm as Record<string, unknown>)) {
+        const n = asNumber(v);
+        if (n !== undefined) map[k] = n;
+      }
+      info.day_minutes = map;
+    }
+    info.amount = asNumber(c["amount"]);
+    info.heat = asNumber(c["heat"]);
+    out.push(info);
+  }
+  return out;
 }

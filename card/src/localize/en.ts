@@ -63,6 +63,7 @@ export const en = {
   "reason.session_overrun": "Session ran over its time limit",
   "reason.weather_unavailable": "Weather data unavailable",
   "reason.skip_today_requested": "Skip requested for today",
+  "reason.day_not_scheduled": "Not scheduled today",
   "reason.consumption_budget": "Consumption budget reached",
   "reason.valves_busy": "Valves busy",
   "reason.valve_unavailable": "Valve unavailable",

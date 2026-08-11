@@ -65,6 +65,7 @@ export const it: Record<keyof typeof en, string> = {
   "reason.session_overrun": "Sessione oltre il tempo massimo",
   "reason.weather_unavailable": "Dati meteo non disponibili",
   "reason.skip_today_requested": "Salto richiesto per oggi",
+  "reason.day_not_scheduled": "Non previsto oggi",
   "reason.consumption_budget": "Budget di consumo raggiunto",
   "reason.valves_busy": "Valvole occupate",
   "reason.valve_unavailable": "Valvola non disponibile",

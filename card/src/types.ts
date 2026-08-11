@@ -48,6 +48,7 @@ export const REASON_KEYS = [
   "session_overrun",
   "weather_unavailable",
   "skip_today_requested",
+  "day_not_scheduled",
   "consumption_budget",
   // cancellation causes
   "valves_busy",
@@ -122,6 +123,13 @@ export interface CycleInfo {
   enabled?: boolean;
   trigger?: CycleTrigger;
   curve?: CycleCurve;
+  /** Weekdays 0=Mon..6=Sun the program runs; undefined/absent = every day. */
+  days?: number[];
+  /** Per-weekday base minutes, keyed by weekday-as-string; absent = uniform. */
+  day_minutes?: Record<string, number>;
+  /** Friendly derived values for a duration curve (null/absent for volume). */
+  amount?: number;
+  heat?: number;
 }
 
 export interface QueueItem {
