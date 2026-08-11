@@ -68,11 +68,13 @@ module = "homeassistant.*"
 follow_imports = "normal"
 
 [[tool.mypy.overrides]]
-# resources.py imports StaticPathConfig with a type: ignore that is needed on
-# newer HA (not re-exported in __all__) but unused on the pinned HA — don't
-# flag the unused ignore so the file stays clean on every HA version.
+# resources.py imports StaticPathConfig from homeassistant.components.http.
+# Newer HA re-exports it without listing it in __all__, so mypy's strict
+# no-implicit-reexport flags it (attr-defined); it exists at runtime on every
+# supported HA. Disable just that code for this one small module — robust
+# across HA versions and cleaner than a version-dependent inline ignore.
 module = "custom_components.irrigation_maestro.resources"
-warn_unused_ignores = false
+disable_error_code = ["attr-defined"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

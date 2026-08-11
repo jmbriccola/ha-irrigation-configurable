@@ -31,14 +31,12 @@ async def async_register_frontend(hass: HomeAssistant) -> None:
         return
 
     # Imported lazily: pulling in the http component at module import time
-    # would fail in contexts where it is not loaded (e.g. unit tests). The
-    # type: ignore covers HA versions that re-export StaticPathConfig without
-    # listing it in the component's __all__ (mypy no-implicit-reexport);
-    # warn_unused_ignores is disabled for this module (pyproject) so it stays
-    # clean on versions where it IS exported.
-    from homeassistant.components.http import (  # noqa: PLC0415
-        StaticPathConfig,  # type: ignore[attr-defined]
-    )
+    # would fail in contexts where it is not loaded (e.g. unit tests). Newer
+    # HA re-exports StaticPathConfig without listing it in http.__all__, which
+    # trips mypy's no-implicit-reexport (attr-defined); that error code is
+    # disabled for this module in pyproject rather than with a fragile inline
+    # ignore that would be unused on the pinned HA.
+    from homeassistant.components.http import StaticPathConfig  # noqa: PLC0415
 
     integration = await async_get_integration(hass, DOMAIN)
     card_dir = integration.file_path / "frontend"
