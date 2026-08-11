@@ -24,6 +24,7 @@ export const it: Record<keyof typeof en, string> = {
   "panel.minutes_value": "{min} min",
   "panel.edit_program": "Modifica",
   "panel.weather_line": "Oggi ({day}) ≈ {min} min. Salta se piove.",
+  "panel.pick_a_day": "Scegli almeno un giorno",
 
   // Editor programma (pannello)
   "program_editor.days": "Giorni",

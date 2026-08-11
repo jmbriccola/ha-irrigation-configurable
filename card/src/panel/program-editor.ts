@@ -52,10 +52,12 @@ interface StepperOptions {
 }
 
 const DEFAULT_MINUTES = 15;
+// Bounds mirror the backend service schemas: set_program_minutes accepts
+// 1..1440 min; set_program_schedule accepts a sun offset of -360..360 min.
 const MIN_MINUTES = 1;
-const MAX_MINUTES = 240;
-const MIN_OFFSET = -180;
-const MAX_OFFSET = 180;
+const MAX_MINUTES = 1440;
+const MIN_OFFSET = -360;
+const MAX_OFFSET = 360;
 const OFFSET_STEP = 5;
 
 export class ImcProgramEditor extends LitElement {
@@ -228,6 +230,11 @@ export class ImcProgramEditor extends LitElement {
       padding: 10px 12px;
       font-size: 12.5px;
     }
+    .hint {
+      margin-top: 10px;
+      font-size: 12px;
+      color: var(--error-color, #db4437);
+    }
     .buttons {
       display: flex;
       gap: 10px;
@@ -247,6 +254,10 @@ export class ImcProgramEditor extends LitElement {
       background: var(--primary-color, #03a9f4);
       color: var(--text-primary-color, #fff);
       border-color: transparent;
+    }
+    .buttons button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
     }
   `;
 
@@ -346,9 +357,14 @@ export class ImcProgramEditor extends LitElement {
       </div>
 
       ${this._renderWeatherLine(lang, cycle)}
+      ${this._days.length === 0
+        ? html`<div class="hint">${localize(lang, "panel.pick_a_day")}</div>`
+        : nothing}
 
       <div class="buttons">
-        <button class="primary" @click=${this._save}>${localize(lang, "editor.save")}</button>
+        <button class="primary" ?disabled=${this._days.length === 0} @click=${this._save}>
+          ${localize(lang, "editor.save")}
+        </button>
         <button @click=${this._cancel}>${localize(lang, "editor.cancel")}</button>
       </div>
     `;
@@ -442,6 +458,13 @@ export class ImcProgramEditor extends LitElement {
   }
 
   private _save(): void {
+    // Guard: an empty weekday selection must never be persisted. The
+    // backend treats a falsy/empty `days` as "every day" — the opposite of
+    // "no days selected" — so silently saving [] here would invert intent.
+    // The Save button is disabled for this case too; this is defense in
+    // depth in case _save is ever invoked programmatically.
+    if (this._days.length === 0) return;
+
     const zoneId = this.zoneId;
     const programId = this.cycle?.cycle_id ?? "";
     const start: ProgramStartDetail =
@@ -449,9 +472,15 @@ export class ImcProgramEditor extends LitElement {
         ? { kind: "time", at: this._startAt }
         : { kind: "sun", event: this._startEvent, offset_min: this._startOffsetMin };
 
+    // "Every day" (all 7 chips on) serializes as [] per the documented
+    // absent/empty = every-day convention, keeping saved state consistent
+    // with what a never-edited program already looks like on the wire.
+    const sortedDays = [...this._days].sort((a, b) => a - b);
+    const days = sortedDays.length >= 7 ? [] : sortedDays;
+
     this.dispatchEvent(
       new CustomEvent<ProgramScheduleSaveDetail>("imc-program-save-schedule", {
-        detail: { zoneId, programId, days: [...this._days], start },
+        detail: { zoneId, programId, days, start },
         bubbles: true,
         composed: true,
       }),

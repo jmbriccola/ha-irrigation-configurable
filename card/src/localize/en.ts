@@ -22,6 +22,7 @@ export const en = {
   "panel.minutes_value": "{min} min",
   "panel.edit_program": "Edit",
   "panel.weather_line": "Today ({day}) ≈ {min} min. Skips if it rains.",
+  "panel.pick_a_day": "Pick at least one day",
 
   // Program editor (panel)
   "program_editor.days": "Days",
