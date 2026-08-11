@@ -42,6 +42,7 @@ ignore = [
     "PLR0911", # too many return statements — decision trees are clearer flat
     "PLR0912", # too many branches
     "PLR0913", # too many arguments — HA callbacks and dataclasses
+    "PLR0917", # too many positional arguments — same rationale as PLR0913
     "PLR0915", # too many statements
     "PLR2004", # magic values in tests/formulas
 ]
