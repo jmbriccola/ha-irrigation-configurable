@@ -18,6 +18,10 @@ dev = [
 target-version = "py313"
 line-length = 100
 src = ["custom_components", "tests"]
+# Newer ruff reformats Python code blocks inside Markdown; our design docs
+# (docs/superpowers plans/specs) carry illustrative, non-canonical snippets
+# that are not source. Never lint/format Markdown — ruff owns .py/.ipynb only.
+extend-exclude = ["docs", "*.md"]
 
 [tool.ruff.lint]
 select = [

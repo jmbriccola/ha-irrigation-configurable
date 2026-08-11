@@ -652,7 +652,7 @@
         "zone_id": { "name": "Zone", "description": "The zone the program belongs to." },
         "program_id": { "name": "Program", "description": "The program to change." },
         "minutes": { "name": "Minutes", "description": "Same watering minutes every scheduled day. Exclusive with per-day minutes." },
-        "day_minutes": { "name": "Per-day minutes", "description": "Minutes per weekday, e.g. {\"0\": 15, \"2\": 20} for Monday and Wednesday. Exclusive with minutes." }
+        "day_minutes": { "name": "Per-day minutes", "description": "Minutes per weekday (0 = Monday … 6 = Sunday), e.g. Monday 15, Wednesday 20. Exclusive with minutes." }
       }
     },
     "add_program": {

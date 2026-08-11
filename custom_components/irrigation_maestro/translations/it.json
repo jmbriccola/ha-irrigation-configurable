@@ -652,7 +652,7 @@
         "zone_id": { "name": "Zona", "description": "La zona a cui appartiene il programma." },
         "program_id": { "name": "Programma", "description": "Il programma da modificare." },
         "minutes": { "name": "Minuti", "description": "Stessi minuti di irrigazione in ogni giorno programmato. Esclusivo rispetto ai minuti per giorno." },
-        "day_minutes": { "name": "Minuti per giorno", "description": "Minuti per giorno della settimana, es. {\"0\": 15, \"2\": 20} per lunedì e mercoledì. Esclusivo rispetto a minuti." }
+        "day_minutes": { "name": "Minuti per giorno", "description": "Minuti per giorno della settimana (0 = lunedì … 6 = domenica), es. lunedì 15, mercoledì 20. Esclusivo rispetto a minuti." }
       }
     },
     "add_program": {
