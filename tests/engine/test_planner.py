@@ -17,6 +17,7 @@ from custom_components.irrigation_maestro.engine.planner import (
     CycleSpec,
     ZoneSpec,
     build_session_plan,
+    resolve_day_curve,
 )
 from custom_components.irrigation_maestro.engine.scheduling import (
     CalendarRestrictions,
@@ -86,6 +87,37 @@ def plan(zones, evaluation=WATER_EVAL, now=NOW, factor=1.0):
         now=now,
         duration_factor=factor,
     )
+
+
+_DAY_CURVE = Curve(points=((12.0, 0.0), (25.0, 10.0), (35.0, 20.0)), min_value=0.0, max_value=60.0)
+
+
+class TestPerDayDuration:
+    def test_day_minutes_override_rebuilds_curve(self):
+        # Friday base 20' at 25C, heat of the curve = 20-10 = 10.
+        # points_from_semantic(20, 10) -> (12,7),(25,20),(35,30); at 31C -> 26.
+        cycle = make_cycle(curve=_DAY_CURVE, day_minutes={4: 20})
+        result = plan([make_zone(cycles=(cycle,))])
+        assert result.runs[0].duration_min == 26
+
+    def test_missing_weekday_falls_back_to_curve(self):
+        # No Friday entry -> legacy path: curve at 31C -> 16.
+        cycle = make_cycle(curve=_DAY_CURVE, day_minutes={0: 20})
+        result = plan([make_zone(cycles=(cycle,))])
+        assert result.runs[0].duration_min == 16
+
+    def test_volume_ignores_day_minutes(self):
+        vol_curve = Curve(
+            points=((12.0, 0.0), (25.0, 10.0), (35.0, 20.0)),
+            min_value=0.0,
+            max_value=60.0,
+            kind=CurveKind.VOLUME,
+        )
+        # day_minutes never converts liters to duration; resolver returns unchanged.
+        assert resolve_day_curve(vol_curve, {4: 20}, 4) is vol_curve
+
+    def test_resolve_day_curve_is_identity_without_day_minutes(self):
+        assert resolve_day_curve(_DAY_CURVE, {}, 4) is _DAY_CURVE
 
 
 class TestDurations:

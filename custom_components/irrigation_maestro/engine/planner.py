@@ -15,6 +15,7 @@ from datetime import date, datetime
 from .curves import Curve, CurveKind, curve_value
 from .model import EngineParams, SessionEvaluation, SkipReason
 from .scheduling import CalendarRestrictions, day_allowed, is_due, split_soak
+from .semantic import ANCHORS, points_from_semantic
 
 _DEFAULT_VOLUME_TIMEOUT_MIN = 30
 
@@ -52,6 +53,24 @@ class ZoneSpec:
     skip_today: bool
     has_flow_meter: bool
     cycles: tuple[CycleSpec, ...]
+
+
+def resolve_day_curve(curve: Curve, day_minutes: dict[int, int], weekday: int) -> Curve:
+    """The curve to use today: a per-day base rebuilt via the semantic mapping,
+    or the original curve unchanged (legacy path — keeps §8 identical)."""
+    if curve.kind is CurveKind.VOLUME:
+        return curve  # per-day minutes is a duration concept
+    base = day_minutes.get(weekday)
+    if base is None:
+        return curve
+    _cool, mild, hot = ANCHORS
+    heat = round(curve_value(curve, hot) - curve_value(curve, mild))
+    return Curve(
+        points=points_from_semantic(base, heat),
+        min_value=curve.min_value,
+        max_value=curve.max_value,
+        kind=curve.kind,
+    )
 
 
 @dataclass(frozen=True, slots=True)
@@ -121,6 +140,7 @@ def _cycle_target(
     zone: ZoneSpec,
     weighted_temp: float,
     duration_factor: float,
+    weekday: int,
 ) -> tuple[int, int | None, int]:
     """Frozen (duration_min, volume_l, safety_timeout_min) for one cycle.
 
@@ -129,7 +149,8 @@ def _cycle_target(
     into the time domain — soak splits, truncation and watchdog all reason
     in minutes).
     """
-    value = curve_value(cycle.curve, weighted_temp, zone.adjustment_pct)
+    day_curve = resolve_day_curve(cycle.curve, cycle.day_minutes, weekday)
+    value = curve_value(day_curve, weighted_temp, zone.adjustment_pct)
     target = max(round(value * duration_factor), 1)
     if cycle.curve.kind is CurveKind.VOLUME:
         timeout = cycle.volume_safety_timeout_min or _DEFAULT_VOLUME_TIMEOUT_MIN
@@ -192,7 +213,7 @@ def build_session_plan(
 
             assert evaluation.weighted_temp is not None
             duration, volume, timeout = _cycle_target(
-                cycle, zone, evaluation.weighted_temp, duration_factor
+                cycle, zone, evaluation.weighted_temp, duration_factor, now.weekday()
             )
             # Volume cycles are never soak-split: the target is a single
             # metered quantity, and splitting would deliver it once per slice.
