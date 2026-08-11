@@ -291,12 +291,16 @@ export class ImcCurveEditor extends LitElement {
     const svgEl = (ev.currentTarget as SVGElement).ownerSVGElement;
     if (!svgEl) return;
     const move = (e: PointerEvent): void => {
-      const rect = svgEl.getBoundingClientRect();
-      const y = ((e.clientY - rect.top) / rect.height) * GRAPH_H;
+      const ctm = svgEl.getScreenCTM();
+      if (!ctm) return;
+      const pt = svgEl.createSVGPoint();
+      pt.x = e.clientX;
+      pt.y = e.clientY;
+      const viewY = pt.matrixTransform(ctm.inverse()).y; // already in viewBox units (0..GRAPH_H)
       const next = [...this._points];
       const current = next[index];
       if (!current) return;
-      next[index] = [current[0], this._valueFromY(y)];
+      next[index] = [current[0], this._valueFromY(viewY)];
       this._points = next;
       this._dragged = true;
       const { amount, heat } = semanticFromPoints(this._points);
