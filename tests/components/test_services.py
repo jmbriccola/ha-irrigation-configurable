@@ -5,7 +5,9 @@ from datetime import timedelta
 
 import pytest
 import voluptuous as vol
+from custom_components.irrigation_maestro import const
 from custom_components.irrigation_maestro.const import DOMAIN
+from custom_components.irrigation_maestro.engine.curves import curve_value
 from freezegun.api import FrozenDateTimeFactory
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ServiceValidationError
@@ -39,6 +41,58 @@ async def test_run_zone_with_duration_override(
     assert outcome["duration_min"] == 2
     # Manual runs never advance the cadence counter.
     assert runtime.state.last_completed(zone_id) is None
+
+
+async def test_manual_run_uses_per_day_minutes(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    """A manual run (no explicit duration) must route through
+    resolve_day_curve, same as a scheduled run — so a per-day base for
+    today's weekday changes the outcome versus the zone's raw curve."""
+    freezer.move_to(START)
+    weekday = dt_util.utcnow().weekday()  # START is a Friday (2026-07-17) -> 4
+    park = MockValvePark(hass)
+    park.add("valve.pots")
+    # sunny/30C -> weighted_temp == 30.0 exactly (see test_evaluate_returns_full_plan,
+    # which asserts this for the same mock_weather() default against this same
+    # weather-only computation).
+    mock_weather(hass)
+    zone = zone_data("Pots", "valve.pots")
+    # amount=20/heat=10 semantic curve: mild (25C) -> 20', hot (35C) -> 30'.
+    zone[const.CONF_CYCLES][0][const.CONF_CURVE] = {
+        const.CONF_CURVE_POINTS: [[12, 7], [25, 20], [35, 30]],
+        const.CONF_CURVE_MIN: 0,
+        const.CONF_CURVE_MAX: 60,
+        const.CONF_CURVE_KIND: "duration",
+    }
+    # Today's per-day base is 7' instead of the curve's 20' mild value.
+    # resolve_day_curve rebuilds with this base and the curve's own heat
+    # (curve_value(curve, 35) - curve_value(curve, 25) == 30 - 20 == 10),
+    # giving day-curve points (12, 0), (25, 7), (35, 17).
+    zone[const.CONF_CYCLES][0][const.CONF_CYCLE_DAY_MINUTES] = {str(weekday): 7}
+    entry = await setup_hub(hass, [zone])
+    runtime = entry.runtime_data
+    zone_id = runtime.zone_ids[0]
+    raw_curve = runtime.zones[zone_id].config.cycles[0].curve
+
+    # Sanity-check the raw curve's own value at weighted_temp=30 (interpolating
+    # between (25, 20) and (35, 30) -> 25'), so the two branches are proven to
+    # differ, not just asserted to differ.
+    raw_expected = max(round(curve_value(raw_curve, 30.0, 100.0)), 1)
+    assert raw_expected == 25
+
+    await hass.services.async_call(DOMAIN, "run_zone", {"zone_id": zone_id}, blocking=True)
+    await advance(hass, freezer, 30)  # gather window + open
+    assert hass.states.get("valve.pots").state == "open"
+
+    await advance(hass, freezer, 13 * 60)  # 12-minute per-day duration elapses
+    assert hass.states.get("valve.pots").state == "closed"
+    outcome = runtime.state.last_outcome(zone_id)
+    assert outcome["result"] == "completed"
+    # Per-day curve interpolated at 30C between (25, 7) and (35, 17) -> 12',
+    # not the raw curve's 25' — proof that day_minutes was consulted.
+    assert outcome["duration_min"] == 12
+    assert outcome["duration_min"] != raw_expected
 
 
 async def test_run_zone_unknown_zone_raises(
