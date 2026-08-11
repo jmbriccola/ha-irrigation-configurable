@@ -1,6 +1,6 @@
 /*!
- * irrigation-maestro-card
- * Custom Lovelace card for the Irrigation Maestro Home Assistant integration.
+ * irrigation-maestro
+ * Custom frontend for the Irrigation Maestro Home Assistant integration.
  * Copyright (c) Jacopo Maria Briccola
  * @license MIT
  */
@@ -621,6 +621,8 @@ const C = {
   "card.not_installed": "Irrigation Maestro is not installed or has not created any entities yet. Set up the integration first.",
   "card.no_zones": "No zones configured yet. Add zones from the Irrigation Maestro integration options.",
   "card.unavailable": "unavailable",
+  // Panel (sidebar)
+  "panel.title": "Irrigation",
   // Header
   "header.water_budget": "Water budget",
   "header.skip_threshold": "Skip threshold",
@@ -772,6 +774,8 @@ const C = {
   "card.not_installed": "Irrigation Maestro non è installato o non ha ancora creato entità. Configura prima l'integrazione.",
   "card.no_zones": "Nessuna zona configurata. Aggiungi le zone dalle opzioni dell'integrazione Irrigation Maestro.",
   "card.unavailable": "non disponibile",
+  // Pannello (barra laterale)
+  "panel.title": "Irrigazione",
   // Intestazione
   "header.water_budget": "Budget idrico",
   "header.skip_threshold": "Soglia di salto",

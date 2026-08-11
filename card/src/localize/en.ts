@@ -13,6 +13,9 @@ export const en = {
     "No zones configured yet. Add zones from the Irrigation Maestro integration options.",
   "card.unavailable": "unavailable",
 
+  // Panel (sidebar)
+  "panel.title": "Irrigation",
+
   // Header
   "header.water_budget": "Water budget",
   "header.skip_threshold": "Skip threshold",

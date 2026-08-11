@@ -15,6 +15,9 @@ export const it: Record<keyof typeof en, string> = {
     "Nessuna zona configurata. Aggiungi le zone dalle opzioni dell'integrazione Irrigation Maestro.",
   "card.unavailable": "non disponibile",
 
+  // Pannello (barra laterale)
+  "panel.title": "Irrigazione",
+
   // Intestazione
   "header.water_budget": "Budget idrico",
   "header.skip_threshold": "Soglia di salto",

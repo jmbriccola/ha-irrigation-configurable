@@ -5,11 +5,10 @@ export default defineConfig({
   plugins: [bannerPlugin()],
   build: {
     lib: {
-      entry: "src/index.ts",
+      entry: "src/panel/index.ts",
       formats: ["es"],
-      fileName: () => "irrigation-maestro-card.js",
+      fileName: () => "irrigation-maestro-panel.js",
     },
-    // Emit the bundle directly into the integration's frontend folder.
     outDir: "../custom_components/irrigation_maestro/frontend",
     emptyOutDir: false,
     target: "es2021",
