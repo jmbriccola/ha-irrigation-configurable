@@ -20,6 +20,7 @@ from homeassistant.util import dt as dt_util
 from . import IrrigationConfigEntry
 from .const import TRIGGER_KIND_SUN, TRIGGER_KIND_TIME
 from .engine.curves import CurveKind
+from .engine.semantic import semantic_from_curve
 from .entity import (
     MaestroHubEntity,
     MaestroZoneEntity,
@@ -235,21 +236,7 @@ class ZoneStateSensor(MaestroZoneEntity, SensorEntity):
             "order": config.order,
             "degraded": self._degraded(),
             "suspended_until": suspended.isoformat() if suspended else None,
-            "cycles": [
-                {
-                    "cycle_id": cycle.cycle_id,
-                    "name": cycle.name,
-                    "enabled": runtime.state.cycle_enabled(self._zone_id, cycle.cycle_id),
-                    "trigger": _trigger_dict(cycle.trigger),
-                    "curve": {
-                        "points": [[temp, value] for temp, value in cycle.curve.points],
-                        "min": cycle.curve.min_value,
-                        "max": cycle.curve.max_value,
-                        "kind": str(cycle.curve.kind),
-                    },
-                }
-                for cycle in config.cycles
-            ],
+            "cycles": [self._cycle_dict(cycle) for cycle in config.cycles],
         }
         active = runtime.session.active_runs.get(self._zone_id)
         if active is not None:
@@ -261,6 +248,26 @@ class ZoneStateSensor(MaestroZoneEntity, SensorEntity):
                 attributes["run_duration_min"] = active.run_total_min
                 attributes["run_planned_runs"] = list(active.planned_runs)
         return attributes
+
+    def _cycle_dict(self, cycle: CycleConfig) -> dict[str, Any]:
+        is_duration = cycle.curve.kind is CurveKind.DURATION
+        amount, heat = semantic_from_curve(cycle.curve) if is_duration else (None, None)
+        return {
+            "cycle_id": cycle.cycle_id,
+            "name": cycle.name,
+            "enabled": self._runtime.state.cycle_enabled(self._zone_id, cycle.cycle_id),
+            "trigger": _trigger_dict(cycle.trigger),
+            "days": sorted(cycle.days) if cycle.days is not None else None,
+            "day_minutes": ({str(k): v for k, v in cycle.day_minutes.items()} or None),
+            "amount": amount,
+            "heat": heat,
+            "curve": {
+                "points": [[temp, value] for temp, value in cycle.curve.points],
+                "min": cycle.curve.min_value,
+                "max": cycle.curve.max_value,
+                "kind": str(cycle.curve.kind),
+            },
+        }
 
     def _degraded(self) -> list[str]:
         config = self.zone_config

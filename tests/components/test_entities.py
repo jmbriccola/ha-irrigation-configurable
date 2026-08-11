@@ -5,6 +5,7 @@ Entities are located exactly the way the card does it: by their
 """
 
 from datetime import timedelta
+from typing import Any
 
 import pytest
 from custom_components.irrigation_maestro.const import DOMAIN
@@ -341,6 +342,69 @@ async def test_consumption_sensor_unavailable_without_budget(
     state = hass.states.get(entity_id)
     assert state is not None
     assert state.state == "unavailable"
+
+
+def _first_cycle_attr(hass: HomeAssistant, entity_id: str) -> dict[str, Any]:
+    state = hass.states.get(entity_id)
+    assert state is not None
+    return state.attributes["cycles"][0]
+
+
+async def test_zone_state_exposes_schedule_fields(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    freezer.move_to(START)
+    park = MockValvePark(hass)
+    park.add("valve.pots")
+    mock_weather(hass)
+    entry = await setup_hub(hass, [zone_data("Pots", "valve.pots")])
+    zone_id = entry.runtime_data.zone_ids[0]
+
+    state = role_state(hass, "zone_state", zone_id)
+    assert state is not None
+    cycle = _first_cycle_attr(hass, state.entity_id)
+    assert cycle["days"] is None  # day-less program
+    assert cycle["day_minutes"] is None  # no per-day overrides
+    assert isinstance(cycle["amount"], int)  # derived from the duration curve
+    assert isinstance(cycle["heat"], int)
+
+
+async def test_zone_state_exposes_per_day_schedule_fields(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    freezer.move_to(START)
+    park = MockValvePark(hass)
+    park.add("valve.pots")
+    mock_weather(hass)
+    zone = zone_data(
+        "Pots",
+        "valve.pots",
+        cycles=[
+            {
+                "id": "cy_pots",
+                "name": "Morning",
+                "enabled": True,
+                "trigger": {"kind": "time", "at": "05:30"},
+                "curve": {
+                    "points": [[20.0, 3.0]],
+                    "min_value": 1.0,
+                    "max_value": 60.0,
+                },
+                "days": [0, 2, 4],
+                "day_minutes": {"0": 10, "4": 20},
+            }
+        ],
+    )
+    entry = await setup_hub(hass, [zone])
+    zone_id = entry.runtime_data.zone_ids[0]
+
+    state = role_state(hass, "zone_state", zone_id)
+    assert state is not None
+    cycle = _first_cycle_attr(hass, state.entity_id)
+    assert cycle["days"] == [0, 2, 4]
+    assert cycle["day_minutes"] == {"0": 10, "4": 20}
+    assert isinstance(cycle["amount"], int)
+    assert isinstance(cycle["heat"], int)
 
 
 async def test_consumption_sensor_present_with_budget(
