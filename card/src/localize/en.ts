@@ -15,6 +15,11 @@ export const en = {
 
   // Panel (sidebar)
   "panel.title": "Irrigation",
+  "panel.no_zones":
+    "No zones configured yet. Add zones from the Irrigation Maestro integration options.",
+  "panel.no_programs": "No programs configured yet.",
+  "panel.per_day_minutes": "Different duration per day",
+  "panel.minutes_value": "{min} min",
 
   // Header
   "header.water_budget": "Water budget",

@@ -17,6 +17,11 @@ export const it: Record<keyof typeof en, string> = {
 
   // Pannello (barra laterale)
   "panel.title": "Irrigazione",
+  "panel.no_zones":
+    "Nessuna zona configurata. Aggiungi le zone dalle opzioni dell'integrazione Irrigation Maestro.",
+  "panel.no_programs": "Nessun programma configurato ancora.",
+  "panel.per_day_minutes": "Durata diversa per giorno",
+  "panel.minutes_value": "{min} min",
 
   // Intestazione
   "header.water_budget": "Budget idrico",
