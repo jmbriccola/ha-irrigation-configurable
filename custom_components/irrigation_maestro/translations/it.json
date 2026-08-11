@@ -188,7 +188,7 @@
         },
         "data_description": {
           "liters_per_month": "Litri totali consentiti al mese. Vuoto = nessun budget. Serve un flussometro, o le portate nominali per stimare il consumo.",
-          "action": "Cosa succede una volta esaurito il budget: \"solo notifica\" avvisa, \"riduci\" accorcia ogni ciclo, \"sospendi\" ferma l'irrigazione fino al mese successivo.",
+          "action": "Cosa succede una volta esaurito il budget: \"solo notifica\" avvisa, \"riduci\" accorcia ogni programma, \"sospendi\" ferma l'irrigazione fino al mese successivo.",
           "reduce_pct": "Di quanto viene accorciato ogni programma quando l'azione è \"Riduci l'irrigazione\". Default 50."
         }
       }
@@ -290,7 +290,7 @@
           "data_description": {
             "name": "Un nome per questa irrigazione, es. \"Mattino\" o \"Sera\".",
             "kind": "Avvio all'alba/tramonto (con uno scostamento) oppure a un orario fisso.",
-            "months_override": "Esegui questo ciclo solo in alcuni mesi. Vuoto = segui la stagione della zona."
+            "months_override": "Esegui questo programma solo in alcuni mesi. Vuoto = segui la stagione della zona."
           }
         },
         "cycle_sun": {
@@ -312,7 +312,7 @@
             "at": "Orario di avvio"
           },
           "data_description": {
-            "at": "L'ora del giorno in cui parte questo ciclo, es. 06:30."
+            "at": "L'ora del giorno in cui parte questo programma, es. 06:30."
           }
         },
         "cycle_curve": {
@@ -320,12 +320,12 @@
           "description": "La curva decide quanto irrigare (durata o quantità) in base alla temperatura pesata: più fa caldo, più si irriga. Parti da un preset pronto, copia una curva da un altro programma, o creane una tua.",
           "data": {
             "source": "Curva",
-            "soak_max_run_min": "Program-and-soak: durata massima (minuti, facoltativa)",
-            "soak_pause_min": "Program-and-soak: pausa (minuti)",
+            "soak_max_run_min": "Cycle-and-soak: durata massima (minuti, facoltativa)",
+            "soak_pause_min": "Cycle-and-soak: pausa (minuti)",
             "volume_safety_timeout_min": "Timeout di sicurezza per volume (minuti)"
           },
           "data_description": {
-            "source": "\"Vasi\" e \"Prato\" sono preset pronti; \"Personalizzata\" ti fa inserire i tuoi punti; \"Copia\" riusa la curva di un ciclo esistente.",
+            "source": "\"Vasi\" e \"Prato\" sono preset pronti; \"Personalizzata\" ti fa inserire i tuoi punti; \"Copia\" riusa la curva di un programma esistente.",
             "soak_max_run_min": "Facoltativo. Per evitare ruscellamento sui terreni che assorbono lentamente, spezza l'irrigazione in tratte non più lunghe di così. Vuoto = in un'unica soluzione.",
             "soak_pause_min": "Pausa di assorbimento tra quelle tratte; nel frattempo possono irrigare le altre zone.",
             "volume_safety_timeout_min": "Solo curve a volume: chiudi la valvola a forza dopo questo tempo se i litri obiettivo non vengono mai misurati."
@@ -360,7 +360,7 @@
           "title": "Zona {zone_name}",
           "menu_options": {
             "edit_zone": "Modifica impostazioni della zona",
-            "manage_cycles": "Gestisci i cicli",
+            "manage_cycles": "Gestisci i programmi",
             "done": "Salva e chiudi"
           }
         },
@@ -399,7 +399,7 @@
         "duration_out_of_range": "Le durate devono essere comprese tra 1 e 1440 minuti.",
         "volume_requires_flow": "Le curve a volume richiedono un sensore di portata di zona o di linea sull'hub.",
         "soak_pause_without_max": "La pausa di assorbimento richiede anche una durata massima.",
-        "copy_source_missing": "Quel ciclo non esiste più: scegline un altro."
+        "copy_source_missing": "Quel programma non esiste più: scegline un altro."
       },
       "abort": {
         "reconfigure_successful": "Zona aggiornata."
@@ -589,7 +589,7 @@
           "description": "La zona a cui appartiene il programma."
         },
         "cycle_id": {
-          "name": "Ciclo",
+          "name": "Programma",
           "description": "Il programma la cui curva viene sostituita."
         },
         "points": {
@@ -611,7 +611,7 @@
       "description": "Costruisce una curva a durata da una quantità base e un incremento per i giorni caldi, poi la salva su un programma.",
       "fields": {
         "zone_id": { "name": "Zona", "description": "La zona a cui appartiene il programma." },
-        "cycle_id": { "name": "Ciclo", "description": "Il programma di cui impostare la curva." },
+        "cycle_id": { "name": "Programma", "description": "Il programma di cui impostare la curva." },
         "amount": { "name": "Quanta acqua (min a 25°)", "description": "Minuti di irrigazione in una giornata mite." },
         "heat": { "name": "Di più quando caldo (min extra a 35°)", "description": "Minuti extra in una giornata calda rispetto a una mite." },
         "min_value": { "name": "Mai meno di (min)", "description": "Limite inferiore facoltativo." },
@@ -708,7 +708,7 @@
       "message": "Zona sconosciuta: {zone_id}."
     },
     "unknown_cycle": {
-      "message": "Ciclo sconosciuto: {cycle_id}."
+      "message": "Programma sconosciuto: {cycle_id}."
     },
     "invalid_points": {
       "message": "Punti della curva non validi ({error}): le temperature devono essere strettamente crescenti e i valori non negativi."

@@ -867,7 +867,7 @@ const C = {
   "zone_state.paused": "In pausa",
   "zone_state.suspended": "Sospesa",
   "zone_state.disabled": "Disabilitata",
-  // Stati ultimo esito (riferiti al "ciclo", maschile)
+  // Stati ultimo esito (riferiti al "programma", maschile)
   "outcome.completed": "Completato",
   "outcome.skipped": "Saltato",
   "outcome.interrupted": "Interrotto",

@@ -188,7 +188,7 @@
         },
         "data_description": {
           "liters_per_month": "Total litres allowed per calendar month. Empty = no budget. Needs a flow meter, or nominal flow rates to estimate use.",
-          "action": "What happens once the budget is used up: notify only warns, reduce shortens every cycle, suspend stops watering until next month.",
+          "action": "What happens once the budget is used up: notify only warns, reduce shortens every program, suspend stops watering until next month.",
           "reduce_pct": "By how much each program is shortened when the action is 'Reduce watering'. Default 50."
         }
       }
@@ -290,7 +290,7 @@
           "data_description": {
             "name": "A name for this run, e.g. 'Morning' or 'Evening'.",
             "kind": "Start at sunrise/sunset (with an offset) or at a fixed clock time.",
-            "months_override": "Run this cycle only in certain months. Empty = follow the zone's season."
+            "months_override": "Run this program only in certain months. Empty = follow the zone's season."
           }
         },
         "cycle_sun": {
@@ -312,7 +312,7 @@
             "at": "Start time"
           },
           "data_description": {
-            "at": "The time of day this cycle starts, e.g. 06:30."
+            "at": "The time of day this program starts, e.g. 06:30."
           }
         },
         "cycle_curve": {
@@ -320,12 +320,12 @@
           "description": "The curve decides how long (or how much) to water based on the weighted temperature: hotter days water more. Start from a ready-made preset, copy one from another program, or build your own.",
           "data": {
             "source": "Curve",
-            "soak_max_run_min": "Program-and-soak: maximum run (minutes, optional)",
-            "soak_pause_min": "Program-and-soak: pause (minutes)",
+            "soak_max_run_min": "Cycle-and-soak: maximum run (minutes, optional)",
+            "soak_pause_min": "Cycle-and-soak: pause (minutes)",
             "volume_safety_timeout_min": "Volume safety timeout (minutes)"
           },
           "data_description": {
-            "source": "'Potted plants' and 'Lawn' are ready-made presets; 'Custom' lets you enter your own points; 'Copy' reuses a curve from an existing cycle.",
+            "source": "'Potted plants' and 'Lawn' are ready-made presets; 'Custom' lets you enter your own points; 'Copy' reuses a curve from an existing program.",
             "soak_max_run_min": "Optional. To avoid runoff on slow-draining soil, split watering into runs no longer than this. Empty = water in one go.",
             "soak_pause_min": "Absorption pause between those runs; other zones can water in the meantime.",
             "volume_safety_timeout_min": "Volume curves only: force the valve closed after this long if the target litres are never measured."
@@ -360,7 +360,7 @@
           "title": "Zone {zone_name}",
           "menu_options": {
             "edit_zone": "Edit zone settings",
-            "manage_cycles": "Manage cycles",
+            "manage_cycles": "Manage programs",
             "done": "Save and close"
           }
         },
@@ -399,7 +399,7 @@
         "duration_out_of_range": "Durations must be between 1 and 1440 minutes.",
         "volume_requires_flow": "Volume curves need a zone flow sensor or a line flow sensor on the hub.",
         "soak_pause_without_max": "A soak pause needs a maximum run time as well.",
-        "copy_source_missing": "That cycle no longer exists — pick another one."
+        "copy_source_missing": "That program no longer exists — pick another one."
       },
       "abort": {
         "reconfigure_successful": "Zone updated."
@@ -589,7 +589,7 @@
           "description": "The zone owning the program."
         },
         "cycle_id": {
-          "name": "Cycle",
+          "name": "Program",
           "description": "The program whose curve is replaced."
         },
         "points": {
@@ -611,7 +611,7 @@
       "description": "Builds a duration curve from a base amount and a hot-day boost, then saves it to a program.",
       "fields": {
         "zone_id": { "name": "Zone", "description": "The zone owning the program." },
-        "cycle_id": { "name": "Cycle", "description": "The program whose curve is set." },
+        "cycle_id": { "name": "Program", "description": "The program whose curve is set." },
         "amount": { "name": "Amount (min at 25°)", "description": "Watering minutes on a mild day." },
         "heat": { "name": "Hot-day boost (extra min at 35°)", "description": "Extra minutes on a hot day vs a mild one." },
         "min_value": { "name": "Never less than (min)", "description": "Optional lower limit." },
@@ -708,7 +708,7 @@
       "message": "Unknown zone: {zone_id}."
     },
     "unknown_cycle": {
-      "message": "Unknown cycle: {cycle_id}."
+      "message": "Unknown program: {cycle_id}."
     },
     "invalid_points": {
       "message": "Invalid curve points ({error}): temperatures must be strictly increasing and values must not be negative."
