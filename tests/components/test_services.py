@@ -525,6 +525,27 @@ async def test_set_program_minutes_per_day(
     assert runtime.zones[zone_id].config.cycles[0].day_minutes == {0: 10, 4: 20}
 
 
+async def test_set_program_minutes_rejects_non_numeric_day_key(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    freezer.move_to(START)
+    mock_weather(hass)
+    entry = await setup_hub(hass, [zone_data("Pots", "valve.pots")])
+    runtime = entry.runtime_data
+    zone_id = runtime.zone_ids[0]
+    program_id = runtime.zones[zone_id].config.cycles[0].cycle_id
+
+    with pytest.raises(ServiceValidationError):
+        await hass.services.async_call(
+            DOMAIN,
+            "set_program_minutes",
+            {"zone_id": zone_id, "program_id": program_id, "day_minutes": {"monday": 10}},
+            blocking=True,
+        )
+    # Nothing was written: the bad key was rejected before persisting.
+    assert runtime.zones[zone_id].config.cycles[0].day_minutes == {}
+
+
 async def test_set_program_minutes_rejects_unknown_program(
     hass: HomeAssistant, freezer: FrozenDateTimeFactory
 ) -> None:

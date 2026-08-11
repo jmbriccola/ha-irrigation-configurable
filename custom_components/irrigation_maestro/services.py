@@ -455,12 +455,19 @@ async def _async_set_program_minutes(call: ServiceCall) -> None:
             item.pop(const.CONF_CYCLE_DAY_MINUTES, None)  # uniform clears per-day
 
     elif ATTR_DAY_MINUTES in call.data:
-        day_map = {str(int(k)): int(v) for k, v in call.data[ATTR_DAY_MINUTES].items()}
-        for weekday in day_map:
-            if not 0 <= int(weekday) <= 6:
+        day_map: dict[str, int] = {}
+        for raw_key, raw_val in call.data[ATTR_DAY_MINUTES].items():
+            try:
+                weekday = int(raw_key)
+            except (TypeError, ValueError):
+                raise ServiceValidationError(
+                    translation_domain=DOMAIN, translation_key="invalid_weekday"
+                ) from None
+            if not 0 <= weekday <= 6:
                 raise ServiceValidationError(
                     translation_domain=DOMAIN, translation_key="invalid_weekday"
                 )
+            day_map[str(weekday)] = int(raw_val)
 
         def mutate(item: dict[str, Any]) -> None:
             item[const.CONF_CYCLE_DAY_MINUTES] = day_map
