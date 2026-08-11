@@ -51,6 +51,9 @@ jobs:
         run: |
           npm ci
           npm run build
+      - name: Card unit tests
+        working-directory: card
+        run: npm run test
       - name: Committed bundle is up to date
         run: git diff --exit-code custom_components/irrigation_maestro/frontend/
 

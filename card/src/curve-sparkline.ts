@@ -1,6 +1,7 @@
 import { css, html, LitElement, nothing, svg } from "lit";
 import type { TemplateResult } from "lit";
 import { property } from "lit/decorators.js";
+import { parseCurvePoints, type CurvePoint } from "./curve-math";
 import type { CycleCurve } from "./types";
 import { asNumber, defineElement } from "./types";
 
@@ -8,20 +9,6 @@ const WIDTH = 150;
 const HEIGHT = 44;
 const PAD_X = 6;
 const PAD_Y = 6;
-
-type Point = readonly [number, number];
-
-function parsePoints(raw: unknown): Point[] {
-  if (!Array.isArray(raw)) return [];
-  const points: Point[] = [];
-  for (const item of raw) {
-    if (!Array.isArray(item) || item.length < 2) continue;
-    const x = asNumber(item[0]);
-    const y = asNumber(item[1]);
-    if (x !== undefined && y !== undefined) points.push([x, y]);
-  }
-  return points.sort((a, b) => a[0] - b[0]);
-}
 
 /**
  * Read-only inline SVG sparkline of a cycle curve: value over
@@ -69,7 +56,7 @@ export class ImcCurveSparkline extends LitElement {
 
   protected override render(): TemplateResult | typeof nothing {
     const curve = this.curve;
-    const points = parsePoints(curve?.points);
+    const points: CurvePoint[] = parseCurvePoints(curve?.points);
     if (points.length === 0) return nothing;
 
     const clampMin = asNumber(curve?.min);
