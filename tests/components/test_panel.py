@@ -1,7 +1,7 @@
 """Tests for the Irrigation Maestro sidebar panel registration."""
 
 import sys
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 from custom_components.irrigation_maestro.panel import PANEL_URL_PATH
 from homeassistant.components.frontend import async_panel_exists
@@ -39,4 +39,30 @@ async def test_panel_removed_on_unload(hass: HomeAssistant) -> None:
     entry = await setup_hub(hass, [zone_data("Alpha", "valve.a")])
     assert async_panel_exists(hass, PANEL_URL_PATH)
     assert await hass.config_entries.async_unload(entry.entry_id)
+    assert not async_panel_exists(hass, PANEL_URL_PATH)
+
+
+async def test_panel_registration_failure_does_not_abort_hub_setup(
+    hass: HomeAssistant,
+) -> None:
+    """A broken sidebar panel registration must not take down the whole hub.
+
+    e.g. another integration already owns the "irrigation" url_path: the
+    hub should still load (entry.runtime_data set) and the dashboard card
+    should remain available; only the sidebar panel is skipped.
+    """
+    sys.modules["hass_frontend"] = MagicMock()
+    try:
+        assert await async_setup_component(hass, "frontend", {})
+    finally:
+        sys.modules.pop("hass_frontend", None)
+    park = MockValvePark(hass)
+    park.add("valve.a")
+    mock_weather(hass)
+    with patch(
+        "custom_components.irrigation_maestro.panel.panel_custom.async_register_panel",
+        side_effect=ValueError("url_path irrigation is already registered"),
+    ):
+        entry = await setup_hub(hass, [zone_data("Alpha", "valve.a")])
+    assert entry.runtime_data is not None
     assert not async_panel_exists(hass, PANEL_URL_PATH)

@@ -97,6 +97,16 @@ export class ImcProgramEditor extends LitElement {
 
   private _seededCycleId?: string;
 
+  /**
+   * Volume-mode programs (liters, edited via the curve editor's
+   * amount/heat controls) have no minutes to save here — `amount`/`heat`
+   * come back null for them. Duration steppers + weather preview only make
+   * sense for a "duration" curve.
+   */
+  private get _isVolume(): boolean {
+    return this.cycle?.curve?.kind === "volume";
+  }
+
   static override styles = css`
     :host {
       display: block;
@@ -252,6 +262,11 @@ export class ImcProgramEditor extends LitElement {
       padding: 10px 12px;
       font-size: 12.5px;
     }
+    .volume-note {
+      margin-top: 14px;
+      font-size: 12.5px;
+      opacity: 0.8;
+    }
     .hint {
       margin-top: 10px;
       font-size: 12px;
@@ -375,14 +390,18 @@ export class ImcProgramEditor extends LitElement {
             })}
       </div>
 
-      <div class="section-label">${localize(lang, "program_editor.duration_per_day")}</div>
-      ${this._renderDurations(lang, labels)}
-      <div class="same-row" @click=${() => (this._sameForAll = !this._sameForAll)}>
-        <span class="switch ${this._sameForAll ? "on" : ""}"></span>
-        ${localize(lang, "program_editor.same_duration")}
-      </div>
+      ${this._isVolume
+        ? html`<div class="volume-note">${localize(lang, "editor.volume_note")}</div>`
+        : html`
+            <div class="section-label">${localize(lang, "program_editor.duration_per_day")}</div>
+            ${this._renderDurations(lang, labels)}
+            <div class="same-row" @click=${() => (this._sameForAll = !this._sameForAll)}>
+              <span class="switch ${this._sameForAll ? "on" : ""}"></span>
+              ${localize(lang, "program_editor.same_duration")}
+            </div>
 
-      ${this._renderWeatherLine(lang, cycle)}
+            ${this._renderWeatherLine(lang, cycle)}
+          `}
       ${this._days.length === 0
         ? html`<div class="hint">${localize(lang, "panel.pick_a_day")}</div>`
         : nothing}
@@ -493,7 +512,21 @@ export class ImcProgramEditor extends LitElement {
     const t = this.weightedTemp;
     if (t === undefined || Number.isNaN(t)) return nothing;
     const today = (new Date().getDay() + 6) % 7;
-    const base = dayBase(cycle, today);
+
+    // The program may not even run today — an "≈ N min" preview for a day
+    // it never waters on would be misleading. "Every day" is 7 chips on
+    // (mirrors the [] === every-day convention used when saving).
+    const everyDaySelected = this._days.length >= 7;
+    if (!everyDaySelected && !this._days.includes(today)) {
+      return html`<div class="weather">${localize(lang, "reason.day_not_scheduled")}</div>`;
+    }
+
+    // Base comes from the WORKING (unsaved) state, not the saved `cycle`
+    // prop, so the preview moves live as the user drags a stepper —
+    // matching the wizard's live preview (program-wizard.ts).
+    const base = this._sameForAll
+      ? this._uniformMinutes
+      : dayBase({ amount: this._uniformMinutes, day_minutes: this._dayMinutes }, today);
     const heat = asNumber(cycle.heat) ?? 8;
     const min = effectiveMinutes(
       base,
@@ -549,6 +582,11 @@ export class ImcProgramEditor extends LitElement {
         composed: true,
       }),
     );
+
+    // Volume-mode programs have no minutes to save here — the backend
+    // rejects set_program_minutes for a volume curve (simple_curve_on_volume).
+    // Liters are edited via the curve editor in the Advanced drawer instead.
+    if (this._isVolume) return;
 
     const minutesDetail: ProgramMinutesSaveDetail = this._sameForAll
       ? { zoneId, programId, minutes: this._uniformMinutes }

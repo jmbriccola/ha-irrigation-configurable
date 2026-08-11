@@ -54,7 +54,10 @@ export class IrrigationMaestroPanel extends LitElement {
   ): Promise<{ context: unknown; response?: Record<string, unknown> } | undefined> {
     if (!this.hass) return undefined;
     try {
-      return await this.hass.callService(domain, service, data, undefined, true, returnResponse);
+      // notifyOnError=false: this wrapper already surfaces failures via the
+      // panel's own `_error` toast below — HA's own error dialog on top of
+      // that would be a redundant, double error UI for the same failure.
+      return await this.hass.callService(domain, service, data, undefined, false, returnResponse);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       this._error = message;
