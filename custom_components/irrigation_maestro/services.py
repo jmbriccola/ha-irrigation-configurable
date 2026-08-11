@@ -25,7 +25,7 @@ from homeassistant.util import dt as dt_util
 
 from . import const
 from .const import DOMAIN, SUBENTRY_TYPE_ZONE
-from .engine.curves import CurveError, validate_points
+from .engine.curves import CurveError, CurveKind, validate_points
 from .engine.semantic import points_from_semantic
 from .models import HubConfig, ZoneConfig
 from .runtime import IrrigationRuntime
@@ -284,6 +284,12 @@ async def _async_set_simple_curve(call: ServiceCall) -> None:
         raise ServiceValidationError(
             translation_domain=DOMAIN,
             translation_key="unknown_cycle",
+            translation_placeholders={"cycle_id": cycle_id},
+        )
+    if cycle.curve.kind is CurveKind.VOLUME:
+        raise ServiceValidationError(
+            translation_domain=DOMAIN,
+            translation_key="simple_curve_on_volume",
             translation_placeholders={"cycle_id": cycle_id},
         )
     points = list(points_from_semantic(call.data[ATTR_AMOUNT], call.data[ATTR_HEAT]))

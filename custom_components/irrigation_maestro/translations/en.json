@@ -667,6 +667,9 @@
     "min_above_max": {
       "message": "The minimum must not exceed the maximum."
     },
+    "simple_curve_on_volume": {
+      "message": "Simple curves are duration-only; this cycle uses a volume curve. Edit it in the zone settings."
+    },
     "invalid_payload": {
       "message": "The payload is not a valid exported configuration."
     },

@@ -62,6 +62,18 @@ describe("semanticFromPoints", () => {
       ]),
     ).toEqual({ amount: 3, heat: 0 });
   });
+  it("applies the curve's own min/max clamps before deriving amount/heat, matching engine/semantic.py's semantic_from_curve (which reads curve_value, itself clamped)", () => {
+    expect(
+      semanticFromPoints(
+        [
+          [25, 200],
+          [35, 400],
+        ],
+        undefined,
+        30,
+      ),
+    ).toEqual({ amount: 30, heat: 0 });
+  });
 });
 
 describe("curveValue", () => {

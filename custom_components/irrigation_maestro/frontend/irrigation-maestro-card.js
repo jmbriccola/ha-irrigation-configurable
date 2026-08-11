@@ -253,14 +253,14 @@ let B = class extends HTMLElement {
   }
 };
 B.elementStyles = [], B.shadowRootOptions = { mode: "open" }, B[ie("elementProperties")] = /* @__PURE__ */ new Map(), B[ie("finalized")] = /* @__PURE__ */ new Map(), Tt?.({ ReactiveElement: B }), (ve.reactiveElementVersions ??= []).push("2.1.2");
-const Te = globalThis, Be = (n) => n, _e = Te.trustedTypes, Ve = _e ? _e.createPolicy("lit-html", { createHTML: (n) => n }) : void 0, rt = "$lit$", M = `lit$${Math.random().toFixed(9).slice(2)}$`, lt = "?" + M, Mt = `<${lt}>`, R = document, ne = () => R.createComment(""), se = (n) => n === null || typeof n != "object" && typeof n != "function", Me = Array.isArray, Pt = (n) => Me(n) || typeof n?.[Symbol.iterator] == "function", ye = `[ 	
+const Te = globalThis, Be = (n) => n, _e = Te.trustedTypes, Ve = _e ? _e.createPolicy("lit-html", { createHTML: (n) => n }) : void 0, rt = "$lit$", M = `lit$${Math.random().toFixed(9).slice(2)}$`, lt = "?" + M, Mt = `<${lt}>`, R = document, ne = () => R.createComment(""), se = (n) => n === null || typeof n != "object" && typeof n != "function", Me = Array.isArray, Nt = (n) => Me(n) || typeof n?.[Symbol.iterator] == "function", ye = `[ 	
 \f\r]`, J = /<(?:(!--|\/[^a-zA-Z])|(\/?[a-zA-Z][^>\s]*)|(\/?$))/g, We = /-->/g, Ze = />/g, O = RegExp(`>|${ye}(?:([^\\s"'>=/]+)(${ye}*=${ye}*(?:[^ 	
 \f\r"'\`<>=]|("|')|))|$)`, "g"), Ge = /'/g, Qe = /"/g, ct = /^(?:script|style|textarea|title)$/i, dt = (n) => (e, ...t) => ({ _$litType$: n, strings: e, values: t }), u = dt(1), q = dt(2), G = /* @__PURE__ */ Symbol.for("lit-noChange"), d = /* @__PURE__ */ Symbol.for("lit-nothing"), Xe = /* @__PURE__ */ new WeakMap(), U = R.createTreeWalker(R, 129);
 function ut(n, e) {
   if (!Me(n) || !n.hasOwnProperty("raw")) throw Error("invalid template strings array");
   return Ve !== void 0 ? Ve.createHTML(e) : e;
 }
-const Nt = (n, e) => {
+const Pt = (n, e) => {
   const t = n.length - 1, o = [];
   let i, s = e === 2 ? "<svg>" : e === 3 ? "<math>" : "", a = J;
   for (let l = 0; l < t; l++) {
@@ -277,7 +277,7 @@ class ae {
     let i;
     this.parts = [];
     let s = 0, a = 0;
-    const l = e.length - 1, r = this.parts, [p, h] = Nt(e, t);
+    const l = e.length - 1, r = this.parts, [p, h] = Pt(e, t);
     if (this.el = ae.createElement(p, o), U.currentNode = this.el.content, t === 2 || t === 3) {
       const m = this.el.content.firstChild;
       m.replaceWith(...m.childNodes);
@@ -362,7 +362,7 @@ class le {
     return this._$AB;
   }
   _$AI(e, t = this) {
-    e = Q(this, e, t), se(e) ? e === d || e == null || e === "" ? (this._$AH !== d && this._$AR(), this._$AH = d) : e !== this._$AH && e !== G && this._(e) : e._$litType$ !== void 0 ? this.$(e) : e.nodeType !== void 0 ? this.T(e) : Pt(e) ? this.k(e) : this._(e);
+    e = Q(this, e, t), se(e) ? e === d || e == null || e === "" ? (this._$AH !== d && this._$AR(), this._$AH = d) : e !== this._$AH && e !== G && this._(e) : e._$litType$ !== void 0 ? this.$(e) : e.nodeType !== void 0 ? this.T(e) : Nt(e) ? this.k(e) : this._(e);
   }
   O(e) {
     return this._$AA.parentNode.insertBefore(e, this._$AB);
@@ -478,7 +478,7 @@ const Rt = (n, e, t) => {
   }
   return i._$AI(n), i;
 };
-const Pe = globalThis;
+const Ne = globalThis;
 class S extends B {
   constructor() {
     super(...arguments), this.renderOptions = { host: this }, this._$Do = void 0;
@@ -501,10 +501,10 @@ class S extends B {
     return G;
   }
 }
-S._$litElement$ = !0, S.finalized = !0, Pe.litElementHydrateSupport?.({ LitElement: S });
-const Lt = Pe.litElementPolyfillSupport;
+S._$litElement$ = !0, S.finalized = !0, Ne.litElementHydrateSupport?.({ LitElement: S });
+const Lt = Ne.litElementPolyfillSupport;
 Lt?.({ LitElement: S });
-(Pe.litElementVersions ??= []).push("4.2.2");
+(Ne.litElementVersions ??= []).push("4.2.2");
 const Ft = { attribute: !0, type: String, converter: me, reflect: !1, hasChanged: Ce }, jt = (n = Ft, e, t) => {
   const { kind: o, metadata: i } = t;
   let s = globalThis.litPropertyMetadata.get(i);
@@ -1037,12 +1037,12 @@ const V = 12, D = 25, W = 35, mt = 3, _t = 45, ft = 0, vt = 30, oo = (D - V) / 1
 function tt(n, e, t) {
   return Math.max(e, Math.min(t, n));
 }
-function P(n) {
+function N(n) {
   const e = Math.floor(n), t = n - e;
   return t < 0.5 ? e : t > 0.5 ? e + 1 : e % 2 === 0 ? e : e + 1;
 }
 function ot(n, e) {
-  const t = Math.max(0, P(n - oo * e));
+  const t = Math.max(0, N(n - oo * e));
   return [
     [V, t],
     [D, n],
@@ -1072,11 +1072,11 @@ function Z(n, e, t, o) {
   }
   return t !== void 0 && (a = Math.max(a, t)), o !== void 0 && (a = Math.min(a, o)), a;
 }
-function it(n) {
-  const e = Z(n, D), t = Z(n, W);
+function it(n, e, t) {
+  const o = Z(n, D, e, t), i = Z(n, W, e, t);
   return {
-    amount: tt(P(e), mt, _t),
-    heat: tt(P(t - e), ft, vt)
+    amount: tt(N(o), mt, _t),
+    heat: tt(N(i - o), ft, vt)
   };
 }
 function gt(n) {
@@ -1185,16 +1185,19 @@ const we = 320, z = 170, ee = 34, st = 12, te = 16, A = 24, pe = 5, ze = 40, Oe 
     super(...arguments), this.language = "en", this._amount = 15, this._heat = 15, this._min = 1, this._max = 120, this._advanced = !1, this._dragged = !1, this._points = ot(15, 15);
   }
   willUpdate(e) {
-    e.has("cycle") && this._seedFromCycle();
+    if (e.has("cycle")) {
+      const t = this.cycle?.cycle_id;
+      t !== this._seededCycleId && (this._seededCycleId = t, this._seedFromCycle());
+    }
   }
   _seedFromCycle() {
     const e = this.cycle?.curve, t = gt(e?.points);
     if (t.length === 0) return;
-    const { amount: o, heat: i } = it(t);
-    this._amount = o, this._heat = i, this._min = v(e?.min) ?? 1, this._max = v(e?.max) ?? 120, this._dragged = !1, this._points = [
-      [V, P(Z(t, V))],
-      [D, P(Z(t, D))],
-      [W, P(Z(t, W))]
+    const o = v(e?.min) ?? 1, i = v(e?.max) ?? 120, { amount: s, heat: a } = it(t, o, i);
+    this._amount = s, this._heat = a, this._min = o, this._max = i, this._dragged = !1, this._points = [
+      [V, N(Z(t, V))],
+      [D, N(Z(t, D))],
+      [W, N(Z(t, W))]
     ];
   }
   _regen() {
@@ -1207,18 +1210,21 @@ const we = 320, z = 170, ee = 34, st = 12, te = 16, A = 24, pe = 5, ze = 40, Oe 
     this._heat = Number(e.target.value), this._regen();
   }
   _clampedValue(e) {
-    return P(Z(this._points, e, this._min, this._max));
+    return N(Z(this._points, e, this._min, this._max));
   }
   _sx(e) {
     return ee + (e - pe) / (ze - pe) * (we - ee - st);
   }
+  _graphTop() {
+    return Math.max(12, ...this._points.map((e) => e[1])) + 4;
+  }
   _sy(e) {
-    const t = Math.max(this._max, ...this._points.map((o) => o[1]), 1);
+    const t = this._graphTop();
     return z - A - e / t * (z - te - A);
   }
   _valueFromY(e) {
-    const t = Math.max(this._max, ...this._points.map((i) => i[1]), 1), o = (z - A - e) / (z - te - A) * t;
-    return Math.max(0, P(o));
+    const t = this._graphTop(), o = (z - A - e) / (z - te - A) * t;
+    return Math.max(0, N(o));
   }
   _startDrag(e, t) {
     if (!this._advanced) return;
@@ -1339,13 +1345,19 @@ const we = 320, z = 170, ee = 34, st = 12, te = 16, A = 24, pe = 5, ze = 40, Oe 
           <label>${c(e, "editor.min.label")}</label>
           <div class="help">${c(e, "editor.min.help")}</div>
           <input type="number" min="0" .value=${String(this._min)}
-            @input=${(t) => this._min = Number(t.target.value)} /> min
+            @input=${(t) => {
+      const o = Number(t.target.value);
+      Number.isNaN(o) || (this._min = Math.min(o, this._max));
+    }} /> min
         </div>
         <div class="limit">
           <label>${c(e, "editor.max.label")}</label>
           <div class="help">${c(e, "editor.max.help")}</div>
           <input type="number" min="0" .value=${String(this._max)}
-            @input=${(t) => this._max = Number(t.target.value)} /> min
+            @input=${(t) => {
+      const o = Number(t.target.value);
+      Number.isNaN(o) || (this._max = Math.max(o, this._min));
+    }} /> min
         </div>
       </div>
       <div class="note">${c(e, "editor.drag_hint")}</div>
@@ -1575,7 +1587,7 @@ E([
   w()
 ], y.prototype, "_points");
 K("imc-curve-editor", y);
-var ao = Object.defineProperty, N = (n, e, t, o) => {
+var ao = Object.defineProperty, P = (n, e, t, o) => {
   for (var i = void 0, s = n.length - 1, a; s >= 0; s--)
     (a = n[s]) && (i = a(e, t, i) || i);
   return i && ao(e, t, i), i;
@@ -2116,32 +2128,32 @@ qe.styles = Y`
     }
   `;
 let k = qe;
-N([
+P([
   $({ attribute: !1 })
 ], k.prototype, "zone");
-N([
+P([
   $()
 ], k.prototype, "language");
-N([
+P([
   $({ attribute: !1 })
 ], k.prototype, "now");
-N([
+P([
   $({ type: Boolean, reflect: !0 })
 ], k.prototype, "compact");
-N([
+P([
   $({ type: Boolean })
 ], k.prototype, "showControls");
-N([
+P([
   $({ attribute: !1 })
 ], k.prototype, "weightedTemp");
-N([
+P([
   w()
 ], k.prototype, "_expanded");
-N([
+P([
   w()
 ], k.prototype, "_editingCycle");
 K("imc-zone-row", k);
-var co = Object.defineProperty, Ne = (n, e, t, o) => {
+var co = Object.defineProperty, Pe = (n, e, t, o) => {
   for (var i = void 0, s = n.length - 1, a; s >= 0; s--)
     (a = n[s]) && (i = a(e, t, i) || i);
   return i && co(e, t, i), i;
@@ -2225,13 +2237,13 @@ Ue.styles = Y`
     }
   `;
 let X = Ue;
-Ne([
+Pe([
   $()
 ], X.prototype, "language");
-Ne([
+Pe([
   $({ type: Boolean })
 ], X.prototype, "paused");
-Ne([
+Pe([
   $({ type: Boolean })
 ], X.prototype, "hasPauseSwitch");
 K("imc-global-controls", X);

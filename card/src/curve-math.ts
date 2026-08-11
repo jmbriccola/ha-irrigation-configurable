@@ -81,12 +81,16 @@ export function curveValue(
   return raw;
 }
 
-export function semanticFromPoints(points: CurvePoint[]): {
+export function semanticFromPoints(
+  points: CurvePoint[],
+  min?: number,
+  max?: number,
+): {
   amount: number;
   heat: number;
 } {
-  const mild = curveValue(points, MILD);
-  const hot = curveValue(points, HOT);
+  const mild = curveValue(points, MILD, min, max);
+  const hot = curveValue(points, HOT, min, max);
   return {
     amount: clamp(roundHalfEven(mild), AMOUNT_MIN, AMOUNT_MAX),
     heat: clamp(roundHalfEven(hot - mild), HEAT_MIN, HEAT_MAX),

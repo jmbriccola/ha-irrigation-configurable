@@ -312,6 +312,49 @@ async def test_set_simple_curve_rejects_out_of_range(
         )
 
 
+async def test_set_simple_curve_rejects_volume_cycle(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    freezer.move_to(START)
+    park = MockValvePark(hass)
+    park.add("valve.pots")
+    mock_weather(hass)
+    zone = zone_data(
+        "Pots",
+        "valve.pots",
+        cycles=[
+            {
+                "id": "cy_vol",
+                "name": "Volume",
+                "enabled": True,
+                "trigger": {"kind": "time", "at": "05:30"},
+                "curve": {
+                    "points": [[20.0, 20.0]],
+                    "min_value": 5.0,
+                    "max_value": 90.0,
+                    "kind": "volume",
+                },
+                "volume_safety_timeout_min": 20,
+            }
+        ],
+    )
+    entry = await setup_hub(hass, [zone])
+    zone_id = entry.runtime_data.zone_ids[0]
+    cycle_id = entry.runtime_data.zones[zone_id].config.cycles[0].cycle_id
+
+    with pytest.raises(ServiceValidationError):
+        await hass.services.async_call(
+            DOMAIN,
+            "set_simple_curve",
+            {"zone_id": zone_id, "cycle_id": cycle_id, "amount": 15, "heat": 15},
+            blocking=True,
+        )
+    # Nothing was written: the volume-shaped curve is untouched.
+    curve_data = entry.subentries[zone_id].data["cycles"][0]["curve"]
+    assert curve_data["points"] == [[20.0, 20.0]]
+    assert curve_data["kind"] == "volume"
+
+
 async def test_export_import_roundtrip_restores_config(
     hass: HomeAssistant, freezer: FrozenDateTimeFactory
 ) -> None:

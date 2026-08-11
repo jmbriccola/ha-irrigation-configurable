@@ -59,6 +59,7 @@ export class ImcCurveEditor extends LitElement {
   /** When a point has been dragged, we save exact points, not the semantic pair. */
   @state() private _dragged = false;
   @state() private _points: CurvePoint[] = pointsFromSemantic(15, 15);
+  private _seededCycleId?: string;
 
   static override styles = css`
     :host {
@@ -229,18 +230,26 @@ export class ImcCurveEditor extends LitElement {
   `;
 
   protected override willUpdate(changed: Map<string, unknown>): void {
-    if (changed.has("cycle")) this._seedFromCycle();
+    if (changed.has("cycle")) {
+      const id = this.cycle?.cycle_id;
+      if (id !== this._seededCycleId) {
+        this._seededCycleId = id;
+        this._seedFromCycle();
+      }
+    }
   }
 
   private _seedFromCycle(): void {
     const curve = this.cycle?.curve;
     const pts = parseCurvePoints(curve?.points);
     if (pts.length === 0) return;
-    const { amount, heat } = semanticFromPoints(pts);
+    const min = asNumber(curve?.min) ?? 1;
+    const max = asNumber(curve?.max) ?? 120;
+    const { amount, heat } = semanticFromPoints(pts, min, max);
     this._amount = amount;
     this._heat = heat;
-    this._min = asNumber(curve?.min) ?? 1;
-    this._max = asNumber(curve?.max) ?? 120;
+    this._min = min;
+    this._max = max;
     this._dragged = false;
     // Seed the editor points from the real curve at the three anchors so the
     // graph faithfully shows the existing curve on open.
@@ -274,13 +283,17 @@ export class ImcCurveEditor extends LitElement {
     return PAD_L + ((t - T_MIN) / (T_MAX - T_MIN)) * (GRAPH_W - PAD_L - PAD_R);
   }
 
+  private _graphTop(): number {
+    return Math.max(12, ...this._points.map((p) => p[1])) + 4;
+  }
+
   private _sy(v: number): number {
-    const top = Math.max(this._max, ...this._points.map((p) => p[1]), 1);
+    const top = this._graphTop();
     return GRAPH_H - PAD_B - (v / top) * (GRAPH_H - PAD_T - PAD_B);
   }
 
   private _valueFromY(y: number): number {
-    const top = Math.max(this._max, ...this._points.map((p) => p[1]), 1);
+    const top = this._graphTop();
     const v = ((GRAPH_H - PAD_B - y) / (GRAPH_H - PAD_T - PAD_B)) * top;
     return Math.max(0, roundHalfEven(v));
   }
@@ -425,13 +438,19 @@ export class ImcCurveEditor extends LitElement {
           <label>${localize(lang, "editor.min.label")}</label>
           <div class="help">${localize(lang, "editor.min.help")}</div>
           <input type="number" min="0" .value=${String(this._min)}
-            @input=${(e: Event) => (this._min = Number((e.target as HTMLInputElement).value))} /> min
+            @input=${(e: Event) => {
+              const value = Number((e.target as HTMLInputElement).value);
+              if (!Number.isNaN(value)) this._min = Math.min(value, this._max);
+            }} /> min
         </div>
         <div class="limit">
           <label>${localize(lang, "editor.max.label")}</label>
           <div class="help">${localize(lang, "editor.max.help")}</div>
           <input type="number" min="0" .value=${String(this._max)}
-            @input=${(e: Event) => (this._max = Number((e.target as HTMLInputElement).value))} /> min
+            @input=${(e: Event) => {
+              const value = Number((e.target as HTMLInputElement).value);
+              if (!Number.isNaN(value)) this._max = Math.max(value, this._min);
+            }} /> min
         </div>
       </div>
       <div class="note">${localize(lang, "editor.drag_hint")}</div>

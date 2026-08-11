@@ -667,6 +667,9 @@
     "min_above_max": {
       "message": "Il minimo non può superare il massimo."
     },
+    "simple_curve_on_volume": {
+      "message": "Le curve semplici sono solo a durata; questo ciclo usa una curva a volume. Modificala nelle impostazioni della zona."
+    },
     "invalid_payload": {
       "message": "Il payload non è una configurazione esportata valida."
     },
