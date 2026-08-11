@@ -123,8 +123,16 @@ sessione e coda, e una riga per zona con progresso in tempo reale, prossimo
 ciclo, ultimo esito, badge delle funzioni degradate e controlli (avvia,
 salta, pausa, sospendi, abilita). L'editor visuale offre: titolo,
 attivazione di header/coda/controlli, modalità compatta, filtro zone. Le
-curve sono visualizzate (sparkline per ciclo) — la modifica resta nel flow
-di configurazione.
+curve sono visualizzate (sparkline per ciclo) e possono essere modificate
+dal vivo direttamente dalla card.
+
+Modificare le curve dalla card — espandi una zona, apri un ciclo e premi
+**Modifica curva**. Due slider (*Quanta acqua* e *Quanto di più quando fa
+caldo*) rimodellano l'irrigazione dal vivo: il grafico, gli esempi
+fresco/mite/caldo e la riga 'con il meteo di oggi' si aggiornano mentre
+trascini. **Avanzate** aggiunge i limiti di sicurezza *Mai meno di / Mai più
+di* e ti fa trascinare i tre punti. Le curve con più di tre punti si
+modificano nelle impostazioni della zona.
 
 ## 6. Risoluzione dei problemi
 

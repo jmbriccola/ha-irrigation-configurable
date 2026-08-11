@@ -39,7 +39,8 @@ config entry).
 | `zone_adjustment`   | number   | percent (int) | — |
 | `zone_suspend_until`| datetime | ISO or unavailable | — |
 
-`cycles` attribute on `zone_state` (for read-only curve display):
+`cycles` attribute on `zone_state` (source for the card's curve sparkline
+and live curve editor — see note under the services table):
 
 ```json
 [{"cycle_id": "a1b2c3d4", "name": "Morning", "enabled": true,
@@ -65,10 +66,16 @@ config entry).
 | `evaluate` | supports response (full plan) |
 | `set_zone_order` | `zone_id`, `order` (int) |
 | `set_curve` | `zone_id`, `cycle_id`, `points` (list of [temp, value]), `min_value`, `max_value` (optional) |
+| `set_simple_curve` | `zone_id`, `cycle_id`, `amount`, `heat`, `min_value?`, `max_value?` |
 | `export_config` | supports response |
 | `import_config` | `payload` (JSON string) |
 
 `zone_id` is always the subentry id (the `zone_id` attribute above).
+
+The card now also **writes** curves: the simple sliders call
+`set_simple_curve`, and dragging the three points in the Advanced view calls
+`set_curve`. The live editor's "with today's weather" line reads
+`hub_weighted_temp`.
 
 ## Events
 

@@ -49,8 +49,8 @@ Irrigation Maestro is built around two ideas:
   message per shared reason, never one per zone), rich bus events
   (`irrigation_maestro_*`) and per-zone outcome sensors.
 - **Custom Lovelace card** (installed automatically in storage mode) with
-  live progress, queue, controls, degraded-feature badges and full EN/IT
-  localization.
+  live progress, queue, controls, degraded-feature badges, a live
+  beginner-friendly curve editor and full EN/IT localization.
 - **Repairs** issues for detected problems, downloadable **diagnostics**,
   config **export/import**, schema versioning with migrations from day one.
 

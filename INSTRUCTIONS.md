@@ -115,8 +115,16 @@ shows the budget/threshold gauge, weighted temperature, session state and
 queue, and one row per zone with live progress, next run, last outcome,
 degraded-feature badges and controls (run, skip, pause, suspend, enable).
 The visual editor offers: title, header/queue/controls toggles, compact
-mode, zone filter. Curves are displayed (sparkline per cycle) — editing
-stays in the configuration flow.
+mode, zone filter. Curves are displayed (sparkline per cycle) and can be
+edited live from the card.
+
+Editing curves from the card — expand a zone, open a cycle and press
+**Edit curve**. Two sliders (*How much water* and *How much more when it's
+hot*) reshape the watering live: the graph, the cool/mild/hot examples and
+the 'with today's weather' line update as you drag. **Advanced** adds the
+*Never less than / Never more than* safety limits and lets you drag the
+three points. Curves needing more than three points are still edited in the
+zone settings.
 
 ## 6. Troubleshooting
 

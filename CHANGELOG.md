@@ -4,6 +4,16 @@ All notable changes to this project are documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.1.0] - 2026-08-11
+
+### Added
+
+- Live, beginner-friendly **curve editor in the Lovelace card**: two
+  plain-language sliders ("how much water", "how much more when it's hot") with
+  a live graph, worked examples and a "with today's weather" line; an Advanced
+  panel with safety limits and draggable points. New `set_simple_curve`
+  service.
+
 ## [1.0.0] - 2026-07-17
 
 First release.
