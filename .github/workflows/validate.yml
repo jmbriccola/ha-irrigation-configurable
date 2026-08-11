@@ -17,7 +17,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      # Non-blocking: the ghcr.io/hacs/action:main image regressed (its file
+      # fetches return None, so even a minimal valid hacs.json is reported
+      # "invalid") — the action ref (1ebf01c, Jun 2026) that passed on
+      # 2026-07-17 now fails unchanged, and there is no versioned image to pin.
+      # It does not affect custom-repository installs or the release. Keep it
+      # running for visibility; drop continue-on-error once upstream is fixed.
       - uses: hacs/action@main
+        continue-on-error: true
         with:
           category: integration
           # Remove "brands" once the home-assistant/brands PR is merged.

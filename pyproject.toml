@@ -67,6 +67,13 @@ explicit_package_bases = true
 module = "homeassistant.*"
 follow_imports = "normal"
 
+[[tool.mypy.overrides]]
+# resources.py imports StaticPathConfig with a type: ignore that is needed on
+# newer HA (not re-exported in __all__) but unused on the pinned HA — don't
+# flag the unused ignore so the file stays clean on every HA version.
+module = "custom_components.irrigation_maestro.resources"
+warn_unused_ignores = false
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 asyncio_mode = "auto"
