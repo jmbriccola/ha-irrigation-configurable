@@ -7,7 +7,7 @@ import pytest
 import voluptuous as vol
 from custom_components.irrigation_maestro import const
 from custom_components.irrigation_maestro.const import DOMAIN
-from custom_components.irrigation_maestro.engine.curves import curve_value
+from custom_components.irrigation_maestro.engine.curves import CurveKind, curve_value
 from freezegun.api import FrozenDateTimeFactory
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ServiceValidationError
@@ -586,3 +586,76 @@ async def test_stop_all_during_watering_closes_and_blocks(
     assert runtime.manual_block_active()
     outcome = runtime.state.last_outcome(zone_id)
     assert outcome["result"] == "interrupted"
+
+
+async def test_add_program_creates_enabled_program(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    freezer.move_to(START)
+    mock_weather(hass)
+    entry = await setup_hub(hass, [zone_data("Pots", "valve.pots")])
+    runtime = entry.runtime_data
+    zone_id = runtime.zone_ids[0]
+    before = len(runtime.zones[zone_id].config.cycles)
+
+    resp = await hass.services.async_call(
+        DOMAIN,
+        "add_program",
+        {"zone_id": zone_id, "name": "Sera"},
+        blocking=True,
+        return_response=True,
+    )
+    new_id = resp["program_id"]
+    cycles = runtime.zones[zone_id].config.cycles
+    assert len(cycles) == before + 1
+    added = next(c for c in cycles if c.cycle_id == new_id)
+    assert added.name == "Sera"
+    assert added.curve.kind is CurveKind.DURATION
+    assert runtime.state.cycle_enabled(zone_id, new_id) is True  # defaults enabled
+
+
+async def test_remove_program_refuses_last(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    freezer.move_to(START)
+    mock_weather(hass)
+    entry = await setup_hub(hass, [zone_data("Pots", "valve.pots")])
+    runtime = entry.runtime_data
+    zone_id = runtime.zone_ids[0]
+    only_id = runtime.zones[zone_id].config.cycles[0].cycle_id
+    with pytest.raises(ServiceValidationError):
+        await hass.services.async_call(
+            DOMAIN, "remove_program", {"zone_id": zone_id, "program_id": only_id}, blocking=True
+        )
+
+
+async def test_add_then_remove_program(hass: HomeAssistant, freezer: FrozenDateTimeFactory) -> None:
+    freezer.move_to(START)
+    mock_weather(hass)
+    entry = await setup_hub(hass, [zone_data("Pots", "valve.pots")])
+    runtime = entry.runtime_data
+    zone_id = runtime.zone_ids[0]
+    resp = await hass.services.async_call(
+        DOMAIN, "add_program", {"zone_id": zone_id}, blocking=True, return_response=True
+    )
+    new_id = resp["program_id"]
+    await hass.services.async_call(
+        DOMAIN, "remove_program", {"zone_id": zone_id, "program_id": new_id}, blocking=True
+    )
+    assert all(c.cycle_id != new_id for c in runtime.zones[zone_id].config.cycles)
+
+
+async def test_rename_program(hass: HomeAssistant, freezer: FrozenDateTimeFactory) -> None:
+    freezer.move_to(START)
+    mock_weather(hass)
+    entry = await setup_hub(hass, [zone_data("Pots", "valve.pots")])
+    runtime = entry.runtime_data
+    zone_id = runtime.zone_ids[0]
+    pid = runtime.zones[zone_id].config.cycles[0].cycle_id
+    await hass.services.async_call(
+        DOMAIN,
+        "rename_program",
+        {"zone_id": zone_id, "program_id": pid, "name": "Alba"},
+        blocking=True,
+    )
+    assert runtime.zones[zone_id].config.cycle(pid).name == "Alba"

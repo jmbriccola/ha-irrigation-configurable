@@ -690,6 +690,9 @@
     },
     "invalid_weekday": {
       "message": "Weekdays must be 0 (Monday) to 6 (Sunday)."
+    },
+    "cannot_remove_last_program": {
+      "message": "A zone must keep at least one program."
     }
   },
   "selector": {

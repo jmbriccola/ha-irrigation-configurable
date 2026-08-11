@@ -690,6 +690,9 @@
     },
     "invalid_weekday": {
       "message": "I giorni vanno da 0 (lunedì) a 6 (domenica)."
+    },
+    "cannot_remove_last_program": {
+      "message": "Una zona deve avere almeno un programma."
     }
   },
   "selector": {

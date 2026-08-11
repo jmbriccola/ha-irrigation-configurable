@@ -10,6 +10,7 @@ from __future__ import annotations
 import json
 from collections.abc import Callable
 from typing import Any, Final, cast
+from uuid import uuid4
 
 import voluptuous as vol
 from homeassistant.config_entries import ConfigEntry, ConfigEntryState
@@ -160,6 +161,43 @@ _SET_PROGRAM_MINUTES_SCHEMA = vol.Schema(
         },
     }
 )
+_ADD_PROGRAM_SCHEMA = vol.Schema(
+    {
+        vol.Required(ATTR_ZONE_ID): cv.string,
+        vol.Optional(ATTR_NAME): cv.string,
+        vol.Optional(ATTR_COPY_FROM): cv.string,
+    }
+)
+_REMOVE_PROGRAM_SCHEMA = vol.Schema(
+    {vol.Required(ATTR_ZONE_ID): cv.string, vol.Required(ATTR_PROGRAM_ID): cv.string}
+)
+_RENAME_PROGRAM_SCHEMA = vol.Schema(
+    {
+        vol.Required(ATTR_ZONE_ID): cv.string,
+        vol.Required(ATTR_PROGRAM_ID): cv.string,
+        vol.Required(ATTR_NAME): cv.string,
+    }
+)
+
+
+def _default_program(name: str) -> dict[str, Any]:
+    """A valid, sensible new program: every day, sunrise, 15' mild + 8' hot."""
+    points = list(points_from_semantic(15, 8))
+    return {
+        const.CONF_CYCLE_ID: uuid4().hex[:8],
+        const.CONF_CYCLE_NAME: name,
+        const.CONF_TRIGGER: {
+            const.CONF_TRIGGER_KIND: const.TRIGGER_KIND_SUN,
+            const.CONF_TRIGGER_EVENT: "sunrise",
+            const.CONF_TRIGGER_OFFSET_S: 0,
+        },
+        const.CONF_CURVE: {
+            const.CONF_CURVE_POINTS: [[t, v] for t, v in points],
+            const.CONF_CURVE_MIN: 1.0,
+            const.CONF_CURVE_MAX: 60.0,
+            const.CONF_CURVE_KIND: str(CurveKind.DURATION),
+        },
+    }
 
 
 # Entry / runtime resolution -----------------------------------------------------
@@ -478,6 +516,73 @@ async def _async_set_program_minutes(call: ServiceCall) -> None:
     _update_cycle(hass, entry, zone_id, program_id, mutate)
 
 
+async def _async_add_program(call: ServiceCall) -> ServiceResponse:
+    hass = call.hass
+    entry = _loaded_entry(hass)
+    runtime = cast(IrrigationRuntime, entry.runtime_data)
+    zone_id: str = call.data[ATTR_ZONE_ID]
+    _require_zone(runtime, zone_id)
+    subentry = entry.subentries[zone_id]
+    cycles = [dict(item) for item in subentry.data.get(const.CONF_CYCLES, [])]
+
+    copy_from = call.data.get(ATTR_COPY_FROM)
+    if copy_from is not None:
+        source = next((c for c in cycles if c.get(const.CONF_CYCLE_ID) == copy_from), None)
+        if source is None:
+            raise ServiceValidationError(
+                translation_domain=DOMAIN,
+                translation_key="unknown_program",
+                translation_placeholders={"program_id": copy_from},
+            )
+        program = {k: v for k, v in source.items() if k != const.CONF_CYCLE_ID}
+        program[const.CONF_CYCLE_ID] = uuid4().hex[:8]
+        program[const.CONF_CYCLE_NAME] = call.data.get(
+            ATTR_NAME, f"{source.get(const.CONF_CYCLE_NAME, 'Program')} (copy)"
+        )
+    else:
+        program = _default_program(call.data.get(ATTR_NAME, "Program"))
+
+    cycles.append(program)
+    hass.config_entries.async_update_subentry(
+        entry, subentry, data={**subentry.data, const.CONF_CYCLES: cycles}
+    )
+    return {"program_id": program[const.CONF_CYCLE_ID]}
+
+
+async def _async_remove_program(call: ServiceCall) -> None:
+    hass = call.hass
+    entry = _loaded_entry(hass)
+    runtime = cast(IrrigationRuntime, entry.runtime_data)
+    zone_id: str = call.data[ATTR_ZONE_ID]
+    _require_zone(runtime, zone_id)
+    program_id: str = call.data[ATTR_PROGRAM_ID]
+    subentry = entry.subentries[zone_id]
+    cycles = [dict(item) for item in subentry.data.get(const.CONF_CYCLES, [])]
+    if not any(c.get(const.CONF_CYCLE_ID) == program_id for c in cycles):
+        raise ServiceValidationError(
+            translation_domain=DOMAIN,
+            translation_key="unknown_program",
+            translation_placeholders={"program_id": program_id},
+        )
+    if len(cycles) <= 1:
+        raise ServiceValidationError(
+            translation_domain=DOMAIN, translation_key="cannot_remove_last_program"
+        )
+    cycles = [c for c in cycles if c.get(const.CONF_CYCLE_ID) != program_id]
+    hass.config_entries.async_update_subentry(
+        entry, subentry, data={**subentry.data, const.CONF_CYCLES: cycles}
+    )
+
+
+async def _async_rename_program(call: ServiceCall) -> None:
+    hass, entry, zone_id, program_id = _program_context(call)
+
+    def mutate(item: dict[str, Any]) -> None:
+        item[const.CONF_CYCLE_NAME] = call.data[ATTR_NAME]
+
+    _update_cycle(hass, entry, zone_id, program_id, mutate)
+
+
 async def _async_export_config(call: ServiceCall) -> ServiceResponse:
     entry = _loaded_entry(call.hass)
     payload = {
@@ -586,4 +691,17 @@ def async_setup_services(hass: HomeAssistant) -> None:
         SERVICE_SET_PROGRAM_MINUTES,
         _async_set_program_minutes,
         _SET_PROGRAM_MINUTES_SCHEMA,
+    )
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_ADD_PROGRAM,
+        _async_add_program,
+        _ADD_PROGRAM_SCHEMA,
+        supports_response=SupportsResponse.OPTIONAL,
+    )
+    hass.services.async_register(
+        DOMAIN, SERVICE_REMOVE_PROGRAM, _async_remove_program, _REMOVE_PROGRAM_SCHEMA
+    )
+    hass.services.async_register(
+        DOMAIN, SERVICE_RENAME_PROGRAM, _async_rename_program, _RENAME_PROGRAM_SCHEMA
     )
