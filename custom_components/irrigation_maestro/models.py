@@ -123,10 +123,14 @@ class CycleConfig:
     soak_max_run_min: int | None = None
     soak_pause_min: int = 0
     volume_safety_timeout_min: int | None = None
+    days: frozenset[int] | None = None
+    day_minutes: dict[int, int] = field(default_factory=dict)
 
     @classmethod
     def from_config(cls, config: dict[str, Any], templates: dict[str, Any]) -> Self:
         months = config.get(const.CONF_MONTHS_OVERRIDE)
+        days_raw = config.get(const.CONF_CYCLE_DAYS)
+        day_minutes_raw = config.get(const.CONF_CYCLE_DAY_MINUTES, {})
         return cls(
             cycle_id=config[const.CONF_CYCLE_ID],
             name=config.get(const.CONF_CYCLE_NAME, config[const.CONF_CYCLE_ID]),
@@ -138,6 +142,8 @@ class CycleConfig:
             soak_max_run_min=config.get(const.CONF_SOAK_MAX_RUN_MIN),
             soak_pause_min=int(config.get(const.CONF_SOAK_PAUSE_MIN, 0)),
             volume_safety_timeout_min=config.get(const.CONF_VOLUME_SAFETY_TIMEOUT_MIN),
+            days=frozenset(int(d) for d in days_raw) if days_raw is not None else None,
+            day_minutes={int(k): int(v) for k, v in day_minutes_raw.items()},
         )
 
     def to_spec(self, *, enabled: bool) -> CycleSpec:
@@ -149,6 +155,8 @@ class CycleConfig:
             soak_pause_min=self.soak_pause_min,
             months_override=self.months_override,
             volume_safety_timeout_min=self.volume_safety_timeout_min,
+            days=self.days,
+            day_minutes=self.day_minutes,
         )
 
 

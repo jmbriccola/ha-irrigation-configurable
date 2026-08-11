@@ -3,9 +3,11 @@
 from datetime import time
 
 import pytest
+from custom_components.irrigation_maestro import const
 from custom_components.irrigation_maestro.engine.curves import CurveError, CurveKind
 from custom_components.irrigation_maestro.engine.scheduling import Parity
 from custom_components.irrigation_maestro.models import (
+    CycleConfig,
     HubConfig,
     ZoneConfig,
     engine_params_from_config,
@@ -197,3 +199,32 @@ class TestZoneConfig:
             "sub1", {**self.DATA, "flow_sensor": "sensor.f1"}, templates={}
         )
         assert zone2.flow_sensor == "sensor.f1"
+
+
+def _cycle_data(**extra):
+    data = {
+        const.CONF_CYCLE_ID: "c1",
+        const.CONF_CYCLE_NAME: "Morning",
+        const.CONF_TRIGGER: {
+            const.CONF_TRIGGER_KIND: const.TRIGGER_KIND_TIME,
+            const.CONF_TRIGGER_AT: "06:30",
+        },
+        const.CONF_CURVE: {const.CONF_CURVE_TEMPLATE: const.PRESET_POTS_ID},
+    }
+    data.update(extra)
+    return data
+
+
+def test_cycle_defaults_have_no_schedule():
+    cycle = CycleConfig.from_config(_cycle_data(), templates={})
+    assert cycle.days is None  # None = every day
+    assert cycle.day_minutes == {}  # empty = use the curve as-is
+
+
+def test_cycle_parses_days_and_day_minutes():
+    cycle = CycleConfig.from_config(
+        _cycle_data(days=[0, 2, 4], day_minutes={"0": 10, "4": 20}),
+        templates={},
+    )
+    assert cycle.days == frozenset({0, 2, 4})
+    assert cycle.day_minutes == {0: 10, 4: 20}  # keys coerced to int

@@ -30,6 +30,8 @@ class CycleSpec:
     soak_pause_min: int = 0
     months_override: frozenset[int] | None = None
     volume_safety_timeout_min: int | None = None
+    days: frozenset[int] | None = None
+    day_minutes: dict[int, int] = field(default_factory=dict)
 
 
 @dataclass(frozen=True, slots=True)
