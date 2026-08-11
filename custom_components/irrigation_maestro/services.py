@@ -29,7 +29,7 @@ from . import const
 from .const import DOMAIN, SUBENTRY_TYPE_ZONE
 from .engine.curves import CurveError, CurveKind, validate_points
 from .engine.semantic import points_from_semantic, semantic_from_curve
-from .models import HubConfig, ZoneConfig
+from .models import CycleConfig, HubConfig, ZoneConfig
 from .runtime import IrrigationRuntime
 
 SERVICE_RUN_ZONE: Final = "run_zone"
@@ -292,6 +292,24 @@ async def _async_set_zone_order(call: ServiceCall) -> None:
     )
 
 
+def _validate_program(program: dict[str, Any], templates: dict[str, Any]) -> None:
+    """Round-trip a program dict through the typed model before it is persisted.
+
+    Services build/mutate raw cycle dicts; without this gate an invalid
+    program (e.g. an unparseable trigger time, a broken curve) is written to
+    storage and only crashes later, asynchronously, on the next reload
+    (spec §4.2).
+    """
+    try:
+        CycleConfig.from_config(program, templates)
+    except (CurveError, ValueError, KeyError, TypeError) as err:
+        raise ServiceValidationError(
+            translation_domain=DOMAIN,
+            translation_key="invalid_program",
+            translation_placeholders={"error": str(err)},
+        ) from err
+
+
 def _update_cycle(
     hass: HomeAssistant,
     entry: ConfigEntry,
@@ -303,16 +321,21 @@ def _update_cycle(
     subentry = entry.subentries[zone_id]
     cycles = [dict(item) for item in subentry.data.get(const.CONF_CYCLES, [])]
     found = False
+    mutated_item: dict[str, Any] | None = None
     for item in cycles:
         if item.get(const.CONF_CYCLE_ID) == cycle_id:
             mutate(item)
             found = True
+            mutated_item = item
     if not found:
         raise ServiceValidationError(
             translation_domain=DOMAIN,
             translation_key="unknown_program",
             translation_placeholders={"program_id": cycle_id},
         )
+    assert mutated_item is not None
+    runtime = cast(IrrigationRuntime, entry.runtime_data)
+    _validate_program(mutated_item, runtime.hub.curve_templates)
     hass.config_entries.async_update_subentry(
         entry, subentry, data={**subentry.data, const.CONF_CYCLES: cycles}
     )
@@ -444,7 +467,10 @@ async def _async_set_program_schedule(call: ServiceCall) -> None:
             )
         trigger = {
             const.CONF_TRIGGER_KIND: const.TRIGGER_KIND_TIME,
-            const.CONF_TRIGGER_AT: call.data[ATTR_START_TIME],
+            # HA's TimeSelector (and services.yaml examples) may emit "HH:MM:SS";
+            # _parse_time only understands "HH:MM" — normalize the same way
+            # config_flow._hh_mm does before persisting.
+            const.CONF_TRIGGER_AT: call.data[ATTR_START_TIME][:5],
         }
     else:
         if ATTR_START_EVENT not in call.data:
@@ -542,6 +568,7 @@ async def _async_add_program(call: ServiceCall) -> ServiceResponse:
     else:
         program = _default_program(call.data.get(ATTR_NAME, "Program"))
 
+    _validate_program(program, runtime.hub.curve_templates)
     cycles.append(program)
     hass.config_entries.async_update_subentry(
         entry, subentry, data={**subentry.data, const.CONF_CYCLES: cycles}

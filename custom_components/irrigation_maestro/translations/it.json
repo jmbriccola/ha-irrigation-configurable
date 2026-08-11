@@ -742,6 +742,9 @@
     },
     "cannot_remove_last_program": {
       "message": "Una zona deve avere almeno un programma."
+    },
+    "invalid_program": {
+      "message": "Il programma non è valido ({error})."
     }
   },
   "selector": {

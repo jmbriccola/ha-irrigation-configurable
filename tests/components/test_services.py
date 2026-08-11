@@ -50,7 +50,13 @@ async def test_manual_run_uses_per_day_minutes(
     resolve_day_curve, same as a scheduled run — so a per-day base for
     today's weekday changes the outcome versus the zone's raw curve."""
     freezer.move_to(START)
-    weekday = dt_util.utcnow().weekday()  # START is a Friday (2026-07-17) -> 4
+    # runtime._manual_run derives the weekday from local time (dt_util.now()),
+    # not UTC. setup_hub() below pins HA's time zone to UTC, so pin it here
+    # too before reading the local weekday -- otherwise this runs against
+    # pytest-homeassistant's default "US/Pacific" fixture time zone, which
+    # can disagree with UTC on which weekday 05:00 UTC falls on.
+    await hass.config.async_set_time_zone("UTC")
+    weekday = dt_util.now().weekday()
     park = MockValvePark(hass)
     park.add("valve.pots")
     # sunny/30C -> weighted_temp == 30.0 exactly (see test_evaluate_returns_full_plan,
@@ -481,6 +487,81 @@ async def test_set_program_schedule_writes_days_and_time(
     assert cycle.trigger.at.strftime("%H:%M") == "07:15"
 
 
+async def test_set_program_schedule_normalizes_hh_mm_ss_start_time(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    """HA's time selector (and the services.yaml example) emit "HH:MM:SS";
+    models._parse_time only understands "HH:MM". Regression test for the
+    critical bug where storing the raw "HH:MM:SS" string corrupted storage:
+    the next _build_zones -> CycleConfig.from_config -> _parse_time crashed
+    and the whole config entry failed to load."""
+    freezer.move_to(START)
+    mock_weather(hass)
+    entry = await setup_hub(hass, [zone_data("Pots", "valve.pots")])
+    runtime = entry.runtime_data
+    zone_id = runtime.zone_ids[0]
+    program_id = runtime.zones[zone_id].config.cycles[0].cycle_id
+
+    await hass.services.async_call(
+        DOMAIN,
+        "set_program_schedule",
+        {
+            "zone_id": zone_id,
+            "program_id": program_id,
+            "start_kind": "time",
+            "start_time": "06:00:00",
+        },
+        blocking=True,
+    )
+
+    # The runtime config was rebuilt in place from the persisted dict without
+    # raising -- proof that the stored value re-parses via CycleConfig.from_config,
+    # the same path the update listener uses on reload.
+    cycle = runtime.zones[zone_id].config.cycles[0]
+    assert cycle.trigger.kind == "time"
+    assert cycle.trigger.at.strftime("%H:%M") == "06:00"
+
+    # The raw stored trigger string itself must be "HH:MM", not "HH:MM:SS".
+    raw_trigger = entry.subentries[zone_id].data["cycles"][0]["trigger"]
+    assert raw_trigger["at"] == "06:00"
+    assert len(raw_trigger["at"]) == 5
+
+
+async def test_set_program_schedule_rejects_unparseable_time(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    """The service schema only requires start_time to be a string (cv.string),
+    so a value like "xx:yy" survives voluptuous but cannot be parsed as a
+    time. _update_cycle must validate the mutated cycle dict through
+    CycleConfig.from_config (spec §4.2) and reject it *before* persisting --
+    this is the safety net for invalid input other than the "HH:MM:SS" case
+    fixed above."""
+    freezer.move_to(START)
+    mock_weather(hass)
+    entry = await setup_hub(hass, [zone_data("Pots", "valve.pots")])
+    runtime = entry.runtime_data
+    zone_id = runtime.zone_ids[0]
+    program_id = runtime.zones[zone_id].config.cycles[0].cycle_id
+    original_trigger = dict(entry.subentries[zone_id].data["cycles"][0]["trigger"])
+
+    with pytest.raises(ServiceValidationError):
+        await hass.services.async_call(
+            DOMAIN,
+            "set_program_schedule",
+            {
+                "zone_id": zone_id,
+                "program_id": program_id,
+                "start_kind": "time",
+                "start_time": "xx:yy",
+            },
+            blocking=True,
+        )
+    # Nothing was written: the unparseable time never reached storage.
+    assert entry.subentries[zone_id].data["cycles"][0]["trigger"] == original_trigger
+    # The runtime config is untouched too (no reload was ever triggered).
+    assert runtime.zones[zone_id].config.cycles[0].trigger.at.strftime("%H:%M") == "05:30"
+
+
 async def test_set_program_minutes_uniform_preserves_heat(
     hass: HomeAssistant, freezer: FrozenDateTimeFactory
 ) -> None:
@@ -612,6 +693,42 @@ async def test_add_program_creates_enabled_program(
     assert added.name == "Sera"
     assert added.curve.kind is CurveKind.DURATION
     assert runtime.state.cycle_enabled(zone_id, new_id) is True  # defaults enabled
+
+
+async def test_add_program_validates_through_typed_model_before_persist(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """_async_add_program must validate the built/copied program dict through
+    CycleConfig.from_config *before* appending and persisting it (spec §4.2),
+    so a bad copy_from source or a bad default can never be saved. Simulate
+    "the typed model rejects this program" by making CycleConfig.from_config
+    fail, and prove the failure surfaces as ServiceValidationError with
+    nothing written -- rather than a raw exception after persisting."""
+    from custom_components.irrigation_maestro import models
+
+    freezer.move_to(START)
+    mock_weather(hass)
+    entry = await setup_hub(hass, [zone_data("Pots", "valve.pots")])
+    runtime = entry.runtime_data
+    zone_id = runtime.zone_ids[0]
+    before_cycles = list(entry.subentries[zone_id].data["cycles"])
+
+    def _always_invalid(config: dict, templates: dict) -> None:
+        raise ValueError("synthetic_failure_for_test")
+
+    monkeypatch.setattr(models.CycleConfig, "from_config", staticmethod(_always_invalid))
+
+    with pytest.raises(ServiceValidationError):
+        await hass.services.async_call(
+            DOMAIN,
+            "add_program",
+            {"zone_id": zone_id, "name": "Bad"},
+            blocking=True,
+            return_response=True,
+        )
+    # Nothing was appended or persisted: the invalid program never reached storage.
+    assert entry.subentries[zone_id].data["cycles"] == before_cycles
+    assert len(runtime.zones[zone_id].config.cycles) == len(before_cycles)
 
 
 async def test_remove_program_refuses_last(
