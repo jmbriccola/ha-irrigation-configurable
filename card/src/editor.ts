@@ -152,11 +152,11 @@ export class IrrigationMaestroCardEditor extends LitElement {
     return html`
       <div class="form">
         <label class="field">
-          ${localize(lang, "editor.title")}
+          ${localize(lang, "card_editor.title")}
           <input
             type="text"
             .value=${config.title ?? ""}
-            placeholder=${localize(lang, "editor.title_placeholder")}
+            placeholder=${localize(lang, "card_editor.title_placeholder")}
             @input=${this._onTitleInput}
           />
         </label>
