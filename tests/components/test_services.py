@@ -453,6 +453,94 @@ async def test_export_import_roundtrip_restores_config(
         )
 
 
+async def test_set_program_schedule_writes_days_and_time(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    freezer.move_to(START)
+    mock_weather(hass)
+    entry = await setup_hub(hass, [zone_data("Pots", "valve.pots")])
+    runtime = entry.runtime_data
+    zone_id = runtime.zone_ids[0]
+    program_id = runtime.zones[zone_id].config.cycles[0].cycle_id
+
+    await hass.services.async_call(
+        DOMAIN,
+        "set_program_schedule",
+        {
+            "zone_id": zone_id,
+            "program_id": program_id,
+            "days": [0, 2, 4],
+            "start_kind": "time",
+            "start_time": "07:15",
+        },
+        blocking=True,
+    )
+    cycle = runtime.zones[zone_id].config.cycles[0]
+    assert cycle.days == frozenset({0, 2, 4})
+    assert cycle.trigger.kind == "time"
+    assert cycle.trigger.at.strftime("%H:%M") == "07:15"
+
+
+async def test_set_program_minutes_uniform_preserves_heat(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    freezer.move_to(START)
+    mock_weather(hass)
+    entry = await setup_hub(hass, [zone_data("Pots", "valve.pots")])
+    runtime = entry.runtime_data
+    zone_id = runtime.zone_ids[0]
+    program_id = runtime.zones[zone_id].config.cycles[0].cycle_id
+    from custom_components.irrigation_maestro.engine.semantic import semantic_from_curve
+
+    _, heat_before = semantic_from_curve(runtime.zones[zone_id].config.cycles[0].curve)
+
+    await hass.services.async_call(
+        DOMAIN,
+        "set_program_minutes",
+        {"zone_id": zone_id, "program_id": program_id, "minutes": 18},
+        blocking=True,
+    )
+    amount_after, heat_after = semantic_from_curve(runtime.zones[zone_id].config.cycles[0].curve)
+    assert amount_after == 18
+    assert heat_after == heat_before  # heat preserved
+    assert runtime.zones[zone_id].config.cycles[0].day_minutes == {}  # per-day cleared
+
+
+async def test_set_program_minutes_per_day(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    freezer.move_to(START)
+    mock_weather(hass)
+    entry = await setup_hub(hass, [zone_data("Pots", "valve.pots")])
+    runtime = entry.runtime_data
+    zone_id = runtime.zone_ids[0]
+    program_id = runtime.zones[zone_id].config.cycles[0].cycle_id
+
+    await hass.services.async_call(
+        DOMAIN,
+        "set_program_minutes",
+        {"zone_id": zone_id, "program_id": program_id, "day_minutes": {"0": 10, "4": 20}},
+        blocking=True,
+    )
+    assert runtime.zones[zone_id].config.cycles[0].day_minutes == {0: 10, 4: 20}
+
+
+async def test_set_program_minutes_rejects_unknown_program(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    freezer.move_to(START)
+    mock_weather(hass)
+    entry = await setup_hub(hass, [zone_data("Pots", "valve.pots")])
+    zone_id = entry.runtime_data.zone_ids[0]
+    with pytest.raises(ServiceValidationError):
+        await hass.services.async_call(
+            DOMAIN,
+            "set_program_minutes",
+            {"zone_id": zone_id, "program_id": "nope", "minutes": 12},
+            blocking=True,
+        )
+
+
 async def test_stop_all_during_watering_closes_and_blocks(
     hass: HomeAssistant, freezer: FrozenDateTimeFactory
 ) -> None:

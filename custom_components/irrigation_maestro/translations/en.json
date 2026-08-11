@@ -675,6 +675,21 @@
     },
     "unknown_import_zone": {
       "message": "The payload references a zone that does not exist: {zone_id}."
+    },
+    "unknown_program": {
+      "message": "Unknown program: {program_id}."
+    },
+    "start_time_required": {
+      "message": "A fixed-time start needs a start_time (HH:MM)."
+    },
+    "start_event_required": {
+      "message": "A sun start needs a start_event (sunrise or sunset)."
+    },
+    "minutes_required": {
+      "message": "Provide either minutes or day_minutes."
+    },
+    "invalid_weekday": {
+      "message": "Weekdays must be 0 (Monday) to 6 (Sunday)."
     }
   },
   "selector": {
