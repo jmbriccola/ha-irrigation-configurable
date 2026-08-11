@@ -185,7 +185,24 @@ export type ZoneAction =
   | { action: "pause"; zoneId: string; hours: number }
   | { action: "suspend"; zoneId: string; until: string }
   | { action: "resume"; zoneId: string }
-  | { action: "set-enabled"; zoneId: string; enabled: boolean };
+  | { action: "set-enabled"; zoneId: string; enabled: boolean }
+  | {
+      action: "save-simple-curve";
+      zoneId: string;
+      cycleId: string;
+      amount: number;
+      heat: number;
+      min: number;
+      max: number;
+    }
+  | {
+      action: "save-curve";
+      zoneId: string;
+      cycleId: string;
+      points: [number, number][];
+      min: number;
+      max: number;
+    };
 
 export type GlobalAction =
   | { action: "run_all" }

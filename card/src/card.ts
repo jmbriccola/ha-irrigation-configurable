@@ -210,6 +210,25 @@ export class IrrigationMaestroCard extends LitElement {
         }
         break;
       }
+      case "save-simple-curve":
+        void this._call("irrigation_maestro", "set_simple_curve", {
+          zone_id: detail.zoneId,
+          cycle_id: detail.cycleId,
+          amount: detail.amount,
+          heat: detail.heat,
+          min_value: detail.min,
+          max_value: detail.max,
+        });
+        break;
+      case "save-curve":
+        void this._call("irrigation_maestro", "set_curve", {
+          zone_id: detail.zoneId,
+          cycle_id: detail.cycleId,
+          points: detail.points,
+          min_value: detail.min,
+          max_value: detail.max,
+        });
+        break;
     }
   }
 
@@ -457,6 +476,7 @@ export class IrrigationMaestroCard extends LitElement {
                   .now=${this._now}
                   .compact=${config.compact === true}
                   .showControls=${config.show_controls !== false}
+                  .weightedTemp=${asNumber(model.hub.weightedTemp?.state)}
                 ></imc-zone-row>
               `,
             )}

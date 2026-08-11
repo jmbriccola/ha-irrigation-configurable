@@ -19,6 +19,8 @@ import {
 } from "./format";
 import { localize, localizeDynamic } from "./localize/localize";
 import "./curve-sparkline";
+import "./curve-editor";
+import type { CurveSavePayload } from "./curve-editor";
 
 const STATE_ICONS: Record<ZoneState, string> = {
   idle: "mdi:water-outline",
@@ -46,8 +48,10 @@ export class ImcZoneRow extends LitElement {
   @property({ attribute: false }) now: number = Date.now();
   @property({ type: Boolean, reflect: true }) compact = false;
   @property({ type: Boolean }) showControls = true;
+  @property({ attribute: false }) weightedTemp?: number;
 
   @state() private _expanded = false;
+  @state() private _editingCycle?: string;
 
   static override styles = css`
     :host {
@@ -278,6 +282,20 @@ export class ImcZoneRow extends LitElement {
     .no-cycles {
       font-size: 12px;
       color: var(--secondary-text-color, #727272);
+    }
+    .link-btn {
+      flex: none;
+      border: none;
+      background: transparent;
+      padding: 2px 4px;
+      font-size: 11px;
+      color: var(--primary-color, #03a9f4);
+      cursor: pointer;
+      text-decoration: underline;
+    }
+    .link-btn:hover {
+      border-color: transparent;
+      opacity: 0.8;
     }
   `;
 
@@ -556,6 +574,28 @@ export class ImcZoneRow extends LitElement {
       );
     }
 
+    const isVolume = curve?.kind === "volume";
+    const editing = !!cycleId && this._editingCycle === cycleId;
+    const editButton =
+      isVolume || !cycleId
+        ? nothing
+        : html`<button
+            class="link-btn"
+            @click=${() =>
+              (this._editingCycle = editing ? undefined : cycleId)}
+          >
+            ${localize(lang, "editor.edit_curve")}
+          </button>`;
+    const editor = editing
+      ? html`<imc-curve-editor
+          .language=${lang}
+          .cycle=${cycle}
+          .weightedTemp=${this.weightedTemp}
+          @imc-curve-save=${this._onCurveSave}
+          @imc-curve-cancel=${() => (this._editingCycle = undefined)}
+        ></imc-curve-editor>`
+      : nothing;
+
     return html`
       <div class="cycle">
         <div class="cycle-info">
@@ -574,8 +614,37 @@ export class ImcZoneRow extends LitElement {
         ${curve
           ? html`<imc-curve-sparkline .curve=${curve}></imc-curve-sparkline>`
           : nothing}
+        ${editButton}
       </div>
+      ${editor}
     `;
+  }
+
+  private _onCurveSave(ev: CustomEvent<CurveSavePayload>): void {
+    const zoneId = this.zone?.zoneId;
+    if (!zoneId) return;
+    const d = ev.detail;
+    if (d.mode === "simple") {
+      this._dispatch({
+        action: "save-simple-curve",
+        zoneId,
+        cycleId: d.cycleId,
+        amount: d.amount,
+        heat: d.heat,
+        min: d.min,
+        max: d.max,
+      });
+    } else {
+      this._dispatch({
+        action: "save-curve",
+        zoneId,
+        cycleId: d.cycleId,
+        points: d.points,
+        min: d.min,
+        max: d.max,
+      });
+    }
+    this._editingCycle = undefined;
   }
 
   protected override render(): unknown {
