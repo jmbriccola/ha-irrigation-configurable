@@ -94,7 +94,7 @@ export const en = {
   "reason.not_due": "Not due yet",
   "reason.calendar_restricted": "Calendar restriction",
   "reason.zone_disabled": "Zone disabled",
-  "reason.cycle_disabled": "Cycle disabled",
+  "reason.cycle_disabled": "Program disabled",
   "reason.suspended": "Zone suspended",
   "reason.paused": "Paused",
   "reason.manual_stop_block": "Blocked after manual stop",
@@ -129,8 +129,8 @@ export const en = {
   "zone.last_outcome": "Last outcome",
   "zone.suspended_until": "Suspended until {date}",
   "zone.remaining": "{minutes} min left",
-  "zone.cycles": "Cycles",
-  "zone.no_cycles": "No cycles configured",
+  "zone.cycles": "Programs",
+  "zone.no_cycles": "No programs configured",
   "zone.cycle_enabled": "Enabled",
   "zone.cycle_disabled": "Disabled",
 
@@ -210,5 +210,5 @@ export const en = {
   "editor.cancel": "Cancel",
   "editor.saved": "Curve updated.",
   "editor.save_error": "Couldn't save the curve: {error}",
-  "editor.volume_note": "This cycle uses a volume curve (liters). Edit it in the zone settings.",
+  "editor.volume_note": "This program uses a volume curve (liters). Edit it in the zone settings.",
 } as const;

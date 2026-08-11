@@ -81,16 +81,16 @@
         },
         "data_description": {
           "settle_pause_s": "Pause between one zone closing and the next opening, to let pressure settle. Default 120.",
-          "manual_block_min": "After you stop watering by hand, automatic cycles stay blocked for this long. Default 60.",
+          "manual_block_min": "After you stop watering by hand, automatic programs stay blocked for this long. Default 60.",
           "watchdog_max_min": "Safety cap: a valve open longer than this is force-closed and reported. Default 70.",
-          "open_confirm_s": "If a valve doesn't report 'open' within this time, the cycle is cancelled. Default 120.",
+          "open_confirm_s": "If a valve doesn't report 'open' within this time, the program is cancelled. Default 120.",
           "close_confirm_s": "If a valve doesn't confirm 'closed' within this time, it retries and alerts you. Default 120.",
           "switch_confirm_s": "For switch-based valves (no position feedback): assumed open/closed after this delay. Default 10.",
-          "wait_free_min": "A due cycle waits at most this long for the other valves to be free before being skipped. Default 10.",
+          "wait_free_min": "A due program waits at most this long for the other valves to be free before being skipped. Default 10.",
           "startup_valve_timeout_s": "After a restart, how long to wait for valves to come back online before reporting one unreachable. Default 300.",
-          "sentinel_time": "Time of the daily check that alerts you if a scheduled cycle never ran. Default 12:00.",
+          "sentinel_time": "Time of the daily check that alerts you if a scheduled program never ran. Default 12:00.",
           "session_max_min": "Optional. Skip any zones still queued once a watering session has run this many minutes. Empty = no limit.",
-          "must_finish_by": "Optional. Don't start a cycle that would finish after this time of day. Empty = no limit."
+          "must_finish_by": "Optional. Don't start a program that would finish after this time of day. Empty = no limit."
         }
       },
       "engine_advanced": {
@@ -154,7 +154,7 @@
         "data_description": {
           "allowed_weekdays": "Water only on the selected days. Leave empty to allow every day.",
           "parity": "Restrict watering to odd or even days of the month (some ordinances alternate by house number).",
-          "forbidden_windows": "Times when watering is not allowed, e.g. '08:00-10:30, 22:00-23:15'. Empty = no forbidden times. A running cycle is cut short rather than run into one."
+          "forbidden_windows": "Times when watering is not allowed, e.g. '08:00-10:30, 22:00-23:15'. Empty = no forbidden times. A running program is cut short rather than run into one."
         }
       },
       "notifications": {
@@ -189,7 +189,7 @@
         "data_description": {
           "liters_per_month": "Total litres allowed per calendar month. Empty = no budget. Needs a flow meter, or nominal flow rates to estimate use.",
           "action": "What happens once the budget is used up: notify only warns, reduce shortens every cycle, suspend stops watering until next month.",
-          "reduce_pct": "By how much each cycle is shortened when the action is 'Reduce watering'. Default 50."
+          "reduce_pct": "By how much each program is shortened when the action is 'Reduce watering'. Default 50."
         }
       }
     },
@@ -210,7 +210,7 @@
       "step": {
         "user": {
           "title": "New zone",
-          "description": "One irrigation circuit: its valve and how often it waters. Only the name and the valve are required — you'll set the watering amount (the curve) after adding a cycle in the next step.",
+          "description": "One irrigation circuit: its valve and how often it waters. Only the name and the valve are required — you'll set the watering amount (the curve) after adding a program in the next step.",
           "data": {
             "name": "Name",
             "icon": "Icon (optional)",
@@ -272,16 +272,16 @@
           }
         },
         "cycle_menu": {
-          "title": "Cycles of {zone_name}",
-          "description": "Configured cycles: {cycles}. At least one cycle is required.",
+          "title": "Programs of {zone_name}",
+          "description": "Configured programs: {cycles}. At least one program is required.",
           "menu_options": {
-            "add_cycle": "Add a cycle",
+            "add_cycle": "Add a program",
             "finish": "Finish and create the zone"
           }
         },
         "cycle": {
-          "title": "Cycle",
-          "description": "A cycle is one daily watering run for this zone. A zone can have several (e.g. one in the morning and one in the evening), each with its own start time and curve.",
+          "title": "Program",
+          "description": "A program is one daily watering run for this zone. A zone can have several (e.g. one in the morning and one in the evening), each with its own start time and curve.",
           "data": {
             "name": "Name",
             "kind": "When it starts",
@@ -295,7 +295,7 @@
         },
         "cycle_sun": {
           "title": "Sun trigger",
-          "description": "Start this cycle relative to sunrise or sunset — it follows the season automatically through the year.",
+          "description": "Start this program relative to sunrise or sunset — it follows the season automatically through the year.",
           "data": {
             "event": "Sun event",
             "offset_min": "Offset (minutes)"
@@ -307,7 +307,7 @@
         },
         "cycle_time": {
           "title": "Time trigger",
-          "description": "Start this cycle at the same clock time every day.",
+          "description": "Start this program at the same clock time every day.",
           "data": {
             "at": "Start time"
           },
@@ -317,11 +317,11 @@
         },
         "cycle_curve": {
           "title": "Watering curve",
-          "description": "The curve decides how long (or how much) to water based on the weighted temperature: hotter days water more. Start from a ready-made preset, copy one from another cycle, or build your own.",
+          "description": "The curve decides how long (or how much) to water based on the weighted temperature: hotter days water more. Start from a ready-made preset, copy one from another program, or build your own.",
           "data": {
             "source": "Curve",
-            "soak_max_run_min": "Cycle-and-soak: maximum run (minutes, optional)",
-            "soak_pause_min": "Cycle-and-soak: pause (minutes)",
+            "soak_max_run_min": "Program-and-soak: maximum run (minutes, optional)",
+            "soak_pause_min": "Program-and-soak: pause (minutes)",
             "volume_safety_timeout_min": "Volume safety timeout (minutes)"
           },
           "data_description": {
@@ -353,7 +353,7 @@
             "source": "Copy from"
           },
           "data_description": {
-            "source": "Pick an existing zone/cycle to copy its curve into this cycle. You can adjust it afterwards."
+            "source": "Pick an existing zone/program to copy its curve into this program. You can adjust it afterwards."
           }
         },
         "reconfigure": {
@@ -365,25 +365,25 @@
           }
         },
         "manage_cycles": {
-          "title": "Manage cycles",
-          "description": "Configured cycles: {cycles}.",
+          "title": "Manage programs",
+          "description": "Configured programs: {cycles}.",
           "menu_options": {
-            "add_cycle": "Add a cycle",
-            "edit_cycle": "Edit a cycle",
-            "remove_cycle": "Remove a cycle",
+            "add_cycle": "Add a program",
+            "edit_cycle": "Edit a program",
+            "remove_cycle": "Remove a program",
             "back": "Back"
           }
         },
         "edit_cycle": {
-          "title": "Edit cycle",
+          "title": "Edit program",
           "data": {
-            "cycle": "Cycle"
+            "cycle": "Program"
           }
         },
         "remove_cycle": {
-          "title": "Remove cycle",
+          "title": "Remove program",
           "data": {
-            "cycle": "Cycle"
+            "cycle": "Program"
           }
         }
       },
@@ -502,7 +502,7 @@
         },
         "duration": {
           "name": "Duration",
-          "description": "Watering duration in minutes. If omitted, the cycle curve decides."
+          "description": "Watering duration in minutes. If omitted, the program curve decides."
         }
       }
     },
@@ -512,7 +512,7 @@
     },
     "skip_today": {
       "name": "Skip today",
-      "description": "Skips today's remaining scheduled cycles.",
+      "description": "Skips today's remaining scheduled programs.",
       "fields": {
         "zone_id": {
           "name": "Zone",
@@ -582,15 +582,15 @@
     },
     "set_curve": {
       "name": "Set curve",
-      "description": "Replaces a cycle's watering curve with inline control points.",
+      "description": "Replaces a program's watering curve with inline control points.",
       "fields": {
         "zone_id": {
           "name": "Zone",
-          "description": "The zone owning the cycle."
+          "description": "The zone owning the program."
         },
         "cycle_id": {
           "name": "Cycle",
-          "description": "The cycle whose curve is replaced."
+          "description": "The program whose curve is replaced."
         },
         "points": {
           "name": "Control points",
@@ -608,10 +608,10 @@
     },
     "set_simple_curve": {
       "name": "Set simple curve",
-      "description": "Builds a duration curve from a base amount and a hot-day boost, then saves it to a cycle.",
+      "description": "Builds a duration curve from a base amount and a hot-day boost, then saves it to a program.",
       "fields": {
-        "zone_id": { "name": "Zone", "description": "The zone owning the cycle." },
-        "cycle_id": { "name": "Cycle", "description": "The cycle whose curve is set." },
+        "zone_id": { "name": "Zone", "description": "The zone owning the program." },
+        "cycle_id": { "name": "Cycle", "description": "The program whose curve is set." },
         "amount": { "name": "Amount (min at 25°)", "description": "Watering minutes on a mild day." },
         "heat": { "name": "Hot-day boost (extra min at 35°)", "description": "Extra minutes on a hot day vs a mild one." },
         "min_value": { "name": "Never less than (min)", "description": "Optional lower limit." },
@@ -647,7 +647,7 @@
     },
     "set_program_minutes": {
       "name": "Set program minutes",
-      "description": "Sets a program's watering minutes, either the same every day or per weekday. Not available for volume-target cycles.",
+      "description": "Sets a program's watering minutes, either the same every day or per weekday. Not available for volume-target programs.",
       "fields": {
         "zone_id": { "name": "Zone", "description": "The zone the program belongs to." },
         "program_id": { "name": "Program", "description": "The program to change." },
@@ -717,7 +717,7 @@
       "message": "The minimum must not exceed the maximum."
     },
     "simple_curve_on_volume": {
-      "message": "Simple curves are duration-only; this cycle uses a volume curve. Edit it in the zone settings."
+      "message": "Simple curves are duration-only; this program uses a volume curve. Edit it in the zone settings."
     },
     "invalid_payload": {
       "message": "The payload is not a valid exported configuration."
@@ -790,10 +790,10 @@
     },
     "notify_event": {
       "options": {
-        "completed": "Cycle completed",
-        "skipped": "Cycle skipped",
-        "interrupted": "Cycle interrupted",
-        "cancelled": "Cycle cancelled",
+        "completed": "Program completed",
+        "skipped": "Program skipped",
+        "interrupted": "Program interrupted",
+        "cancelled": "Program cancelled",
         "anomaly": "Anomaly",
         "watchdog": "Watchdog intervention",
         "sentinel": "Sentinel: watering did not run",
@@ -837,7 +837,7 @@
         "preset_pots": "Preset: potted plants",
         "preset_lawn": "Preset: lawn",
         "custom": "Custom curve",
-        "copy": "Copy from an existing cycle"
+        "copy": "Copy from an existing program"
       }
     },
     "copy_source": {

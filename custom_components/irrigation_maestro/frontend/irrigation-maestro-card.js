@@ -694,7 +694,7 @@ const C = {
   "reason.not_due": "Not due yet",
   "reason.calendar_restricted": "Calendar restriction",
   "reason.zone_disabled": "Zone disabled",
-  "reason.cycle_disabled": "Cycle disabled",
+  "reason.cycle_disabled": "Program disabled",
   "reason.suspended": "Zone suspended",
   "reason.paused": "Paused",
   "reason.manual_stop_block": "Blocked after manual stop",
@@ -727,8 +727,8 @@ const C = {
   "zone.last_outcome": "Last outcome",
   "zone.suspended_until": "Suspended until {date}",
   "zone.remaining": "{minutes} min left",
-  "zone.cycles": "Cycles",
-  "zone.no_cycles": "No cycles configured",
+  "zone.cycles": "Programs",
+  "zone.no_cycles": "No programs configured",
   "zone.cycle_enabled": "Enabled",
   "zone.cycle_disabled": "Disabled",
   // Cycle triggers
@@ -802,7 +802,7 @@ const C = {
   "editor.cancel": "Cancel",
   "editor.saved": "Curve updated.",
   "editor.save_error": "Couldn't save the curve: {error}",
-  "editor.volume_note": "This cycle uses a volume curve (liters). Edit it in the zone settings."
+  "editor.volume_note": "This program uses a volume curve (liters). Edit it in the zone settings."
 }, Zt = {
   // Messaggi a livello di scheda
   "card.name": "Scheda Irrigation Maestro",
@@ -883,7 +883,7 @@ const C = {
   "reason.not_due": "Non ancora in programma",
   "reason.calendar_restricted": "Limitazione di calendario",
   "reason.zone_disabled": "Zona disabilitata",
-  "reason.cycle_disabled": "Ciclo disabilitato",
+  "reason.cycle_disabled": "Programma disabilitato",
   "reason.suspended": "Zona sospesa",
   "reason.paused": "In pausa",
   "reason.manual_stop_block": "Bloccata dopo un arresto manuale",
@@ -916,8 +916,8 @@ const C = {
   "zone.last_outcome": "Ultimo esito",
   "zone.suspended_until": "Sospesa fino al {date}",
   "zone.remaining": "{minutes} min rimanenti",
-  "zone.cycles": "Cicli",
-  "zone.no_cycles": "Nessun ciclo configurato",
+  "zone.cycles": "Programmi",
+  "zone.no_cycles": "Nessun programma configurato",
   "zone.cycle_enabled": "Abilitato",
   "zone.cycle_disabled": "Disabilitato",
   // Trigger dei cicli
@@ -991,7 +991,7 @@ const C = {
   "editor.cancel": "Annulla",
   "editor.saved": "Curva aggiornata.",
   "editor.save_error": "Non è stato possibile salvare la curva: {error}",
-  "editor.volume_note": "Questo ciclo usa una curva a volume (litri). Modificala nelle impostazioni della zona."
+  "editor.volume_note": "Questo programma usa una curva a volume (litri). Modificala nelle impostazioni della zona."
 }, be = {
   en: C,
   it: Zt

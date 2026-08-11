@@ -81,16 +81,16 @@
         },
         "data_description": {
           "settle_pause_s": "Pausa tra la chiusura di una zona e l'apertura della successiva, per far assestare la pressione. Default 120.",
-          "manual_block_min": "Dopo uno stop manuale, i cicli automatici restano bloccati per questo tempo. Default 60.",
+          "manual_block_min": "Dopo uno stop manuale, i programmi automatici restano bloccati per questo tempo. Default 60.",
           "watchdog_max_min": "Sicurezza: una valvola aperta più a lungo di così viene chiusa a forza e segnalata. Default 70.",
-          "open_confirm_s": "Se una valvola non risulta \"aperta\" entro questo tempo, il ciclo viene annullato. Default 120.",
+          "open_confirm_s": "Se una valvola non risulta \"aperta\" entro questo tempo, il programma viene annullato. Default 120.",
           "close_confirm_s": "Se una valvola non conferma \"chiusa\" entro questo tempo, riprova e ti avvisa. Default 120.",
           "switch_confirm_s": "Per valvole a interruttore (senza feedback di posizione): considerate aperte/chiuse dopo questo ritardo. Default 10.",
-          "wait_free_min": "Un ciclo in scadenza attende al massimo questo tempo che le altre valvole siano libere, poi viene saltato. Default 10.",
+          "wait_free_min": "Un programma in scadenza attende al massimo questo tempo che le altre valvole siano libere, poi viene saltato. Default 10.",
           "startup_valve_timeout_s": "Dopo un riavvio, quanto attendere che le valvole tornino online prima di segnalarne una irraggiungibile. Default 300.",
-          "sentinel_time": "Orario del controllo giornaliero che ti avvisa se un ciclo previsto non è mai partito. Default 12:00.",
+          "sentinel_time": "Orario del controllo giornaliero che ti avvisa se un programma previsto non è mai partito. Default 12:00.",
           "session_max_min": "Facoltativo. Salta le zone ancora in coda una volta che la sessione ha irrigato per questi minuti. Vuoto = nessun limite.",
-          "must_finish_by": "Facoltativo. Non avviare un ciclo che finirebbe dopo quest'ora del giorno. Vuoto = nessun limite."
+          "must_finish_by": "Facoltativo. Non avviare un programma che finirebbe dopo quest'ora del giorno. Vuoto = nessun limite."
         }
       },
       "engine_advanced": {
@@ -154,7 +154,7 @@
         "data_description": {
           "allowed_weekdays": "Irriga solo nei giorni selezionati. Lascia vuoto per consentirli tutti.",
           "parity": "Limita l'irrigazione ai giorni pari o dispari del mese (alcune ordinanze alternano per numero civico).",
-          "forbidden_windows": "Orari in cui l'irrigazione non è consentita, es. '08:00-10:30, 22:00-23:15'. Vuoto = nessun divieto. Un ciclo in corso viene troncato invece di sconfinare."
+          "forbidden_windows": "Orari in cui l'irrigazione non è consentita, es. '08:00-10:30, 22:00-23:15'. Vuoto = nessun divieto. Un programma in corso viene troncato invece di sconfinare."
         }
       },
       "notifications": {
@@ -189,7 +189,7 @@
         "data_description": {
           "liters_per_month": "Litri totali consentiti al mese. Vuoto = nessun budget. Serve un flussometro, o le portate nominali per stimare il consumo.",
           "action": "Cosa succede una volta esaurito il budget: \"solo notifica\" avvisa, \"riduci\" accorcia ogni ciclo, \"sospendi\" ferma l'irrigazione fino al mese successivo.",
-          "reduce_pct": "Di quanto viene accorciato ogni ciclo quando l'azione è \"Riduci l'irrigazione\". Default 50."
+          "reduce_pct": "Di quanto viene accorciato ogni programma quando l'azione è \"Riduci l'irrigazione\". Default 50."
         }
       }
     },
@@ -210,7 +210,7 @@
       "step": {
         "user": {
           "title": "Nuova zona",
-          "description": "Un circuito di irrigazione: la sua valvola e ogni quanto irriga. Sono obbligatori solo il nome e la valvola: la quantità d'acqua (la curva) si imposta dopo, aggiungendo un ciclo nel passaggio successivo.",
+          "description": "Un circuito di irrigazione: la sua valvola e ogni quanto irriga. Sono obbligatori solo il nome e la valvola: la quantità d'acqua (la curva) si imposta dopo, aggiungendo un programma nel passaggio successivo.",
           "data": {
             "name": "Nome",
             "icon": "Icona (facoltativa)",
@@ -272,16 +272,16 @@
           }
         },
         "cycle_menu": {
-          "title": "Cicli di {zone_name}",
-          "description": "Cicli configurati: {cycles}. Serve almeno un ciclo.",
+          "title": "Programmi di {zone_name}",
+          "description": "Programmi configurati: {cycles}. Serve almeno un programma.",
           "menu_options": {
-            "add_cycle": "Aggiungi un ciclo",
+            "add_cycle": "Aggiungi un programma",
             "finish": "Termina e crea la zona"
           }
         },
         "cycle": {
-          "title": "Ciclo",
-          "description": "Un ciclo è una singola irrigazione giornaliera di questa zona. Una zona può averne più d'uno (es. mattino e sera), ciascuno con il proprio orario di avvio e la propria curva.",
+          "title": "Programma",
+          "description": "Un programma è una singola irrigazione giornaliera di questa zona. Una zona può averne più d'uno (es. mattino e sera), ciascuno con il proprio orario di avvio e la propria curva.",
           "data": {
             "name": "Nome",
             "kind": "Quando parte",
@@ -295,7 +295,7 @@
         },
         "cycle_sun": {
           "title": "Attivazione solare",
-          "description": "Avvia questo ciclo in relazione all'alba o al tramonto: segue automaticamente la stagione durante l'anno.",
+          "description": "Avvia questo programma in relazione all'alba o al tramonto: segue automaticamente la stagione durante l'anno.",
           "data": {
             "event": "Evento solare",
             "offset_min": "Scostamento (minuti)"
@@ -307,7 +307,7 @@
         },
         "cycle_time": {
           "title": "Attivazione a orario",
-          "description": "Avvia questo ciclo alla stessa ora ogni giorno.",
+          "description": "Avvia questo programma alla stessa ora ogni giorno.",
           "data": {
             "at": "Orario di avvio"
           },
@@ -317,11 +317,11 @@
         },
         "cycle_curve": {
           "title": "Curva di irrigazione",
-          "description": "La curva decide quanto irrigare (durata o quantità) in base alla temperatura pesata: più fa caldo, più si irriga. Parti da un preset pronto, copia una curva da un altro ciclo, o creane una tua.",
+          "description": "La curva decide quanto irrigare (durata o quantità) in base alla temperatura pesata: più fa caldo, più si irriga. Parti da un preset pronto, copia una curva da un altro programma, o creane una tua.",
           "data": {
             "source": "Curva",
-            "soak_max_run_min": "Cycle-and-soak: durata massima (minuti, facoltativa)",
-            "soak_pause_min": "Cycle-and-soak: pausa (minuti)",
+            "soak_max_run_min": "Program-and-soak: durata massima (minuti, facoltativa)",
+            "soak_pause_min": "Program-and-soak: pausa (minuti)",
             "volume_safety_timeout_min": "Timeout di sicurezza per volume (minuti)"
           },
           "data_description": {
@@ -353,7 +353,7 @@
             "source": "Copia da"
           },
           "data_description": {
-            "source": "Scegli una zona/ciclo esistente per copiarne la curva in questo ciclo. Potrai modificarla in seguito."
+            "source": "Scegli una zona/programma esistente per copiarne la curva in questo programma. Potrai modificarla in seguito."
           }
         },
         "reconfigure": {
@@ -365,25 +365,25 @@
           }
         },
         "manage_cycles": {
-          "title": "Gestione cicli",
-          "description": "Cicli configurati: {cycles}.",
+          "title": "Gestione programmi",
+          "description": "Programmi configurati: {cycles}.",
           "menu_options": {
-            "add_cycle": "Aggiungi un ciclo",
-            "edit_cycle": "Modifica un ciclo",
-            "remove_cycle": "Rimuovi un ciclo",
+            "add_cycle": "Aggiungi un programma",
+            "edit_cycle": "Modifica un programma",
+            "remove_cycle": "Rimuovi un programma",
             "back": "Indietro"
           }
         },
         "edit_cycle": {
-          "title": "Modifica ciclo",
+          "title": "Modifica programma",
           "data": {
-            "cycle": "Ciclo"
+            "cycle": "Programma"
           }
         },
         "remove_cycle": {
-          "title": "Rimuovi ciclo",
+          "title": "Rimuovi programma",
           "data": {
-            "cycle": "Ciclo"
+            "cycle": "Programma"
           }
         }
       },
@@ -502,7 +502,7 @@
         },
         "duration": {
           "name": "Durata",
-          "description": "Durata dell'irrigazione in minuti. Se omessa, decide la curva del ciclo."
+          "description": "Durata dell'irrigazione in minuti. Se omessa, decide la curva del programma."
         }
       }
     },
@@ -512,7 +512,7 @@
     },
     "skip_today": {
       "name": "Salta oggi",
-      "description": "Salta i cicli programmati rimanenti di oggi.",
+      "description": "Salta i programmi programmati rimanenti di oggi.",
       "fields": {
         "zone_id": {
           "name": "Zona",
@@ -582,15 +582,15 @@
     },
     "set_curve": {
       "name": "Imposta curva",
-      "description": "Sostituisce la curva di irrigazione di un ciclo con punti di controllo espliciti.",
+      "description": "Sostituisce la curva di irrigazione di un programma con punti di controllo espliciti.",
       "fields": {
         "zone_id": {
           "name": "Zona",
-          "description": "La zona a cui appartiene il ciclo."
+          "description": "La zona a cui appartiene il programma."
         },
         "cycle_id": {
           "name": "Ciclo",
-          "description": "Il ciclo la cui curva viene sostituita."
+          "description": "Il programma la cui curva viene sostituita."
         },
         "points": {
           "name": "Punti di controllo",
@@ -608,10 +608,10 @@
     },
     "set_simple_curve": {
       "name": "Imposta curva semplice",
-      "description": "Costruisce una curva a durata da una quantità base e un incremento per i giorni caldi, poi la salva su un ciclo.",
+      "description": "Costruisce una curva a durata da una quantità base e un incremento per i giorni caldi, poi la salva su un programma.",
       "fields": {
-        "zone_id": { "name": "Zona", "description": "La zona a cui appartiene il ciclo." },
-        "cycle_id": { "name": "Ciclo", "description": "Il ciclo di cui impostare la curva." },
+        "zone_id": { "name": "Zona", "description": "La zona a cui appartiene il programma." },
+        "cycle_id": { "name": "Ciclo", "description": "Il programma di cui impostare la curva." },
         "amount": { "name": "Quanta acqua (min a 25°)", "description": "Minuti di irrigazione in una giornata mite." },
         "heat": { "name": "Di più quando caldo (min extra a 35°)", "description": "Minuti extra in una giornata calda rispetto a una mite." },
         "min_value": { "name": "Mai meno di (min)", "description": "Limite inferiore facoltativo." },
@@ -647,7 +647,7 @@
     },
     "set_program_minutes": {
       "name": "Imposta i minuti del programma",
-      "description": "Imposta i minuti di irrigazione di un programma, uguali ogni giorno oppure per singolo giorno della settimana. Non disponibile per i cicli a volume target.",
+      "description": "Imposta i minuti di irrigazione di un programma, uguali ogni giorno oppure per singolo giorno della settimana. Non disponibile per i programmi a volume target.",
       "fields": {
         "zone_id": { "name": "Zona", "description": "La zona a cui appartiene il programma." },
         "program_id": { "name": "Programma", "description": "Il programma da modificare." },
@@ -717,7 +717,7 @@
       "message": "Il minimo non può superare il massimo."
     },
     "simple_curve_on_volume": {
-      "message": "Le curve semplici sono solo a durata; questo ciclo usa una curva a volume. Modificala nelle impostazioni della zona."
+      "message": "Le curve semplici sono solo a durata; questo programma usa una curva a volume. Modificala nelle impostazioni della zona."
     },
     "invalid_payload": {
       "message": "Il payload non è una configurazione esportata valida."
@@ -790,10 +790,10 @@
     },
     "notify_event": {
       "options": {
-        "completed": "Ciclo completato",
-        "skipped": "Ciclo saltato",
-        "interrupted": "Ciclo interrotto",
-        "cancelled": "Ciclo annullato",
+        "completed": "Programma completato",
+        "skipped": "Programma saltato",
+        "interrupted": "Programma interrotto",
+        "cancelled": "Programma annullato",
         "anomaly": "Anomalia",
         "watchdog": "Intervento del watchdog",
         "sentinel": "Sentinella: irrigazione non eseguita",
@@ -837,7 +837,7 @@
         "preset_pots": "Preset: piante in vaso",
         "preset_lawn": "Preset: prato",
         "custom": "Curva personalizzata",
-        "copy": "Copia da un ciclo esistente"
+        "copy": "Copia da un programma esistente"
       }
     },
     "copy_source": {

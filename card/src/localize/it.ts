@@ -96,7 +96,7 @@ export const it: Record<keyof typeof en, string> = {
   "reason.not_due": "Non ancora in programma",
   "reason.calendar_restricted": "Limitazione di calendario",
   "reason.zone_disabled": "Zona disabilitata",
-  "reason.cycle_disabled": "Ciclo disabilitato",
+  "reason.cycle_disabled": "Programma disabilitato",
   "reason.suspended": "Zona sospesa",
   "reason.paused": "In pausa",
   "reason.manual_stop_block": "Bloccata dopo un arresto manuale",
@@ -131,8 +131,8 @@ export const it: Record<keyof typeof en, string> = {
   "zone.last_outcome": "Ultimo esito",
   "zone.suspended_until": "Sospesa fino al {date}",
   "zone.remaining": "{minutes} min rimanenti",
-  "zone.cycles": "Cicli",
-  "zone.no_cycles": "Nessun ciclo configurato",
+  "zone.cycles": "Programmi",
+  "zone.no_cycles": "Nessun programma configurato",
   "zone.cycle_enabled": "Abilitato",
   "zone.cycle_disabled": "Disabilitato",
 
@@ -213,5 +213,5 @@ export const it: Record<keyof typeof en, string> = {
   "editor.cancel": "Annulla",
   "editor.saved": "Curva aggiornata.",
   "editor.save_error": "Non è stato possibile salvare la curva: {error}",
-  "editor.volume_note": "Questo ciclo usa una curva a volume (litri). Modificala nelle impostazioni della zona.",
+  "editor.volume_note": "Questo programma usa una curva a volume (litri). Modificala nelle impostazioni della zona.",
 };
