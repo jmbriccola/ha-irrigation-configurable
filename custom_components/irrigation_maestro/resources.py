@@ -31,13 +31,16 @@ async def async_register_frontend(hass: HomeAssistant) -> None:
         return
 
     # Imported lazily: pulling in the http component at module import time
-    # would fail in contexts where it is not loaded (e.g. unit tests).
-    from homeassistant.components.http import StaticPathConfig  # noqa: PLC0415
+    # would fail in contexts where it is not loaded (e.g. unit tests). Access
+    # StaticPathConfig as a module attribute (not `from … import`) so mypy's
+    # no-implicit-reexport check passes across HA versions that don't list it
+    # in the component's __all__.
+    from homeassistant.components import http  # noqa: PLC0415
 
     integration = await async_get_integration(hass, DOMAIN)
     card_dir = integration.file_path / "frontend"
     await hass.http.async_register_static_paths(
-        [StaticPathConfig(FRONTEND_URL_BASE, str(card_dir), cache_headers=False)]
+        [http.StaticPathConfig(FRONTEND_URL_BASE, str(card_dir), cache_headers=False)]
     )
 
     version = integration.version or "0"
