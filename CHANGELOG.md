@@ -4,6 +4,30 @@ All notable changes to this project are documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.2.0] - 2026-08-11
+
+### Added
+
+- New **"Irrigazione" sidebar panel** (`panel_custom`, served as its own
+  bundle): a dedicated, full-page view of every zone's programs, alongside
+  the existing dashboard card — not a replacement for it.
+- **Weekly day-grid scheduling**: pick which weekdays a program runs on
+  directly on a 7-day grid, with a start time or sun-event trigger, and
+  **per-day watering durations** (e.g. shorter on a day you know it rained)
+  or a single uniform duration, via the new `set_program_schedule` /
+  `set_program_minutes` services.
+- **Guided "add program" wizard** to create a new program on a zone in a few
+  steps (name, trigger, days, duration), including copying an existing
+  program as a starting point (`add_program`), plus rename and remove
+  (`rename_program`, `remove_program`) directly from the panel.
+- **Advanced drawer** on each program reusing the same beginner-friendly
+  heat-response curve editor as the card (two sliders, live graph, "with
+  today's weather" line) for zones that want the mild/hot-day duration
+  curve instead of a fixed target.
+- A weekday-aware weather line and `day_not_scheduled` skip reason so it's
+  clear when a program simply isn't due today versus skipped by the weather
+  engine.
+
 ## [1.1.0] - 2026-08-11
 
 ### Added

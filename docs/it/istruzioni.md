@@ -134,7 +134,33 @@ trascini. **Avanzate** aggiunge i limiti di sicurezza *Mai meno di / Mai più
 di* e ti fa trascinare i tre punti. Le curve con più di tre punti si
 modificano nelle impostazioni della zona.
 
-## 6. Risoluzione dei problemi
+## 6. Il pannello "Irrigazione"
+
+Apri la voce **Irrigazione** nella barra laterale di Home Assistant (icona a
+irrigatore) per un'alternativa a schermo intero alla card, dedicata alla
+gestione dei programmi:
+
+1. Scegli la scheda della **zona**.
+2. L'elenco mostra tutti i programmi di quella zona; aggiungine uno nuovo
+   con la procedura guidata (nome, trigger, giorni, durata — con la
+   possibilità di copiare un programma esistente come punto di partenza),
+   oppure modifica/rinomina/elimina un programma esistente.
+3. Ogni programma si apre su una **griglia settimanale**: tocca i giorni in
+   cui deve irrigare (vuoto = tutti i giorni), imposta l'orario o il trigger
+   solare, e la durata: un unico valore per tutti i giorni programmati,
+   oppure un valore diverso per ciascun giorno (es. più breve dopo un
+   giorno di pioggia).
+4. Le impostazioni **avanzate** — la curva di risposta al caldo (lo stesso
+   editor a due slider della card, "quanta acqua" / "quanto di più quando
+   fa caldo") per i programmi che scalano la durata con la temperatura
+   invece di un valore fisso — sono dietro un cassetto (drawer), chiuso per
+   default.
+
+Il pannello e la card della dashboard leggono e scrivono gli stessi
+programmi: usa l'uno, l'altra, o entrambi — non serve migrare nulla. La card
+(§5 sopra) continua a funzionare esattamente come oggi.
+
+## 7. Risoluzione dei problemi
 
 - **Un ciclo non è partito e nessuno ti ha avvisato** → la sentinella
   giornaliera (default 12:00) notifica e apre una segnalazione in

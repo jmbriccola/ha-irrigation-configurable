@@ -81,6 +81,18 @@ lovelace:
       type: module
 ```
 
+### The "Irrigazione" panel
+
+The integration also registers a dedicated **sidebar panel** — look for
+**Irrigazione** (sprinkler icon) in the Home Assistant sidebar. It's a
+full-page, zone-by-zone view for managing watering programs: open the panel,
+pick a zone tab, then add or edit its programs (giorni/days on a weekly
+grid, orario/start time, durata/duration per day or uniform), with a guided
+wizard for new programs and an **Advanced** drawer for the heat-response
+curve when a fixed duration isn't enough. The dashboard card described above
+keeps working exactly as before — the panel is an additional, more spacious
+place to manage programs, not a replacement.
+
 ## The decision engine
 
 All weights below are defaults, editable in the hub options (with a

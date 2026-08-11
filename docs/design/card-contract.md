@@ -147,3 +147,50 @@ by design — the startup watchdog closes valves and the sentinel flags the
 missing outcome.
 
 Zone/session states and degraded keys above are localizable too.
+
+## The sidebar panel (`irrigation-maestro-panel`)
+
+Alongside the dashboard card, the integration registers a **custom sidebar
+panel** via `panel_custom`:
+
+- `frontend_url_path`: `irrigation` (sidebar entry **"Irrigazione"**,
+  `mdi:sprinkler-variant`).
+- `webcomponent_name`: `irrigation-maestro-panel`.
+- Served from its own bundle, `irrigation-maestro-panel.js`, cache-busted
+  with the same `?v={version}` query param as the card (see
+  `custom_components/irrigation_maestro/panel.py` /
+  `custom_components/irrigation_maestro/resources.py`); the two bundles are
+  independent — a panel-only change does not require touching
+  `irrigation-maestro-card.js` and vice versa, but both are always rebuilt
+  and committed together to keep `frontend/` in sync with source.
+- `require_admin: false`, `embed_iframe: false`, `trust_external: false` —
+  it renders like any other built-in HA panel, not an iframe.
+
+The panel is **not** a replacement for the card: the dashboard card keeps
+working unchanged (same entities, same services) for anyone who prefers a
+Lovelace tile. The panel is a dedicated, full-page surface for zone/program
+management.
+
+**Discovery and data**: the panel uses the exact same contract as the card —
+no separate API. It iterates `hass.states` for entities carrying
+`maestro_role`, groups by `zone_id` the same way, and reads/writes programs
+through the `cycles[]` list on each zone's `zone_state` attributes described
+above: `cycle_id`, `name`, `enabled`, `trigger`, `days`, `day_minutes`,
+`amount`, `heat`, `curve`. The weekly day-grid, per-day duration fields and
+the "with today's weather" line are pure presentations of those same
+fields — there is no new backend surface for the panel to consume.
+
+**Services it drives** — the five program-scheduling services documented
+above, unchanged from the card's Phase A contract:
+
+- `set_program_schedule` — day-grid + trigger editor.
+- `set_program_minutes` — uniform or per-day duration editor.
+- `add_program` — the guided add-program wizard (optionally `copy_from` an
+  existing program).
+- `rename_program` / `remove_program` — program list row actions.
+
+Plus the existing curve services (`set_curve`, `set_simple_curve`) behind
+the panel's **advanced drawer**, which reuses the same beginner-friendly
+heat-response curve editor component as the card (two sliders, live graph,
+worked examples, "with today's weather" line) rather than a separate
+implementation.

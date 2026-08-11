@@ -126,7 +126,31 @@ the 'with today's weather' line update as you drag. **Advanced** adds the
 three points. Curves needing more than three points are still edited in the
 zone settings.
 
-## 6. Troubleshooting
+## 6. The "Irrigazione" panel
+
+Open the **Irrigazione** entry in the Home Assistant sidebar (sprinkler
+icon) for a dedicated, full-page alternative to the card for managing
+programs:
+
+1. Pick a **zone** tab.
+2. The program list shows every program on that zone; add a new one with
+   the guided wizard (name, trigger, days, duration — optionally copying an
+   existing program as a starting point), or edit/rename/remove an existing
+   one.
+3. Each program opens onto a weekly **day grid** — tap the weekdays it
+   should run on (empty = every day) — a start time or sun-event trigger,
+   and a duration: one value for every scheduled day, or a different value
+   per day (e.g. shorter after a day it rained).
+4. **Advanced** settings — the heat-response curve (the same two-slider
+   editor as the card, "how much water" / "how much more when it's hot")
+   for programs that scale duration with temperature instead of a fixed
+   value — live behind a drawer, collapsed by default.
+
+The panel and the dashboard card read and write the same programs — use
+either, or both; nothing needs to be migrated. The card (§5 above) keeps
+working exactly as it does today.
+
+## 7. Troubleshooting
 
 - **A cycle didn't run and nobody told you** → the daily sentinel (default
   12:00) notifies and opens a Repairs issue when a due cycle left no
