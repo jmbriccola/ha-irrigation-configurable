@@ -187,6 +187,8 @@ def build_session_plan(
                 reason = zone_reason
             elif not cycle.enabled:
                 reason = SkipReason.CYCLE_DISABLED
+            elif cycle.days is not None and now.weekday() not in cycle.days:
+                reason = SkipReason.DAY_NOT_SCHEDULED
             elif now.month not in months:
                 reason = SkipReason.OUT_OF_SEASON
             elif evaluation.skip_reason is SkipReason.OUT_OF_SEASON:

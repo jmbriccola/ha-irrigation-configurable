@@ -34,6 +34,7 @@ class SkipReason(StrEnum):
     WEATHER_UNAVAILABLE = "weather_unavailable"
     SKIP_TODAY_REQUESTED = "skip_today_requested"
     CONSUMPTION_BUDGET = "consumption_budget"
+    DAY_NOT_SCHEDULED = "day_not_scheduled"
 
     @property
     def silent(self) -> bool:
@@ -47,6 +48,7 @@ _SILENT_REASONS = frozenset(
         SkipReason.NOT_DUE,
         SkipReason.ZONE_DISABLED,
         SkipReason.CYCLE_DISABLED,
+        SkipReason.DAY_NOT_SCHEDULED,
     }
 )
 

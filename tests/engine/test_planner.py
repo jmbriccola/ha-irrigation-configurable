@@ -281,6 +281,26 @@ class TestGates:
         )
 
 
+class TestWeekdayGate:
+    def test_skips_when_today_not_scheduled(self):
+        cycle = make_cycle(days=frozenset({0, 1}))  # Mon, Tue only
+        result = plan([make_zone(cycles=(cycle,))])
+        assert not result.runs
+        assert result.skipped[0].reason is SkipReason.DAY_NOT_SCHEDULED
+
+    def test_runs_when_today_scheduled(self):
+        cycle = make_cycle(days=frozenset({4}))  # Friday
+        result = plan([make_zone(cycles=(cycle,))])
+        assert len(result.runs) == 1
+
+    def test_day_less_program_unaffected(self):
+        result = plan([make_zone()])  # make_cycle() has days=None
+        assert len(result.runs) == 1
+
+    def test_day_not_scheduled_is_silent(self):
+        assert SkipReason.DAY_NOT_SCHEDULED.silent is True
+
+
 class TestAggregation:
     def test_shared_reason_groups_zones(self):
         zones = [
