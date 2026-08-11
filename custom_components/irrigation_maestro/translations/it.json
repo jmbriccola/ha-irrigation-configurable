@@ -660,7 +660,7 @@
       "description": "Aggiunge un nuovo programma a una zona, eventualmente copiato da uno esistente.",
       "fields": {
         "zone_id": { "name": "Zona", "description": "La zona a cui aggiungere il programma." },
-        "name": { "name": "Nome", "description": "Il nome del nuovo programma. Il valore predefinito è \"Program\", oppure \"<origine> (copy)\" se copiato." },
+        "name": { "name": "Nome", "description": "Il nome del nuovo programma. Predefinito 'Program', oppure il nome di origine seguito da ' (copy)' se copiato." },
         "copy_from": { "name": "Copia da", "description": "Un programma esistente sulla stessa zona da cui copiare programmazione e curva." }
       }
     },

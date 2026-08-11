@@ -660,7 +660,7 @@
       "description": "Adds a new program to a zone, optionally copied from an existing one.",
       "fields": {
         "zone_id": { "name": "Zone", "description": "The zone to add the program to." },
-        "name": { "name": "Name", "description": "The new program's name. Defaults to \"Program\", or \"<source> (copy)\" when copying." },
+        "name": { "name": "Name", "description": "The new program's name. Defaults to 'Program', or the source name followed by ' (copy)' when copying." },
         "copy_from": { "name": "Copy from", "description": "An existing program on the same zone to copy the schedule and curve from." }
       }
     },
