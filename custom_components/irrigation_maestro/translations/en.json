@@ -606,6 +606,18 @@
         }
       }
     },
+    "set_simple_curve": {
+      "name": "Set simple curve",
+      "description": "Builds a duration curve from a base amount and a hot-day boost, then saves it to a cycle.",
+      "fields": {
+        "zone_id": { "name": "Zone", "description": "The zone owning the cycle." },
+        "cycle_id": { "name": "Cycle", "description": "The cycle whose curve is set." },
+        "amount": { "name": "Amount (min at 25°)", "description": "Watering minutes on a mild day." },
+        "heat": { "name": "Hot-day boost (extra min at 35°)", "description": "Extra minutes on a hot day vs a mild one." },
+        "min_value": { "name": "Never less than (min)", "description": "Optional lower limit." },
+        "max_value": { "name": "Never more than (min)", "description": "Optional upper limit." }
+      }
+    },
     "export_config": {
       "name": "Export configuration",
       "description": "Returns the hub options and every zone's configuration as a JSON string."

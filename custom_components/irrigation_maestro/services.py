@@ -26,6 +26,7 @@ from homeassistant.util import dt as dt_util
 from . import const
 from .const import DOMAIN, SUBENTRY_TYPE_ZONE
 from .engine.curves import CurveError, validate_points
+from .engine.semantic import points_from_semantic
 from .models import HubConfig, ZoneConfig
 from .runtime import IrrigationRuntime
 
@@ -39,6 +40,7 @@ SERVICE_STOP_ALL: Final = "stop_all"
 SERVICE_EVALUATE: Final = "evaluate"
 SERVICE_SET_ZONE_ORDER: Final = "set_zone_order"
 SERVICE_SET_CURVE: Final = "set_curve"
+SERVICE_SET_SIMPLE_CURVE: Final = "set_simple_curve"
 SERVICE_EXPORT_CONFIG: Final = "export_config"
 SERVICE_IMPORT_CONFIG: Final = "import_config"
 
@@ -49,6 +51,8 @@ ATTR_HOURS: Final = "hours"
 ATTR_UNTIL: Final = "until"
 ATTR_ORDER: Final = "order"
 ATTR_POINTS: Final = "points"
+ATTR_AMOUNT: Final = "amount"
+ATTR_HEAT: Final = "heat"
 ATTR_MIN_VALUE: Final = "min_value"
 ATTR_MAX_VALUE: Final = "max_value"
 ATTR_PAYLOAD: Final = "payload"
@@ -98,6 +102,16 @@ _SET_CURVE_SCHEMA = vol.Schema(
         vol.Required(ATTR_ZONE_ID): cv.string,
         vol.Required(ATTR_CYCLE_ID): cv.string,
         vol.Required(ATTR_POINTS): vol.All([_curve_point], vol.Length(min=1)),
+        vol.Optional(ATTR_MIN_VALUE): vol.Coerce(float),
+        vol.Optional(ATTR_MAX_VALUE): vol.Coerce(float),
+    }
+)
+_SET_SIMPLE_CURVE_SCHEMA = vol.Schema(
+    {
+        vol.Required(ATTR_ZONE_ID): cv.string,
+        vol.Required(ATTR_CYCLE_ID): cv.string,
+        vol.Required(ATTR_AMOUNT): vol.All(vol.Coerce(int), vol.Range(min=3, max=45)),
+        vol.Required(ATTR_HEAT): vol.All(vol.Coerce(int), vol.Range(min=0, max=30)),
         vol.Optional(ATTR_MIN_VALUE): vol.Coerce(float),
         vol.Optional(ATTR_MAX_VALUE): vol.Coerce(float),
     }
@@ -198,6 +212,32 @@ async def _async_set_zone_order(call: ServiceCall) -> None:
     )
 
 
+def _write_cycle_curve(
+    hass: HomeAssistant,
+    entry: ConfigEntry,
+    zone_id: str,
+    cycle_id: str,
+    points: list[tuple[float, float]],
+    min_value: float,
+    max_value: float,
+    kind: str,
+) -> None:
+    """Persist a cycle's curve into the zone subentry (in-place, no reload)."""
+    subentry = entry.subentries[zone_id]
+    cycles = [dict(item) for item in subentry.data.get(const.CONF_CYCLES, [])]
+    for item in cycles:
+        if item.get(const.CONF_CYCLE_ID) == cycle_id:
+            item[const.CONF_CURVE] = {
+                const.CONF_CURVE_POINTS: [[temp, value] for temp, value in points],
+                const.CONF_CURVE_MIN: min_value,
+                const.CONF_CURVE_MAX: max_value,
+                const.CONF_CURVE_KIND: kind,
+            }
+    hass.config_entries.async_update_subentry(
+        entry, subentry, data={**subentry.data, const.CONF_CYCLES: cycles}
+    )
+
+
 async def _async_set_curve(call: ServiceCall) -> None:
     hass = call.hass
     entry = _loaded_entry(hass)
@@ -227,18 +267,40 @@ async def _async_set_curve(call: ServiceCall) -> None:
     if min_value > max_value:
         raise ServiceValidationError(translation_domain=DOMAIN, translation_key="min_above_max")
 
-    subentry = entry.subentries[zone_id]
-    cycles = [dict(item) for item in subentry.data.get(const.CONF_CYCLES, [])]
-    for item in cycles:
-        if item.get(const.CONF_CYCLE_ID) == cycle_id:
-            item[const.CONF_CURVE] = {
-                const.CONF_CURVE_POINTS: [[temp, value] for temp, value in points],
-                const.CONF_CURVE_MIN: min_value,
-                const.CONF_CURVE_MAX: max_value,
-                const.CONF_CURVE_KIND: str(cycle.curve.kind),
-            }
-    hass.config_entries.async_update_subentry(
-        entry, subentry, data={**subentry.data, const.CONF_CYCLES: cycles}
+    _write_cycle_curve(
+        hass, entry, zone_id, cycle_id, points, min_value, max_value, str(cycle.curve.kind)
+    )
+
+
+async def _async_set_simple_curve(call: ServiceCall) -> None:
+    hass = call.hass
+    entry = _loaded_entry(hass)
+    runtime = cast(IrrigationRuntime, entry.runtime_data)
+    zone_id: str = call.data[ATTR_ZONE_ID]
+    cycle_id: str = call.data[ATTR_CYCLE_ID]
+    _require_zone(runtime, zone_id)
+    cycle = runtime.zones[zone_id].config.cycle(cycle_id)
+    if cycle is None:
+        raise ServiceValidationError(
+            translation_domain=DOMAIN,
+            translation_key="unknown_cycle",
+            translation_placeholders={"cycle_id": cycle_id},
+        )
+    points = list(points_from_semantic(call.data[ATTR_AMOUNT], call.data[ATTR_HEAT]))
+    try:
+        validate_points(points)
+    except CurveError as err:  # defensive; the formula is always valid
+        raise ServiceValidationError(
+            translation_domain=DOMAIN,
+            translation_key="invalid_points",
+            translation_placeholders={"error": str(err)},
+        ) from err
+    min_value = float(call.data.get(ATTR_MIN_VALUE, cycle.curve.min_value))
+    max_value = float(call.data.get(ATTR_MAX_VALUE, cycle.curve.max_value))
+    if min_value > max_value:
+        raise ServiceValidationError(translation_domain=DOMAIN, translation_key="min_above_max")
+    _write_cycle_curve(
+        hass, entry, zone_id, cycle_id, points, min_value, max_value, str(cycle.curve.kind)
     )
 
 
@@ -326,6 +388,9 @@ def async_setup_services(hass: HomeAssistant) -> None:
         DOMAIN, SERVICE_SET_ZONE_ORDER, _async_set_zone_order, _SET_ZONE_ORDER_SCHEMA
     )
     hass.services.async_register(DOMAIN, SERVICE_SET_CURVE, _async_set_curve, _SET_CURVE_SCHEMA)
+    hass.services.async_register(
+        DOMAIN, SERVICE_SET_SIMPLE_CURVE, _async_set_simple_curve, _SET_SIMPLE_CURVE_SCHEMA
+    )
     hass.services.async_register(
         DOMAIN,
         SERVICE_EXPORT_CONFIG,

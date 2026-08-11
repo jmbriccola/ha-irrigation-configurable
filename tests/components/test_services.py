@@ -4,6 +4,7 @@ import json
 from datetime import timedelta
 
 import pytest
+import voluptuous as vol
 from custom_components.irrigation_maestro.const import DOMAIN
 from freezegun.api import FrozenDateTimeFactory
 from homeassistant.core import HomeAssistant
@@ -240,6 +241,75 @@ async def test_set_curve_rejects_bad_input(
     # Nothing was written.
     assert "points" in entry.subentries[zone_id].data["cycles"][0]["curve"]
     assert entry.subentries[zone_id].data["cycles"][0]["curve"]["points"] == [[20.0, 3.0]]
+
+
+async def test_set_simple_curve_stores_generated_points(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    freezer.move_to(START)
+    park = MockValvePark(hass)
+    park.add("valve.pots")
+    mock_weather(hass)
+    entry = await setup_hub(hass, [zone_data("Pots", "valve.pots")])
+    zone_id = entry.runtime_data.zone_ids[0]
+    cycle_id = entry.runtime_data.zones[zone_id].config.cycles[0].cycle_id
+
+    await hass.services.async_call(
+        DOMAIN,
+        "set_simple_curve",
+        {"zone_id": zone_id, "cycle_id": cycle_id, "amount": 15, "heat": 15},
+        blocking=True,
+    )
+    await hass.async_block_till_done()
+
+    cycle = entry.runtime_data.zones[zone_id].config.cycle(cycle_id)
+    # Reference values from points_from_semantic(15, 15); see
+    # tests/engine/test_semantic.py::test_points_endpoints_match_amount_and_heat.
+    assert cycle.curve.points == ((12.0, 0.0), (25.0, 15.0), (35.0, 30.0))
+
+
+async def test_set_simple_curve_keeps_existing_clamps_when_omitted(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    freezer.move_to(START)
+    park = MockValvePark(hass)
+    park.add("valve.pots")
+    mock_weather(hass)
+    entry = await setup_hub(hass, [zone_data("Pots", "valve.pots")])
+    zone_id = entry.runtime_data.zone_ids[0]
+    cycle_id = entry.runtime_data.zones[zone_id].config.cycles[0].cycle_id
+    before = entry.runtime_data.zones[zone_id].config.cycle(cycle_id).curve
+
+    await hass.services.async_call(
+        DOMAIN,
+        "set_simple_curve",
+        {"zone_id": zone_id, "cycle_id": cycle_id, "amount": 20, "heat": 10},
+        blocking=True,
+    )
+    await hass.async_block_till_done()
+    after = entry.runtime_data.zones[zone_id].config.cycle(cycle_id).curve
+    assert after.min_value == before.min_value
+    assert after.max_value == before.max_value
+
+
+async def test_set_simple_curve_rejects_out_of_range(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    freezer.move_to(START)
+    park = MockValvePark(hass)
+    park.add("valve.pots")
+    mock_weather(hass)
+    entry = await setup_hub(hass, [zone_data("Pots", "valve.pots")])
+    zone_id = entry.runtime_data.zone_ids[0]
+    cycle_id = entry.runtime_data.zones[zone_id].config.cycles[0].cycle_id
+
+    with pytest.raises(vol.Invalid):  # MultipleInvalid before the handler ever runs
+        await hass.services.async_call(
+            DOMAIN,
+            "set_simple_curve",
+            {"zone_id": zone_id, "cycle_id": cycle_id, "amount": 999, "heat": 5},
+            blocking=True,
+        )
 
 
 async def test_export_import_roundtrip_restores_config(
