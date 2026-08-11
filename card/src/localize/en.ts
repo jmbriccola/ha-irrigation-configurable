@@ -20,6 +20,17 @@ export const en = {
   "panel.no_programs": "No programs configured yet.",
   "panel.per_day_minutes": "Different duration per day",
   "panel.minutes_value": "{min} min",
+  "panel.edit_program": "Edit",
+  "panel.weather_line": "Today ({day}) ≈ {min} min. Skips if it rains.",
+
+  // Program editor (panel)
+  "program_editor.days": "Days",
+  "program_editor.start": "When does it start?",
+  "program_editor.start_fixed": "Fixed time",
+  "program_editor.start_sunrise": "Sunrise",
+  "program_editor.start_sunset": "Sunset",
+  "program_editor.duration_per_day": "Duration per day",
+  "program_editor.same_duration": "Same duration every day",
 
   // Header
   "header.water_budget": "Water budget",

@@ -1,11 +1,15 @@
-import { LitElement, html, css, type TemplateResult } from "lit";
+import { LitElement, html, css, nothing, type TemplateResult } from "lit";
 import type { PropertyValues } from "lit";
 import { property, state } from "lit/decorators.js";
 import type { HomeAssistant } from "../types";
-import { defineElement } from "../types";
+import { asNumber, defineElement } from "../types";
 import { pickLanguage, localize } from "../localize/localize";
 import { discover, type MaestroModel, type ZoneBundle } from "../discovery";
 import "./program-list";
+import type {
+  ProgramMinutesSaveDetail,
+  ProgramScheduleSaveDetail,
+} from "./program-editor";
 
 /**
  * Sidebar panel shell: zone tabs + the selected zone's read-only program
@@ -16,9 +20,70 @@ export class IrrigationMaestroPanel extends LitElement {
   @property({ attribute: false }) hass?: HomeAssistant;
   @property({ type: Boolean }) narrow = false;
   @state() private _selectedZoneId?: string;
+  @state() private _error?: string;
 
   private _relevantIds: string[] = [];
   private _statesCount = 0;
+  private _errorTimer?: number;
+
+  public override disconnectedCallback(): void {
+    super.disconnectedCallback();
+    if (this._errorTimer !== undefined) {
+      window.clearTimeout(this._errorTimer);
+      this._errorTimer = undefined;
+    }
+  }
+
+  /* ------------------------------------------------------------ */
+  /* Actions → services                                            */
+  /* ------------------------------------------------------------ */
+
+  private async _call(
+    domain: string,
+    service: string,
+    data: Record<string, unknown>,
+    returnResponse = false,
+  ): Promise<{ context: unknown; response?: Record<string, unknown> } | undefined> {
+    if (!this.hass) return undefined;
+    try {
+      return await this.hass.callService(domain, service, data, undefined, true, returnResponse);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      this._error = message;
+      if (this._errorTimer !== undefined) {
+        window.clearTimeout(this._errorTimer);
+      }
+      this._errorTimer = window.setTimeout(() => {
+        this._error = undefined;
+        this._errorTimer = undefined;
+      }, 6000);
+      return undefined;
+    }
+  }
+
+  private _onSaveSchedule(ev: CustomEvent<ProgramScheduleSaveDetail>): void {
+    const d = ev.detail;
+    void this._call("irrigation_maestro", "set_program_schedule", {
+      zone_id: d.zoneId,
+      program_id: d.programId,
+      days: d.days,
+      start_kind: d.start.kind,
+      ...(d.start.kind === "time"
+        ? { start_time: d.start.at }
+        : { start_event: d.start.event, start_offset_min: d.start.offset_min ?? 0 }),
+    });
+  }
+
+  private _onSaveMinutes(ev: CustomEvent<ProgramMinutesSaveDetail>): void {
+    const d = ev.detail;
+    void this._call(
+      "irrigation_maestro",
+      "set_program_minutes",
+      d.dayMinutes
+        ? { zone_id: d.zoneId, program_id: d.programId, day_minutes: d.dayMinutes }
+        : { zone_id: d.zoneId, program_id: d.programId, minutes: d.minutes },
+    );
+  }
 
   /* ------------------------------------------------------------ */
   /* Update gating: only re-render when a maestro entity changed   */
@@ -82,6 +147,14 @@ export class IrrigationMaestroPanel extends LitElement {
       color: var(--secondary-text-color);
       padding: 24px 0;
     }
+    .error {
+      margin: 0 0 12px;
+      padding: 8px 10px;
+      border-radius: 6px;
+      font-size: 12px;
+      background: var(--error-color, #db4437);
+      color: var(--text-primary-color, #fff);
+    }
   `;
 
   override render(): TemplateResult {
@@ -102,9 +175,16 @@ export class IrrigationMaestroPanel extends LitElement {
     }
 
     const selected = this._resolveSelected(model.zones);
+    const weightedTemp = asNumber(model.hub.weightedTemp?.state);
     return html`
-      <div class="wrap">
+      <div
+        class="wrap"
+        @imc-program-save-schedule=${this._onSaveSchedule}
+        @imc-program-save-minutes=${this._onSaveMinutes}
+        @imc-program-cancel=${() => undefined}
+      >
         <header><h1>${localize(lang, "panel.title")}</h1></header>
+        ${this._error ? html`<div class="error">${this._error}</div>` : nothing}
         <div class="tabs">
           ${model.zones.map(
             (z) => html`
@@ -117,7 +197,11 @@ export class IrrigationMaestroPanel extends LitElement {
             `,
           )}
         </div>
-        <imc-program-list .hass=${hass} .zone=${selected}></imc-program-list>
+        <imc-program-list
+          .hass=${hass}
+          .zone=${selected}
+          .weightedTemp=${weightedTemp}
+        ></imc-program-list>
       </div>
     `;
   }

@@ -158,7 +158,10 @@ export interface HomeAssistant {
     domain: string,
     service: string,
     data?: Record<string, unknown>,
-  ): Promise<unknown>;
+    target?: Record<string, unknown>,
+    notifyOnError?: boolean,
+    returnResponse?: boolean,
+  ): Promise<{ context: unknown; response?: Record<string, unknown> }>;
 }
 
 /* ------------------------------------------------------------------ */

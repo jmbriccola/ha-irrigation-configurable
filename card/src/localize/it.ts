@@ -22,6 +22,17 @@ export const it: Record<keyof typeof en, string> = {
   "panel.no_programs": "Nessun programma configurato ancora.",
   "panel.per_day_minutes": "Durata diversa per giorno",
   "panel.minutes_value": "{min} min",
+  "panel.edit_program": "Modifica",
+  "panel.weather_line": "Oggi ({day}) ≈ {min} min. Salta se piove.",
+
+  // Editor programma (pannello)
+  "program_editor.days": "Giorni",
+  "program_editor.start": "Orario di partenza",
+  "program_editor.start_fixed": "Ora fissa",
+  "program_editor.start_sunrise": "Alba",
+  "program_editor.start_sunset": "Tramonto",
+  "program_editor.duration_per_day": "Durata per giorno",
+  "program_editor.same_duration": "Stessa durata per tutti i giorni",
 
   // Intestazione
   "header.water_budget": "Budget idrico",
