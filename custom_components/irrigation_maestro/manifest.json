@@ -3,7 +3,7 @@
   "name": "Irrigation Maestro",
   "codeowners": ["@jmbriccola"],
   "config_flow": true,
-  "dependencies": ["http", "lovelace"],
+  "dependencies": ["frontend", "http", "lovelace", "panel_custom"],
   "documentation": "https://github.com/jmbriccola/ha-irrigation-configurable",
   "integration_type": "hub",
   "iot_class": "calculated",

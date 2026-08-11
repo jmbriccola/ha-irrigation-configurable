@@ -157,3 +157,4 @@ PRESET_LAWN_ID: Final = "preset_lawn"
 # Frontend
 FRONTEND_URL_BASE: Final = f"/{DOMAIN}/frontend"
 CARD_FILENAME: Final = "irrigation-maestro-card.js"
+PANEL_FILENAME: Final = "irrigation-maestro-panel.js"
