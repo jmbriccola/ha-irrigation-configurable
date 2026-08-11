@@ -48,11 +48,22 @@ export class ImcProgramList extends LitElement {
   @state() private _editingId?: string;
   @state() private _wizardOpen = false;
 
-  /** Closing the wizard/editor on zone switch avoids a stale add-program
-   *  flow (targeting the previous zone) surviving a tab change. */
+  /**
+   * Closing the wizard on zone switch avoids a stale add-program flow
+   * (targeting the previous zone) surviving a tab change. `panel.ts` calls
+   * `discover(hass)` fresh on every re-render and builds a brand-new
+   * `ZoneBundle` object each time, so `changed.has("zone")` fires on
+   * essentially every re-render (any relevant maestro entity tick), not
+   * just an actual tab switch — gate on the stable `zoneId` actually
+   * changing, not object identity, the same way `program-editor.ts` seeds
+   * off `cycle.cycle_id` rather than the `cycle` object reference.
+   */
   protected override willUpdate(changed: PropertyValues<this>): void {
     if (changed.has("zone")) {
-      this._wizardOpen = false;
+      const prev = changed.get("zone") as ZoneBundle | undefined;
+      if (prev && prev.zoneId !== this.zone?.zoneId) {
+        this._wizardOpen = false;
+      }
     }
   }
 

@@ -1,7 +1,7 @@
 import { css, html, LitElement, nothing } from "lit";
 import type { TemplateResult } from "lit";
 import { property, state } from "lit/decorators.js";
-import { WEEKDAYS, effectiveMinutes, everyDay, toggleWeekday, weekdayLabels } from "../schedule-math";
+import { WEEKDAYS, effectiveMinutes, toggleWeekday, weekdayLabels } from "../schedule-math";
 import { localize, pickLanguage } from "../localize/localize";
 import { clamp, defineElement } from "../types";
 import type { HomeAssistant } from "../types";
@@ -338,7 +338,7 @@ export class ImcProgramWizard extends LitElement {
       </div>
       <div class="presets">
         <span
-          class="preset ${everyDay(this._days) ? "sel" : ""}"
+          class="preset ${this._days.length === 7 ? "sel" : ""}"
           @click=${() => (this._days = [...WEEKDAYS])}
         >
           ${localize(lang, "wizard.preset_every_day")}
