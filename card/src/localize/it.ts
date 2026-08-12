@@ -307,5 +307,11 @@ export const it: Record<keyof typeof en, string> = {
   "settings.master_pre_open_s_hint": "Secondi di anticipo con cui la valvola master apre. Default 0.",
   "settings.master_post_close_s": "Post-chiusura master",
   "settings.master_post_close_s_hint": "Secondi in cui la valvola master resta aperta dopo la zona. Default 0.",
+  "program_editor.soak_max_run": "Durata massima per corsa",
+  "program_editor.soak_max_run_hint": "Minuti. Divide l'irrigazione in corse più brevi perché il terreno assorba fra una e l'altra. Vuoto = una corsa continua.",
+  "program_editor.soak_pause": "Pausa di ammollo",
+  "program_editor.soak_pause_hint": "Minuti di attesa fra una corsa e l'altra. Senza una durata massima per corsa non ha alcun effetto.",
+  "program_editor.volume_safety_timeout": "Timeout di sicurezza volumetrico",
+  "program_editor.volume_safety_timeout_hint": "Minuti dopo i quali una corsa a volume si ferma anche se il contatore non ha raggiunto il target.",
   "settings.advanced_note": "Parametri avanzati (motore, sicurezza, notifiche) → Impostazioni",
 };

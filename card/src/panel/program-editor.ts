@@ -41,6 +41,23 @@ function toggleMonth(months: number[], month: number): number[] {
     : [...months, month].sort((a, b) => a - b);
 }
 
+export interface AdvancedInput {
+  soakMaxRunMin?: number;
+  soakPauseMin?: number;
+  volumeSafetyTimeoutMin?: number;
+}
+
+/** Absent means unchanged, matching set_program_advanced. Zero is a value. */
+export function buildAdvancedPatch(input: AdvancedInput): Record<string, unknown> {
+  const patch: Record<string, unknown> = {};
+  if (input.soakMaxRunMin !== undefined) patch["soak_max_run_min"] = input.soakMaxRunMin;
+  if (input.soakPauseMin !== undefined) patch["soak_pause_min"] = input.soakPauseMin;
+  if (input.volumeSafetyTimeoutMin !== undefined) {
+    patch["volume_safety_timeout_min"] = input.volumeSafetyTimeoutMin;
+  }
+  return patch;
+}
+
 export interface ProgramStartDetail {
   kind: "time" | "sun";
   at?: string;
@@ -113,6 +130,7 @@ export class ImcProgramEditor extends LitElement {
   @state() private _dayMinutes: Record<string, number> = {};
   @state() private _sameForAll = true;
   @state() private _advancedOpen = false;
+  @state() private _advanced: AdvancedInput = {};
 
   private _seededCycleId?: string;
 
@@ -345,6 +363,11 @@ export class ImcProgramEditor extends LitElement {
     const cycle = this.cycle;
     if (!cycle) return;
     this._calendar = normaliseCalendar(cycle.calendar);
+    this._advanced = {
+      soakMaxRunMin: cycle.soak_max_run_min,
+      soakPauseMin: cycle.soak_pause_min,
+      volumeSafetyTimeoutMin: cycle.volume_safety_timeout_min,
+    };
     this._seasonMonths = [...(cycle.season_months ?? [])];
 
     const trigger = cycle.trigger;
@@ -466,6 +489,56 @@ export class ImcProgramEditor extends LitElement {
 
   private _renderAdvanced(lang: string): TemplateResult {
     return html`
+      <div class="section-label">${localize(lang, "program_editor.soak_max_run")}</div>
+      <input
+        class="field"
+        type="number"
+        min="1"
+        .value=${this._advanced.soakMaxRunMin ?? ""}
+        @input=${(e: Event) =>
+          (this._advanced = {
+            ...this._advanced,
+            soakMaxRunMin: asNumber((e.target as HTMLInputElement).value),
+          })}
+      />
+      <div class="hint">${localize(lang, "program_editor.soak_max_run_hint")}</div>
+
+      <div class="section-label">${localize(lang, "program_editor.soak_pause")}</div>
+      <input
+        class="field"
+        type="number"
+        min="0"
+        .value=${this._advanced.soakPauseMin ?? ""}
+        @input=${(e: Event) =>
+          (this._advanced = {
+            ...this._advanced,
+            soakPauseMin: asNumber((e.target as HTMLInputElement).value),
+          })}
+      />
+      <div class="hint">${localize(lang, "program_editor.soak_pause_hint")}</div>
+
+      ${this._isVolume
+        ? html`
+            <div class="section-label">
+              ${localize(lang, "program_editor.volume_safety_timeout")}
+            </div>
+            <input
+              class="field"
+              type="number"
+              min="1"
+              .value=${this._advanced.volumeSafetyTimeoutMin ?? ""}
+              @input=${(e: Event) =>
+                (this._advanced = {
+                  ...this._advanced,
+                  volumeSafetyTimeoutMin: asNumber((e.target as HTMLInputElement).value),
+                })}
+            />
+            <div class="hint">
+              ${localize(lang, "program_editor.volume_safety_timeout_hint")}
+            </div>
+          `
+        : nothing}
+
       <div class="section-label">${localize(lang, "panel.heat_response")}</div>
       <imc-curve-editor
         .cycle=${this.cycle}
@@ -633,6 +706,17 @@ export class ImcProgramEditor extends LitElement {
         composed: true,
       }),
     );
+
+    const advanced = buildAdvancedPatch(this._advanced);
+    if (Object.keys(advanced).length > 0) {
+      this.dispatchEvent(
+        new CustomEvent("imc-program-save-advanced", {
+          detail: { zoneId, programId, patch: advanced },
+          bubbles: true,
+          composed: true,
+        }),
+      );
+    }
 
     // Volume-mode programs have no minutes to save here — the backend
     // rejects set_program_minutes for a volume curve (simple_curve_on_volume).

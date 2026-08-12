@@ -124,6 +124,9 @@ export interface CalendarInfo {
 }
 
 export interface CycleInfo {
+  soak_max_run_min?: number;
+  soak_pause_min?: number;
+  volume_safety_timeout_min?: number;
   calendar?: CalendarInfo;
   season_months?: number[];
   cycle_id?: string;
