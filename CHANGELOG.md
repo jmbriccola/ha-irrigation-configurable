@@ -4,6 +4,16 @@ All notable changes to this project are documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.3.1] - 2026-08-12
+
+### Added
+
+- The **"Irrigazione" panel now shows a success confirmation toast** after
+  saving — zone create/edit, zone delete, and each of the three settings
+  saves (weather & sensors, consumption budget, calendar restrictions) — the
+  same place the existing error toast already appears, so a save that
+  worked is now as visible as one that didn't.
+
 ## [1.3.0] - 2026-08-12
 
 ### Added

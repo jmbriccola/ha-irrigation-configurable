@@ -254,8 +254,8 @@ let B = class extends HTMLElement {
 };
 B.elementStyles = [], B.shadowRootOptions = { mode: "open" }, B[ie("elementProperties")] = /* @__PURE__ */ new Map(), B[ie("finalized")] = /* @__PURE__ */ new Map(), Tt?.({ ReactiveElement: B }), (fe.reactiveElementVersions ??= []).push("2.1.2");
 const Te = globalThis, Be = (n) => n, _e = Te.trustedTypes, Ve = _e ? _e.createPolicy("lit-html", { createHTML: (n) => n }) : void 0, rt = "$lit$", M = `lit$${Math.random().toFixed(9).slice(2)}$`, lt = "?" + M, Mt = `<${lt}>`, H = document, ne = () => H.createComment(""), se = (n) => n === null || typeof n != "object" && typeof n != "function", Me = Array.isArray, Nt = (n) => Me(n) || typeof n?.[Symbol.iterator] == "function", xe = `[ 	
-\f\r]`, J = /<(?:(!--|\/[^a-zA-Z])|(\/?[a-zA-Z][^>\s]*)|(\/?$))/g, We = /-->/g, Ge = />/g, O = RegExp(`>|${xe}(?:([^\\s"'>=/]+)(${xe}*=${xe}*(?:[^ 	
-\f\r"'\`<>=]|("|')|))|$)`, "g"), Ze = /'/g, Qe = /"/g, dt = /^(?:script|style|textarea|title)$/i, ct = (n) => (e, ...t) => ({ _$litType$: n, strings: e, values: t }), u = ct(1), D = ct(2), Z = /* @__PURE__ */ Symbol.for("lit-noChange"), c = /* @__PURE__ */ Symbol.for("lit-nothing"), Ke = /* @__PURE__ */ new WeakMap(), R = H.createTreeWalker(H, 129);
+\f\r]`, J = /<(?:(!--|\/[^a-zA-Z])|(\/?[a-zA-Z][^>\s]*)|(\/?$))/g, We = /-->/g, Ze = />/g, O = RegExp(`>|${xe}(?:([^\\s"'>=/]+)(${xe}*=${xe}*(?:[^ 	
+\f\r"'\`<>=]|("|')|))|$)`, "g"), Ge = /'/g, Qe = /"/g, dt = /^(?:script|style|textarea|title)$/i, ct = (n) => (e, ...t) => ({ _$litType$: n, strings: e, values: t }), u = ct(1), D = ct(2), G = /* @__PURE__ */ Symbol.for("lit-noChange"), c = /* @__PURE__ */ Symbol.for("lit-nothing"), Ke = /* @__PURE__ */ new WeakMap(), R = H.createTreeWalker(H, 129);
 function ut(n, e) {
   if (!Me(n) || !n.hasOwnProperty("raw")) throw Error("invalid template strings array");
   return Ve !== void 0 ? Ve.createHTML(e) : e;
@@ -266,7 +266,7 @@ const Pt = (n, e) => {
   for (let l = 0; l < t; l++) {
     const r = n[l];
     let p, h, m = -1, _ = 0;
-    for (; _ < r.length && (a.lastIndex = _, h = a.exec(r), h !== null); ) _ = a.lastIndex, a === J ? h[1] === "!--" ? a = We : h[1] !== void 0 ? a = Ge : h[2] !== void 0 ? (dt.test(h[2]) && (i = RegExp("</" + h[2], "g")), a = O) : h[3] !== void 0 && (a = O) : a === O ? h[0] === ">" ? (a = i ?? J, m = -1) : h[1] === void 0 ? m = -2 : (m = a.lastIndex - h[2].length, p = h[1], a = h[3] === void 0 ? O : h[3] === '"' ? Qe : Ze) : a === Qe || a === Ze ? a = O : a === We || a === Ge ? a = J : (a = O, i = void 0);
+    for (; _ < r.length && (a.lastIndex = _, h = a.exec(r), h !== null); ) _ = a.lastIndex, a === J ? h[1] === "!--" ? a = We : h[1] !== void 0 ? a = Ze : h[2] !== void 0 ? (dt.test(h[2]) && (i = RegExp("</" + h[2], "g")), a = O) : h[3] !== void 0 && (a = O) : a === O ? h[0] === ">" ? (a = i ?? J, m = -1) : h[1] === void 0 ? m = -2 : (m = a.lastIndex - h[2].length, p = h[1], a = h[3] === void 0 ? O : h[3] === '"' ? Qe : Ge) : a === Qe || a === Ge ? a = O : a === We || a === Ze ? a = J : (a = O, i = void 0);
     const g = a === O && n[l + 1].startsWith("/>") ? " " : "";
     s += a === J ? r + Mt : m >= 0 ? (o.push(p), r.slice(0, m) + rt + r.slice(m) + M + g) : r + M + (m === -2 ? l : g);
   }
@@ -310,7 +310,7 @@ class ae {
   }
 }
 function Q(n, e, t = n, o) {
-  if (e === Z) return e;
+  if (e === G) return e;
   let i = o !== void 0 ? t._$Co?.[o] : t._$Cl;
   const s = se(e) ? void 0 : e._$litDirective$;
   return i?.constructor !== s && (i?._$AO?.(!1), s === void 0 ? i = void 0 : (i = new s(n), i._$AT(n, t, o)), o !== void 0 ? (t._$Co ??= [])[o] = i : t._$Cl = i), i !== void 0 && (e = Q(n, i._$AS(n, e.values), i, o)), e;
@@ -362,7 +362,7 @@ class le {
     return this._$AB;
   }
   _$AI(e, t = this) {
-    e = Q(this, e, t), se(e) ? e === c || e == null || e === "" ? (this._$AH !== c && this._$AR(), this._$AH = c) : e !== this._$AH && e !== Z && this._(e) : e._$litType$ !== void 0 ? this.$(e) : e.nodeType !== void 0 ? this.T(e) : Nt(e) ? this.k(e) : this._(e);
+    e = Q(this, e, t), se(e) ? e === c || e == null || e === "" ? (this._$AH !== c && this._$AR(), this._$AH = c) : e !== this._$AH && e !== G && this._(e) : e._$litType$ !== void 0 ? this.$(e) : e.nodeType !== void 0 ? this.T(e) : Nt(e) ? this.k(e) : this._(e);
   }
   O(e) {
     return this._$AA.parentNode.insertBefore(e, this._$AB);
@@ -415,11 +415,11 @@ class ve {
   _$AI(e, t = this, o, i) {
     const s = this.strings;
     let a = !1;
-    if (s === void 0) e = Q(this, e, t, 0), a = !se(e) || e !== this._$AH && e !== Z, a && (this._$AH = e);
+    if (s === void 0) e = Q(this, e, t, 0), a = !se(e) || e !== this._$AH && e !== G, a && (this._$AH = e);
     else {
       const l = e;
       let r, p;
-      for (e = s[0], r = 0; r < s.length - 1; r++) p = Q(this, l[o + r], t, r), p === Z && (p = this._$AH[r]), a ||= !se(p) || p !== this._$AH[r], p === c ? e = c : e !== c && (e += (p ?? "") + s[r + 1]), this._$AH[r] = p;
+      for (e = s[0], r = 0; r < s.length - 1; r++) p = Q(this, l[o + r], t, r), p === G && (p = this._$AH[r]), a ||= !se(p) || p !== this._$AH[r], p === c ? e = c : e !== c && (e += (p ?? "") + s[r + 1]), this._$AH[r] = p;
     }
     a && !i && this.j(e);
   }
@@ -448,7 +448,7 @@ class Rt extends ve {
     super(e, t, o, i, s), this.type = 5;
   }
   _$AI(e, t = this) {
-    if ((e = Q(this, e, t, 0) ?? c) === Z) return;
+    if ((e = Q(this, e, t, 0) ?? c) === G) return;
     const o = this._$AH, i = e === c && o !== c || e.capture !== o.capture || e.once !== o.once || e.passive !== o.passive, s = e !== c && (o === c || i);
     i && this.element.removeEventListener(this.name, this, o), s && this.element.addEventListener(this.name, this, e), this._$AH = e;
   }
@@ -498,7 +498,7 @@ class S extends B {
     super.disconnectedCallback(), this._$Do?.setConnected(!1);
   }
   render() {
-    return Z;
+    return G;
   }
 }
 S._$litElement$ = !0, S.finalized = !0, Ne.litElementHydrateSupport?.({ LitElement: S });
@@ -640,6 +640,9 @@ const C = {
   "panel.budget_ok": "water budget OK",
   "panel.budget_low": "water budget low",
   "panel.config_read_failed": "Couldn't read the current configuration.",
+  "panel.saved_settings": "Settings saved",
+  "panel.saved_zone": "Zone saved",
+  "panel.removed_zone": "Zone deleted",
   // Program editor (panel)
   "program_editor.days": "Days",
   "program_editor.start": "When does it start?",
@@ -842,7 +845,7 @@ const C = {
   "settings.parity_even": "Even",
   "settings.forbidden_windows": "Forbidden windows",
   "settings.advanced_note": "Advanced parameters (engine, safety, notifications) live in Settings"
-}, Gt = {
+}, Zt = {
   // Messaggi a livello di scheda
   "card.name": "Scheda Irrigation Maestro",
   "card.description": "Panoramica e controllo dell'integrazione Irrigation Maestro: bilancio idrico, zone, coda e curve.",
@@ -868,6 +871,9 @@ const C = {
   "panel.budget_ok": "budget acqua OK",
   "panel.budget_low": "budget acqua basso",
   "panel.config_read_failed": "Impossibile leggere la configurazione attuale.",
+  "panel.saved_settings": "Impostazioni salvate",
+  "panel.saved_zone": "Zona salvata",
+  "panel.removed_zone": "Zona eliminata",
   // Editor programma (pannello)
   "program_editor.days": "Giorni",
   "program_editor.start": "Orario di partenza",
@@ -1072,13 +1078,13 @@ const C = {
   "settings.advanced_note": "Parametri avanzati (motore, sicurezza, notifiche) → Impostazioni"
 }, be = {
   en: C,
-  it: Gt
+  it: Zt
 };
 function ht(n) {
   const t = (n?.locale?.language ?? n?.language ?? "en").toLowerCase().split(/[-_]/)[0] ?? "en";
   return t in be ? t : "en";
 }
-function Zt(n, e) {
+function Gt(n, e) {
   return e ? n.replace(/\{(\w+)\}/g, (t, o) => {
     const i = e[o];
     return i === void 0 ? t : String(i);
@@ -1086,7 +1092,7 @@ function Zt(n, e) {
 }
 function d(n, e, t) {
   const o = be[n] ?? C;
-  return Zt(o[e] ?? C[e], t);
+  return Gt(o[e] ?? C[e], t);
 }
 function oe(n, e, t) {
   const o = `${e}.${t}`, i = be[n] ?? C, s = C;
@@ -1203,7 +1209,7 @@ function ot(n, e) {
     [W, n + e]
   ];
 }
-function G(n, e, t, o) {
+function Z(n, e, t, o) {
   const i = n[0], s = n[n.length - 1];
   let a;
   if (!i || !s)
@@ -1227,7 +1233,7 @@ function G(n, e, t, o) {
   return t !== void 0 && (a = Math.max(a, t)), o !== void 0 && (a = Math.min(a, o)), a;
 }
 function it(n, e, t) {
-  const o = G(n, U, e, t), i = G(n, W, e, t);
+  const o = Z(n, U, e, t), i = Z(n, W, e, t);
   return {
     amount: tt(N(o), mt, _t),
     heat: tt(N(i - o), gt, ft)
@@ -1349,9 +1355,9 @@ const we = 320, z = 170, ee = 34, st = 12, te = 16, A = 24, pe = 5, ze = 40, Oe 
     if (t.length === 0) return;
     const o = f(e?.min) ?? 1, i = f(e?.max) ?? 120, { amount: s, heat: a } = it(t, o, i);
     this._amount = s, this._heat = a, this._min = o, this._max = i, this._dragged = !1, this._points = [
-      [V, N(G(t, V))],
-      [U, N(G(t, U))],
-      [W, N(G(t, W))]
+      [V, N(Z(t, V))],
+      [U, N(Z(t, U))],
+      [W, N(Z(t, W))]
     ];
   }
   _regen() {
@@ -1364,7 +1370,7 @@ const we = 320, z = 170, ee = 34, st = 12, te = 16, A = 24, pe = 5, ze = 40, Oe 
     this._heat = Number(e.target.value), this._regen();
   }
   _clampedValue(e) {
-    return N(G(this._points, e, this._min, this._max));
+    return N(Z(this._points, e, this._min, this._max));
   }
   _sx(e) {
     return ee + (e - pe) / (ze - pe) * (we - ee - st);

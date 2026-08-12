@@ -35,6 +35,9 @@ export const it: Record<keyof typeof en, string> = {
   "panel.budget_ok": "budget acqua OK",
   "panel.budget_low": "budget acqua basso",
   "panel.config_read_failed": "Impossibile leggere la configurazione attuale.",
+  "panel.saved_settings": "Impostazioni salvate",
+  "panel.saved_zone": "Zona salvata",
+  "panel.removed_zone": "Zona eliminata",
 
   // Editor programma (pannello)
   "program_editor.days": "Giorni",

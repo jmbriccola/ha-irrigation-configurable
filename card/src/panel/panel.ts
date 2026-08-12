@@ -39,6 +39,7 @@ export class IrrigationMaestroPanel extends LitElement {
   @property({ type: Boolean }) narrow = false;
   @state() private _selectedZoneId?: string;
   @state() private _error?: string;
+  @state() private _notice?: string;
   // undefined = zone-list view, null = create-new, ZoneData = editing an
   // existing zone (seeded from a fresh `export_config` read — see
   // `_readConfig`/`_onEditZone` below).
@@ -53,12 +54,17 @@ export class IrrigationMaestroPanel extends LitElement {
   private _relevantIds: string[] = [];
   private _statesCount = 0;
   private _errorTimer?: number;
+  private _noticeTimer?: number;
 
   public override disconnectedCallback(): void {
     super.disconnectedCallback();
     if (this._errorTimer !== undefined) {
       window.clearTimeout(this._errorTimer);
       this._errorTimer = undefined;
+    }
+    if (this._noticeTimer !== undefined) {
+      window.clearTimeout(this._noticeTimer);
+      this._noticeTimer = undefined;
     }
   }
 
@@ -97,6 +103,21 @@ export class IrrigationMaestroPanel extends LitElement {
       this._error = undefined;
       this._errorTimer = undefined;
     }, 6000);
+  }
+
+  /** Surface a message in the `_notice` toast, auto-dismissed after 3s — the
+   *  success-side counterpart to `_showError` above, called after a save
+   *  actually succeeds (never on failure — the `_error` toast already covers
+   *  that). */
+  private _showNotice(message: string): void {
+    this._notice = message;
+    if (this._noticeTimer !== undefined) {
+      window.clearTimeout(this._noticeTimer);
+    }
+    this._noticeTimer = window.setTimeout(() => {
+      this._notice = undefined;
+      this._noticeTimer = undefined;
+    }, 3000);
   }
 
   /**
@@ -187,14 +208,20 @@ export class IrrigationMaestroPanel extends LitElement {
     if (success) {
       this._editingZone = undefined;
       this._editingZoneId = undefined;
+      this._showNotice(localize(pickLanguage(this.hass), "panel.saved_zone"));
     }
   }
 
   private async _onZoneRemove(ev: CustomEvent<ZoneRemoveDetail>): Promise<void> {
-    await this._call("irrigation_maestro", "remove_zone", { zone_id: ev.detail.zoneId });
+    const res = await this._call("irrigation_maestro", "remove_zone", {
+      zone_id: ev.detail.zoneId,
+    });
     this._editingZone = undefined;
     this._editingZoneId = undefined;
     this._selectedZoneId = undefined;
+    if (res) {
+      this._showNotice(localize(pickLanguage(this.hass), "panel.removed_zone"));
+    }
   }
 
   private _onZoneCancel(): void {
@@ -209,16 +236,29 @@ export class IrrigationMaestroPanel extends LitElement {
    * straight into the service call — no field renaming needed here, unlike
    * e.g. `_onCurveSave` above.
    */
-  private _onSaveWeather(ev: CustomEvent<WeatherSaveDetail>): void {
-    void this._call("irrigation_maestro", "set_weather_sources", { ...ev.detail });
+  private async _onSaveWeather(ev: CustomEvent<WeatherSaveDetail>): Promise<void> {
+    const result = await this._call("irrigation_maestro", "set_weather_sources", {
+      ...ev.detail,
+    });
+    if (result !== undefined) {
+      this._showNotice(localize(pickLanguage(this.hass), "panel.saved_settings"));
+    }
   }
 
-  private _onSaveBudget(ev: CustomEvent<BudgetSaveDetail>): void {
-    void this._call("irrigation_maestro", "set_consumption_budget", { ...ev.detail });
+  private async _onSaveBudget(ev: CustomEvent<BudgetSaveDetail>): Promise<void> {
+    const result = await this._call("irrigation_maestro", "set_consumption_budget", {
+      ...ev.detail,
+    });
+    if (result !== undefined) {
+      this._showNotice(localize(pickLanguage(this.hass), "panel.saved_settings"));
+    }
   }
 
-  private _onSaveRestrictions(ev: CustomEvent<RestrictionsSaveDetail>): void {
-    void this._call("irrigation_maestro", "set_restrictions", { ...ev.detail });
+  private async _onSaveRestrictions(ev: CustomEvent<RestrictionsSaveDetail>): Promise<void> {
+    const result = await this._call("irrigation_maestro", "set_restrictions", { ...ev.detail });
+    if (result !== undefined) {
+      this._showNotice(localize(pickLanguage(this.hass), "panel.saved_settings"));
+    }
   }
 
   private _onSettingsBack(): void {
@@ -454,7 +494,25 @@ export class IrrigationMaestroPanel extends LitElement {
       color: var(--text-primary-color, #fff);
       overflow-wrap: anywhere;
     }
+    .notice {
+      margin: 0 0 12px;
+      padding: 8px 10px;
+      border-radius: 6px;
+      font-size: 12px;
+      background: var(--success-color, #1f9d55);
+      color: var(--text-primary-color, #fff);
+      overflow-wrap: anywhere;
+    }
   `;
+
+  /** Error + success toasts, rendered together at the same spot in every
+   *  render branch below — see `_showError`/`_showNotice`. */
+  private _renderToasts(): TemplateResult {
+    return html`
+      ${this._error ? html`<div class="error">${this._error}</div>` : nothing}
+      ${this._notice ? html`<div class="notice">${this._notice}</div>` : nothing}
+    `;
+  }
 
   override render(): TemplateResult {
     const hass = this.hass;
@@ -480,7 +538,7 @@ export class IrrigationMaestroPanel extends LitElement {
           @imc-zone-cancel=${this._onZoneCancel}
         >
           <header><h1>${localize(lang, "panel.title")}</h1></header>
-          ${this._error ? html`<div class="error">${this._error}</div>` : nothing}
+          ${this._renderToasts()}
           <imc-zone-editor
             .hass=${hass}
             .zone=${this._editingZone ?? undefined}
@@ -507,7 +565,7 @@ export class IrrigationMaestroPanel extends LitElement {
           @imc-settings-back=${this._onSettingsBack}
         >
           <header><h1>${localize(lang, "panel.title")}</h1></header>
-          ${this._error ? html`<div class="error">${this._error}</div>` : nothing}
+          ${this._renderToasts()}
           <imc-settings-view .hass=${hass} .options=${this._options ?? {}}></imc-settings-view>
         </div>
       `;
@@ -522,7 +580,7 @@ export class IrrigationMaestroPanel extends LitElement {
               ⚙️ ${localize(lang, "settings.title")}
             </span>
           </header>
-          ${this._error ? html`<div class="error">${this._error}</div>` : nothing}
+          ${this._renderToasts()}
           <div class="empty">${localize(lang, "panel.no_zones")}</div>
           <div class="tabs">
             <div
@@ -563,7 +621,7 @@ export class IrrigationMaestroPanel extends LitElement {
           </span>
         </header>
         ${this._renderWeatherContext(model, lang, weightedTemp)}
-        ${this._error ? html`<div class="error">${this._error}</div>` : nothing}
+        ${this._renderToasts()}
         <div class="tabs">
           ${model.zones.map(
             (z) => html`

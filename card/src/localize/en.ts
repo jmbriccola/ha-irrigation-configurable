@@ -33,6 +33,9 @@ export const en = {
   "panel.budget_ok": "water budget OK",
   "panel.budget_low": "water budget low",
   "panel.config_read_failed": "Couldn't read the current configuration.",
+  "panel.saved_settings": "Settings saved",
+  "panel.saved_zone": "Zone saved",
+  "panel.removed_zone": "Zone deleted",
 
   // Program editor (panel)
   "program_editor.days": "Days",
