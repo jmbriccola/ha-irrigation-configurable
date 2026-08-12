@@ -9,6 +9,7 @@ import { discover, type MaestroModel, type ZoneBundle } from "../discovery";
 import "./program-list";
 import "./zone-editor";
 import "./settings-view";
+import { type CalendarConfig } from "./calendar-editor";
 import type {
   ProgramCurveSaveDetail,
   ProgramMinutesSaveDetail,
@@ -28,6 +29,21 @@ import {
   type HubOptions,
   type ZoneData,
 } from "./config-read";
+
+/**
+ * Only the fields of the chosen mode travel: the service rebuilds the whole
+ * calendar from them and writes it as one object, so switching mode can never
+ * leave residue from the previous one.
+ */
+function calendarFields(calendar: CalendarConfig): Record<string, unknown> {
+  if (calendar.mode === "interval") {
+    return { calendar_mode: "interval", interval_days: calendar.interval_days };
+  }
+  if (calendar.mode === "parity") {
+    return { calendar_mode: "parity", parity: calendar.parity };
+  }
+  return { calendar_mode: "weekdays", days: calendar.days };
+}
 
 /**
  * Sidebar panel shell: zone tabs + the selected zone's read-only program
@@ -267,10 +283,14 @@ export class IrrigationMaestroPanel extends LitElement {
 
   private _onSaveSchedule(ev: CustomEvent<ProgramScheduleSaveDetail>): void {
     const d = ev.detail;
+    // Exactly the fields of the chosen mode travel: the service rebuilds the
+    // calendar from them and writes it whole, so switching mode can never
+    // leave residue from the previous one.
     void this._call("irrigation_maestro", "set_program_schedule", {
       zone_id: d.zoneId,
       program_id: d.programId,
-      days: d.days,
+      ...calendarFields(d.calendar),
+      ...(d.seasonMonths ? { season_months: d.seasonMonths } : {}),
       start_kind: d.start.kind,
       ...(d.start.kind === "time"
         ? { start_time: d.start.at }
@@ -343,7 +363,7 @@ export class IrrigationMaestroPanel extends LitElement {
     await this._call("irrigation_maestro", "set_program_schedule", {
       zone_id: d.zoneId,
       program_id: programId,
-      days: d.days,
+      ...calendarFields(d.calendar),
       start_kind: d.start.kind,
       ...(d.start.kind === "time"
         ? { start_time: d.start.at }

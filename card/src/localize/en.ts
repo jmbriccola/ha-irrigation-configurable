@@ -95,6 +95,9 @@ export const en = {
   "reason.cold_day": "Too cold",
   "reason.wind": "Too windy",
   "reason.budget_sufficient": "Water budget sufficient",
+  "program_editor.calendar": "Calendar",
+  "program_editor.season": "Season (empty = all year as configured on the hub)",
+  "reason.calendar_not_today": "Not a watering day",
   "reason.not_due": "Not due yet",
   "reason.calendar_restricted": "Calendar restriction",
   "reason.zone_disabled": "Zone disabled",
@@ -254,6 +257,7 @@ export const en = {
   "settings.parity_all": "All",
   "settings.parity_odd": "Odd",
   "settings.parity_even": "Even",
+  "settings.restrictions_hours_only": "Forbidden hours only. Which days a zone waters is set on each program's calendar.",
   "settings.forbidden_windows": "Forbidden windows",
   "settings.advanced_note": "Advanced parameters (engine, safety, notifications) live in Settings",
 } as const;

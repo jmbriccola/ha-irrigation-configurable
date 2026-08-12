@@ -36,9 +36,7 @@ export interface ZoneSaveDetail {
     flow_tolerance_pct?: number;
     adjustment_pct?: number;
     order?: number;
-    interval_days?: number;
     compatibility_group?: string;
-    season_months?: number[];
   };
 }
 
@@ -71,9 +69,7 @@ export class ImcZoneEditor extends LitElement {
   @state() private _flowTolerancePct?: number;
   @state() private _adjustmentPct?: number;
   @state() private _order?: number;
-  @state() private _intervalDays?: number;
   @state() private _compatibilityGroup = "";
-  @state() private _seasonMonths: number[] = [];
   @state() private _advancedOpen = false;
 
   private _seededZoneId?: string;
@@ -184,9 +180,7 @@ export class ImcZoneEditor extends LitElement {
     this._flowTolerancePct = zone?.flow_tolerance_pct;
     this._adjustmentPct = zone?.adjustment_pct;
     this._order = zone?.order;
-    this._intervalDays = zone?.interval_days;
     this._compatibilityGroup = zone?.compatibility_group ?? "";
-    this._seasonMonths = zone?.season_months ? [...zone.season_months] : [];
     this._advancedOpen = false;
   }
 
@@ -317,33 +311,6 @@ export class ImcZoneEditor extends LitElement {
         @input=${(e: Event) => (this._order = asNumber((e.target as HTMLInputElement).value))}
       />
 
-      <div class="section-label">${localize(lang, "zone.field_interval")}</div>
-      <input
-        class="field"
-        type="number"
-        min="1"
-        max="60"
-        step="1"
-        .value=${this._intervalDays ?? ""}
-        @input=${(e: Event) =>
-          (this._intervalDays = asNumber((e.target as HTMLInputElement).value))}
-      />
-
-      <div class="section-label">${localize(lang, "zone.field_season")}</div>
-      <div class="months">
-        ${monthLabels(lang).map((lbl, i) => {
-          const m = i + 1;
-          return html`
-            <div
-              class="month ${this._seasonMonths.includes(m) ? "on" : ""}"
-              @click=${() => (this._seasonMonths = this._toggleMonth(m))}
-            >
-              ${lbl}
-            </div>
-          `;
-        })}
-      </div>
-
       <div class="section-label">${localize(lang, "zone.field_group")}</div>
       <input
         class="field"
@@ -353,13 +320,6 @@ export class ImcZoneEditor extends LitElement {
           (this._compatibilityGroup = (e.target as HTMLInputElement).value)}
       />
     `;
-  }
-
-  private _toggleMonth(month: number): number[] {
-    const set = new Set(this._seasonMonths);
-    if (set.has(month)) set.delete(month);
-    else set.add(month);
-    return [...set].sort((a, b) => a - b);
   }
 
   private _save(): void {
@@ -383,11 +343,9 @@ export class ImcZoneEditor extends LitElement {
       }
       if (this._adjustmentPct !== undefined) patch.adjustment_pct = this._adjustmentPct;
       if (this._order !== undefined) patch.order = this._order;
-      if (this._intervalDays !== undefined) patch.interval_days = this._intervalDays;
       if (this._compatibilityGroup.trim() !== "") {
         patch.compatibility_group = this._compatibilityGroup.trim();
       }
-      if (this._seasonMonths.length > 0) patch.season_months = [...this._seasonMonths];
     }
 
     this.dispatchEvent(
