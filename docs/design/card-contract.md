@@ -137,19 +137,33 @@ automations, YAML-driven setups, or bulk changes:
 | `set_consumption_budget` | `liters_per_month` (optional; omitted/zero disables the budget), `action` (required: notify/reduce/suspend), `reduce_pct` (1-100, used when action is reduce) |
 | `set_restrictions` | `allowed_weekdays` (list of 0-6, empty = every day), `parity` (odd/even/none), `forbidden_windows` (list of `{start, end}` time-of-day pairs) |
 
-- `add_zone` creates the zone with a default program (every day, sunrise
-  start, 15′ mild + 8′ hot boost) — the same seed the config flow's zone
-  wizard uses — and returns the new zone's id (the `zone_id` attribute above)
-  as its service response.
+- `add_zone` seeds the new zone with one sensible default program (a
+  duration curve of about 15 min on a mild day, +8 on a hot day, running
+  every day at sunrise) so the zone is immediately valid and usable; the
+  user then edits it. This is **not** the config flow's interactive zone
+  wizard — that wizard is a multi-step form whose curve step defaults to
+  the "Preset: potted plants" template instead. `add_zone` returns the new
+  zone's id (the `zone_id` attribute above) as its service response.
 - `update_zone` and `remove_zone` mirror the "Edit zone" and zone-removal
   paths of the config flow's zone subentry, but as a single service call
-  instead of a multi-step wizard.
+  instead of a multi-step wizard. `update_zone` **patches**: only the
+  fields passed in the call are changed, everything else on the zone is
+  left as-is.
 - `set_weather_sources`, `set_consumption_budget` and `set_restrictions`
-  patch the hub's options in place — `set_weather_sources` requires
-  `weather_entity` on every call (the hub always needs one); the optional
-  sensor/valve fields on it follow the merge rule used by `_write_hub_options`:
-  present and non-empty sets the value, present and empty clears it, and
-  omitting the field entirely leaves the current value unchanged.
+  patch the hub's options in place, but with different write semantics per
+  service:
+  - `set_weather_sources` **merges**: `weather_entity` is required on
+    every call (the hub always needs one); each optional sensor/valve
+    field follows the merge rule used by `_write_hub_options` — present
+    and non-empty sets the value, present and empty clears it, and
+    omitting the field entirely leaves the current value unchanged.
+  - `set_consumption_budget` and `set_restrictions` **replace** their
+    whole options section on every call: any field omitted from the call
+    is cleared, not left as-is (the panel is expected to always send the
+    full section). This is the opposite of `set_weather_sources`' merge
+    behavior and of `update_zone`'s patch behavior above — callers that
+    only want to change one field of a budget/restrictions call must
+    still pass every other field they want to keep.
 - All six apply their change **in place** via
   `config_entries.async_add_subentry` / `async_update_subentry` /
   `async_remove_subentry` (zones) or an options update (hub settings) — no
