@@ -20,6 +20,97 @@ import type { EntitySelectorConfig } from "./ha-selector";
  * task) maps each to its matching hub service.
  */
 
+
+/**
+ * Installer settings: the panel edits them, the services validate them.
+ *
+ * A field the user left empty is omitted entirely, because every settings
+ * service treats absent as unchanged. Zero is NOT empty — it is a meaningful
+ * pause or confirmation delay, and dropping it as falsy would make the field
+ * impossible to set back to zero.
+ */
+function put(
+  patch: Record<string, unknown>,
+  key: string,
+  value: number | string | undefined,
+): void {
+  if (value === undefined) return;
+  if (typeof value === "string" && value.trim() === "") return;
+  patch[key] = value;
+}
+
+export interface SessionLimitsInput {
+  sessionMaxMin?: number;
+  mustFinishBy?: string;
+  waitFreeMin?: number;
+  manualBlockMin?: number;
+  settlePauseS?: number;
+  sentinelTime?: string;
+}
+
+export function buildSessionLimitsPatch(input: SessionLimitsInput): Record<string, unknown> {
+  const patch: Record<string, unknown> = {};
+  put(patch, "session_max_min", input.sessionMaxMin);
+  put(patch, "must_finish_by", input.mustFinishBy);
+  put(patch, "wait_free_min", input.waitFreeMin);
+  put(patch, "manual_block_min", input.manualBlockMin);
+  put(patch, "settle_pause_s", input.settlePauseS);
+  put(patch, "sentinel_time", input.sentinelTime);
+  return patch;
+}
+
+export interface ValveSafetyInput {
+  openConfirmS?: number;
+  closeConfirmS?: number;
+  switchConfirmS?: number;
+  startupValveTimeoutS?: number;
+  watchdogMaxMin?: number;
+}
+
+export function buildValveSafetyPatch(input: ValveSafetyInput): Record<string, unknown> {
+  const patch: Record<string, unknown> = {};
+  put(patch, "open_confirm_s", input.openConfirmS);
+  put(patch, "close_confirm_s", input.closeConfirmS);
+  put(patch, "switch_confirm_s", input.switchConfirmS);
+  put(patch, "startup_valve_timeout_s", input.startupValveTimeoutS);
+  put(patch, "watchdog_max_min", input.watchdogMaxMin);
+  return patch;
+}
+
+export interface ConcurrencyInput {
+  maxConcurrent?: number;
+  compatibilityGroups?: string;
+  masterPreOpenS?: number;
+  masterPostCloseS?: number;
+}
+
+export function buildConcurrencyPatch(input: ConcurrencyInput): Record<string, unknown> {
+  const patch: Record<string, unknown> = {};
+  put(patch, "max_concurrent", input.maxConcurrent);
+  put(patch, "compatibility_groups", input.compatibilityGroups?.trim());
+  put(patch, "master_pre_open_s", input.masterPreOpenS);
+  put(patch, "master_post_close_s", input.masterPostCloseS);
+  return patch;
+}
+
+export interface NotificationSaveDetail {
+  event: string;
+  enabled: boolean;
+  services: string[];
+}
+
+export const NOTIFY_EVENTS = [
+  "completed",
+  "skipped",
+  "interrupted",
+  "cancelled",
+  "anomaly",
+  "watchdog",
+  "sentinel",
+  "session_overrun",
+  "consumption_budget",
+] as const;
+
 export interface WeatherSaveDetail {
   weather_entity: string;
   rain_sensor?: string;
@@ -69,6 +160,16 @@ export class ImcSettingsView extends LitElement {
 
   // Restrizioni calendario
   @state() private _forbiddenWindows: { start: string; end: string }[] = [];
+
+  // Installer settings: two collapsed drawers, closed by default. Everything
+  // is reachable, but eleven safety fields sitting open next to the everyday
+  // settings invite accidental edits.
+  @state() private _sessionOpen = false;
+  @state() private _valvesOpen = false;
+  @state() private _session: SessionLimitsInput = {};
+  @state() private _valves: ValveSafetyInput = {};
+  @state() private _concurrency: ConcurrencyInput = {};
+  @state() private _notifications: Record<string, { enabled: boolean; services: string }> = {};
 
   static override styles = css`
     :host {
@@ -274,6 +375,40 @@ export class ImcSettingsView extends LitElement {
     this._reducePct = budget?.reduce_pct;
 
     const restrictions = o.restrictions;
+    const opts = this.options ?? {};
+    this._session = {
+      sessionMaxMin: opts.session_max_min,
+      mustFinishBy: opts.must_finish_by,
+      waitFreeMin: opts.wait_free_min,
+      manualBlockMin: opts.manual_block_min,
+      settlePauseS: opts.settle_pause_s,
+      sentinelTime: opts.sentinel_time,
+    };
+    this._valves = {
+      openConfirmS: opts.open_confirm_s,
+      closeConfirmS: opts.close_confirm_s,
+      switchConfirmS: opts.switch_confirm_s,
+      startupValveTimeoutS: opts.startup_valve_timeout_s,
+      watchdogMaxMin: opts.watchdog_max_min,
+    };
+    this._concurrency = {
+      maxConcurrent: opts.max_concurrent,
+      compatibilityGroups: opts.compatibility_groups,
+      masterPreOpenS: opts.master_pre_open_s,
+      masterPostCloseS: opts.master_post_close_s,
+    };
+    this._notifications = Object.fromEntries(
+      NOTIFY_EVENTS.map((event) => {
+        const stored = opts.notifications?.[event];
+        return [
+          event,
+          {
+            enabled: stored?.enabled ?? false,
+            services: (stored?.services ?? []).join(", "),
+          },
+        ];
+      }),
+    );
     this._forbiddenWindows = restrictions?.forbidden_windows
       ? restrictions.forbidden_windows.map((w) => ({ ...w }))
       : [];
@@ -336,7 +471,8 @@ export class ImcSettingsView extends LitElement {
       </div>
 
       ${this._renderWeatherSection(lang)} ${this._renderBudgetSection(lang)}
-      ${this._renderRestrictionsSection(lang)}
+      ${this._renderRestrictionsSection(lang)} ${this._renderNotificationsSection(lang)}
+      ${this._renderSessionDrawer(lang)} ${this._renderValvesDrawer(lang)}
 
       <div class="advanced-note">▸ ${localize(lang, "settings.advanced_note")}</div>
     `;
@@ -604,6 +740,257 @@ export class ImcSettingsView extends LitElement {
     this.dispatchEvent(
       new CustomEvent<RestrictionsSaveDetail>("imc-settings-save-restrictions", {
         detail,
+        bubbles: true,
+        composed: true,
+      }),
+    );
+  }
+
+
+  /** A labelled number input that reports its unit and its default. */
+  private _num(
+    label: string,
+    hint: string,
+    value: number | undefined,
+    onInput: (value: number | undefined) => void,
+  ): TemplateResult {
+    return html`
+      <div class="section-label">${label}</div>
+      <input
+        class="field"
+        type="number"
+        .value=${value ?? ""}
+        @input=${(e: Event) => onInput(asNumber((e.target as HTMLInputElement).value))}
+      />
+      <div class="hint">${hint}</div>
+    `;
+  }
+
+  private _renderNotificationsSection(lang: string): TemplateResult {
+    return html`
+      <div class="sec">
+        <div class="header">🔔 ${localize(lang, "settings.notifications")}</div>
+        ${NOTIFY_EVENTS.map((event) => {
+          const current = this._notifications[event] ?? { enabled: false, services: "" };
+          return html`
+            <div class="section-label">${localize(lang, `settings.notify_${event}`)}</div>
+            <div class="toggle-row" @click=${() => this._toggleNotification(event)}>
+              <span class="switch ${current.enabled ? "on" : ""}"></span>
+              <span>${localize(lang, current.enabled ? "settings.on" : "settings.off")}</span>
+            </div>
+            <input
+              class="field"
+              type="text"
+              placeholder="notify.mobile_app_phone"
+              .value=${current.services}
+              @input=${(e: Event) =>
+                this._setNotificationServices(event, (e.target as HTMLInputElement).value)}
+            />
+          `;
+        })}
+      </div>
+    `;
+  }
+
+  private _renderSessionDrawer(lang: string): TemplateResult {
+    return html`
+      <div class="sec">
+        <div
+          class="header advanced-toggle"
+          @click=${() => (this._sessionOpen = !this._sessionOpen)}
+        >
+          ${this._sessionOpen ? "▾" : "▸"} ${localize(lang, "settings.session_safety")}
+        </div>
+        ${this._sessionOpen
+          ? html`
+              ${this._num(
+                localize(lang, "settings.session_max_min"),
+                localize(lang, "settings.session_max_min_hint"),
+                this._session.sessionMaxMin,
+                (v) => (this._session = { ...this._session, sessionMaxMin: v }),
+              )}
+              <div class="section-label">${localize(lang, "settings.must_finish_by")}</div>
+              <input
+                class="field"
+                type="time"
+                .value=${this._session.mustFinishBy ?? ""}
+                @input=${(e: Event) =>
+                  (this._session = {
+                    ...this._session,
+                    mustFinishBy: (e.target as HTMLInputElement).value,
+                  })}
+              />
+              ${this._num(
+                localize(lang, "settings.wait_free_min"),
+                localize(lang, "settings.wait_free_min_hint"),
+                this._session.waitFreeMin,
+                (v) => (this._session = { ...this._session, waitFreeMin: v }),
+              )}
+              ${this._num(
+                localize(lang, "settings.manual_block_min"),
+                localize(lang, "settings.manual_block_min_hint"),
+                this._session.manualBlockMin,
+                (v) => (this._session = { ...this._session, manualBlockMin: v }),
+              )}
+              ${this._num(
+                localize(lang, "settings.settle_pause_s"),
+                localize(lang, "settings.settle_pause_s_hint"),
+                this._session.settlePauseS,
+                (v) => (this._session = { ...this._session, settlePauseS: v }),
+              )}
+              <div class="section-label">${localize(lang, "settings.sentinel_time")}</div>
+              <input
+                class="field"
+                type="time"
+                .value=${this._session.sentinelTime ?? ""}
+                @input=${(e: Event) =>
+                  (this._session = {
+                    ...this._session,
+                    sentinelTime: (e.target as HTMLInputElement).value,
+                  })}
+              />
+              <button class="primary" @click=${this._saveSessionLimits}>
+                ${localize(lang, "editor.save")}
+              </button>
+            `
+          : nothing}
+      </div>
+    `;
+  }
+
+  private _renderValvesDrawer(lang: string): TemplateResult {
+    return html`
+      <div class="sec">
+        <div class="header advanced-toggle" @click=${() => (this._valvesOpen = !this._valvesOpen)}>
+          ${this._valvesOpen ? "▾" : "▸"} ${localize(lang, "settings.valves_concurrency")}
+        </div>
+        ${this._valvesOpen
+          ? html`
+              ${this._num(
+                localize(lang, "settings.open_confirm_s"),
+                localize(lang, "settings.open_confirm_s_hint"),
+                this._valves.openConfirmS,
+                (v) => (this._valves = { ...this._valves, openConfirmS: v }),
+              )}
+              ${this._num(
+                localize(lang, "settings.close_confirm_s"),
+                localize(lang, "settings.close_confirm_s_hint"),
+                this._valves.closeConfirmS,
+                (v) => (this._valves = { ...this._valves, closeConfirmS: v }),
+              )}
+              ${this._num(
+                localize(lang, "settings.switch_confirm_s"),
+                localize(lang, "settings.switch_confirm_s_hint"),
+                this._valves.switchConfirmS,
+                (v) => (this._valves = { ...this._valves, switchConfirmS: v }),
+              )}
+              ${this._num(
+                localize(lang, "settings.startup_valve_timeout_s"),
+                localize(lang, "settings.startup_valve_timeout_s_hint"),
+                this._valves.startupValveTimeoutS,
+                (v) => (this._valves = { ...this._valves, startupValveTimeoutS: v }),
+              )}
+              ${this._num(
+                localize(lang, "settings.watchdog_max_min"),
+                localize(lang, "settings.watchdog_max_min_hint"),
+                this._valves.watchdogMaxMin,
+                (v) => (this._valves = { ...this._valves, watchdogMaxMin: v }),
+              )}
+              ${this._num(
+                localize(lang, "settings.max_concurrent"),
+                localize(lang, "settings.max_concurrent_hint"),
+                this._concurrency.maxConcurrent,
+                (v) => (this._concurrency = { ...this._concurrency, maxConcurrent: v }),
+              )}
+              <div class="section-label">${localize(lang, "settings.compatibility_groups")}</div>
+              <input
+                class="field"
+                type="text"
+                .value=${this._concurrency.compatibilityGroups ?? ""}
+                @input=${(e: Event) =>
+                  (this._concurrency = {
+                    ...this._concurrency,
+                    compatibilityGroups: (e.target as HTMLInputElement).value,
+                  })}
+              />
+              <div class="hint">${localize(lang, "settings.compatibility_groups_hint")}</div>
+              ${this._num(
+                localize(lang, "settings.master_pre_open_s"),
+                localize(lang, "settings.master_pre_open_s_hint"),
+                this._concurrency.masterPreOpenS,
+                (v) => (this._concurrency = { ...this._concurrency, masterPreOpenS: v }),
+              )}
+              ${this._num(
+                localize(lang, "settings.master_post_close_s"),
+                localize(lang, "settings.master_post_close_s_hint"),
+                this._concurrency.masterPostCloseS,
+                (v) => (this._concurrency = { ...this._concurrency, masterPostCloseS: v }),
+              )}
+              <button class="primary" @click=${this._saveValveSafety}>
+                ${localize(lang, "editor.save")}
+              </button>
+            `
+          : nothing}
+      </div>
+    `;
+  }
+
+  private _toggleNotification(event: string): void {
+    const current = this._notifications[event] ?? { enabled: false, services: "" };
+    const next = { ...current, enabled: !current.enabled };
+    this._notifications = { ...this._notifications, [event]: next };
+    this._emitNotification(event, next);
+  }
+
+  private _setNotificationServices(event: string, raw: string): void {
+    const current = this._notifications[event] ?? { enabled: false, services: "" };
+    const next = { ...current, services: raw };
+    this._notifications = { ...this._notifications, [event]: next };
+    this._emitNotification(event, next);
+  }
+
+  private _emitNotification(
+    event: string,
+    value: { enabled: boolean; services: string },
+  ): void {
+    this.dispatchEvent(
+      new CustomEvent<NotificationSaveDetail>("imc-settings-save-notifications", {
+        detail: {
+          event,
+          enabled: value.enabled,
+          services: value.services
+            .split(",")
+            .map((item) => item.trim())
+            .filter(Boolean),
+        },
+        bubbles: true,
+        composed: true,
+      }),
+    );
+  }
+
+  private _saveSessionLimits(): void {
+    this.dispatchEvent(
+      new CustomEvent("imc-settings-save-session-limits", {
+        detail: buildSessionLimitsPatch(this._session),
+        bubbles: true,
+        composed: true,
+      }),
+    );
+  }
+
+  private _saveValveSafety(): void {
+    // The drawer holds both groups, so one Save emits both service calls.
+    this.dispatchEvent(
+      new CustomEvent("imc-settings-save-valve-safety", {
+        detail: buildValveSafetyPatch(this._valves),
+        bubbles: true,
+        composed: true,
+      }),
+    );
+    this.dispatchEvent(
+      new CustomEvent("imc-settings-save-concurrency", {
+        detail: buildConcurrencyPatch(this._concurrency),
         bubbles: true,
         composed: true,
       }),

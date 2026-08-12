@@ -13,6 +13,23 @@ export interface ZoneData {
 }
 
 export interface HubOptions {
+  // Installer settings, editable from the panel's Advanced drawers since 2.1.0.
+  session_max_min?: number;
+  must_finish_by?: string;
+  wait_free_min?: number;
+  manual_block_min?: number;
+  settle_pause_s?: number;
+  sentinel_time?: string;
+  open_confirm_s?: number;
+  close_confirm_s?: number;
+  switch_confirm_s?: number;
+  startup_valve_timeout_s?: number;
+  watchdog_max_min?: number;
+  max_concurrent?: number;
+  compatibility_groups?: string;
+  master_pre_open_s?: number;
+  master_post_close_s?: number;
+  notifications?: Record<string, { enabled?: boolean; services?: string[] }>;
   weather_entity?: string;
   rain_sensor?: string;
   outdoor_temp_sensor?: string;
