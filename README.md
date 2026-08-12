@@ -34,7 +34,9 @@ Irrigation Maestro is built around two ideas:
   cycles for many-zone setups; optional **volume mode** (liters) with flow
   meter; optional **cycle-and-soak** with cross-zone interleaving.
 - **Calendar-day cadence** per zone (default every 3 days, retries after
-  skips), seasonal windows (default March–October), per-zone adjustment
+  skips). The cadence counts watering *days*, not cycles: on a watering day
+  every enabled cycle of the zone runs, and the counter restarts from the day
+  a cycle completed. Seasonal windows (default March–October), per-zone adjustment
   factor, and **watering-ordinance restrictions**: allowed weekdays, odd/even
   day schemes, forbidden time windows (running cycles are truncated rather
   than overrun into a window).

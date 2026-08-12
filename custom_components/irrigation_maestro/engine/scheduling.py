@@ -58,8 +58,21 @@ def is_due(last_completed: date | None, today: date, interval_days: int) -> bool
     Due when at least ``interval_days`` calendar days passed since the last
     day with a completed cycle. A skipped day keeps the zone due, so it
     retries on following days until it completes.
+
+    A cycle completed today ESTABLISHES today as a watering day rather than
+    closing it: the zone stays due so its remaining cycles of the day still
+    run (§1). The cadence counts days between watering days, not between
+    cycles. Only scheduled runs write the marker, so a manual run never
+    establishes a day.
+
+    A marker in the future (clock skew, a timezone change, a restored older
+    store) is treated the same way instead of yielding a negative day count
+    that would freeze the zone silently and permanently; the next completed
+    cycle rewrites it to today, so the anomaly self-heals.
     """
     if last_completed is None:
+        return True
+    if last_completed >= today:
         return True
     return (today - last_completed).days >= max(interval_days, 1)
 

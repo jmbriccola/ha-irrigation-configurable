@@ -4,6 +4,34 @@ All notable changes to this project are documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.3.3] - 2026-08-12
+
+### Fixed
+
+- **Zones with multiple daily cycles only ran the first one.** A zone with,
+  say, a morning cycle (sunrise −1h) and an evening cycle (sunset −3h) ran
+  the morning one and silently skipped the evening one — every day. The
+  first completed cycle wrote the zone's "last watered" day, and the cadence
+  check then read that as "already watered today", skipping every later
+  trigger of the same day as `not_due` (a silent reason, so nothing was
+  notified or logged as a problem). No configuration could work around it:
+  the check enforces a minimum interval of one day, so even `interval_days=1`
+  blocked the second cycle.
+
+  A completed cycle now *establishes* the watering day instead of closing
+  it, which is what the cadence was always specified to do: on a watering day
+  all enabled cycles of the zone run, and the counter restarts from the day a
+  cycle completed. Multi-day cadence is unchanged (with `interval_days=3` and
+  a cycle completed Monday, Tuesday and Wednesday still skip), skipped days
+  still keep the zone due so it retries, and manual runs still never
+  establish a day.
+
+  Also hardened as part of the same check: a "last watered" day in the
+  *future* — possible after clock skew, a timezone change, or restoring an
+  older store — used to produce a negative day count that froze the zone
+  silently and permanently. Such a zone is now due, and the next completed
+  cycle rewrites the marker to today, so the anomaly self-heals.
+
 ## [1.3.2] - 2026-08-12
 
 ### Fixed

@@ -209,6 +209,91 @@ async def test_two_zones_never_open_together(
     assert ("open_valve", "valve.b") in park.commands
 
 
+async def test_second_daily_cycle_runs_after_the_first_completed(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    """Regression: a zone with a morning and an evening cycle ran only the
+    morning one, because the first completion marked the zone as watered and
+    every later trigger of the same day was silently gated as NOT_DUE."""
+    freezer.move_to(START)
+    park = MockValvePark(hass)
+    park.add("valve.pots")
+    mock_weather(hass)
+    entry = await setup_hub(
+        hass,
+        [
+            zone_data(
+                "Pots",
+                "valve.pots",
+                cycles=[
+                    {
+                        "id": "cy_morning",
+                        "name": "Morning",
+                        "enabled": True,
+                        "trigger": {"kind": "time", "at": "05:30"},
+                        "curve": {"points": [[20.0, 3.0]], "min_value": 1.0, "max_value": 60.0},
+                    },
+                    {
+                        "id": "cy_evening",
+                        "name": "Evening",
+                        "enabled": True,
+                        "trigger": {"kind": "time", "at": "06:30"},
+                        "curve": {"points": [[20.0, 3.0]], "min_value": 1.0, "max_value": 60.0},
+                    },
+                ],
+            )
+        ],
+    )
+
+    finished: list[Any] = []
+    hass.bus.async_listen(f"{DOMAIN}_cycle_finished", finished.append)
+
+    await advance(hass, freezer, 31 * 60)  # morning trigger at 05:30
+    assert hass.states.get("valve.pots").state == "open"
+    await advance(hass, freezer, 4 * 60)
+    assert [event.data["cycle_id"] for event in finished] == ["cy_morning"]
+
+    runtime = entry.runtime_data
+    zone_id = runtime.zone_ids[0]
+    assert runtime.state.last_completed(zone_id) == dt_util.now().date()
+
+    await advance(hass, freezer, 56 * 60)  # evening trigger at 06:30
+    assert hass.states.get("valve.pots").state == "open"
+    await advance(hass, freezer, 4 * 60)
+
+    assert [event.data["cycle_id"] for event in finished] == ["cy_morning", "cy_evening"]
+    assert runtime.state.last_outcome(zone_id)["result"] == "completed"
+
+
+async def test_manual_run_does_not_establish_the_watering_day(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    """A manual run waters off-cadence: it must not mark the day as watered,
+    nor unblock a scheduled cycle that the cadence still holds back."""
+    freezer.move_to(START)
+    park = MockValvePark(hass)
+    park.add("valve.pots")
+    mock_weather(hass)
+    entry = await setup_hub(hass, [zone_data("Pots", "valve.pots", interval_days=3)])
+
+    runtime = entry.runtime_data
+    zone_id = runtime.zone_ids[0]
+    yesterday = dt_util.now().date() - timedelta(days=1)
+    runtime.state.set_last_completed(zone_id, yesterday)  # N=3 -> today is NOT_DUE
+
+    await hass.services.async_call(DOMAIN, "run_zone", {"zone_id": zone_id}, blocking=True)
+    await advance(hass, freezer, 5 * 60)
+    assert ("open_valve", "valve.pots") in park.commands
+    assert runtime.state.last_completed(zone_id) == yesterday
+
+    # The 05:30 scheduled trigger is still held back by the cadence.
+    park.commands.clear()
+    await advance(hass, freezer, 26 * 60)
+    assert ("open_valve", "valve.pots") not in park.commands
+    assert runtime.state.last_outcome(zone_id)["reason_key"] == "not_due"
+    assert runtime.state.last_completed(zone_id) == yesterday
+
+
 async def test_manual_close_interrupts_and_blocks_queue(
     hass: HomeAssistant, freezer: FrozenDateTimeFactory
 ) -> None:

@@ -89,6 +89,14 @@ details harvested from it (kept as engine behaviour):
   season, restrictions) AND the manual-stop block — user intent is explicit;
   safety gates (valves free, confirmations, surveillance) always apply.
   Manual completions do NOT update the cadence counter (`last_completed`).
+- `last_completed` is a per-ZONE watering-DAY marker, not a per-cycle "already
+  ran" flag: a completed cycle ESTABLISHES the day, so `is_due` is True while
+  `last_completed == today` and the zone's remaining cycles of the day still
+  run (fixed in 1.3.3 — before that the first cycle silently closed the day
+  and multi-cycle zones ran once). Same-day re-runs of the SAME cycle are
+  prevented by the trigger schedule (one firing per cycle per day), not by
+  the cadence gate. A future `last_completed` is also treated as due, so
+  clock skew cannot freeze a zone permanently.
 - Volume-mode cycle whose meter disappears degrades to a duration run of its
   volume-safety-timeout minutes (never guesses liters).
 - Flow out-of-range → anomaly notification only; zero-flow → interrupt.
