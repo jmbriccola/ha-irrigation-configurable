@@ -424,3 +424,78 @@ async def test_consumption_sensor_present_with_budget(
     assert sensor.attributes["budget_liters"] == 1000
     assert sensor.attributes["used_liters"] == 0
     assert sensor.attributes["action"] == "notify"
+
+
+async def test_next_run_skips_days_the_calendar_forbids(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    """It used to promise a run on days the zone would silently skip."""
+    freezer.move_to(START)  # Friday 2026-07-17
+    MockValvePark(hass).add("valve.pots")
+    mock_weather(hass)
+    await setup_hub(
+        hass,
+        [
+            zone_data(
+                "Pots",
+                "valve.pots",
+                calendar={"mode": "weekdays", "days": [0]},  # Mondays only
+            )
+        ],
+    )
+    next_run = role_state(hass, "zone_next_run")
+    assert next_run is not None
+    assert next_run.state.startswith("2026-07-20T05:30")  # the following Monday
+
+
+async def test_next_run_respects_the_program_season(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    freezer.move_to(START)  # July
+    MockValvePark(hass).add("valve.pots")
+    mock_weather(hass)
+    await setup_hub(
+        hass,
+        [
+            zone_data(
+                "Pots",
+                "valve.pots",
+                cycles=[
+                    {
+                        "id": "cy_pots",
+                        "name": "Morning",
+                        "enabled": True,
+                        "trigger": {"kind": "time", "at": "05:30"},
+                        "curve": {"points": [[20.0, 3.0]], "min_value": 1.0, "max_value": 60.0},
+                        "season_months": [9],  # September only
+                    }
+                ],
+            )
+        ],
+    )
+    next_run = role_state(hass, "zone_next_run")
+    assert next_run is not None
+    assert next_run.state.startswith("2026-09-01T05:30")
+
+
+async def test_next_run_skips_past_a_suspension(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    """A suspended zone reports when watering resumes, not tomorrow."""
+    freezer.move_to(START)
+    MockValvePark(hass).add("valve.pots")
+    mock_weather(hass)
+    entry = await setup_hub(hass, [zone_data("Pots", "valve.pots")])
+    zone_id = entry.runtime_data.zone_ids[0]
+
+    await hass.services.async_call(
+        DOMAIN,
+        "suspend_until",
+        {"zone_id": zone_id, "until": "2027-01-01 00:00:00"},
+        blocking=True,
+    )
+    await hass.async_block_till_done()
+    next_run = role_state(hass, "zone_next_run", zone_id)
+    assert next_run is not None
+    # Suspended until January, and the default season starts in March.
+    assert next_run.state.startswith("2027-03-01T05:30")
