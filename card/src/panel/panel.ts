@@ -22,7 +22,12 @@ import type {
 } from "./program-list";
 import type { WizardFinishDetail } from "./program-wizard";
 import type { ZoneRemoveDetail, ZoneSaveDetail } from "./zone-editor";
-import type { BudgetSaveDetail, RestrictionsSaveDetail, WeatherSaveDetail } from "./settings-view";
+import type {
+  BudgetSaveDetail,
+  NotificationSaveDetail,
+  RestrictionsSaveDetail,
+  WeatherSaveDetail,
+} from "./settings-view";
 import {
   parseExportedConfig,
   type ExportedConfig,
@@ -279,6 +284,15 @@ export class IrrigationMaestroPanel extends LitElement {
 
   private _onSettingsBack(): void {
     this._view = "zones";
+  }
+
+  /** Shared path for the settings services: skip empty patches, toast on success. */
+  private async _saveSettings(service: string, data: Record<string, unknown>): Promise<void> {
+    if (Object.keys(data).length === 0) return;
+    const res = await this._call("irrigation_maestro", service, data);
+    if (res !== undefined) {
+      this._showNotice(localize(pickLanguage(this.hass), "panel.saved_settings"));
+    }
   }
 
   private _onSaveSchedule(ev: CustomEvent<ProgramScheduleSaveDetail>): void {
@@ -582,7 +596,15 @@ export class IrrigationMaestroPanel extends LitElement {
           @imc-settings-save-weather=${this._onSaveWeather}
           @imc-settings-save-budget=${this._onSaveBudget}
           @imc-settings-save-restrictions=${this._onSaveRestrictions}
-          @imc-settings-back=${this._onSettingsBack}
+          @imc-settings-save-session-limits=${(e: CustomEvent<Record<string, unknown>>) =>
+          this._saveSettings("set_session_limits", e.detail)}
+        @imc-settings-save-valve-safety=${(e: CustomEvent<Record<string, unknown>>) =>
+          this._saveSettings("set_valve_safety", e.detail)}
+        @imc-settings-save-concurrency=${(e: CustomEvent<Record<string, unknown>>) =>
+          this._saveSettings("set_concurrency", e.detail)}
+        @imc-settings-save-notifications=${(e: CustomEvent<NotificationSaveDetail>) =>
+          this._saveSettings("set_notifications", { ...e.detail })}
+        @imc-settings-back=${this._onSettingsBack}
         >
           <header><h1>${localize(lang, "panel.title")}</h1></header>
           ${this._renderToasts()}
