@@ -48,7 +48,7 @@ def migrate_zone_v1_to_v2(
     """Rewrite one zone subentry. Returns the new data and what was dropped."""
     zone = dict(zone_data)
     notes: list[MigrationNote] = []
-    zone_name = zone.get(const.CONF_ZONE_NAME, "?")
+    zone_name = str(zone.get(const.CONF_ZONE_NAME, "?"))
 
     interval = int(zone.pop(const.CONF_INTERVAL_DAYS, const.DEFAULT_INTERVAL_DAYS))
     zone_season = zone.pop(const.CONF_ZONE_SEASON_MONTHS, None)
@@ -68,7 +68,7 @@ def migrate_zone_v1_to_v2(
             # user has since chosen — the migration has to be idempotent.
             cycles.append(cycle)
             continue
-        name = cycle.get(const.CONF_CYCLE_NAME, cycle.get(const.CONF_CYCLE_ID, "?"))
+        name = str(cycle.get(const.CONF_CYCLE_NAME, cycle.get(const.CONF_CYCLE_ID, "?")))
         grid = _meaningful_grid(cycle.pop(const.CONF_CYCLE_DAYS, None))
 
         # Season: an explicit per-program override wins over the zone value.

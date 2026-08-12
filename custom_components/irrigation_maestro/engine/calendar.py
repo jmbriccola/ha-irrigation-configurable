@@ -9,6 +9,7 @@ before 2.0.0.
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import date
 from enum import StrEnum
@@ -38,7 +39,7 @@ class ProgramCalendar:
     parity: Parity | None = None
 
     @classmethod
-    def weekdays(cls, days: set[int] | frozenset[int]) -> Self:
+    def weekdays(cls, days: Iterable[int]) -> Self:
         chosen = frozenset(int(day) for day in days)
         if not chosen:
             raise EngineError("calendar_weekdays_empty")
@@ -67,8 +68,11 @@ class ProgramCalendar:
     @classmethod
     def from_config(cls, config: dict[str, Any]) -> Self:
         """Build from stored data, ignoring keys foreign to the chosen mode."""
+        raw_mode = config.get("mode")
+        if not isinstance(raw_mode, str):
+            raise EngineError("calendar_unknown_mode")
         try:
-            mode = CalendarMode(config.get("mode"))
+            mode = CalendarMode(raw_mode)
         except ValueError as err:
             raise EngineError("calendar_unknown_mode") from err
         if mode is CalendarMode.WEEKDAYS:
