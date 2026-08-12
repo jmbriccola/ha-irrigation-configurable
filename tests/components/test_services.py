@@ -873,3 +873,34 @@ async def test_remove_zone(hass, freezer):
     await hass.async_block_till_done()
     assert victim not in runtime.zone_ids
     assert not any(s.attributes.get("zone_id") == victim for s in hass.states.async_all("sensor"))
+
+
+async def test_set_weather_sources(hass, freezer):
+    freezer.move_to(START)
+    park = MockValvePark(hass)
+    park.add("valve.pots")
+    mock_weather(hass)
+    entry = await setup_hub(hass, [zone_data("Pots", "valve.pots")])
+    await hass.services.async_call(
+        DOMAIN,
+        "set_weather_sources",
+        {"weather_entity": "weather.home", "rain_sensor": "sensor.rain"},
+        blocking=True,
+    )
+    from custom_components.irrigation_maestro.models import HubConfig
+
+    hub = HubConfig.from_options(dict(entry.options))
+    assert hub.weather_entity == "weather.home"
+    assert hub.rain_sensor == "sensor.rain"
+
+
+async def test_set_weather_sources_requires_weather(hass, freezer):
+    freezer.move_to(START)
+    park = MockValvePark(hass)
+    park.add("valve.pots")
+    mock_weather(hass)
+    await setup_hub(hass, [zone_data("Pots", "valve.pots")])
+    with pytest.raises((ServiceValidationError, vol.Invalid)):
+        await hass.services.async_call(
+            DOMAIN, "set_weather_sources", {"weather_entity": ""}, blocking=True
+        )

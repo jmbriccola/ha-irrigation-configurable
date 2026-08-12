@@ -748,6 +748,9 @@
     },
     "invalid_zone": {
       "message": "La zona non è valida ({error})."
+    },
+    "invalid_hub_settings": {
+      "message": "Le impostazioni non sono valide ({error})."
     }
   },
   "selector": {

@@ -237,6 +237,25 @@ _UPDATE_ZONE_SCHEMA = vol.Schema(
 )
 _REMOVE_ZONE_SCHEMA = vol.Schema({vol.Required(ATTR_ZONE_ID): cv.string})
 
+_SET_WEATHER_SOURCES_SCHEMA = vol.Schema(
+    {
+        vol.Required(ATTR_WEATHER_ENTITY): vol.All(cv.string, vol.Length(min=1)),
+        vol.Optional(ATTR_RAIN_SENSOR): cv.string,
+        vol.Optional(ATTR_OUTDOOR_TEMP_SENSOR): cv.string,
+        vol.Optional(ATTR_LINE_FLOW_SENSOR): cv.string,
+        vol.Optional(ATTR_MASTER_VALVE): cv.string,
+    }
+)
+
+# attr -> option key; optional ones MERGE: present+non-empty sets, present+empty
+# clears, absent unchanged
+_WEATHER_OPT_KEYS: Final = {
+    ATTR_RAIN_SENSOR: const.CONF_RAIN_SENSOR,
+    ATTR_OUTDOOR_TEMP_SENSOR: const.CONF_OUTDOOR_TEMP_SENSOR,
+    ATTR_LINE_FLOW_SENSOR: const.CONF_LINE_FLOW_SENSOR,
+    ATTR_MASTER_VALVE: const.CONF_MASTER_VALVE,
+}
+
 # attr -> zone-data const key, with the coercion already applied by the schema
 _ZONE_PATCH_KEYS: Final = {
     ATTR_NAME: const.CONF_ZONE_NAME,
@@ -394,6 +413,24 @@ def _validate_zone(data: dict[str, Any], templates: dict[str, Any]) -> None:
             translation_key="invalid_zone",
             translation_placeholders={"error": str(err)},
         ) from err
+
+
+def _write_hub_options(hass: HomeAssistant, entry: ConfigEntry, options: dict[str, Any]) -> None:
+    """Validate a COMPLETE options dict and persist it in place.
+
+    Callers build ``options`` from ``dict(entry.options)`` and set/pop keys, so
+    clearing a key actually takes effect (a re-merge with entry.options here
+    would silently resurrect popped keys).
+    """
+    try:
+        HubConfig.from_options(options)
+    except (ValueError, KeyError, TypeError) as err:
+        raise ServiceValidationError(
+            translation_domain=DOMAIN,
+            translation_key="invalid_hub_settings",
+            translation_placeholders={"error": str(err)},
+        ) from err
+    hass.config_entries.async_update_entry(entry, options=options)
 
 
 def _update_cycle(
@@ -748,6 +785,21 @@ async def _async_remove_zone(call: ServiceCall) -> None:
     hass.config_entries.async_remove_subentry(entry, zone_id)
 
 
+async def _async_set_weather_sources(call: ServiceCall) -> None:
+    hass = call.hass
+    entry = _loaded_entry(hass)
+    merged = dict(entry.options)
+    merged[const.CONF_WEATHER_ENTITY] = call.data[ATTR_WEATHER_ENTITY]
+    for attr, opt_key in _WEATHER_OPT_KEYS.items():
+        if attr in call.data:  # absent = unchanged
+            value = call.data[attr]
+            if value:  # non-empty = set
+                merged[opt_key] = value
+            else:  # explicit empty = clear
+                merged.pop(opt_key, None)
+    _write_hub_options(hass, entry, merged)
+
+
 async def _async_export_config(call: ServiceCall) -> ServiceResponse:
     entry = _loaded_entry(call.hass)
     payload = {
@@ -882,4 +934,7 @@ def async_setup_services(hass: HomeAssistant) -> None:
     )
     hass.services.async_register(
         DOMAIN, SERVICE_REMOVE_ZONE, _async_remove_zone, _REMOVE_ZONE_SCHEMA
+    )
+    hass.services.async_register(
+        DOMAIN, SERVICE_SET_WEATHER_SOURCES, _async_set_weather_sources, _SET_WEATHER_SOURCES_SCHEMA
     )
