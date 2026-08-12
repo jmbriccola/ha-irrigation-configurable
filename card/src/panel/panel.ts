@@ -7,6 +7,7 @@ import { pickLanguage, localize } from "../localize/localize";
 import { formatNumber } from "../format";
 import { discover, type MaestroModel, type ZoneBundle } from "../discovery";
 import "./program-list";
+import "./zone-editor";
 import type {
   ProgramCurveSaveDetail,
   ProgramMinutesSaveDetail,
@@ -18,6 +19,8 @@ import type {
   ProgramToggleDetail,
 } from "./program-list";
 import type { WizardFinishDetail } from "./program-wizard";
+import type { ZoneRemoveDetail, ZoneSaveDetail } from "./zone-editor";
+import { parseExportedConfig, type ExportedConfig, type ZoneData } from "./config-read";
 
 /**
  * Sidebar panel shell: zone tabs + the selected zone's read-only program
@@ -29,6 +32,11 @@ export class IrrigationMaestroPanel extends LitElement {
   @property({ type: Boolean }) narrow = false;
   @state() private _selectedZoneId?: string;
   @state() private _error?: string;
+  // undefined = zone-list view, null = create-new, ZoneData = editing an
+  // existing zone (seeded from a fresh `export_config` read — see
+  // `_readConfig`/`_onEditZone` below).
+  @state() private _editingZone?: ZoneData | null;
+  @state() private _editingZoneId?: string;
 
   private _relevantIds: string[] = [];
   private _statesCount = 0;
@@ -70,6 +78,72 @@ export class IrrigationMaestroPanel extends LitElement {
       }, 6000);
       return undefined;
     }
+  }
+
+  /**
+   * Full-config snapshot, used to seed the zone editor with every field
+   * (including the advanced ones `discover()`'s entity-attribute model
+   * doesn't surface). `export_config` is a response service returning a
+   * JSON string payload — nested under `res.response["payload"]`, same
+   * shape as the other response services above.
+   */
+  private async _readConfig(): Promise<ExportedConfig | undefined> {
+    const res = await this._call("irrigation_maestro", "export_config", {}, true);
+    const payload = res?.response?.["payload"];
+    if (typeof payload !== "string") return undefined;
+    try {
+      return parseExportedConfig(payload);
+    } catch {
+      return undefined;
+    }
+  }
+
+  private async _onEditZone(zoneId: string): Promise<void> {
+    const cfg = await this._readConfig();
+    if (cfg) {
+      this._editingZoneId = zoneId;
+      this._editingZone = cfg.zones[zoneId] ?? {};
+    }
+  }
+
+  /**
+   * `imc-zone-save`: `add_zone` accepts ONLY `name`/`valve_entity`/
+   * `area_m2`/`icon` — its voluptuous schema has no ALLOW_EXTRA, so any
+   * other field in the payload hard-fails the call. Pick exactly those
+   * keys rather than spreading `d.patch` (the editor never produces
+   * advanced fields in create mode, but this guards defensively either
+   * way). `update_zone` accepts the full field set, so the update branch
+   * spreads the patch directly. `add_zone` is a response service — its id
+   * comes back nested under `res.response["zone_id"]`, mirroring
+   * `_onWizardFinish`'s `program_id` handling above.
+   */
+  private async _onZoneSave(ev: CustomEvent<ZoneSaveDetail>): Promise<void> {
+    const d = ev.detail;
+    if (d.mode === "add") {
+      const p = d.patch;
+      const add: Record<string, unknown> = { name: p.name, valve_entity: p.valve_entity };
+      if (p.area_m2 !== undefined) add["area_m2"] = p.area_m2;
+      if (p.icon !== undefined) add["icon"] = p.icon;
+      const res = await this._call("irrigation_maestro", "add_zone", add, true);
+      const zoneId = res?.response?.["zone_id"];
+      if (typeof zoneId === "string" && zoneId) this._selectedZoneId = zoneId;
+    } else {
+      await this._call("irrigation_maestro", "update_zone", { zone_id: d.zoneId, ...d.patch });
+    }
+    this._editingZone = undefined;
+    this._editingZoneId = undefined;
+  }
+
+  private async _onZoneRemove(ev: CustomEvent<ZoneRemoveDetail>): Promise<void> {
+    await this._call("irrigation_maestro", "remove_zone", { zone_id: ev.detail.zoneId });
+    this._editingZone = undefined;
+    this._editingZoneId = undefined;
+    this._selectedZoneId = undefined;
+  }
+
+  private _onZoneCancel(): void {
+    this._editingZone = undefined;
+    this._editingZoneId = undefined;
   }
 
   private _onSaveSchedule(ev: CustomEvent<ProgramScheduleSaveDetail>): void {
@@ -258,6 +332,26 @@ export class IrrigationMaestroPanel extends LitElement {
       background: var(--imc-accent);
       color: #fff;
     }
+    .tab.add {
+      background: transparent;
+      border: 1px dashed var(--divider-color, rgba(127, 127, 127, 0.4));
+      color: var(--imc-accent, #3a6df0);
+      font-weight: 600;
+    }
+    .zone-toolbar {
+      display: flex;
+      justify-content: flex-end;
+      margin: -6px 0 8px;
+    }
+    .edit-zone-link {
+      font-size: 12px;
+      color: var(--imc-accent, #3a6df0);
+      cursor: pointer;
+      user-select: none;
+    }
+    .edit-zone-link:hover {
+      opacity: 0.8;
+    }
     .empty {
       color: var(--secondary-text-color);
       padding: 24px 0;
@@ -306,27 +400,55 @@ export class IrrigationMaestroPanel extends LitElement {
         @imc-program-remove=${this._onProgramRemove}
         @imc-wizard-finish=${this._onWizardFinish}
         @imc-wizard-cancel=${() => undefined}
+        @imc-zone-save=${this._onZoneSave}
+        @imc-zone-remove=${this._onZoneRemove}
+        @imc-zone-cancel=${this._onZoneCancel}
       >
         <header><h1>${localize(lang, "panel.title")}</h1></header>
         ${this._renderWeatherContext(model, lang, weightedTemp)}
         ${this._error ? html`<div class="error">${this._error}</div>` : nothing}
-        <div class="tabs">
-          ${model.zones.map(
-            (z) => html`
-              <div
-                class="tab ${z.zoneId === selected.zoneId ? "sel" : ""}"
-                @click=${() => (this._selectedZoneId = z.zoneId)}
-              >
-                ${z.name}
+        ${this._editingZone !== undefined
+          ? html`<imc-zone-editor
+              .hass=${hass}
+              .zone=${this._editingZone ?? undefined}
+              .zoneId=${this._editingZoneId}
+            ></imc-zone-editor>`
+          : html`
+              <div class="tabs">
+                ${model.zones.map(
+                  (z) => html`
+                    <div
+                      class="tab ${z.zoneId === selected.zoneId ? "sel" : ""}"
+                      @click=${() => (this._selectedZoneId = z.zoneId)}
+                    >
+                      ${z.name}
+                    </div>
+                  `,
+                )}
+                <div
+                  class="tab add"
+                  @click=${() => {
+                    this._editingZone = null;
+                    this._editingZoneId = undefined;
+                  }}
+                >
+                  ＋ ${localize(lang, "zone.add")}
+                </div>
               </div>
-            `,
-          )}
-        </div>
-        <imc-program-list
-          .hass=${hass}
-          .zone=${selected}
-          .weightedTemp=${weightedTemp}
-        ></imc-program-list>
+              <div class="zone-toolbar">
+                <span
+                  class="edit-zone-link"
+                  @click=${() => this._onEditZone(selected.zoneId)}
+                >
+                  ✎ ${localize(lang, "zone.edit")}
+                </span>
+              </div>
+              <imc-program-list
+                .hass=${hass}
+                .zone=${selected}
+                .weightedTemp=${weightedTemp}
+              ></imc-program-list>
+            `}
       </div>
     `;
   }
