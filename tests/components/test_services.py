@@ -904,3 +904,47 @@ async def test_set_weather_sources_requires_weather(hass, freezer):
         await hass.services.async_call(
             DOMAIN, "set_weather_sources", {"weather_entity": ""}, blocking=True
         )
+
+
+async def test_set_consumption_budget(hass, freezer):
+    freezer.move_to(START)
+    park = MockValvePark(hass)
+    park.add("valve.pots")
+    mock_weather(hass)
+    entry = await setup_hub(hass, [zone_data("Pots", "valve.pots")])
+    await hass.services.async_call(
+        DOMAIN,
+        "set_consumption_budget",
+        {"liters_per_month": 8000, "action": "reduce", "reduce_pct": 40},
+        blocking=True,
+    )
+    from custom_components.irrigation_maestro.models import HubConfig
+
+    hub = HubConfig.from_options(dict(entry.options))
+    assert hub.consumption_budget_liters == 8000
+    assert hub.consumption_action == "reduce"
+    assert hub.consumption_reduce_pct == 40
+
+
+async def test_set_restrictions(hass, freezer):
+    freezer.move_to(START)
+    park = MockValvePark(hass)
+    park.add("valve.pots")
+    mock_weather(hass)
+    entry = await setup_hub(hass, [zone_data("Pots", "valve.pots")])
+    await hass.services.async_call(
+        DOMAIN,
+        "set_restrictions",
+        {
+            "allowed_weekdays": [0, 2, 4],
+            "parity": "odd",
+            "forbidden_windows": [{"start": "22:00", "end": "06:00"}],
+        },
+        blocking=True,
+    )
+    from custom_components.irrigation_maestro.models import HubConfig
+
+    hub = HubConfig.from_options(dict(entry.options))
+    assert hub.restrictions.allowed_weekdays == frozenset({0, 2, 4})
+    assert str(hub.restrictions.parity) == "odd"
+    assert len(hub.restrictions.forbidden_windows) == 1

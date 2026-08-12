@@ -247,6 +247,26 @@ _SET_WEATHER_SOURCES_SCHEMA = vol.Schema(
     }
 )
 
+_SET_CONSUMPTION_BUDGET_SCHEMA = vol.Schema(
+    {
+        vol.Optional(ATTR_LITERS_PER_MONTH): vol.All(vol.Coerce(float), vol.Range(min=0)),
+        vol.Required(ATTR_ACTION): vol.In(
+            [const.BUDGET_ACTION_NOTIFY, const.BUDGET_ACTION_REDUCE, const.BUDGET_ACTION_SUSPEND]
+        ),
+        vol.Optional(ATTR_REDUCE_PCT): vol.All(vol.Coerce(int), vol.Range(min=1, max=100)),
+    }
+)
+_WINDOW_SCHEMA = vol.Schema(
+    {vol.Required(ATTR_WINDOW_START): cv.string, vol.Required(ATTR_WINDOW_END): cv.string}
+)
+_SET_RESTRICTIONS_SCHEMA = vol.Schema(
+    {
+        vol.Optional(ATTR_ALLOWED_WEEKDAYS): [vol.All(vol.Coerce(int), vol.Range(min=0, max=6))],
+        vol.Optional(ATTR_PARITY): vol.In(["odd", "even", "none"]),
+        vol.Optional(ATTR_FORBIDDEN_WINDOWS): [_WINDOW_SCHEMA],
+    }
+)
+
 # attr -> option key; optional ones MERGE: present+non-empty sets, present+empty
 # clears, absent unchanged
 _WEATHER_OPT_KEYS: Final = {
@@ -800,6 +820,42 @@ async def _async_set_weather_sources(call: ServiceCall) -> None:
     _write_hub_options(hass, entry, merged)
 
 
+async def _async_set_consumption_budget(call: ServiceCall) -> None:
+    hass = call.hass
+    entry = _loaded_entry(hass)
+    budget: dict[str, Any] = {const.CONF_BUDGET_ACTION: call.data[ATTR_ACTION]}
+    if ATTR_LITERS_PER_MONTH in call.data and call.data[ATTR_LITERS_PER_MONTH] > 0:
+        budget[const.CONF_BUDGET_LITERS] = float(call.data[ATTR_LITERS_PER_MONTH])
+    if ATTR_REDUCE_PCT in call.data:
+        budget[const.CONF_BUDGET_REDUCE_PCT] = int(call.data[ATTR_REDUCE_PCT])
+    merged = dict(entry.options)
+    merged[const.CONF_CONSUMPTION_BUDGET] = budget
+    _write_hub_options(hass, entry, merged)
+
+
+async def _async_set_restrictions(call: ServiceCall) -> None:
+    hass = call.hass
+    entry = _loaded_entry(hass)
+    restrictions: dict[str, Any] = {}
+    allowed_weekdays = call.data.get(ATTR_ALLOWED_WEEKDAYS)
+    if allowed_weekdays:
+        restrictions[const.CONF_ALLOWED_WEEKDAYS] = sorted(set(allowed_weekdays))
+    parity = call.data.get(ATTR_PARITY)
+    if parity and parity != "none":
+        restrictions[const.CONF_PARITY] = parity
+    if ATTR_FORBIDDEN_WINDOWS in call.data:
+        restrictions[const.CONF_FORBIDDEN_WINDOWS] = [
+            {
+                const.CONF_WINDOW_START: w[ATTR_WINDOW_START],
+                const.CONF_WINDOW_END: w[ATTR_WINDOW_END],
+            }
+            for w in call.data[ATTR_FORBIDDEN_WINDOWS]
+        ]
+    merged = dict(entry.options)
+    merged[const.CONF_RESTRICTIONS] = restrictions
+    _write_hub_options(hass, entry, merged)
+
+
 async def _async_export_config(call: ServiceCall) -> ServiceResponse:
     entry = _loaded_entry(call.hass)
     payload = {
@@ -937,4 +993,13 @@ def async_setup_services(hass: HomeAssistant) -> None:
     )
     hass.services.async_register(
         DOMAIN, SERVICE_SET_WEATHER_SOURCES, _async_set_weather_sources, _SET_WEATHER_SOURCES_SCHEMA
+    )
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_SET_CONSUMPTION_BUDGET,
+        _async_set_consumption_budget,
+        _SET_CONSUMPTION_BUDGET_SCHEMA,
+    )
+    hass.services.async_register(
+        DOMAIN, SERVICE_SET_RESTRICTIONS, _async_set_restrictions, _SET_RESTRICTIONS_SCHEMA
     )
