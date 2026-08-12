@@ -8,6 +8,7 @@ import { formatNumber } from "../format";
 import { discover, type MaestroModel, type ZoneBundle } from "../discovery";
 import "./program-list";
 import "./zone-editor";
+import "./settings-view";
 import type {
   ProgramCurveSaveDetail,
   ProgramMinutesSaveDetail,
@@ -20,7 +21,13 @@ import type {
 } from "./program-list";
 import type { WizardFinishDetail } from "./program-wizard";
 import type { ZoneRemoveDetail, ZoneSaveDetail } from "./zone-editor";
-import { parseExportedConfig, type ExportedConfig, type ZoneData } from "./config-read";
+import type { BudgetSaveDetail, RestrictionsSaveDetail, WeatherSaveDetail } from "./settings-view";
+import {
+  parseExportedConfig,
+  type ExportedConfig,
+  type HubOptions,
+  type ZoneData,
+} from "./config-read";
 
 /**
  * Sidebar panel shell: zone tabs + the selected zone's read-only program
@@ -37,6 +44,11 @@ export class IrrigationMaestroPanel extends LitElement {
   // `_readConfig`/`_onEditZone` below).
   @state() private _editingZone?: ZoneData | null;
   @state() private _editingZoneId?: string;
+  // "zones" = the normal zone tabs/program-list view (default), "settings" =
+  // the everyday-settings view (spec §1.3), opened via the header's ⚙️
+  // button — see `_onOpenSettings`/`_options` below.
+  @state() private _view: "zones" | "settings" = "zones";
+  @state() private _options?: HubOptions;
 
   private _relevantIds: string[] = [];
   private _statesCount = 0;
@@ -121,6 +133,22 @@ export class IrrigationMaestroPanel extends LitElement {
   }
 
   /**
+   * ⚙️ header button: opens the everyday-settings view (spec §1.3), seeded
+   * from a fresh `export_config` read — same "read-before-open" pattern as
+   * `_onEditZone` above, including the shared `config_read_failed` error
+   * path when the read fails or the payload is unusable.
+   */
+  private async _onOpenSettings(): Promise<void> {
+    const cfg = await this._readConfig();
+    if (cfg) {
+      this._options = cfg.options;
+      this._view = "settings";
+    } else {
+      this._showError(localize(pickLanguage(this.hass), "panel.config_read_failed"));
+    }
+  }
+
+  /**
    * `imc-zone-save`: `add_zone` accepts ONLY `name`/`valve_entity`/
    * `area_m2`/`icon` — its voluptuous schema has no ALLOW_EXTRA, so any
    * other field in the payload hard-fails the call. Pick exactly those
@@ -172,6 +200,29 @@ export class IrrigationMaestroPanel extends LitElement {
   private _onZoneCancel(): void {
     this._editingZone = undefined;
     this._editingZoneId = undefined;
+  }
+
+  /**
+   * The 3 settings-view save events (spec §1.3, wired in this task): each
+   * event's detail keys ARE the matching hub service's attr names 1:1
+   * (verified against `services.yaml`), so every handler spreads the detail
+   * straight into the service call — no field renaming needed here, unlike
+   * e.g. `_onCurveSave` above.
+   */
+  private _onSaveWeather(ev: CustomEvent<WeatherSaveDetail>): void {
+    void this._call("irrigation_maestro", "set_weather_sources", { ...ev.detail });
+  }
+
+  private _onSaveBudget(ev: CustomEvent<BudgetSaveDetail>): void {
+    void this._call("irrigation_maestro", "set_consumption_budget", { ...ev.detail });
+  }
+
+  private _onSaveRestrictions(ev: CustomEvent<RestrictionsSaveDetail>): void {
+    void this._call("irrigation_maestro", "set_restrictions", { ...ev.detail });
+  }
+
+  private _onSettingsBack(): void {
+    this._view = "zones";
   }
 
   private _onSaveSchedule(ev: CustomEvent<ProgramScheduleSaveDetail>): void {
@@ -334,6 +385,16 @@ export class IrrigationMaestroPanel extends LitElement {
       font-size: 20px;
       font-weight: 600;
     }
+    .settings-btn {
+      margin-left: auto;
+      font-size: 13px;
+      color: var(--imc-accent, #3a6df0);
+      cursor: pointer;
+      user-select: none;
+    }
+    .settings-btn:hover {
+      opacity: 0.8;
+    }
     .meteo {
       font-size: 12.5px;
       color: var(--secondary-text-color);
@@ -429,10 +490,38 @@ export class IrrigationMaestroPanel extends LitElement {
       `;
     }
 
+    // The settings view (spec §1.3) replaces the whole zones view — it's
+    // opened via the header's ⚙️ button (`_onOpenSettings`) and owns its own
+    // "‹ back" control internally, dispatching `imc-settings-back` (wired
+    // below) to return here. Checked AFTER the zone-editor branch above
+    // (that one takes precedence — you can't be mid zone-edit and in
+    // settings at once) but BEFORE the empty-zones check below, since
+    // settings must be reachable regardless of zone count.
+    if (this._view === "settings") {
+      return html`
+        <div
+          class="wrap ${this.narrow ? "narrow" : ""}"
+          @imc-settings-save-weather=${this._onSaveWeather}
+          @imc-settings-save-budget=${this._onSaveBudget}
+          @imc-settings-save-restrictions=${this._onSaveRestrictions}
+          @imc-settings-back=${this._onSettingsBack}
+        >
+          <header><h1>${localize(lang, "panel.title")}</h1></header>
+          ${this._error ? html`<div class="error">${this._error}</div>` : nothing}
+          <imc-settings-view .hass=${hass} .options=${this._options ?? {}}></imc-settings-view>
+        </div>
+      `;
+    }
+
     if (!model.found || model.zones.length === 0) {
       return html`
         <div class="wrap">
-          <header><h1>${localize(lang, "panel.title")}</h1></header>
+          <header>
+            <h1>${localize(lang, "panel.title")}</h1>
+            <span class="settings-btn" @click=${this._onOpenSettings}>
+              ⚙️ ${localize(lang, "settings.title")}
+            </span>
+          </header>
           ${this._error ? html`<div class="error">${this._error}</div>` : nothing}
           <div class="empty">${localize(lang, "panel.no_zones")}</div>
           <div class="tabs">
@@ -467,7 +556,12 @@ export class IrrigationMaestroPanel extends LitElement {
         @imc-wizard-finish=${this._onWizardFinish}
         @imc-wizard-cancel=${() => undefined}
       >
-        <header><h1>${localize(lang, "panel.title")}</h1></header>
+        <header>
+          <h1>${localize(lang, "panel.title")}</h1>
+          <span class="settings-btn" @click=${this._onOpenSettings}>
+            ⚙️ ${localize(lang, "settings.title")}
+          </span>
+        </header>
         ${this._renderWeatherContext(model, lang, weightedTemp)}
         ${this._error ? html`<div class="error">${this._error}</div>` : nothing}
         <div class="tabs">
