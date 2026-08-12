@@ -44,6 +44,12 @@ Irrigation Maestro is built around two ideas:
 - **Per-zone adjustment factor** and hub-wide **forbidden time windows**: a
   cycle already running is truncated rather than allowed to overrun into a
   window. Windows constrain hours only; watering days belong to the program.
+- **Everything configured from the sidebar panel** after setup: zones,
+  programs and their calendars, weather sources, consumption budget, forbidden
+  hours, notifications, and — behind Advanced drawers — session limits, valve
+  confirmations, the watchdog and concurrency. The config flow covers first-run
+  setup, zone creation and the weather decision engine, which stays deliberately
+  out of the dashboard's reach.
 - **Weather engine** (§ details below) with a single forecast fetch per
   session, stage-and-commit rain estimation without a rain sensor, and a
   configurable stale-weather policy.

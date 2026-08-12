@@ -37,62 +37,6 @@
           "consumption_budget": "Budget di consumo"
         }
       },
-      "general": {
-        "title": "Generale",
-        "description": "La sorgente meteo e l'hardware opzionale condiviso da tutte le zone. È obbligatoria solo l'entità meteo; lascia vuoto il resto se non ce l'hai.",
-        "data": {
-          "weather_entity": "Entità meteo",
-          "rain_sensor": "Sensore pioggia (facoltativo)",
-          "outdoor_temp_sensor": "Sensore temperatura esterna (facoltativo)",
-          "line_flow_sensor": "Sensore di portata di linea (facoltativo)",
-          "master_valve": "Valvola master / pompa (facoltativa)",
-          "master_pre_open_s": "Anticipo apertura valvola master (secondi)",
-          "master_post_close_s": "Ritardo chiusura valvola master (secondi)",
-          "max_concurrent": "Zone contemporanee al massimo",
-          "compatibility_groups": "Gruppi di compatibilità"
-        },
-        "data_description": {
-          "weather_entity": "Obbligatoria. Un'entità weather.* che fornisce previsioni di temperatura e precipitazioni (es. Met.no).",
-          "rain_sensor": "Un sensore con la pioggia totale di oggi in mm. Se vuoto, la pioggia viene stimata dalle previsioni.",
-          "outdoor_temp_sensor": "Usa un termometro reale al posto dell'entità meteo per le massime giornaliere.",
-          "line_flow_sensor": "Un unico contatore di portata (L/min) sul collettore, condiviso dalle zone che non ne hanno uno proprio.",
-          "master_valve": "Una valvola o un interruttore (es. il relè di una pompa) aperto prima della prima zona e chiuso dopo l'ultima.",
-          "master_pre_open_s": "Per quanto la valvola master/pompa gira prima che si apra la prima zona, per fare pressione. Default 5.",
-          "master_post_close_s": "Per quanto la valvola master/pompa continua a girare dopo la chiusura dell'ultima zona. Default 5.",
-          "max_concurrent": "Quante zone possono irrigare insieme. Tieni 1 a meno che la pressione dell'acqua ne alimenti di più contemporaneamente.",
-          "compatibility_groups": "Serve solo se il massimo qui sopra è maggiore di 1. Nomi separati da virgola (es. 'goccia, prato'); solo le zone assegnate allo stesso gruppo possono irrigare insieme."
-        }
-      },
-      "safety": {
-        "title": "Sicurezza e tempistiche",
-        "description": "Timeout e finestre di sicurezza per l'apertura e la chiusura delle valvole. I valori predefiniti vanno bene per la maggior parte degli impianti: modificali solo se il tuo hardware lo richiede.",
-        "data": {
-          "settle_pause_s": "Pausa di assestamento tra le zone",
-          "manual_block_min": "Blocco dopo uno stop manuale",
-          "watchdog_max_min": "Limite watchdog per zona",
-          "open_confirm_s": "Timeout conferma apertura valvola",
-          "close_confirm_s": "Timeout conferma chiusura valvola",
-          "switch_confirm_s": "Ritardo di conferma per interruttori",
-          "wait_free_min": "Attesa di uno slot libero",
-          "startup_valve_timeout_s": "Timeout disponibilità valvole all'avvio",
-          "sentinel_time": "Orario del controllo sentinella giornaliero",
-          "session_max_min": "Durata massima della sessione",
-          "must_finish_by": "La sessione deve terminare entro"
-        },
-        "data_description": {
-          "settle_pause_s": "Pausa tra la chiusura di una zona e l'apertura della successiva, per far assestare la pressione. Default 120.",
-          "manual_block_min": "Dopo uno stop manuale, i programmi automatici restano bloccati per questo tempo. Default 60.",
-          "watchdog_max_min": "Sicurezza: una valvola aperta più a lungo di così viene chiusa a forza e segnalata. Default 70.",
-          "open_confirm_s": "Se una valvola non risulta \"aperta\" entro questo tempo, il programma viene annullato. Default 120.",
-          "close_confirm_s": "Se una valvola non conferma \"chiusa\" entro questo tempo, riprova e ti avvisa. Default 120.",
-          "switch_confirm_s": "Per valvole a interruttore (senza feedback di posizione): considerate aperte/chiuse dopo questo ritardo. Default 10.",
-          "wait_free_min": "Un programma in scadenza attende al massimo questo tempo che le altre valvole siano libere, poi viene saltato. Default 10.",
-          "startup_valve_timeout_s": "Dopo un riavvio, quanto attendere che le valvole tornino online prima di segnalarne una irraggiungibile. Default 300.",
-          "sentinel_time": "Orario del controllo giornaliero che ti avvisa se un programma previsto non è mai partito. Default 12:00.",
-          "session_max_min": "Facoltativo. Salta le zone ancora in coda una volta che la sessione ha irrigato per questi minuti. Vuoto = nessun limite.",
-          "must_finish_by": "Facoltativo. Non avviare un programma che finirebbe dopo quest'ora del giorno. Vuoto = nessun limite."
-        }
-      },
       "engine_advanced": {
         "title": "Motore decisionale (avanzato)",
         "description": "Pesi e soglie del motore che decide se e quanto irrigare. Modificali solo se sai cosa stai facendo: \"Ripristina valori predefiniti\" riporta i valori validati sul campo.",
@@ -141,51 +85,6 @@
           "stale_weather_max_h": "Ore senza un aggiornamento meteo prima che i dati siano considerati obsoleti. Default 6.",
           "stale_weather_policy": "Con dati obsoleti: \"Irriga comunque\" usa l'ultima temperatura nota (budget 0); \"Salta l'irrigazione\" salta.",
           "reset_to_defaults": "Scarta tutti i valori di questa pagina e ripristina i predefiniti integrati, validati sul campo."
-        }
-      },
-      "restrictions": {
-        "title": "Restrizioni di calendario",
-        "description": "Regole facoltative per ordinanze comunali o consortili sull'irrigazione. Lascia tutto vuoto se non hai restrizioni. Le zone possono derogare singolarmente.",
-        "data": {
-          "forbidden_windows": "Fasce orarie vietate"
-        },
-        "data_description": {
-          "forbidden_windows": "Orari in cui l'irrigazione non è consentita, es. '08:00-10:30, 22:00-23:15'. Vuoto = nessun divieto. Un programma in corso viene troncato invece di sconfinare."
-        }
-      },
-      "notifications": {
-        "title": "Notifiche",
-        "description": "Scegli l'evento da configurare; nel passaggio successivo ne imposti destinatari e priorità.",
-        "data": {
-          "event": "Evento"
-        }
-      },
-      "notifications_event": {
-        "title": "Impostazioni di notifica",
-        "description": "Impostazioni di recapito per l'evento \"{event}\".",
-        "data": {
-          "enabled": "Invia notifiche per questo evento",
-          "services": "Servizi di notifica",
-          "priority": "Priorità"
-        },
-        "data_description": {
-          "enabled": "Disattiva per rendere silenzioso questo evento.",
-          "services": "Uno o più servizi notify.* (es. l'app del telefono) che ricevono questo evento.",
-          "priority": "\"Alta\" segna gli eventi urgenti (anomalie, watchdog) come ad alta importanza sulle app che lo supportano."
-        }
-      },
-      "consumption_budget": {
-        "title": "Budget di consumo",
-        "description": "Tetto mensile di consumo, facoltativo. Lascia vuoto il budget per disattivarlo del tutto.",
-        "data": {
-          "liters_per_month": "Budget mensile (litri)",
-          "action": "Azione al superamento",
-          "reduce_pct": "Percentuale di riduzione"
-        },
-        "data_description": {
-          "liters_per_month": "Litri totali consentiti al mese. Vuoto = nessun budget. Serve un flussometro, o le portate nominali per stimare il consumo.",
-          "action": "Cosa succede una volta esaurito il budget: \"solo notifica\" avvisa, \"riduci\" accorcia ogni programma, \"sospendi\" ferma l'irrigazione fino al mese successivo.",
-          "reduce_pct": "Di quanto viene accorciato ogni programma quando l'azione è \"Riduci l'irrigazione\". Default 50."
         }
       }
     },
@@ -896,6 +795,128 @@
         "forbidden_windows": {
           "name": "Finestre vietate",
           "description": "Orari in cui l'irrigazione non è consentita. Vuoto significa nessun divieto. Un programma in corso viene troncato invece di sconfinare."
+        }
+      }
+    },
+    "set_session_limits": {
+      "name": "Imposta limiti di sessione",
+      "description": "Quanto può durare una sessione e quando deve finire.",
+      "fields": {
+        "session_max_min": {
+          "name": "Durata massima della sessione",
+          "description": "Minuti. Ciò che resta in coda oltre questo limite viene saltato."
+        },
+        "must_finish_by": {
+          "name": "Deve finire entro",
+          "description": "Ora locale entro cui la sessione deve terminare."
+        },
+        "wait_free_min": {
+          "name": "Attesa valvole libere",
+          "description": "Minuti di attesa per una valvola occupata prima di annullare la corsa."
+        },
+        "manual_block_min": {
+          "name": "Blocco dopo stop manuale",
+          "description": "Minuti in cui le corse programmate restano bloccate dopo uno stop manuale."
+        },
+        "settle_pause_s": {
+          "name": "Pausa di assestamento",
+          "description": "Secondi fra la chiusura di una zona e l'apertura della successiva."
+        },
+        "sentinel_time": {
+          "name": "Orario sentinella",
+          "description": "Ora locale del controllo giornaliero che ogni programma previsto abbia lasciato traccia."
+        }
+      }
+    },
+    "set_valve_safety": {
+      "name": "Imposta sicurezza valvole",
+      "description": "Timeout di conferma e watchdog.",
+      "fields": {
+        "open_confirm_s": {
+          "name": "Conferma apertura",
+          "description": "Secondi di attesa perché una valvola risulti aperta."
+        },
+        "close_confirm_s": {
+          "name": "Conferma chiusura",
+          "description": "Secondi di attesa perché una valvola risulti chiusa."
+        },
+        "switch_confirm_s": {
+          "name": "Conferma switch",
+          "description": "Secondi per le valvole su switch, che non riportano posizione."
+        },
+        "startup_valve_timeout_s": {
+          "name": "Timeout chiusura all'avvio",
+          "description": "Secondi concessi alla chiusura di tutte le valvole all'avvio."
+        },
+        "watchdog_max_min": {
+          "name": "Massimo watchdog",
+          "description": "Minuti dopo i quali il watchdog forza la chiusura di una valvola."
+        }
+      }
+    },
+    "set_concurrency": {
+      "name": "Imposta concorrenza",
+      "description": "Quante zone possono irrigare insieme e i tempi della valvola master.",
+      "fields": {
+        "max_concurrent": {
+          "name": "Zone contemporanee",
+          "description": "Quante zone possono irrigare insieme."
+        },
+        "compatibility_groups": {
+          "name": "Gruppi di compatibilità",
+          "description": "Nomi di gruppo separati da virgola le cui zone possono irrigare insieme."
+        },
+        "master_pre_open_s": {
+          "name": "Pre-apertura master",
+          "description": "Secondi di anticipo con cui la valvola master apre."
+        },
+        "master_post_close_s": {
+          "name": "Post-chiusura master",
+          "description": "Secondi in cui la valvola master resta aperta dopo la zona."
+        }
+      }
+    },
+    "set_notifications": {
+      "name": "Imposta notifiche",
+      "description": "Abilita un evento e scegli i servizi di notifica che richiama.",
+      "fields": {
+        "event": {
+          "name": "Evento",
+          "description": "Quale evento configurare."
+        },
+        "enabled": {
+          "name": "Abilitato",
+          "description": "Se questo evento invia notifiche."
+        },
+        "services": {
+          "name": "Servizi di notifica",
+          "description": "Elenco di servizi notify, es. notify.mobile_app_telefono."
+        }
+      }
+    },
+    "set_program_advanced": {
+      "name": "Imposta opzioni avanzate del programma",
+      "description": "Cycle-and-soak e timeout di sicurezza volumetrico.",
+      "fields": {
+        "zone_id": {
+          "name": "Zona",
+          "description": "La zona a cui appartiene il programma."
+        },
+        "program_id": {
+          "name": "Programma",
+          "description": "Il programma da modificare."
+        },
+        "soak_max_run_min": {
+          "name": "Durata massima per corsa",
+          "description": "Minuti. Divide l'irrigazione perché il terreno assorba fra una corsa e l'altra."
+        },
+        "soak_pause_min": {
+          "name": "Pausa di ammollo",
+          "description": "Minuti fra una corsa e l'altra. Senza una durata massima non ha effetto."
+        },
+        "volume_safety_timeout_min": {
+          "name": "Timeout di sicurezza volumetrico",
+          "description": "Minuti dopo i quali una corsa a volume si ferma comunque."
         }
       }
     }
