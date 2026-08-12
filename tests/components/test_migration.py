@@ -1,0 +1,312 @@
+"""Migration v1 -> v2: the schedule model rewrite.
+
+The contract is behavioural, not structural: a migrated configuration must
+water on the same calendar days as before, or raise a note saying it could not.
+"""
+
+from datetime import date, timedelta
+
+import pytest
+from custom_components.irrigation_maestro.migration import migrate_zone_v1_to_v2
+
+TODAY = date(2026, 7, 13)  # Monday
+
+
+def zone_v1(*, interval_days=3, days=None, season=None, programs=1):
+    cycles = []
+    for index in range(programs):
+        cycle = {
+            "id": f"c{index}",
+            "name": f"P{index}",
+            "trigger": {"kind": "time", "at": "05:30"},
+        }
+        if days is not None:
+            cycle["days"] = sorted(days)
+        cycles.append(cycle)
+    zone = {
+        "name": "Pots",
+        "valve_entity": "valve.p",
+        "interval_days": interval_days,
+        "cycles": cycles,
+    }
+    if season is not None:
+        zone["season_months"] = sorted(season)
+    return zone
+
+
+def calendars(migrated):
+    return [cycle["calendar"] for cycle in migrated["cycles"]]
+
+
+class TestCalendarChoice:
+    def test_grid_wins_over_cadence_and_notes_it(self):
+        migrated, notes = migrate_zone_v1_to_v2(zone_v1(interval_days=3, days={0, 2, 4}), None)
+        assert calendars(migrated) == [{"mode": "weekdays", "days": [0, 2, 4]}]
+        assert [note.kind for note in notes] == ["cadence_dropped"]
+
+    def test_grid_with_daily_cadence_is_not_a_conflict(self):
+        migrated, notes = migrate_zone_v1_to_v2(zone_v1(interval_days=1, days={0, 2}), None)
+        assert calendars(migrated) == [{"mode": "weekdays", "days": [0, 2]}]
+        assert notes == []
+
+    def test_cadence_without_grid_becomes_interval(self):
+        migrated, notes = migrate_zone_v1_to_v2(zone_v1(interval_days=3), None)
+        assert calendars(migrated) == [{"mode": "interval", "interval_days": 3}]
+        assert notes == []
+
+    def test_no_grid_no_cadence_becomes_daily(self):
+        migrated, notes = migrate_zone_v1_to_v2(zone_v1(interval_days=1), None)
+        assert calendars(migrated) == [{"mode": "weekdays", "days": [0, 1, 2, 3, 4, 5, 6]}]
+        assert notes == []
+
+    def test_all_seven_days_is_not_a_meaningful_grid(self):
+        migrated, _notes = migrate_zone_v1_to_v2(zone_v1(interval_days=3, days=set(range(7))), None)
+        assert calendars(migrated) == [{"mode": "interval", "interval_days": 3}]
+
+    def test_every_program_of_the_zone_is_migrated(self):
+        migrated, _notes = migrate_zone_v1_to_v2(zone_v1(interval_days=3, programs=3), None)
+        assert len(calendars(migrated)) == 3
+
+
+class TestHubWeekdays:
+    def test_allowed_weekdays_are_intersected_not_dropped(self):
+        # Hub allows Mon/Wed/Fri; a daily program must not become daily.
+        migrated, notes = migrate_zone_v1_to_v2(
+            zone_v1(interval_days=1), {"allowed_weekdays": [0, 2, 4]}
+        )
+        assert calendars(migrated) == [{"mode": "weekdays", "days": [0, 2, 4]}]
+        assert notes == []
+
+    def test_intersection_narrows_an_existing_grid(self):
+        migrated, _notes = migrate_zone_v1_to_v2(
+            zone_v1(interval_days=1, days={0, 1, 2}), {"allowed_weekdays": [0, 2, 4]}
+        )
+        assert calendars(migrated) == [{"mode": "weekdays", "days": [0, 2]}]
+
+    def test_empty_intersection_disables_the_program(self):
+        migrated, notes = migrate_zone_v1_to_v2(
+            zone_v1(interval_days=1, days={1, 3}), {"allowed_weekdays": [0, 2, 4]}
+        )
+        assert migrated["cycles"][0]["enabled"] is False
+        assert [note.kind for note in notes] == ["program_disabled"]
+
+    def test_interval_keeps_its_cadence_and_notes_the_dropped_limit(self):
+        # "every 3 days but only Mon/Wed/Fri" is inexpressible; keep the water
+        # volume, hand the legal decision to the user.
+        migrated, notes = migrate_zone_v1_to_v2(
+            zone_v1(interval_days=3), {"allowed_weekdays": [0, 2, 4]}
+        )
+        assert calendars(migrated) == [{"mode": "interval", "interval_days": 3}]
+        assert [note.kind for note in notes] == ["weekdays_dropped"]
+
+
+class TestHubParity:
+    def test_parity_becomes_the_mode_when_no_grid(self):
+        migrated, notes = migrate_zone_v1_to_v2(zone_v1(interval_days=1), {"parity": "odd"})
+        assert calendars(migrated) == [{"mode": "parity", "parity": "odd"}]
+        assert notes == []
+
+    def test_parity_with_a_grid_keeps_the_grid_and_notes_it(self):
+        migrated, notes = migrate_zone_v1_to_v2(
+            zone_v1(interval_days=1, days={0, 2}), {"parity": "odd"}
+        )
+        assert calendars(migrated) == [{"mode": "weekdays", "days": [0, 2]}]
+        assert [note.kind for note in notes] == ["parity_dropped"]
+
+    def test_parity_with_a_cadence_keeps_the_cadence_and_notes_it(self):
+        migrated, notes = migrate_zone_v1_to_v2(zone_v1(interval_days=3), {"parity": "even"})
+        assert calendars(migrated) == [{"mode": "interval", "interval_days": 3}]
+        assert [note.kind for note in notes] == ["parity_dropped"]
+
+
+class TestSeason:
+    def test_zone_season_pushes_down_to_programs(self):
+        migrated, _notes = migrate_zone_v1_to_v2(zone_v1(season={6, 7, 8}), None)
+        assert migrated["cycles"][0]["season_months"] == [6, 7, 8]
+        assert "season_months" not in migrated
+
+    def test_existing_override_wins_over_the_zone_value(self):
+        zone = zone_v1(season={6, 7, 8})
+        zone["cycles"][0]["months_override"] = [7]
+        migrated, _notes = migrate_zone_v1_to_v2(zone, None)
+        assert migrated["cycles"][0]["season_months"] == [7]
+        assert "months_override" not in migrated["cycles"][0]
+
+    def test_no_season_anywhere_leaves_the_program_inheriting_the_hub(self):
+        migrated, _notes = migrate_zone_v1_to_v2(zone_v1(), None)
+        assert "season_months" not in migrated["cycles"][0]
+
+
+class TestRemovedZoneFields:
+    def test_calendar_fields_are_gone(self):
+        migrated, _notes = migrate_zone_v1_to_v2(zone_v1(season={7}), None)
+        for key in ("interval_days", "season_months", "restrictions"):
+            assert key not in migrated
+
+    def test_legacy_days_key_is_gone_from_programs(self):
+        migrated, _notes = migrate_zone_v1_to_v2(zone_v1(days={0, 2}), None)
+        assert "days" not in migrated["cycles"][0]
+
+    def test_zone_restrictions_override_is_reported(self):
+        zone = zone_v1()
+        zone["restrictions"] = {"allowed_weekdays": [1]}
+        _migrated, notes = migrate_zone_v1_to_v2(zone, None)
+        assert "zone_restrictions_dropped" in [note.kind for note in notes]
+
+    def test_unrelated_zone_fields_survive(self):
+        zone = zone_v1()
+        zone["area_m2"] = 12.5
+        zone["compatibility_group"] = "g1"
+        migrated, _notes = migrate_zone_v1_to_v2(zone, None)
+        assert migrated["area_m2"] == 12.5
+        assert migrated["compatibility_group"] == "g1"
+
+
+class TestBehaviourPreservation:
+    """The real contract: which days water, before and after."""
+
+    def watering_days_v1(self, zone, hub, start, count):
+        """Replay the OLD rules: grid AND cadence AND hub weekdays AND parity."""
+        from custom_components.irrigation_maestro.engine.scheduling import is_due
+
+        grid = zone["cycles"][0].get("days")
+        allowed = (hub or {}).get("allowed_weekdays")
+        parity = (hub or {}).get("parity")
+        last, days = None, []
+        for offset in range(count):
+            day = start + timedelta(days=offset)
+            if grid is not None and day.weekday() not in grid:
+                continue
+            if allowed is not None and day.weekday() not in allowed:
+                continue
+            if parity == "odd" and day.day % 2 == 0:
+                continue
+            if parity == "even" and day.day % 2 == 1:
+                continue
+            if not is_due(last, day, zone["interval_days"]):
+                continue
+            days.append(day)
+            last = day
+        return days
+
+    def watering_days_v2(self, migrated, start, count):
+        from custom_components.irrigation_maestro.engine.calendar import (
+            ProgramCalendar,
+            calendar_allows,
+        )
+
+        cycle = migrated["cycles"][0]
+        if cycle.get("enabled") is False:
+            return []
+        calendar = ProgramCalendar.from_config(cycle["calendar"])
+        last, days = None, []
+        for offset in range(count):
+            day = start + timedelta(days=offset)
+            if not calendar_allows(calendar, day, last):
+                continue
+            days.append(day)
+            last = day
+        return days
+
+    @pytest.mark.parametrize(
+        "zone,hub",
+        [
+            (zone_v1(interval_days=1), None),
+            (zone_v1(interval_days=3), None),
+            (zone_v1(interval_days=7), None),
+            (zone_v1(interval_days=1, days={0, 2, 4}), None),
+            (zone_v1(interval_days=1, days={5, 6}), None),
+            (zone_v1(interval_days=1), {"allowed_weekdays": [0, 2, 4]}),
+            (zone_v1(interval_days=1, days={0, 1, 2}), {"allowed_weekdays": [0, 2, 4]}),
+            (zone_v1(interval_days=1), {"parity": "odd"}),
+            (zone_v1(interval_days=1), {"parity": "even"}),
+        ],
+    )
+    def test_watering_days_are_unchanged_over_60_days(self, zone, hub):
+        migrated, notes = migrate_zone_v1_to_v2(zone, hub)
+        assert notes == [], "this combination is expected to migrate cleanly"
+        assert self.watering_days_v2(migrated, TODAY, 60) == self.watering_days_v1(
+            zone, hub, TODAY, 60
+        )
+
+    def test_the_reported_defect_is_what_changes(self):
+        # Mon/Wed/Fri with the default cadence of 3 dropped Wednesday every
+        # week. After migration the user gets the days they picked.
+        zone = zone_v1(interval_days=3, days={0, 2, 4})
+        migrated, notes = migrate_zone_v1_to_v2(zone, None)
+        before = self.watering_days_v1(zone, None, TODAY, 14)
+        after = self.watering_days_v2(migrated, TODAY, 14)
+        assert [day.weekday() for day in before] == [0, 4, 0, 4]  # Wednesday missing
+        assert [day.weekday() for day in after] == [0, 2, 4, 0, 2, 4]
+        assert [note.kind for note in notes] == ["cadence_dropped"]
+
+
+class TestEndToEnd:
+    """A real v1 entry must come up migrated, with its repair issues raised."""
+
+    async def test_v1_entry_is_migrated_on_setup(self, hass):
+        from custom_components.irrigation_maestro.const import DOMAIN
+        from homeassistant.helpers import issue_registry as ir
+        from pytest_homeassistant_custom_component.common import MockConfigEntry
+
+        await hass.config.async_set_time_zone("UTC")
+        entry = MockConfigEntry(
+            domain=DOMAIN,
+            version=1,  # pre-2.0.0 installation
+            title="Irrigation Maestro",
+            data={},
+            options={
+                "weather_entity": "weather.test",
+                "restrictions": {"allowed_weekdays": [0, 2, 4], "parity": "odd"},
+            },
+            subentries_data=[
+                {
+                    "data": {
+                        "name": "Pots",
+                        "valve_entity": "valve.pots",
+                        "interval_days": 3,
+                        "season_months": [6, 7, 8],
+                        "cycles": [
+                            {
+                                "id": "cy_morning",
+                                "name": "Morning",
+                                "days": [0, 2, 4],
+                                "trigger": {"kind": "time", "at": "05:30"},
+                                "curve": {
+                                    "points": [[20.0, 3.0]],
+                                    "min_value": 1.0,
+                                    "max_value": 60.0,
+                                },
+                            }
+                        ],
+                    },
+                    "subentry_type": "zone",
+                    "title": "Pots",
+                    "unique_id": None,
+                }
+            ],
+        )
+        entry.add_to_hass(hass)
+        assert await hass.config_entries.async_setup(entry.entry_id)
+        await hass.async_block_till_done()
+
+        assert entry.version == 2
+        data = next(iter(entry.subentries.values())).data
+        # The grid the user picked wins; the cadence and the parity are gone.
+        assert data["cycles"][0]["calendar"] == {"mode": "weekdays", "days": [0, 2, 4]}
+        assert data["cycles"][0]["season_months"] == [6, 7, 8]
+        assert "interval_days" not in data
+        assert "season_months" not in data
+        # Restrictions keep hours only.
+        assert entry.options["restrictions"] == {}
+
+        registry = ir.async_get(hass)
+        assert registry.async_get_issue(DOMAIN, "migration_cadence_dropped") is not None
+        assert registry.async_get_issue(DOMAIN, "migration_parity_dropped") is not None
+
+    async def test_migration_is_idempotent(self):
+        zone = zone_v1(interval_days=3, days={0, 2, 4})
+        once, _notes = migrate_zone_v1_to_v2(zone, None)
+        twice, notes = migrate_zone_v1_to_v2(once, None)
+        assert twice == once
+        assert notes == []

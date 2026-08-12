@@ -6,8 +6,16 @@ import logging
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
+from homeassistant.helpers import issue_registry as ir
 
+from . import const
+from .const import DOMAIN
+from .migration import (
+    MigrationNote,
+    migrate_hub_restrictions,
+    migrate_zone_v1_to_v2,
+)
 from .panel import async_register_panel, async_unregister_panel
 from .resources import async_register_frontend
 from .runtime import IrrigationRuntime
@@ -54,17 +62,55 @@ async def async_unload_entry(hass: HomeAssistant, entry: IrrigationConfigEntry) 
     return unload_ok
 
 
+@callback
+def async_report_migration_notes(hass: HomeAssistant, notes: list[MigrationNote]) -> None:
+    """One repair issue per kind, listing every zone and program affected."""
+    grouped: dict[str, list[MigrationNote]] = {}
+    for note in notes:
+        grouped.setdefault(note.kind, []).append(note)
+    for kind, items in grouped.items():
+        summary = ", ".join(
+            f"{note.zone_name} / {note.program_name}".removesuffix(" / ") for note in items
+        )
+        ir.async_create_issue(
+            hass,
+            DOMAIN,
+            f"migration_{kind}",
+            is_fixable=False,
+            severity=ir.IssueSeverity.WARNING,
+            translation_key=f"migration_{kind}",
+            translation_placeholders={"items": summary},
+        )
+
+
 async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Migrate old config entries (schema versioning from 1.0, §7)."""
-    if entry.version > 1:
+    if entry.version > 2:
         # Downgrade from a future major version: refuse, do not guess.
         return False
-    # Version 1.x: nothing to migrate yet. This hook ships from day one so the
-    # first schema change cannot break existing installations.
-    _LOGGER.debug(
-        "Config entry %s at version %s.%s — no migration needed",
+    if entry.version == 2:
+        return True
+
+    # v1 -> v2: the program becomes the single owner of "when". Every zone is
+    # rewritten and anything the new model cannot express is reported.
+    hub_restrictions = dict(entry.options.get(const.CONF_RESTRICTIONS) or {})
+    notes: list[MigrationNote] = []
+    for subentry in entry.subentries.values():
+        if subentry.subentry_type != const.SUBENTRY_TYPE_ZONE:
+            continue
+        data, zone_notes = migrate_zone_v1_to_v2(dict(subentry.data), hub_restrictions)
+        notes.extend(zone_notes)
+        hass.config_entries.async_update_subentry(entry, subentry, data=data)
+
+    options = dict(entry.options)
+    options[const.CONF_RESTRICTIONS] = migrate_hub_restrictions(hub_restrictions)
+    hass.config_entries.async_update_entry(entry, options=options, version=2, minor_version=0)
+
+    if notes:
+        async_report_migration_notes(hass, notes)
+    _LOGGER.info(
+        "Migrated config entry %s to the unified schedule model (%s note(s))",
         entry.entry_id,
-        entry.version,
-        entry.minor_version,
+        len(notes),
     )
     return True

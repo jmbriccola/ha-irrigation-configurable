@@ -209,7 +209,7 @@ def _hub_entities_schema() -> vol.Schema:
 class IrrigationMaestroConfigFlow(ConfigFlow, domain=const.DOMAIN):
     """Create the single Irrigation Maestro hub entry."""
 
-    VERSION = 1
+    VERSION = 2
     MINOR_VERSION = 1
 
     @staticmethod

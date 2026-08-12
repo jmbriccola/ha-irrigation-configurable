@@ -113,6 +113,14 @@ class IrrigationRuntime:
     async def async_setup(self) -> None:
         await self.state.async_load()
         self._build_zones()
+        # v2: the watering marker is keyed per program. Idempotent — already
+        # migrated keys pass through untouched.
+        self.state.migrate_markers(
+            {
+                zone_id: [cycle.cycle_id for cycle in zone.config.cycles]
+                for zone_id, zone in self.zones.items()
+            }
+        )
         self._schedule_triggers()
         self._start_trackers()
         self.watchdog.start()

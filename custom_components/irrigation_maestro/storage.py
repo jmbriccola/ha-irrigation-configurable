@@ -18,6 +18,7 @@ from homeassistant.helpers.storage import Store
 from .const import DOMAIN, STORAGE_VERSION
 from .engine import history
 from .engine.model import EngineParams
+from .migration import migrate_last_completed
 
 _SAVE_DELAY_S = 10
 _GLOBAL_KEY = "__global__"
@@ -54,6 +55,12 @@ class RuntimeState:
             data = self._default_data()
             data.update(stored)
             self._data = data
+
+    def migrate_markers(self, zone_programs: dict[str, list[str]]) -> None:
+        """Re-key the watering marker from per zone to per program (v2)."""
+        self._data["last_completed"] = migrate_last_completed(
+            self._data["last_completed"], zone_programs
+        )
 
     async def async_save(self) -> None:
         await self._store.async_save(self._data)
