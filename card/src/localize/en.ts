@@ -304,5 +304,11 @@ export const en = {
   "settings.master_pre_open_s_hint": "Seconds the master valve opens before a zone. Default 0.",
   "settings.master_post_close_s": "Master post-close",
   "settings.master_post_close_s_hint": "Seconds the master valve stays open after a zone. Default 0.",
+  "program_editor.soak_max_run": "Maximum run length",
+  "program_editor.soak_max_run_hint": "Minutes. Splits the watering into shorter runs so the soil can absorb between them. Empty = one continuous run.",
+  "program_editor.soak_pause": "Soak pause",
+  "program_editor.soak_pause_hint": "Minutes to wait between runs. Needs a maximum run length to have any effect.",
+  "program_editor.volume_safety_timeout": "Volume safety timeout",
+  "program_editor.volume_safety_timeout_hint": "Minutes after which a volume-target run stops even if the meter has not reached the target.",
   "settings.advanced_note": "Advanced parameters (engine, safety, notifications) live in Settings",
 } as const;

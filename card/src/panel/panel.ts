@@ -647,6 +647,14 @@ export class IrrigationMaestroPanel extends LitElement {
       <div
         class="wrap ${this.narrow ? "narrow" : ""}"
         @imc-program-save-schedule=${this._onSaveSchedule}
+        @imc-program-save-advanced=${(
+          e: CustomEvent<{ zoneId: string; programId: string; patch: Record<string, unknown> }>,
+        ) =>
+          this._saveSettings("set_program_advanced", {
+            zone_id: e.detail.zoneId,
+            program_id: e.detail.programId,
+            ...e.detail.patch,
+          })}
         @imc-program-save-minutes=${this._onSaveMinutes}
         @imc-curve-save=${this._onCurveSave}
         @imc-program-cancel=${() => undefined}

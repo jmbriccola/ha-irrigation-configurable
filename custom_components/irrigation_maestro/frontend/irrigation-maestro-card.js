@@ -894,6 +894,12 @@ const E = {
   "settings.master_pre_open_s_hint": "Seconds the master valve opens before a zone. Default 0.",
   "settings.master_post_close_s": "Master post-close",
   "settings.master_post_close_s_hint": "Seconds the master valve stays open after a zone. Default 0.",
+  "program_editor.soak_max_run": "Maximum run length",
+  "program_editor.soak_max_run_hint": "Minutes. Splits the watering into shorter runs so the soil can absorb between them. Empty = one continuous run.",
+  "program_editor.soak_pause": "Soak pause",
+  "program_editor.soak_pause_hint": "Minutes to wait between runs. Needs a maximum run length to have any effect.",
+  "program_editor.volume_safety_timeout": "Volume safety timeout",
+  "program_editor.volume_safety_timeout_hint": "Minutes after which a volume-target run stops even if the meter has not reached the target.",
   "settings.advanced_note": "Advanced parameters (engine, safety, notifications) live in Settings"
 }, Zt = {
   // Messaggi a livello di scheda
@@ -1175,6 +1181,12 @@ const E = {
   "settings.master_pre_open_s_hint": "Secondi di anticipo con cui la valvola master apre. Default 0.",
   "settings.master_post_close_s": "Post-chiusura master",
   "settings.master_post_close_s_hint": "Secondi in cui la valvola master resta aperta dopo la zona. Default 0.",
+  "program_editor.soak_max_run": "Durata massima per corsa",
+  "program_editor.soak_max_run_hint": "Minuti. Divide l'irrigazione in corse più brevi perché il terreno assorba fra una e l'altra. Vuoto = una corsa continua.",
+  "program_editor.soak_pause": "Pausa di ammollo",
+  "program_editor.soak_pause_hint": "Minuti di attesa fra una corsa e l'altra. Senza una durata massima per corsa non ha alcun effetto.",
+  "program_editor.volume_safety_timeout": "Timeout di sicurezza volumetrico",
+  "program_editor.volume_safety_timeout_hint": "Minuti dopo i quali una corsa a volume si ferma anche se il contatore non ha raggiunto il target.",
   "settings.advanced_note": "Parametri avanzati (motore, sicurezza, notifiche) → Impostazioni"
 }, be = {
   en: E,
