@@ -6,7 +6,7 @@ is built against them.
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from typing import Any
 
 from homeassistant.components.sensor import SensorDeviceClass, SensorEntity
@@ -19,6 +19,7 @@ from homeassistant.util import dt as dt_util
 
 from . import IrrigationConfigEntry
 from .const import TRIGGER_KIND_SUN, TRIGGER_KIND_TIME
+from .engine.calendar import calendar_allows
 from .engine.curves import CurveKind
 from .engine.semantic import semantic_from_curve
 from .entity import (
@@ -27,7 +28,7 @@ from .entity import (
     async_add_zone_entities,
     async_ensure_hub_device,
 )
-from .models import CycleConfig, CycleTrigger
+from .models import CycleConfig, CycleTrigger, ZoneConfig
 from .runtime import IrrigationRuntime
 from .session import PHASE_WATERING
 
@@ -293,9 +294,17 @@ class ZoneStateSensor(MaestroZoneEntity, SensorEntity):
 
 
 class ZoneNextRunSensor(MaestroZoneEntity, SensorEntity):
-    """The earliest next trigger occurrence across the zone's enabled cycles."""
+    """The earliest next occurrence the zone will actually water on.
+
+    It projects each enabled program forward until a day passes every gate —
+    calendar, season, suspension, pause and skip-today — instead of reporting
+    the raw next trigger. Before 2.0.0 it ignored all of them and promised a
+    run on days the zone would skip; four overlapping day mechanisms made an
+    honest answer impractical, and one calendar mode makes it easy.
+    """
 
     _attr_device_class = SensorDeviceClass.TIMESTAMP
+    _SEARCH_DAYS = 366
 
     def __init__(self, runtime: IrrigationRuntime, zone_id: str) -> None:
         super().__init__(runtime, zone_id, "zone_next_run")
@@ -315,30 +324,60 @@ class ZoneNextRunSensor(MaestroZoneEntity, SensorEntity):
         config = self.zone_config
         if config is None:
             return None
+        state = self._runtime.state
         best: tuple[datetime, CycleConfig] | None = None
         for cycle in config.cycles:
-            if not self._runtime.state.cycle_enabled(self._zone_id, cycle.cycle_id):
+            if not state.cycle_enabled(self._zone_id, cycle.cycle_id):
                 continue
-            when = self._next_occurrence(cycle.trigger)
-            if when is None:
-                continue
-            if best is None or when < best[0]:
+            when = self._next_eligible(config, cycle)
+            if when is not None and (best is None or when < best[0]):
                 best = (when, cycle)
         return best
 
-    def _next_occurrence(self, trigger: CycleTrigger) -> datetime | None:
+    def _next_eligible(self, config: ZoneConfig, cycle: CycleConfig) -> datetime | None:
+        """First instant this program both fires and is allowed to water."""
+        state = self._runtime.state
+        if not state.zone_enabled(self._zone_id):
+            return None
+        now = dt_util.now()
+        marker = state.last_completed(self._zone_id, cycle.cycle_id)
+        months = (
+            cycle.season_months
+            if cycle.season_months is not None
+            else self._runtime.hub.engine_params.season_months
+        )
+        blocked_until = max(
+            filter(
+                None,
+                (state.suspended_until(self._zone_id), state.paused_until(self._zone_id)),
+            ),
+            default=None,
+        )
+        skip_day = state.skip_today_date(self._zone_id)
+
+        for offset in range(self._SEARCH_DAYS):
+            day = now.date() + timedelta(days=offset)
+            if day == skip_day or day.month not in months:
+                continue
+            if not calendar_allows(cycle.calendar, day, marker):
+                continue
+            when = self._occurrence_on(cycle.trigger, day)
+            if when is None or when <= now:
+                continue
+            if blocked_until is not None and when <= blocked_until:
+                continue
+            return when
+        return None
+
+    def _occurrence_on(self, trigger: CycleTrigger, day: date) -> datetime | None:
+        """The trigger instant on a specific calendar day."""
         if trigger.kind == TRIGGER_KIND_TIME and trigger.at is not None:
-            local_now = dt_util.now()
-            candidate = local_now.replace(
-                hour=trigger.at.hour, minute=trigger.at.minute, second=0, microsecond=0
+            return dt_util.start_of_local_day(day).replace(
+                hour=trigger.at.hour, minute=trigger.at.minute
             )
-            if candidate <= local_now:
-                candidate += timedelta(days=1)
-            return candidate
         if trigger.kind == TRIGGER_KIND_SUN and trigger.event is not None:
-            return sun.get_astral_event_next(
-                self.hass, trigger.event, offset=timedelta(seconds=trigger.offset_s)
-            )
+            base = sun.get_astral_event_date(self.hass, trigger.event, day)
+            return base + timedelta(seconds=trigger.offset_s) if base else None
         return None
 
 
