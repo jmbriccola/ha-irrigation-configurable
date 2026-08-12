@@ -1,7 +1,9 @@
-"""Calendar-day cadence, season windows and calendar restrictions (§1).
+"""Cadence helper, season windows and forbidden time windows (§1).
 
-Restrictions model municipal/consortium watering ordinances: allowed weekdays,
-odd/even day-of-month schemes and forbidden time-of-day windows. Queued or
+From 2.0.0 restrictions constrain HOURS only — which days a zone waters is
+decided by each program's calendar (see engine/calendar.py). Keeping a second
+weekday/parity mechanism here is what let two schedules silently cancel each
+other out, so it is deliberately absent rather than merely unused. Queued or
 retried work slides to the first allowed slot, and a running cycle must never
 overrun into a forbidden window (it is truncated instead).
 """
@@ -45,10 +47,8 @@ class TimeWindow:
 
 @dataclass(frozen=True, slots=True)
 class CalendarRestrictions:
-    """Global restrictions, overridable per zone."""
+    """Hub-wide watering-ordinance limits. Hours only (see the module docstring)."""
 
-    allowed_weekdays: frozenset[int] | None = None  # 0 = Monday; None = all
-    parity: Parity | None = None
     forbidden_windows: tuple[TimeWindow, ...] = field(default_factory=tuple)
 
 
@@ -82,17 +82,6 @@ def in_season(month: int, months: frozenset[int]) -> bool:
     return month in months
 
 
-def day_allowed(day: date, restrictions: CalendarRestrictions) -> bool:
-    """Whether a calendar day passes weekday and parity restrictions."""
-    if restrictions.allowed_weekdays is not None and (
-        day.weekday() not in restrictions.allowed_weekdays
-    ):
-        return False
-    if restrictions.parity is Parity.ODD and day.day % 2 == 0:
-        return False
-    return not (restrictions.parity is Parity.EVEN and day.day % 2 == 1)
-
-
 def time_allowed(value: time, windows: tuple[TimeWindow, ...]) -> bool:
     """Whether a time of day is outside every forbidden window."""
     return not any(window.contains(value) for window in windows)
@@ -101,19 +90,14 @@ def time_allowed(value: time, windows: tuple[TimeWindow, ...]) -> bool:
 def next_allowed_start(start: datetime, restrictions: CalendarRestrictions) -> datetime:
     """First instant at or after ``start`` where a cycle may begin.
 
-    Slides across disallowed days (to their midnight) and out of forbidden
-    windows (to the window end, re-checking the landing day). Raises
+    Slides out of forbidden windows (to the window end, re-checking the
+    landing day). Raises
     EngineError if nothing is allowed within a year — a configuration that
     forbids everything must surface, not spin.
     """
     candidate = start
     deadline = start + timedelta(days=_MAX_SEARCH_DAYS)
     while candidate <= deadline:
-        if not day_allowed(candidate.date(), restrictions):
-            candidate = datetime.combine(
-                candidate.date() + timedelta(days=1), time.min, tzinfo=candidate.tzinfo
-            )
-            continue
         blocking = next(
             (w for w in restrictions.forbidden_windows if w.contains(candidate.time())),
             None,

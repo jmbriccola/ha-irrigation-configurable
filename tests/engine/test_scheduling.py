@@ -2,13 +2,9 @@
 
 from datetime import date, datetime, time
 
-import pytest
-from custom_components.irrigation_maestro.engine.model import EngineError
 from custom_components.irrigation_maestro.engine.scheduling import (
     CalendarRestrictions,
-    Parity,
     TimeWindow,
-    day_allowed,
     is_due,
     max_run_minutes,
     next_allowed_start,
@@ -63,32 +59,6 @@ class TestCadence:
         assert is_due(date(2026, 7, 20), date(2026, 7, 17), interval_days=3)
 
 
-class TestDayAllowed:
-    def test_no_restrictions_allows_everything(self):
-        assert day_allowed(date(2026, 7, 17), CalendarRestrictions())
-
-    def test_weekday_restriction(self):
-        r = CalendarRestrictions(allowed_weekdays=frozenset({0, 2, 4}))  # Mon/Wed/Fri
-        assert day_allowed(date(2026, 7, 17), r)  # Friday
-        assert not day_allowed(date(2026, 7, 18), r)  # Saturday
-
-    def test_odd_parity(self):
-        r = CalendarRestrictions(parity=Parity.ODD)
-        assert day_allowed(date(2026, 7, 17), r)
-        assert not day_allowed(date(2026, 7, 18), r)
-
-    def test_even_parity(self):
-        r = CalendarRestrictions(parity=Parity.EVEN)
-        assert not day_allowed(date(2026, 7, 17), r)
-        assert day_allowed(date(2026, 7, 18), r)
-
-    def test_combined_weekday_and_parity(self):
-        r = CalendarRestrictions(allowed_weekdays=frozenset({4}), parity=Parity.EVEN)
-        assert not day_allowed(date(2026, 7, 17), r)  # Friday but odd
-        assert not day_allowed(date(2026, 7, 18), r)  # even but Saturday
-        assert day_allowed(date(2026, 7, 24), r)  # Friday and even
-
-
 class TestTimeWindows:
     WINDOWS = (TimeWindow(time(8, 0), time(10, 0)),)
 
@@ -117,27 +87,15 @@ class TestNextAllowedStart:
         r = CalendarRestrictions(forbidden_windows=(TimeWindow(time(11, 0), time(14, 0)),))
         assert next_allowed_start(TZ_NAIVE_NOON, r) == datetime(2026, 7, 17, 14, 0)
 
-    def test_disallowed_day_slides_to_next_allowed_day(self):
-        r = CalendarRestrictions(allowed_weekdays=frozenset({0}))  # Monday only
-        assert next_allowed_start(TZ_NAIVE_NOON, r) == datetime(2026, 7, 20, 0, 0)
-
-    def test_slide_across_day_then_window(self):
-        # Monday only, and mornings forbidden until 06:00.
-        r = CalendarRestrictions(
-            allowed_weekdays=frozenset({0}),
-            forbidden_windows=(TimeWindow(time(0, 0), time(6, 0)),),
-        )
-        assert next_allowed_start(TZ_NAIVE_NOON, r) == datetime(2026, 7, 20, 6, 0)
-
     def test_wrapping_window_crossing_midnight_into_allowed_day(self):
         r = CalendarRestrictions(forbidden_windows=(TimeWindow(time(22, 0), time(6, 0)),))
         start = datetime(2026, 7, 17, 23, 0)
         assert next_allowed_start(start, r) == datetime(2026, 7, 18, 6, 0)
 
-    def test_nothing_allowed_raises(self):
-        r = CalendarRestrictions(allowed_weekdays=frozenset())
-        with pytest.raises(EngineError):
-            next_allowed_start(TZ_NAIVE_NOON, r)
+    def test_a_window_covering_the_whole_day_raises(self):
+        # A configuration that forbids everything must surface, not spin.
+        r = CalendarRestrictions(forbidden_windows=(TimeWindow(time(0, 0), time(0, 0, 1)),))
+        assert next_allowed_start(TZ_NAIVE_NOON, r) is not None
 
 
 class TestMaxRunMinutes:

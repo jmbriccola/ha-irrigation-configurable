@@ -6,7 +6,6 @@ import pytest
 from custom_components.irrigation_maestro import const
 from custom_components.irrigation_maestro.engine.calendar import ProgramCalendar
 from custom_components.irrigation_maestro.engine.curves import CurveError, CurveKind
-from custom_components.irrigation_maestro.engine.scheduling import Parity
 from custom_components.irrigation_maestro.models import (
     CycleConfig,
     HubConfig,
@@ -47,25 +46,26 @@ class TestRestrictions:
     def test_none_stays_none(self):
         assert restrictions_from_config(None) is None
 
-    def test_full_parse(self):
+    def test_windows_parse(self):
         restrictions = restrictions_from_config(
-            {
-                "allowed_weekdays": [0, 2, 4],
-                "parity": "odd",
-                "forbidden_windows": [{"start": "08:00", "end": "10:30"}],
-            }
+            {"forbidden_windows": [{"start": "08:00", "end": "10:30"}]}
         )
         assert restrictions is not None
-        assert restrictions.allowed_weekdays == frozenset({0, 2, 4})
-        assert restrictions.parity is Parity.ODD
         assert restrictions.forbidden_windows[0].start == time(8, 0)
         assert restrictions.forbidden_windows[0].end == time(10, 30)
+
+    def test_day_limits_are_ignored(self):
+        # Weekday and parity limits are program calendar modes from 2.0.0;
+        # a stale blob must not resurrect them as a second day mechanism.
+        restrictions = restrictions_from_config({"allowed_weekdays": [0, 2, 4], "parity": "odd"})
+        assert restrictions is not None
+        assert restrictions.forbidden_windows == ()
+        assert not hasattr(restrictions, "allowed_weekdays")
+        assert not hasattr(restrictions, "parity")
 
     def test_empty_dict_gives_unrestricted(self):
         restrictions = restrictions_from_config({})
         assert restrictions is not None
-        assert restrictions.allowed_weekdays is None
-        assert restrictions.parity is None
         assert restrictions.forbidden_windows == ()
 
 
@@ -126,7 +126,7 @@ class TestHubConfig:
                 "session_max_min": 180,
                 "must_finish_by": "09:30",
                 "sentinel_time": "13:15",
-                "restrictions": {"parity": "even"},
+                "restrictions": {"forbidden_windows": [{"start": "22:00", "end": "06:00"}]},
                 "engine": {"threshold_base_mm": 4.5},
                 "consumption_budget": {"liters_per_month": 5000, "action": "reduce"},
             }
@@ -138,7 +138,7 @@ class TestHubConfig:
         assert hub.session_max_min == 180
         assert hub.must_finish_by == time(9, 30)
         assert hub.sentinel_time == time(13, 15)
-        assert hub.restrictions.parity is Parity.EVEN
+        assert hub.restrictions.forbidden_windows[0].start == time(22, 0)
         assert hub.engine_params.threshold_base_mm == 4.5
         assert hub.consumption_budget_liters == 5000
         assert hub.consumption_action == "reduce"

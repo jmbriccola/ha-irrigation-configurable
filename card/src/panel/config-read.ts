@@ -8,7 +8,6 @@ export interface ZoneData {
   flow_tolerance_pct?: number;
   adjustment_pct?: number;
   order?: number;
-  interval_days?: number;
   compatibility_group?: string;
   season_months?: number[];
 }
@@ -25,7 +24,6 @@ export interface HubOptions {
     reduce_pct?: number;
   };
   restrictions?: {
-    allowed_weekdays?: number[];
     parity?: string;
     forbidden_windows?: {
       start: string;

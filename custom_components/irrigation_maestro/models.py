@@ -19,7 +19,7 @@ from .engine.calendar import ProgramCalendar
 from .engine.curves import PRESET_LAWN, PRESET_POTS, Curve, CurveError, CurveKind
 from .engine.model import EngineParams
 from .engine.planner import CycleSpec, ZoneSpec
-from .engine.scheduling import CalendarRestrictions, Parity, TimeWindow
+from .engine.scheduling import CalendarRestrictions, TimeWindow
 
 BUILTIN_TEMPLATES: dict[str, Curve] = {
     const.PRESET_POTS_ID: PRESET_POTS,
@@ -49,23 +49,18 @@ def engine_params_from_config(config: dict[str, Any]) -> EngineParams:
 
 
 def restrictions_from_config(config: dict[str, Any] | None) -> CalendarRestrictions | None:
-    """CalendarRestrictions from a restrictions dict; None passes through."""
+    """Hub restrictions: forbidden time-of-day windows only (2.0.0).
+
+    Weekday and parity limits were a second source of truth for watering days
+    and now live as program calendar modes.
+    """
     if config is None:
         return None
-    weekdays = config.get(const.CONF_ALLOWED_WEEKDAYS)
-    parity_raw = config.get(const.CONF_PARITY)
     windows = tuple(
-        TimeWindow(
-            start=_parse_time(window[const.CONF_WINDOW_START]),
-            end=_parse_time(window[const.CONF_WINDOW_END]),
-        )
-        for window in config.get(const.CONF_FORBIDDEN_WINDOWS, [])
+        TimeWindow(_parse_time(w[const.CONF_WINDOW_START]), _parse_time(w[const.CONF_WINDOW_END]))
+        for w in config.get(const.CONF_FORBIDDEN_WINDOWS, [])
     )
-    return CalendarRestrictions(
-        allowed_weekdays=frozenset(weekdays) if weekdays is not None else None,
-        parity=Parity(parity_raw) if parity_raw else None,
-        forbidden_windows=windows,
-    )
+    return CalendarRestrictions(forbidden_windows=windows)
 
 
 def resolve_curve(config: dict[str, Any], templates: dict[str, Any]) -> Curve:
