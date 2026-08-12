@@ -2,6 +2,8 @@ import { css, html, LitElement, nothing } from "lit";
 import type { TemplateResult } from "lit";
 import { property, state } from "lit/decorators.js";
 import { WEEKDAYS, effectiveMinutes, toggleWeekday, weekdayLabels } from "../schedule-math";
+import "./calendar-editor";
+import { type CalendarConfig } from "./calendar-editor";
 import { localize, pickLanguage } from "../localize/localize";
 import { clamp, defineElement } from "../types";
 import type { HomeAssistant } from "../types";
@@ -27,7 +29,7 @@ export interface WizardStart {
 export interface WizardFinishDetail {
   zoneId: string;
   name?: string;
-  days: number[];
+  calendar: CalendarConfig;
   start: WizardStart;
   minutes: number;
 }
@@ -74,7 +76,7 @@ export class ImcProgramWizard extends LitElement {
   @property({ attribute: false }) weightedTemp?: number;
 
   @state() private _step: Step = 1;
-  @state() private _days: number[] = [...WEEKDAYS];
+  @state() private _calendar: CalendarConfig = { mode: "weekdays", days: [...WEEKDAYS] };
   @state() private _startKind: "time" | "sun" = "sun";
   @state() private _startAt = "06:00";
   @state() private _startEvent: "sunrise" | "sunset" = "sunrise";
@@ -300,14 +302,12 @@ export class ImcProgramWizard extends LitElement {
         ${this._step < 3
           ? html`<button
               class="primary"
-              ?disabled=${this._days.length === 0}
               @click=${this._next}
             >
               ${localize(lang, "wizard.next")}
             </button>`
           : html`<button
               class="primary"
-              ?disabled=${this._days.length === 0}
               @click=${this._finish}
             >
               ${localize(lang, "wizard.finish")}
@@ -322,44 +322,13 @@ export class ImcProgramWizard extends LitElement {
     return localize(lang, "wizard.step3_title");
   }
 
-  private _renderStep1(lang: string): TemplateResult {
-    const labels = weekdayLabels(lang);
+  private _renderStep1(_lang: string): TemplateResult {
     return html`
-      <div class="days">
-        ${labels.map(
-          (lbl, wd) => html`
-            <div
-              class="day ${this._days.includes(wd) ? "on" : ""}"
-              @click=${() => (this._days = toggleWeekday(this._days, wd))}
-            >
-              ${lbl}
-            </div>
-          `,
-        )}
-      </div>
-      <div class="presets">
-        <span
-          class="preset ${this._days.length === 7 ? "sel" : ""}"
-          @click=${() => (this._days = [...WEEKDAYS])}
-        >
-          ${localize(lang, "wizard.preset_every_day")}
-        </span>
-        <span
-          class="preset ${sameDays(this._days, PRESET_ALTERNATE) ? "sel" : ""}"
-          @click=${() => (this._days = [...PRESET_ALTERNATE])}
-        >
-          ${localize(lang, "wizard.preset_alternate")}
-        </span>
-        <span
-          class="preset ${sameDays(this._days, PRESET_WEEKEND) ? "sel" : ""}"
-          @click=${() => (this._days = [...PRESET_WEEKEND])}
-        >
-          ${localize(lang, "wizard.preset_weekend")}
-        </span>
-      </div>
-      ${this._days.length === 0
-        ? html`<div class="hint">${localize(lang, "panel.pick_a_day")}</div>`
-        : nothing}
+      <imc-calendar-editor
+        .calendar=${this._calendar}
+        @imc-calendar-change=${(event: CustomEvent<{ calendar: CalendarConfig }>) =>
+          (this._calendar = event.detail.calendar)}
+      ></imc-calendar-editor>
     `;
   }
 
@@ -473,33 +442,23 @@ export class ImcProgramWizard extends LitElement {
   }
 
   private _next(): void {
-    if (this._days.length === 0) return;
     if (this._step < 3) this._step = (this._step + 1) as Step;
   }
 
   private _finish(): void {
-    // Same guard as program-editor.ts: an empty weekday selection must
-    // never be persisted (the backend reads falsy/empty `days` as "every
-    // day" — the opposite of "no days selected"). The wizard's presets
-    // and the step-1→2 guard already keep this from happening in the
-    // normal flow; this is defense in depth.
-    if (this._days.length === 0) return;
-
     const start: WizardStart =
       this._startKind === "time"
         ? { kind: "time", at: this._startAt }
         : { kind: "sun", event: this._startEvent, offset_min: this._startOffsetMin };
 
-    // "Every day" (all 7 chips on) serializes as [] — the same
-    // absent/empty = every-day convention program-editor.ts uses, so a
-    // wizard-created program looks identical on the wire to one whose
-    // schedule was never customized.
-    const sortedDays = [...this._days].sort((a, b) => a - b);
-    const days = sortedDays.length >= 7 ? [] : sortedDays;
-
     this.dispatchEvent(
       new CustomEvent<WizardFinishDetail>("imc-wizard-finish", {
-        detail: { zoneId: this.zoneId, days, start, minutes: this._minutes },
+        detail: {
+          zoneId: this.zoneId,
+          calendar: this._calendar,
+          start,
+          minutes: this._minutes,
+        },
         bubbles: true,
         composed: true,
       }),

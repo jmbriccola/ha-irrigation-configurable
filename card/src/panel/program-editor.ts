@@ -15,6 +15,8 @@ import type { CycleInfo, HomeAssistant } from "../types";
 // Side-effect import: registers <imc-curve-editor>, reused verbatim as the
 // "heat response" control inside the advanced drawer below.
 import "../curve-editor";
+import "./calendar-editor";
+import { type CalendarConfig, normaliseCalendar } from "./calendar-editor";
 import type { CurveSavePayload } from "../curve-editor";
 
 /**
@@ -26,6 +28,18 @@ import type { CurveSavePayload } from "../curve-editor";
  * only holds the working copy and renders it.
  */
 
+const MONTH_LABELS = [
+  "Gen", "Feb", "Mar", "Apr", "Mag", "Giu",
+  "Lug", "Ago", "Set", "Ott", "Nov", "Dic",
+];
+
+/** Season chips: empty means "inherit the hub season". */
+function toggleMonth(months: number[], month: number): number[] {
+  return months.includes(month)
+    ? months.filter((item) => item !== month)
+    : [...months, month].sort((a, b) => a - b);
+}
+
 export interface ProgramStartDetail {
   kind: "time" | "sun";
   at?: string;
@@ -36,7 +50,8 @@ export interface ProgramStartDetail {
 export interface ProgramScheduleSaveDetail {
   zoneId: string;
   programId: string;
-  days: number[];
+  calendar: CalendarConfig;
+  seasonMonths?: number[];
   start: ProgramStartDetail;
 }
 
@@ -85,7 +100,8 @@ export class ImcProgramEditor extends LitElement {
   @property({ attribute: false }) cycle?: CycleInfo;
   @property({ attribute: false }) weightedTemp?: number;
 
-  @state() private _days: number[] = [...WEEKDAYS];
+  @state() private _calendar: CalendarConfig = { mode: "weekdays", days: [...WEEKDAYS] };
+  @state() private _seasonMonths: number[] = [];
   @state() private _startKind: "time" | "sun" = "time";
   @state() private _startAt = "06:00";
   @state() private _startEvent: "sunrise" | "sunset" = "sunrise";
@@ -103,6 +119,15 @@ export class ImcProgramEditor extends LitElement {
    * come back null for them. Duration steppers + weather preview only make
    * sense for a "duration" curve.
    */
+  /** Weekdays the per-day duration editor should offer.
+
+   * Only the weekday mode pins runs to particular weekdays; an interval or
+   * parity program can land on any of them.
+   */
+  private get _activeDays(): number[] {
+    return this._calendar.mode === "weekdays" ? this._calendar.days : [...WEEKDAYS];
+  }
+
   private get _isVolume(): boolean {
     return this.cycle?.curve?.kind === "volume";
   }
@@ -315,7 +340,8 @@ export class ImcProgramEditor extends LitElement {
   private _seedFromCycle(): void {
     const cycle = this.cycle;
     if (!cycle) return;
-    this._days = cycle.days && cycle.days.length > 0 ? [...cycle.days] : [...WEEKDAYS];
+    this._calendar = normaliseCalendar(cycle.calendar);
+    this._seasonMonths = [...(cycle.season_months ?? [])];
 
     const trigger = cycle.trigger;
     if (trigger?.kind === "sun") {
@@ -341,13 +367,20 @@ export class ImcProgramEditor extends LitElement {
     const labels = weekdayLabels(lang);
 
     return html`
-      <div class="section-label">${localize(lang, "program_editor.days")}</div>
+      <div class="section-label">${localize(lang, "program_editor.calendar")}</div>
+      <imc-calendar-editor
+        .calendar=${this._calendar}
+        @imc-calendar-change=${(event: CustomEvent<{ calendar: CalendarConfig }>) =>
+          (this._calendar = event.detail.calendar)}
+      ></imc-calendar-editor>
+
+      <div class="section-label">${localize(lang, "program_editor.season")}</div>
       <div class="days">
-        ${labels.map(
-          (lbl, wd) => html`
+        ${MONTH_LABELS.map(
+          (lbl, index) => html`
             <div
-              class="day ${this._days.includes(wd) ? "on" : ""}"
-              @click=${() => (this._days = toggleWeekday(this._days, wd))}
+              class="day ${this._seasonMonths.includes(index + 1) ? "on" : ""}"
+              @click=${() => (this._seasonMonths = toggleMonth(this._seasonMonths, index + 1))}
             >
               ${lbl}
             </div>
@@ -402,9 +435,6 @@ export class ImcProgramEditor extends LitElement {
 
             ${this._renderWeatherLine(lang, cycle)}
           `}
-      ${this._days.length === 0
-        ? html`<div class="hint">${localize(lang, "panel.pick_a_day")}</div>`
-        : nothing}
 
       <div
         class="section-label advanced-toggle"
@@ -415,7 +445,7 @@ export class ImcProgramEditor extends LitElement {
       ${this._advancedOpen ? this._renderAdvanced(lang) : nothing}
 
       <div class="buttons">
-        <button class="primary" ?disabled=${this._days.length === 0} @click=${this._save}>
+        <button class="primary" @click=${this._save}>
           ${localize(lang, "editor.save")}
         </button>
         <button @click=${this._cancel}>${localize(lang, "editor.cancel")}</button>
@@ -470,7 +500,7 @@ export class ImcProgramEditor extends LitElement {
         })}
       </div>`;
     }
-    return html`${this._days.map((wd) => {
+    return html`${this._activeDays.map((wd) => {
       const value = dayBase({ amount: this._uniformMinutes, day_minutes: this._dayMinutes }, wd);
       return html`<div class="duration-row">
         <span class="dname">${labels[wd] ?? ""}</span>
@@ -516,9 +546,8 @@ export class ImcProgramEditor extends LitElement {
     // The program may not even run today — an "≈ N min" preview for a day
     // it never waters on would be misleading. "Every day" is 7 chips on
     // (mirrors the [] === every-day convention used when saving).
-    const everyDaySelected = this._days.length >= 7;
-    if (!everyDaySelected && !this._days.includes(today)) {
-      return html`<div class="weather">${localize(lang, "reason.day_not_scheduled")}</div>`;
+    if (!this._activeDays.includes(today)) {
+      return html`<div class="weather">${localize(lang, "reason.calendar_not_today")}</div>`;
     }
 
     // Base comes from the WORKING (unsaved) state, not the saved `cycle`
@@ -545,7 +574,7 @@ export class ImcProgramEditor extends LitElement {
 
   private _buildDayMinutes(): Record<string, number> {
     const map: Record<string, number> = {};
-    for (const wd of this._days) {
+    for (const wd of this._activeDays) {
       map[String(wd)] = dayBase(
         { amount: this._uniformMinutes, day_minutes: this._dayMinutes },
         wd,
@@ -560,8 +589,6 @@ export class ImcProgramEditor extends LitElement {
     // "no days selected" — so silently saving [] here would invert intent.
     // The Save button is disabled for this case too; this is defense in
     // depth in case _save is ever invoked programmatically.
-    if (this._days.length === 0) return;
-
     const zoneId = this.zoneId;
     const programId = this.cycle?.cycle_id ?? "";
     const start: ProgramStartDetail =
@@ -569,15 +596,15 @@ export class ImcProgramEditor extends LitElement {
         ? { kind: "time", at: this._startAt }
         : { kind: "sun", event: this._startEvent, offset_min: this._startOffsetMin };
 
-    // "Every day" (all 7 chips on) serializes as [] per the documented
-    // absent/empty = every-day convention, keeping saved state consistent
-    // with what a never-edited program already looks like on the wire.
-    const sortedDays = [...this._days].sort((a, b) => a - b);
-    const days = sortedDays.length >= 7 ? [] : sortedDays;
-
     this.dispatchEvent(
       new CustomEvent<ProgramScheduleSaveDetail>("imc-program-save-schedule", {
-        detail: { zoneId, programId, days, start },
+        detail: {
+          zoneId,
+          programId,
+          calendar: this._calendar,
+          seasonMonths: this._seasonMonths.length ? [...this._seasonMonths].sort((a, b) => a - b) : undefined,
+          start,
+        },
         bubbles: true,
         composed: true,
       }),

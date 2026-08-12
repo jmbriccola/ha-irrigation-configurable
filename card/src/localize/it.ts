@@ -97,6 +97,9 @@ export const it: Record<keyof typeof en, string> = {
   "reason.cold_day": "Giornata troppo fredda",
   "reason.wind": "Troppo vento",
   "reason.budget_sufficient": "Budget idrico sufficiente",
+  "program_editor.calendar": "Calendario",
+  "program_editor.season": "Stagione (vuoto = come impostato nell'hub)",
+  "reason.calendar_not_today": "Non è un giorno di irrigazione",
   "reason.not_due": "Non ancora in programma",
   "reason.calendar_restricted": "Limitazione di calendario",
   "reason.zone_disabled": "Zona disabilitata",
@@ -257,6 +260,7 @@ export const it: Record<keyof typeof en, string> = {
   "settings.parity_all": "Tutti",
   "settings.parity_odd": "Dispari",
   "settings.parity_even": "Pari",
+  "settings.restrictions_hours_only": "Solo fasce orarie vietate. I giorni in cui una zona irriga si impostano nel calendario di ogni programma.",
   "settings.forbidden_windows": "Finestre vietate",
   "settings.advanced_note": "Parametri avanzati (motore, sicurezza, notifiche) → Impostazioni",
 };

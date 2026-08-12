@@ -117,7 +117,16 @@ export interface CycleCurve {
   kind?: string;
 }
 
+export interface CalendarInfo {
+  mode: "weekdays" | "interval" | "parity";
+  days?: number[];
+  interval_days?: number;
+  parity?: "odd" | "even";
+}
+
 export interface CycleInfo {
+  calendar?: CalendarInfo;
+  season_months?: number[];
   cycle_id?: string;
   name?: string;
   enabled?: boolean;

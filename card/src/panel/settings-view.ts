@@ -35,8 +35,6 @@ export interface BudgetSaveDetail {
 }
 
 export interface RestrictionsSaveDetail {
-  allowed_weekdays?: number[];
-  parity?: "odd" | "even" | "none";
   forbidden_windows?: { start: string; end: string }[];
 }
 
@@ -70,8 +68,6 @@ export class ImcSettingsView extends LitElement {
   @state() private _reducePct?: number;
 
   // Restrizioni calendario
-  @state() private _allowedWeekdays: number[] = [...WEEKDAYS];
-  @state() private _parity: Parity = "none";
   @state() private _forbiddenWindows: { start: string; end: string }[] = [];
 
   static override styles = css`
@@ -281,13 +277,6 @@ export class ImcSettingsView extends LitElement {
     this._reducePct = budget?.reduce_pct;
 
     const restrictions = o.restrictions;
-    const days = restrictions?.allowed_weekdays;
-    // Empty/absent allowed_weekdays means "every day allowed" (the same
-    // convention `set_restrictions`/the program schedule use elsewhere) —
-    // render that as all 7 chips lit.
-    this._allowedWeekdays =
-      days && days.length > 0 && days.length < 7 ? [...days].sort((a, b) => a - b) : [...WEEKDAYS];
-    this._parity = normalizeParity(restrictions?.parity);
     this._forbiddenWindows = restrictions?.forbidden_windows
       ? restrictions.forbidden_windows.map((w) => ({ ...w }))
       : [];
@@ -493,42 +482,13 @@ export class ImcSettingsView extends LitElement {
   }
 
   private _renderRestrictionsSection(lang: string): TemplateResult {
-    const labels = weekdayLabels(lang);
+    // Hours only. Which DAYS a zone waters is set on each program's
+    // calendar — a second weekday grid here is what let two schedules
+    // silently cancel each other out before 2.0.0.
     return html`
       <div class="sec">
-        <div class="header">📅 ${localize(lang, "settings.restrictions")}</div>
-
-        <div class="section-label">${localize(lang, "settings.allowed_days")}</div>
-        <div class="days">
-          ${labels.map(
-            (lbl, wd) => html`
-              <div
-                class="day ${this._allowedWeekdays.includes(wd) ? "on" : ""}"
-                @click=${() => (this._allowedWeekdays = toggleWeekday(this._allowedWeekdays, wd))}
-              >
-                ${lbl}
-              </div>
-            `,
-          )}
-        </div>
-
-        <span class="seg parity-seg">
-          <span
-            class="${this._parity === "none" ? "sel" : ""}"
-            @click=${() => (this._parity = "none")}
-            >${localize(lang, "settings.parity_all")}</span
-          >
-          <span
-            class="${this._parity === "odd" ? "sel" : ""}"
-            @click=${() => (this._parity = "odd")}
-            >${localize(lang, "settings.parity_odd")}</span
-          >
-          <span
-            class="${this._parity === "even" ? "sel" : ""}"
-            @click=${() => (this._parity = "even")}
-            >${localize(lang, "settings.parity_even")}</span
-          >
-        </span>
+        <div class="header">🕑 ${localize(lang, "settings.restrictions")}</div>
+        <div class="hint">${localize(lang, "settings.restrictions_hours_only")}</div>
 
         <div class="section-label">${localize(lang, "settings.forbidden_windows")}</div>
         ${this._forbiddenWindows.map(
@@ -641,10 +601,7 @@ export class ImcSettingsView extends LitElement {
    * the program schedule elsewhere in the panel.
    */
   private _saveRestrictions(): void {
-    const sorted = [...this._allowedWeekdays].sort((a, b) => a - b);
     const detail: RestrictionsSaveDetail = {
-      allowed_weekdays: sorted.length === 0 || sorted.length >= 7 ? [] : sorted,
-      parity: this._parity,
       forbidden_windows: this._forbiddenWindows.map((w) => ({ start: w.start, end: w.end })),
     };
     this.dispatchEvent(

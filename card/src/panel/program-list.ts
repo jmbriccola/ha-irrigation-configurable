@@ -7,7 +7,7 @@ import type { CycleInfo } from "../types";
 import { pickLanguage, localize } from "../localize/localize";
 import { readCycles, type ZoneBundle } from "../discovery";
 import { describeTrigger } from "../format";
-import { weekdayLabels, everyDay } from "../schedule-math";
+import { describeCalendar } from "./calendar-editor";
 import "./program-editor";
 import "./program-wizard";
 
@@ -223,25 +223,14 @@ export class ImcProgramList extends LitElement {
     zone: ZoneBundle,
     cycles: CycleInfo[],
   ): TemplateResult {
-    const labels = weekdayLabels(lang);
     return html`${cycles.map((c) => {
-      const on = c.days ?? [];
-      const isEvery = everyDay(c.days);
       const editing = !!c.cycle_id && this._editingId === c.cycle_id;
       const cycleSwitch = c.cycle_id ? this._findCycleSwitch(zone, c.cycle_id) : undefined;
       const switchOn = cycleSwitch?.state === "on";
       return html`
         <div class="prog">
           <div class="name">${c.name ?? c.cycle_id}</div>
-          <div class="days">
-            ${labels.map(
-              (lbl, wd) => html`
-                <div class="day ${isEvery || on.includes(wd) ? "on" : ""}">
-                  ${lbl}
-                </div>
-              `,
-            )}
-          </div>
+          <div class="days">${describeCalendar(c.calendar)}</div>
           <div class="meta">
             ${describeTrigger(c.trigger, lang)} · ${this._minutesSummary(lang, c)}
           </div>
