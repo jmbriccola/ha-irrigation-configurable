@@ -174,9 +174,12 @@ automations, YAML-driven setups, or bulk changes:
   configuration untouched.
 - The config flow (initial setup wizard, "Configure" on the hub, "Add
   zone"/"Configure" on a zone subentry) **remains a fully supported
-  alternative** to these services — nothing here replaces it. Phase A ships
-  only the service layer; a dedicated zone editor / settings view in the
-  card or panel that calls these services from the UI is Phase B.
+  alternative** to these services — nothing here replaces it, including for
+  the parameters the panel's zone editor / settings view (below) don't
+  expose: engine weights/thresholds, safety timings, notification routing.
+  Phase A shipped the service layer only; Phase B is the panel UI that calls
+  these six services — see "The sidebar panel" below for the ＋/✎ zone
+  editor and the ⚙️ settings view that consume them.
 
 ## Events
 
@@ -225,16 +228,36 @@ panel** via `panel_custom`:
 The panel is **not** a replacement for the card: the dashboard card keeps
 working unchanged (same entities, same services) for anyone who prefers a
 Lovelace tile. The panel is a dedicated, full-page surface for zone/program
-management.
+management, and — since Phase B — the **configuration hub**: on top of the
+program list Phase A gave it, it also creates/edits/deletes zones and edits
+the everyday hub settings (weather & sensors, consumption budget, calendar
+restrictions).
 
-**Discovery and data**: the panel uses the exact same contract as the card —
-no separate API. It iterates `hass.states` for entities carrying
-`maestro_role`, groups by `zone_id` the same way, and reads/writes programs
-through the `cycles[]` list on each zone's `zone_state` attributes described
-above: `cycle_id`, `name`, `enabled`, `trigger`, `days`, `day_minutes`,
-`amount`, `heat`, `curve`. The weekly day-grid, per-day duration fields and
-the "with today's weather" line are pure presentations of those same
-fields — there is no new backend surface for the panel to consume.
+**Discovery and data (zones/programs list)**: the panel uses the exact same
+contract as the card — no separate API. It iterates `hass.states` for
+entities carrying `maestro_role`, groups by `zone_id` the same way, and
+reads/writes programs through the `cycles[]` list on each zone's
+`zone_state` attributes described above: `cycle_id`, `name`, `enabled`,
+`trigger`, `days`, `day_minutes`, `amount`, `heat`, `curve`. The weekly
+day-grid, per-day duration fields and the "with today's weather" line are
+pure presentations of those same fields — there is no new backend surface
+for this part of the panel to consume.
+
+**Reads for the zone editor and settings view**: `zone_state` attributes
+don't carry every zone field (e.g. `flow_sensor`, `nominal_flow_lpm`,
+`compatibility_group`) or any hub option (weather entities, consumption
+budget, restrictions) — those exist only in config-entry/subentry data, not
+entity attributes. The ✎ zone editor and ⚙️ settings view therefore call
+`export_config` (the same response service `import_config` round-trips) when
+opened, and seed the form from the parsed JSON payload (`options` +
+`zones[zone_id]`) instead of from `discover()`'s entity model — one read per
+open, not on every render (`panel.ts`'s `_readConfig` / `_onEditZone` /
+`_onOpenSettings`). Entity fields in both forms (valve, flow sensor, weather
+entity, rain / outdoor-temp / line-flow sensors, master valve) reuse Home
+Assistant's native `<ha-selector>` at runtime — never bundled, supplied by
+the frontend, consistent with `embed_iframe: false` above — through a thin
+`<imc-entity-picker>` wrapper that falls back to a plain entity-id text
+input when `<ha-selector>` isn't registered.
 
 **Services it drives** — the five program-scheduling services documented
 above, unchanged from the card's Phase A contract:
@@ -250,3 +273,10 @@ the panel's **advanced drawer**, which reuses the same beginner-friendly
 heat-response curve editor component as the card (two sliders, live graph,
 worked examples, "with today's weather" line) rather than a separate
 implementation.
+
+**Plus the six configuration services** (documented in "Configuration
+services" above), driving the ＋/✎ zone editor and the ⚙️ settings view:
+
+- `add_zone` / `update_zone` / `remove_zone` — zone create / edit / delete.
+- `set_weather_sources` / `set_consumption_budget` / `set_restrictions` —
+  the settings view's three independently-saved sections.

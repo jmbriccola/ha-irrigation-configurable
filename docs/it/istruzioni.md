@@ -137,8 +137,9 @@ modificano nelle impostazioni della zona.
 ## 6. Il pannello "Irrigazione"
 
 Apri la voce **Irrigazione** nella barra laterale di Home Assistant (icona a
-irrigatore) per un'alternativa a schermo intero alla card, dedicata alla
-gestione dei programmi:
+irrigatore) — è l'**hub di configurazione** quotidiano: un'alternativa a
+schermo intero alla card per gestire i programmi, più la gestione delle zone
+e le impostazioni quotidiane dell'hub, tutto in un unico posto.
 
 1. Scegli la scheda della **zona**.
 2. L'elenco mostra tutti i programmi di quella zona; aggiungine uno nuovo
@@ -150,11 +151,34 @@ gestione dei programmi:
    solare, e la durata: un unico valore per tutti i giorni programmati,
    oppure un valore diverso per ciascun giorno (es. più breve dopo un
    giorno di pioggia).
-4. Le impostazioni **avanzate** — la curva di risposta al caldo (lo stesso
-   editor a due slider della card, "quanta acqua" / "quanto di più quando
-   fa caldo") per i programmi che scalano la durata con la temperatura
-   invece di un valore fisso — sono dietro un cassetto (drawer), chiuso per
-   default.
+4. Le impostazioni **avanzate** di un programma — la curva di risposta al
+   caldo (lo stesso editor a due slider della card, "quanta acqua" / "quanto
+   di più quando fa caldo") per i programmi che scalano la durata con la
+   temperatura invece di un valore fisso — sono dietro un cassetto (drawer),
+   chiuso per default.
+5. **＋ Aggiungi zona** (accanto alle schede zona) apre un modulo breve —
+   nome, entità valvola (o switch), area — e crea la zona con un programma
+   predefinito sensato, pronto da rifinire. **✎ Modifica zona** (sopra
+   l'elenco programmi, per la zona selezionata) apre lo stesso modulo
+   precompilato, più un cassetto **Avanzate** per sensore di portata,
+   portata nominale/tolleranza, correzione %, ordine, intervallo di
+   irrigazione, deroga ai mesi di stagione e gruppo di compatibilità — si
+   aggiornano solo i campi che modifichi. Il pulsante **🗑 Elimina zona**
+   (con richiesta di conferma) rimuove la zona.
+6. **⚙️ Impostazioni**, nell'intestazione, apre tre sezioni salvate
+   indipendentemente: **Meteo e sensori** (entità meteo, sensori
+   pioggia/temperatura esterna/portata di linea, valvola principale),
+   **Budget di consumo** (litri al mese e azione al superamento — notifica,
+   riduci, sospendi) e **Restrizioni calendario** (giorni consentiti,
+   parità pari/dispari, finestre orarie vietate) — ognuna con il proprio
+   pulsante Salva.
+
+I parametri avanzati (pesi/soglie del motore, tempistiche di sicurezza,
+instradamento delle notifiche — §3 sopra) non sono nel pannello: restano nel
+menu **Configura** dell'hub (il config flow), che resta anche il modo per
+fare la **configurazione iniziale** e aggiungere la primissima zona. Il
+pannello e il config flow scrivono la stessa configurazione: usa l'uno o
+l'altro, in qualsiasi momento — non serve migrare nulla.
 
 Il pannello e la card della dashboard leggono e scrivono gli stessi
 programmi: usa l'uno, l'altra, o entrambi — non serve migrare nulla. La card

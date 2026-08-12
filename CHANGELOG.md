@@ -4,6 +4,25 @@ All notable changes to this project are documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.3.0] - 2026-08-12
+
+### Added
+
+- The **"Irrigazione" panel is now the configuration hub**: create, edit and
+  delete zones (＋ Aggiungi zona / ✎ Modifica zona, with a 🗑 delete and
+  confirmation) directly from the sidebar, no need to leave the panel for
+  the integration page.
+- A new **⚙️ Impostazioni** view in the panel for the everyday hub settings —
+  weather & sensors, consumption budget, calendar restrictions — each saved
+  independently, right next to the zones and programs it already managed.
+- Six new backend services powering the above, usable directly too (scripts,
+  automations, bulk changes): `add_zone`, `update_zone`, `remove_zone`,
+  `set_weather_sources`, `set_consumption_budget`, `set_restrictions`.
+- The HA **config flow** (Settings → Devices & services) remains fully
+  available, both for the initial hub/zone setup and for the expert
+  engine/safety/notification parameters the panel doesn't expose — nothing
+  here replaces it.
+
 ## [1.2.0] - 2026-08-11
 
 ### Added

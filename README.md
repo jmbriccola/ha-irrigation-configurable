@@ -63,7 +63,9 @@ Irrigation Maestro is built around two ideas:
 4. Settings → Devices & services → **Add integration** → *Irrigation
    Maestro*: pick your `weather` entity (plus optional rain / temperature /
    flow sensors and master valve).
-5. On the created hub, use **Add zone** to create each irrigation circuit.
+5. On the created hub, use **Add zone** to create each irrigation circuit —
+   or skip ahead and add zones later from the **Irrigazione** sidebar panel
+   (below); both stay in sync.
 
 Requires Home Assistant **2025.7.0 or newer**.
 
@@ -84,14 +86,20 @@ lovelace:
 ### The "Irrigazione" panel
 
 The integration also registers a dedicated **sidebar panel** — look for
-**Irrigazione** (sprinkler icon) in the Home Assistant sidebar. It's a
-full-page, zone-by-zone view for managing watering programs: open the panel,
-pick a zone tab, then add or edit its programs (giorni/days on a weekly
-grid, orario/start time, durata/duration per day or uniform), with a guided
-wizard for new programs and an **Advanced** drawer for the heat-response
-curve when a fixed duration isn't enough. The dashboard card described above
-keeps working exactly as before — the panel is an additional, more spacious
-place to manage programs, not a replacement.
+**Irrigazione** (sprinkler icon) in the Home Assistant sidebar. It's the
+day-to-day **configuration hub**: pick a zone tab and add or edit its
+watering programs (giorni/days on a weekly grid, orario/start time,
+durata/duration per day or uniform), with a guided wizard for new programs
+and an **Advanced** drawer for the heat-response curve when a fixed duration
+isn't enough — plus **＋ Aggiungi zona / ✎ Modifica zona** to create, edit
+or delete zones themselves, and a **⚙️ Impostazioni** view to edit the
+everyday hub settings (weather & sensors, consumption budget, calendar
+restrictions), all without leaving the sidebar. The HA **config flow**
+(Settings → Devices & services) remains fully available too, for the
+initial setup and for the expert engine/safety/notification parameters the
+panel doesn't expose. The dashboard card described above keeps working
+exactly as before — the panel is an additional, more spacious place to
+manage zones and programs, not a replacement.
 
 ## The decision engine
 

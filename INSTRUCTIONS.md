@@ -129,8 +129,9 @@ zone settings.
 ## 6. The "Irrigazione" panel
 
 Open the **Irrigazione** entry in the Home Assistant sidebar (sprinkler
-icon) for a dedicated, full-page alternative to the card for managing
-programs:
+icon) — it's the day-to-day **configuration hub**: a full-page alternative
+to the card for managing programs, plus zone management and the everyday
+hub settings, all in one place.
 
 1. Pick a **zone** tab.
 2. The program list shows every program on that zone; add a new one with
@@ -141,10 +142,30 @@ programs:
    should run on (empty = every day) — a start time or sun-event trigger,
    and a duration: one value for every scheduled day, or a different value
    per day (e.g. shorter after a day it rained).
-4. **Advanced** settings — the heat-response curve (the same two-slider
-   editor as the card, "how much water" / "how much more when it's hot")
-   for programs that scale duration with temperature instead of a fixed
-   value — live behind a drawer, collapsed by default.
+4. **Advanced** settings on a program — the heat-response curve (the same
+   two-slider editor as the card, "how much water" / "how much more when
+   it's hot") for programs that scale duration with temperature instead of
+   a fixed value — live behind a drawer, collapsed by default.
+5. **＋ Aggiungi zona** (next to the zone tabs) opens a short form — name,
+   valve (or switch) entity, area — and creates the zone with one sensible
+   default program, ready to refine. **✎ Modifica zona** (above the program
+   list, for the selected zone) opens the same form pre-filled, plus an
+   **Avanzate** drawer for flow sensor, nominal flow/tolerance, adjustment
+   %, order, watering interval, season-month override and compatibility
+   group — only the fields you change are updated. A **🗑 Elimina zona**
+   button (with a confirmation prompt) removes the zone.
+6. **⚙️ Impostazioni**, in the header, opens three independently-saved
+   sections: **Weather & sensors** (weather entity, rain/outdoor-temperature/
+   line-flow sensors, master valve), **Consumption budget** (liters per
+   month and the action on exceeding it — notify, reduce, suspend) and
+   **Calendar restrictions** (allowed weekdays, odd/even parity, forbidden
+   time windows) — each with its own Save button.
+
+Expert parameters (engine weights/thresholds, safety timings, notification
+routing — §3 above) aren't in the panel; they stay in the hub's **Configure**
+menu (the config flow), which also remains the way to do the **initial
+setup** and add the very first zone. The panel and the config flow write the
+same configuration — use either, at any time; nothing needs to be migrated.
 
 The panel and the dashboard card read and write the same programs — use
 either, or both; nothing needs to be migrated. The card (§5 above) keeps
