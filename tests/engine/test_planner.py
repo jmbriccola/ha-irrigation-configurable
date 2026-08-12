@@ -387,6 +387,17 @@ class TestMultipleDailyCycles:
         assert plan([zone], now=NOW + timedelta(days=1)).runs
 
 
+class TestSkipReasonConsolidation:
+    """Three reasons meant the same thing to a user: not a watering day."""
+
+    def test_calendar_not_today_exists_and_is_silent(self):
+        assert SkipReason.CALENDAR_NOT_TODAY.silent is True
+
+    def test_superseded_reasons_are_gone(self):
+        for name in ("NOT_DUE", "DAY_NOT_SCHEDULED", "CALENDAR_RESTRICTED"):
+            assert not hasattr(SkipReason, name), f"{name} should be replaced"
+
+
 class TestAggregation:
     def test_shared_reason_groups_zones(self):
         zones = [
