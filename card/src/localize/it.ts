@@ -244,6 +244,7 @@ export const it: Record<keyof typeof en, string> = {
   "settings.outdoor_temp": "Sensore temperatura esterna",
   "settings.line_flow": "Sensore di portata di linea",
   "settings.master_valve": "Valvola principale",
+  "settings.clear": "Rimuovi",
   "settings.budget": "Budget consumo",
   "settings.liters": "Litri al mese",
   "settings.on_exceed": "Al superamento",

@@ -241,6 +241,7 @@ export const en = {
   "settings.outdoor_temp": "Outdoor temperature sensor",
   "settings.line_flow": "Line flow sensor",
   "settings.master_valve": "Master valve",
+  "settings.clear": "Clear",
   "settings.budget": "Consumption budget",
   "settings.liters": "Liters per month",
   "settings.on_exceed": "On exceed",

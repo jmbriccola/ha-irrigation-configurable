@@ -3,12 +3,14 @@ import type { TemplateResult } from "lit";
 import { property, state } from "lit/decorators.js";
 import { WEEKDAYS, toggleWeekday, weekdayLabels } from "../schedule-math";
 import { localize, pickLanguage } from "../localize/localize";
+import type { TranslationKey } from "../localize/localize";
 import { asNumber, defineElement } from "../types";
 import type { HomeAssistant } from "../types";
 import type { HubOptions } from "./config-read";
-// Side-effect import: registers <imc-entity-picker>, used for all five
-// entity fields in the "Meteo e sensori" section below.
+// Side-effect import registers <imc-entity-picker>; the type is used by the
+// optional-picker helper below. Both come from the same module.
 import "./ha-selector";
+import type { EntitySelectorConfig } from "./ha-selector";
 
 /**
  * The everyday-settings view (spec §1.3): three independently-saved
@@ -112,6 +114,20 @@ export class ImcSettingsView extends LitElement {
     }
     .section-label:first-of-type {
       margin-top: 10px;
+    }
+    .section-label.opt-label {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 8px;
+    }
+    .clear-link {
+      font-size: 11px;
+      text-transform: none;
+      letter-spacing: 0;
+      color: var(--imc-accent, #3a6df0);
+      cursor: pointer;
+      user-select: none;
     }
     .field {
       width: 100%;
@@ -281,6 +297,50 @@ export class ImcSettingsView extends LitElement {
     return this._weatherEntity.trim() !== "";
   }
 
+  /**
+   * An optional entity field: the native `<ha-selector>` offers no reliable,
+   * discoverable way to empty a value once set, so we render an explicit
+   * "Clear" link (shown only when there IS a value) that sets the field back
+   * to `""`. Saving then sends `""`, which `set_weather_sources` treats as
+   * "clear this key" — restoring e.g. the weather entity's own temperature.
+   */
+  private _optionalPicker(
+    lang: string,
+    labelKey: TranslationKey,
+    value: string,
+    selector: EntitySelectorConfig,
+    setValue: (v: string) => void,
+  ): TemplateResult {
+    const label = localize(lang, labelKey);
+    return html`
+      <div class="section-label opt-label">
+        <span>${label}</span>
+        ${value
+          ? html`<span
+              class="clear-link"
+              role="button"
+              tabindex="0"
+              @click=${() => setValue("")}
+              @keydown=${(e: KeyboardEvent) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  setValue("");
+                }
+              }}
+              >✕ ${localize(lang, "settings.clear")}</span
+            >`
+          : nothing}
+      </div>
+      <imc-entity-picker
+        .hass=${this.hass}
+        .selector=${selector}
+        .value=${value}
+        .label=${label}
+        @value-changed=${(e: CustomEvent<{ value: string }>) => setValue(e.detail.value)}
+      ></imc-entity-picker>
+    `;
+  }
+
   protected override render(): TemplateResult {
     const lang = pickLanguage(this.hass);
     return html`
@@ -313,51 +373,43 @@ export class ImcSettingsView extends LitElement {
 
         <div class="two">
           <div>
-            <div class="section-label">${localize(lang, "settings.rain")}</div>
-            <imc-entity-picker
-              .hass=${this.hass}
-              .selector=${{ entity: { domain: "sensor" } }}
-              .value=${this._rainSensor}
-              .label=${localize(lang, "settings.rain")}
-              @value-changed=${(e: CustomEvent<{ value: string }>) =>
-                (this._rainSensor = e.detail.value)}
-            ></imc-entity-picker>
+            ${this._optionalPicker(
+              lang,
+              "settings.rain",
+              this._rainSensor,
+              { entity: { domain: "sensor" } },
+              (v) => (this._rainSensor = v),
+            )}
           </div>
           <div>
-            <div class="section-label">${localize(lang, "settings.outdoor_temp")}</div>
-            <imc-entity-picker
-              .hass=${this.hass}
-              .selector=${{ entity: { domain: "sensor" } }}
-              .value=${this._outdoorTempSensor}
-              .label=${localize(lang, "settings.outdoor_temp")}
-              @value-changed=${(e: CustomEvent<{ value: string }>) =>
-                (this._outdoorTempSensor = e.detail.value)}
-            ></imc-entity-picker>
+            ${this._optionalPicker(
+              lang,
+              "settings.outdoor_temp",
+              this._outdoorTempSensor,
+              { entity: { domain: "sensor" } },
+              (v) => (this._outdoorTempSensor = v),
+            )}
           </div>
         </div>
 
         <div class="two">
           <div>
-            <div class="section-label">${localize(lang, "settings.line_flow")}</div>
-            <imc-entity-picker
-              .hass=${this.hass}
-              .selector=${{ entity: { domain: "sensor" } }}
-              .value=${this._lineFlowSensor}
-              .label=${localize(lang, "settings.line_flow")}
-              @value-changed=${(e: CustomEvent<{ value: string }>) =>
-                (this._lineFlowSensor = e.detail.value)}
-            ></imc-entity-picker>
+            ${this._optionalPicker(
+              lang,
+              "settings.line_flow",
+              this._lineFlowSensor,
+              { entity: { domain: "sensor" } },
+              (v) => (this._lineFlowSensor = v),
+            )}
           </div>
           <div>
-            <div class="section-label">${localize(lang, "settings.master_valve")}</div>
-            <imc-entity-picker
-              .hass=${this.hass}
-              .selector=${{ entity: { domain: ["valve", "switch"] } }}
-              .value=${this._masterValve}
-              .label=${localize(lang, "settings.master_valve")}
-              @value-changed=${(e: CustomEvent<{ value: string }>) =>
-                (this._masterValve = e.detail.value)}
-            ></imc-entity-picker>
+            ${this._optionalPicker(
+              lang,
+              "settings.master_valve",
+              this._masterValve,
+              { entity: { domain: ["valve", "switch"] } },
+              (v) => (this._masterValve = v),
+            )}
           </div>
         </div>
 

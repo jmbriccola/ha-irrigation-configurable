@@ -4,6 +4,19 @@ All notable changes to this project are documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.3.2] - 2026-08-12
+
+### Fixed
+
+- **Optional sensors in ⚙️ Impostazioni can now be cleared.** Once an
+  optional entity was set (e.g. the outdoor temperature sensor), the native
+  entity picker offered no way to empty it again, so it was stuck. Each
+  optional field (rain sensor, outdoor temperature, line flow, master valve)
+  now shows an explicit **✕ Clear** link when it holds a value; clearing and
+  saving removes it, so temperature falls back to the weather entity as
+  intended. The backend already treated an empty value as "clear" — this
+  adds the missing affordance and a regression test guarding it.
+
 ## [1.3.1] - 2026-08-12
 
 ### Added

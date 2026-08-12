@@ -894,6 +894,31 @@ async def test_set_weather_sources(hass, freezer):
     assert hub.rain_sensor == "sensor.rain"
 
 
+async def test_set_weather_sources_clears_outdoor_temp(hass, freezer):
+    """Setting then clearing (empty string) outdoor_temp_sensor removes it."""
+    freezer.move_to(START)
+    park = MockValvePark(hass)
+    park.add("valve.pots")
+    mock_weather(hass)
+    entry = await setup_hub(hass, [zone_data("Pots", "valve.pots")])
+    # 1) set it
+    await hass.services.async_call(
+        DOMAIN,
+        "set_weather_sources",
+        {"weather_entity": "weather.home", "outdoor_temp_sensor": "sensor.temp"},
+        blocking=True,
+    )
+    assert entry.options.get(const.CONF_OUTDOOR_TEMP_SENSOR) == "sensor.temp"
+    # 2) clear it with an explicit empty string
+    await hass.services.async_call(
+        DOMAIN,
+        "set_weather_sources",
+        {"weather_entity": "weather.home", "outdoor_temp_sensor": ""},
+        blocking=True,
+    )
+    assert const.CONF_OUTDOOR_TEMP_SENSOR not in entry.options
+
+
 async def test_set_weather_sources_requires_weather(hass, freezer):
     freezer.move_to(START)
     park = MockValvePark(hass)

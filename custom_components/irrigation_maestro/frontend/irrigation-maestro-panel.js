@@ -69,7 +69,7 @@ const { is: zt, defineProperty: kt, getOwnPropertyDescriptor: St, getOwnProperty
       }
   }
   return t;
-} }, Me = (o, e) => !zt(o, e), Ve = { attribute: !0, type: String, converter: ue, reflect: !1, useDefault: !1, hasChanged: Me };
+} }, Me = (o, e) => !zt(o, e), Be = { attribute: !0, type: String, converter: ue, reflect: !1, useDefault: !1, hasChanged: Me };
 Symbol.metadata ??= /* @__PURE__ */ Symbol("metadata"), me.litPropertyMetadata ??= /* @__PURE__ */ new WeakMap();
 let K = class extends HTMLElement {
   static addInitializer(e) {
@@ -78,7 +78,7 @@ let K = class extends HTMLElement {
   static get observedAttributes() {
     return this.finalize(), this._$Eh && [...this._$Eh.keys()];
   }
-  static createProperty(e, t = Ve) {
+  static createProperty(e, t = Be) {
     if (t.state && (t.attribute = !1), this._$Ei(), this.prototype.hasOwnProperty(e) && ((t = Object.create(t)).wrapped = !0), this.elementProperties.set(e, t), !t.noAccessor) {
       const i = /* @__PURE__ */ Symbol(), s = this.getPropertyDescriptor(e, i, t);
       s !== void 0 && kt(this.prototype, e, s);
@@ -96,7 +96,7 @@ let K = class extends HTMLElement {
     }, configurable: !0, enumerable: !0 };
   }
   static getPropertyOptions(e) {
-    return this.elementProperties.get(e) ?? Ve;
+    return this.elementProperties.get(e) ?? Be;
   }
   static _$Ei() {
     if (this.hasOwnProperty(se("elementProperties"))) return;
@@ -253,14 +253,14 @@ let K = class extends HTMLElement {
   }
 };
 K.elementStyles = [], K.shadowRootOptions = { mode: "open" }, K[se("elementProperties")] = /* @__PURE__ */ new Map(), K[se("finalized")] = /* @__PURE__ */ new Map(), It?.({ ReactiveElement: K }), (me.reactiveElementVersions ??= []).push("2.1.2");
-const Te = globalThis, Be = (o) => o, he = Te.trustedTypes, qe = he ? he.createPolicy("lit-html", { createHTML: (o) => o }) : void 0, pt = "$lit$", R = `lit$${Math.random().toFixed(9).slice(2)}$`, ut = "?" + R, Ct = `<${ut}>`, B = document, oe = () => B.createComment(""), ne = (o) => o === null || typeof o != "object" && typeof o != "function", Ie = Array.isArray, Nt = (o) => Ie(o) || typeof o?.[Symbol.iterator] == "function", be = `[ 	
+const Te = globalThis, Ve = (o) => o, he = Te.trustedTypes, qe = he ? he.createPolicy("lit-html", { createHTML: (o) => o }) : void 0, pt = "$lit$", R = `lit$${Math.random().toFixed(9).slice(2)}$`, ut = "?" + R, Ct = `<${ut}>`, V = document, oe = () => V.createComment(""), ne = (o) => o === null || typeof o != "object" && typeof o != "function", Ie = Array.isArray, Pt = (o) => Ie(o) || typeof o?.[Symbol.iterator] == "function", be = `[ 	
 \f\r]`, ee = /<(?:(!--|\/[^a-zA-Z])|(\/?[a-zA-Z][^>\s]*)|(\/?$))/g, Ke = /-->/g, Ge = />/g, j = RegExp(`>|${be}(?:([^\\s"'>=/]+)(${be}*=${be}*(?:[^ 	
-\f\r"'\`<>=]|("|')|))|$)`, "g"), Xe = /'/g, Qe = /"/g, ht = /^(?:script|style|textarea|title)$/i, _t = (o) => (e, ...t) => ({ _$litType$: o, strings: e, values: t }), d = _t(1), ye = _t(2), Q = /* @__PURE__ */ Symbol.for("lit-noChange"), u = /* @__PURE__ */ Symbol.for("lit-nothing"), Je = /* @__PURE__ */ new WeakMap(), H = B.createTreeWalker(B, 129);
+\f\r"'\`<>=]|("|')|))|$)`, "g"), Xe = /'/g, Qe = /"/g, ht = /^(?:script|style|textarea|title)$/i, _t = (o) => (e, ...t) => ({ _$litType$: o, strings: e, values: t }), d = _t(1), ye = _t(2), Q = /* @__PURE__ */ Symbol.for("lit-noChange"), u = /* @__PURE__ */ Symbol.for("lit-nothing"), Je = /* @__PURE__ */ new WeakMap(), H = V.createTreeWalker(V, 129);
 function mt(o, e) {
   if (!Ie(o) || !o.hasOwnProperty("raw")) throw Error("invalid template strings array");
   return qe !== void 0 ? qe.createHTML(e) : e;
 }
-const Ot = (o, e) => {
+const Nt = (o, e) => {
   const t = o.length - 1, i = [];
   let s, n = e === 2 ? "<svg>" : e === 3 ? "<math>" : "", r = ee;
   for (let c = 0; c < t; c++) {
@@ -277,7 +277,7 @@ class re {
     let s;
     this.parts = [];
     let n = 0, r = 0;
-    const c = e.length - 1, l = this.parts, [_, m] = Ot(e, t);
+    const c = e.length - 1, l = this.parts, [_, m] = Nt(e, t);
     if (this.el = re.createElement(_, i), H.currentNode = this.el.content, t === 2 || t === 3) {
       const h = this.el.content.firstChild;
       h.replaceWith(...h.childNodes);
@@ -305,7 +305,7 @@ class re {
     }
   }
   static createElement(e, t) {
-    const i = B.createElement("template");
+    const i = V.createElement("template");
     return i.innerHTML = e, i;
   }
 }
@@ -315,7 +315,7 @@ function J(o, e, t = o, i) {
   const n = ne(e) ? void 0 : e._$litDirective$;
   return s?.constructor !== n && (s?._$AO?.(!1), n === void 0 ? s = void 0 : (s = new n(o), s._$AT(o, t, i)), i !== void 0 ? (t._$Co ??= [])[i] = s : t._$Cl = s), s !== void 0 && (e = J(o, s._$AS(o, e.values), s, i)), e;
 }
-class Pt {
+class Ot {
   constructor(e, t) {
     this._$AV = [], this._$AN = void 0, this._$AD = e, this._$AM = t;
   }
@@ -326,7 +326,7 @@ class Pt {
     return this._$AM._$AU;
   }
   u(e) {
-    const { el: { content: t }, parts: i } = this._$AD, s = (e?.creationScope ?? B).importNode(t, !0);
+    const { el: { content: t }, parts: i } = this._$AD, s = (e?.creationScope ?? V).importNode(t, !0);
     H.currentNode = s;
     let n = H.nextNode(), r = 0, c = 0, l = i[0];
     for (; l !== void 0; ) {
@@ -336,7 +336,7 @@ class Pt {
       }
       r !== l?.index && (n = H.nextNode(), r++);
     }
-    return H.currentNode = B, s;
+    return H.currentNode = V, s;
   }
   p(e) {
     let t = 0;
@@ -362,7 +362,7 @@ class ae {
     return this._$AB;
   }
   _$AI(e, t = this) {
-    e = J(this, e, t), ne(e) ? e === u || e == null || e === "" ? (this._$AH !== u && this._$AR(), this._$AH = u) : e !== this._$AH && e !== Q && this._(e) : e._$litType$ !== void 0 ? this.$(e) : e.nodeType !== void 0 ? this.T(e) : Nt(e) ? this.k(e) : this._(e);
+    e = J(this, e, t), ne(e) ? e === u || e == null || e === "" ? (this._$AH !== u && this._$AR(), this._$AH = u) : e !== this._$AH && e !== Q && this._(e) : e._$litType$ !== void 0 ? this.$(e) : e.nodeType !== void 0 ? this.T(e) : Pt(e) ? this.k(e) : this._(e);
   }
   O(e) {
     return this._$AA.parentNode.insertBefore(e, this._$AB);
@@ -371,13 +371,13 @@ class ae {
     this._$AH !== e && (this._$AR(), this._$AH = this.O(e));
   }
   _(e) {
-    this._$AH !== u && ne(this._$AH) ? this._$AA.nextSibling.data = e : this.T(B.createTextNode(e)), this._$AH = e;
+    this._$AH !== u && ne(this._$AH) ? this._$AA.nextSibling.data = e : this.T(V.createTextNode(e)), this._$AH = e;
   }
   $(e) {
     const { values: t, _$litType$: i } = e, s = typeof i == "number" ? this._$AC(e) : (i.el === void 0 && (i.el = re.createElement(mt(i.h, i.h[0]), this.options)), i);
     if (this._$AH?._$AD === s) this._$AH.p(t);
     else {
-      const n = new Pt(s, this), r = n.u(this.options);
+      const n = new Ot(s, this), r = n.u(this.options);
       n.p(t), this.T(r), this._$AH = n;
     }
   }
@@ -394,8 +394,8 @@ class ae {
   }
   _$AR(e = this._$AA.nextSibling, t) {
     for (this._$AP?.(!1, !0, t); e !== this._$AB; ) {
-      const i = Be(e).nextSibling;
-      Be(e).remove(), e = i;
+      const i = Ve(e).nextSibling;
+      Ve(e).remove(), e = i;
     }
   }
   setConnected(e) {
@@ -542,10 +542,10 @@ function v(o) {
     if (Number.isFinite(e)) return e;
   }
 }
-function N(o) {
+function P(o) {
   return typeof o == "string" && o !== "" ? o : void 0;
 }
-function Vt(o) {
+function Bt(o) {
   return Array.isArray(o) ? o : [];
 }
 function $e(o) {
@@ -774,6 +774,7 @@ const ke = {
   "settings.outdoor_temp": "Outdoor temperature sensor",
   "settings.line_flow": "Line flow sensor",
   "settings.master_valve": "Master valve",
+  "settings.clear": "Clear",
   "settings.budget": "Consumption budget",
   "settings.liters": "Liters per month",
   "settings.on_exceed": "On exceed",
@@ -788,7 +789,7 @@ const ke = {
   "settings.parity_even": "Even",
   "settings.forbidden_windows": "Forbidden windows",
   "settings.advanced_note": "Advanced parameters (engine, safety, notifications) live in Settings"
-}, Bt = {
+}, Vt = {
   // Messaggi a livello di scheda
   "card.name": "Scheda Irrigation Maestro",
   "card.description": "Panoramica e controllo dell'integrazione Irrigation Maestro: bilancio idrico, zone, coda e curve.",
@@ -1005,6 +1006,7 @@ const ke = {
   "settings.outdoor_temp": "Sensore temperatura esterna",
   "settings.line_flow": "Sensore di portata di linea",
   "settings.master_valve": "Valvola principale",
+  "settings.clear": "Rimuovi",
   "settings.budget": "Budget consumo",
   "settings.liters": "Litri al mese",
   "settings.on_exceed": "Al superamento",
@@ -1021,7 +1023,7 @@ const ke = {
   "settings.advanced_note": "Parametri avanzati (motore, sicurezza, notifiche) → Impostazioni"
 }, vt = {
   en: ke,
-  it: Bt
+  it: Vt
 };
 function x(o) {
   const t = (o?.locale?.language ?? o?.language ?? "en").toLowerCase().split(/[-_]/)[0] ?? "en";
@@ -1057,8 +1059,8 @@ function Xt(o, e) {
     const n = s < 0 ? "−" : "+";
     return `${i} ${n} ${Gt(s)}`;
   }
-  const t = N(o.at) ?? N(o.time);
-  return t ? a(e, "trigger.at", { time: t }) : N(o.kind) ?? "";
+  const t = P(o.at) ?? P(o.time);
+  return t ? a(e, "trigger.at", { time: t }) : P(o.kind) ?? "";
 }
 const Qt = {
   hub_water_budget: "waterBudget",
@@ -1080,10 +1082,10 @@ const Qt = {
 function Yt(o) {
   const e = {}, t = /* @__PURE__ */ new Map(), i = [];
   for (const n of Object.values(o.states)) {
-    const r = N(n.attributes.maestro_role);
+    const r = P(n.attributes.maestro_role);
     if (!r) continue;
     i.push(n.entity_id);
-    const c = N(n.attributes.zone_id);
+    const c = P(n.attributes.zone_id);
     if (c) {
       let l = t.get(c);
       if (l || (l = {
@@ -1105,19 +1107,19 @@ function Yt(o) {
   const s = [...t.values()];
   for (const n of s) {
     const r = n.state?.attributes ?? {};
-    n.name = N(r.zone_name) ?? N(n.state?.attributes.friendly_name) ?? n.zoneId, n.order = v(r.order) ?? v(n.orderNumber?.state) ?? Number.MAX_SAFE_INTEGER;
+    n.name = P(r.zone_name) ?? P(n.state?.attributes.friendly_name) ?? n.zoneId, n.order = v(r.order) ?? v(n.orderNumber?.state) ?? Number.MAX_SAFE_INTEGER;
   }
   return s.sort(
     (n, r) => n.order - r.order || n.name.localeCompare(r.name)
   ), { found: i.length > 0, hub: e, zones: s, entityIds: i };
 }
 function ei(o) {
-  const e = Vt(o.state?.attributes?.cycles), t = [];
+  const e = Bt(o.state?.attributes?.cycles), t = [];
   for (const i of e) {
     if (typeof i != "object" || i === null) continue;
     const s = i, n = {
-      cycle_id: N(s.cycle_id),
-      name: N(s.name),
+      cycle_id: P(s.cycle_id),
+      name: P(s.name),
       enabled: typeof s.enabled == "boolean" ? s.enabled : void 0,
       trigger: s.trigger ?? void 0,
       curve: s.curve ?? void 0
@@ -1152,7 +1154,7 @@ function Se(o, e) {
     [X, o + e]
   ];
 }
-function V(o, e, t, i) {
+function B(o, e, t, i) {
   const s = o[0], n = o[o.length - 1];
   let r;
   if (!s || !n)
@@ -1176,7 +1178,7 @@ function V(o, e, t, i) {
   return t !== void 0 && (r = Math.max(r, t)), i !== void 0 && (r = Math.min(r, i)), r;
 }
 function et(o, e, t) {
-  const i = V(o, Z, e, t), s = V(o, X, e, t);
+  const i = B(o, Z, e, t), s = B(o, X, e, t);
   return {
     amount: Ye(D(i), gt, ft),
     heat: Ye(D(s - i), bt, yt)
@@ -1202,7 +1204,7 @@ function ge(o) {
 function si(o) {
   return !o || o.length === 0 || o.length >= 7;
 }
-function Ne(o, e) {
+function Pe(o, e) {
   const t = new Set(o);
   return t.has(e) ? t.delete(e) : t.add(e), [...t].sort((i, s) => i - s);
 }
@@ -1213,14 +1215,14 @@ function xe(o, e) {
   return o.day_minutes?.[String(e)] ?? o.amount ?? 0;
 }
 function $t(o, e, t, i, s) {
-  return D(V(Se(o, e), t, i, s));
+  return D(B(Se(o, e), t, i, s));
 }
-var ni = Object.defineProperty, O = (o, e, t, i) => {
+var ni = Object.defineProperty, N = (o, e, t, i) => {
   for (var s = void 0, n = o.length - 1, r; n >= 0; n--)
     (r = o[n]) && (s = r(e, t, s) || s);
   return s && ni(e, t, s), s;
 };
-const we = 320, M = 170, te = 34, it = 12, ie = 16, C = 24, ce = 5, ze = 40, Oe = class Oe extends T {
+const we = 320, M = 170, te = 34, it = 12, ie = 16, C = 24, ce = 5, ze = 40, Ne = class Ne extends T {
   constructor() {
     super(...arguments), this.language = "en", this._amount = 15, this._heat = 15, this._min = 1, this._max = 120, this._advanced = !1, this._dragged = !1, this._points = Se(15, 15);
   }
@@ -1235,9 +1237,9 @@ const we = 320, M = 170, te = 34, it = 12, ie = 16, C = 24, ce = 5, ze = 40, Oe 
     if (t.length === 0) return;
     const i = v(e?.min) ?? 1, s = v(e?.max) ?? 120, { amount: n, heat: r } = et(t, i, s);
     this._amount = n, this._heat = r, this._min = i, this._max = s, this._dragged = !1, this._points = [
-      [G, D(V(t, G))],
-      [Z, D(V(t, Z))],
-      [X, D(V(t, X))]
+      [G, D(B(t, G))],
+      [Z, D(B(t, Z))],
+      [X, D(B(t, X))]
     ];
   }
   _regen() {
@@ -1250,7 +1252,7 @@ const we = 320, M = 170, te = 34, it = 12, ie = 16, C = 24, ce = 5, ze = 40, Oe 
     this._heat = Number(e.target.value), this._regen();
   }
   _clampedValue(e) {
-    return D(V(this._points, e, this._min, this._max));
+    return D(B(this._points, e, this._min, this._max));
   }
   _sx(e) {
     return te + (e - ce) / (ze - ce) * (we - te - it);
@@ -1428,7 +1430,7 @@ const we = 320, M = 170, te = 34, it = 12, ie = 16, C = 24, ce = 5, ze = 40, Oe 
     `;
   }
 };
-Oe.styles = L`
+Ne.styles = L`
     :host {
       display: block;
       border: 1px solid var(--divider-color, rgba(127, 127, 127, 0.25));
@@ -1595,35 +1597,35 @@ Oe.styles = L`
       opacity: 0.8;
     }
   `;
-let k = Oe;
-O([
+let k = Ne;
+N([
   g()
 ], k.prototype, "language");
-O([
+N([
   g({ attribute: !1 })
 ], k.prototype, "cycle");
-O([
+N([
   g({ attribute: !1 })
 ], k.prototype, "weightedTemp");
-O([
+N([
   p()
 ], k.prototype, "_amount");
-O([
+N([
   p()
 ], k.prototype, "_heat");
-O([
+N([
   p()
 ], k.prototype, "_min");
-O([
+N([
   p()
 ], k.prototype, "_max");
-O([
+N([
   p()
 ], k.prototype, "_advanced");
-O([
+N([
   p()
 ], k.prototype, "_dragged");
-O([
+N([
   p()
 ], k.prototype, "_points");
 W("imc-curve-editor", k);
@@ -1632,7 +1634,7 @@ var ri = Object.defineProperty, A = (o, e, t, i) => {
     (r = o[n]) && (s = r(e, t, s) || s);
   return s && ri(e, t, s), s;
 };
-const st = 15, ot = 1, nt = 1440, ai = -360, di = 360, li = 5, Pe = class Pe extends T {
+const st = 15, ot = 1, nt = 1440, ai = -360, di = 360, li = 5, Oe = class Oe extends T {
   constructor() {
     super(...arguments), this.zoneId = "", this._days = [...Y], this._startKind = "time", this._startAt = "06:00", this._startEvent = "sunrise", this._startOffsetMin = 0, this._uniformMinutes = st, this._dayMinutes = {}, this._sameForAll = !0, this._advancedOpen = !1;
   }
@@ -1669,7 +1671,7 @@ const st = 15, ot = 1, nt = 1440, ai = -360, di = 360, li = 5, Pe = class Pe ext
       (s, n) => d`
             <div
               class="day ${this._days.includes(n) ? "on" : ""}"
-              @click=${() => this._days = Ne(this._days, n)}
+              @click=${() => this._days = Pe(this._days, n)}
             >
               ${s}
             </div>
@@ -1862,7 +1864,7 @@ const st = 15, ot = 1, nt = 1440, ai = -360, di = 360, li = 5, Pe = class Pe ext
     );
   }
 };
-Pe.styles = L`
+Oe.styles = L`
     :host {
       display: block;
       border: 1px solid var(--divider-color, rgba(127, 127, 127, 0.25));
@@ -2056,7 +2058,7 @@ Pe.styles = L`
       cursor: not-allowed;
     }
   `;
-let y = Pe;
+let y = Oe;
 A([
   g({ attribute: !1 })
 ], y.prototype, "hass");
@@ -2097,7 +2099,7 @@ A([
   p()
 ], y.prototype, "_advancedOpen");
 W("imc-program-editor", y);
-var ci = Object.defineProperty, P = (o, e, t, i) => {
+var ci = Object.defineProperty, O = (o, e, t, i) => {
   for (var s = void 0, n = o.length - 1, r; n >= 0; n--)
     (r = o[n]) && (s = r(e, t, s) || s);
   return s && ci(e, t, s), s;
@@ -2156,7 +2158,7 @@ const De = class De extends T {
       (i, s) => d`
             <div
               class="day ${this._days.includes(s) ? "on" : ""}"
-              @click=${() => this._days = Ne(this._days, s)}
+              @click=${() => this._days = Pe(this._days, s)}
             >
               ${i}
             </div>
@@ -2496,34 +2498,34 @@ De.styles = L`
     }
   `;
 let S = De;
-P([
+O([
   g({ attribute: !1 })
 ], S.prototype, "hass");
-P([
+O([
   g()
 ], S.prototype, "zoneId");
-P([
+O([
   g({ attribute: !1 })
 ], S.prototype, "weightedTemp");
-P([
+O([
   p()
 ], S.prototype, "_step");
-P([
+O([
   p()
 ], S.prototype, "_days");
-P([
+O([
   p()
 ], S.prototype, "_startKind");
-P([
+O([
   p()
 ], S.prototype, "_startAt");
-P([
+O([
   p()
 ], S.prototype, "_startEvent");
-P([
+O([
   p()
 ], S.prototype, "_startOffsetMin");
-P([
+O([
   p()
 ], S.prototype, "_minutes");
 W("imc-program-wizard", S);
@@ -2644,7 +2646,7 @@ const Fe = class Fe extends T {
   /** Find the `cycle_enabled` switch entity for a program, matched by the
    *  discovery-assigned `cycle_id` attribute (see docs/design/card-contract.md). */
   _findCycleSwitch(e, t) {
-    return e.cycleSwitches.find((i) => N(i.attributes.cycle_id) === t);
+    return e.cycleSwitches.find((i) => P(i.attributes.cycle_id) === t);
   }
   _dispatch(e, t) {
     this.dispatchEvent(new CustomEvent(e, { detail: t, bubbles: !0, composed: !0 }));
@@ -3245,6 +3247,38 @@ const Le = class Le extends T {
   get _canSaveWeather() {
     return this._weatherEntity.trim() !== "";
   }
+  /**
+   * An optional entity field: the native `<ha-selector>` offers no reliable,
+   * discoverable way to empty a value once set, so we render an explicit
+   * "Clear" link (shown only when there IS a value) that sets the field back
+   * to `""`. Saving then sends `""`, which `set_weather_sources` treats as
+   * "clear this key" — restoring e.g. the weather entity's own temperature.
+   */
+  _optionalPicker(e, t, i, s, n) {
+    const r = a(e, t);
+    return d`
+      <div class="section-label opt-label">
+        <span>${r}</span>
+        ${i ? d`<span
+              class="clear-link"
+              role="button"
+              tabindex="0"
+              @click=${() => n("")}
+              @keydown=${(c) => {
+      (c.key === "Enter" || c.key === " ") && (c.preventDefault(), n(""));
+    }}
+              >✕ ${a(e, "settings.clear")}</span
+            >` : u}
+      </div>
+      <imc-entity-picker
+        .hass=${this.hass}
+        .selector=${s}
+        .value=${i}
+        .label=${r}
+        @value-changed=${(c) => n(c.detail.value)}
+      ></imc-entity-picker>
+    `;
+  }
   render() {
     const e = x(this.hass);
     return d`
@@ -3275,47 +3309,43 @@ const Le = class Le extends T {
 
         <div class="two">
           <div>
-            <div class="section-label">${a(e, "settings.rain")}</div>
-            <imc-entity-picker
-              .hass=${this.hass}
-              .selector=${{ entity: { domain: "sensor" } }}
-              .value=${this._rainSensor}
-              .label=${a(e, "settings.rain")}
-              @value-changed=${(t) => this._rainSensor = t.detail.value}
-            ></imc-entity-picker>
+            ${this._optionalPicker(
+      e,
+      "settings.rain",
+      this._rainSensor,
+      { entity: { domain: "sensor" } },
+      (t) => this._rainSensor = t
+    )}
           </div>
           <div>
-            <div class="section-label">${a(e, "settings.outdoor_temp")}</div>
-            <imc-entity-picker
-              .hass=${this.hass}
-              .selector=${{ entity: { domain: "sensor" } }}
-              .value=${this._outdoorTempSensor}
-              .label=${a(e, "settings.outdoor_temp")}
-              @value-changed=${(t) => this._outdoorTempSensor = t.detail.value}
-            ></imc-entity-picker>
+            ${this._optionalPicker(
+      e,
+      "settings.outdoor_temp",
+      this._outdoorTempSensor,
+      { entity: { domain: "sensor" } },
+      (t) => this._outdoorTempSensor = t
+    )}
           </div>
         </div>
 
         <div class="two">
           <div>
-            <div class="section-label">${a(e, "settings.line_flow")}</div>
-            <imc-entity-picker
-              .hass=${this.hass}
-              .selector=${{ entity: { domain: "sensor" } }}
-              .value=${this._lineFlowSensor}
-              .label=${a(e, "settings.line_flow")}
-              @value-changed=${(t) => this._lineFlowSensor = t.detail.value}
-            ></imc-entity-picker>
+            ${this._optionalPicker(
+      e,
+      "settings.line_flow",
+      this._lineFlowSensor,
+      { entity: { domain: "sensor" } },
+      (t) => this._lineFlowSensor = t
+    )}
           </div>
           <div>
-            <div class="section-label">${a(e, "settings.master_valve")}</div>
-            <imc-entity-picker
-              .hass=${this.hass}
-              .selector=${{ entity: { domain: ["valve", "switch"] } }}
-              .value=${this._masterValve}
-              .label=${a(e, "settings.master_valve")}
-              @value-changed=${(t) => this._masterValve = t.detail.value}
-            ></imc-entity-picker>
+            ${this._optionalPicker(
+      e,
+      "settings.master_valve",
+      this._masterValve,
+      { entity: { domain: ["valve", "switch"] } },
+      (t) => this._masterValve = t
+    )}
           </div>
         </div>
 
@@ -3404,7 +3434,7 @@ const Le = class Le extends T {
       (i, s) => d`
               <div
                 class="day ${this._allowedWeekdays.includes(s) ? "on" : ""}"
-                @click=${() => this._allowedWeekdays = Ne(this._allowedWeekdays, s)}
+                @click=${() => this._allowedWeekdays = Pe(this._allowedWeekdays, s)}
               >
                 ${i}
               </div>
@@ -3586,6 +3616,20 @@ Le.styles = L`
     }
     .section-label:first-of-type {
       margin-top: 10px;
+    }
+    .section-label.opt-label {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 8px;
+    }
+    .clear-link {
+      font-size: 11px;
+      text-transform: none;
+      letter-spacing: 0;
+      color: var(--imc-accent, #3a6df0);
+      cursor: pointer;
+      user-select: none;
     }
     .field {
       width: 100%;
