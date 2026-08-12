@@ -4,6 +4,7 @@ from datetime import time
 
 import pytest
 from custom_components.irrigation_maestro import const
+from custom_components.irrigation_maestro.engine.calendar import ProgramCalendar
 from custom_components.irrigation_maestro.engine.curves import CurveError, CurveKind
 from custom_components.irrigation_maestro.engine.scheduling import Parity
 from custom_components.irrigation_maestro.models import (
@@ -173,7 +174,6 @@ class TestZoneConfig:
         assert zone.name == "Lawn"
         assert zone.valve_entity == "valve.lawn"
         assert zone.order == 100
-        assert zone.interval_days == 3
         assert zone.adjustment_pct == 100
         assert len(zone.cycles) == 2
         morning, evening = zone.cycles
@@ -215,16 +215,30 @@ def _cycle_data(**extra):
     return data
 
 
-def test_cycle_defaults_have_no_schedule():
+def test_cycle_defaults_to_a_daily_calendar():
     cycle = CycleConfig.from_config(_cycle_data(), templates={})
-    assert cycle.days is None  # None = every day
+    assert cycle.calendar == ProgramCalendar.daily()
+    assert cycle.season_months is None  # inherits the hub season
     assert cycle.day_minutes == {}  # empty = use the curve as-is
 
 
-def test_cycle_parses_days_and_day_minutes():
+def test_cycle_parses_calendar_and_day_minutes():
     cycle = CycleConfig.from_config(
-        _cycle_data(days=[0, 2, 4], day_minutes={"0": 10, "4": 20}),
+        _cycle_data(
+            calendar={"mode": "weekdays", "days": [0, 2, 4]},
+            day_minutes={"0": 10, "4": 20},
+        ),
         templates={},
     )
-    assert cycle.days == frozenset({0, 2, 4})
+    assert cycle.calendar == ProgramCalendar.weekdays({0, 2, 4})
     assert cycle.day_minutes == {0: 10, 4: 20}  # keys coerced to int
+
+
+def test_cycle_parses_its_own_season():
+    cycle = CycleConfig.from_config(_cycle_data(season_months=[6, 7, 8]), templates={})
+    assert cycle.season_months == frozenset({6, 7, 8})
+
+
+def test_zone_no_longer_owns_calendar_fields():
+    for removed in ("interval_days", "season_months", "restrictions"):
+        assert removed not in ZoneConfig.__dataclass_fields__

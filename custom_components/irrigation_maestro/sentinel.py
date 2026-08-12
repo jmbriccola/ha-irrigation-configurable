@@ -64,10 +64,8 @@ class Sentinel:
         return None
 
     def _months_for(self, zone: ZoneConfig, cycle: CycleConfig) -> frozenset[int]:
-        if cycle.months_override is not None:
-            return cycle.months_override
-        if zone.season_months is not None:
-            return zone.season_months
+        if cycle.season_months is not None:
+            return cycle.season_months
         return self._runtime.hub.engine_params.season_months
 
     async def async_check(self) -> None:

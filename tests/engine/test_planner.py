@@ -2,6 +2,7 @@
 
 from datetime import date, datetime, timedelta
 
+from custom_components.irrigation_maestro.engine.calendar import ProgramCalendar
 from custom_components.irrigation_maestro.engine.curves import (
     PRESET_LAWN,
     PRESET_POTS,
@@ -19,12 +20,9 @@ from custom_components.irrigation_maestro.engine.planner import (
     build_session_plan,
     resolve_day_curve,
 )
-from custom_components.irrigation_maestro.engine.scheduling import (
-    CalendarRestrictions,
-)
 
 PARAMS = EngineParams()
-NOW = datetime(2026, 7, 17, 5, 30)  # Friday, July -> in season
+NOW = datetime(2026, 7, 17, 5, 30)  # Friday, July -> in season, odd day
 TODAY = NOW.date()
 
 WATER_EVAL = SessionEvaluation(
@@ -48,9 +46,11 @@ def make_cycle(cycle_id="c1", **overrides):
         cycle_id=cycle_id,
         enabled=True,
         curve=PRESET_POTS,
+        calendar=ProgramCalendar.daily(),
+        season_months=None,
+        last_completed=None,
         soak_max_run_min=None,
         soak_pause_min=0,
-        months_override=None,
         volume_safety_timeout_min=None,
     )
     defaults.update(overrides)
@@ -64,10 +64,6 @@ def make_zone(zone_id="z1", name="Pots", **overrides):
         enabled=True,
         order=100,
         adjustment_pct=100.0,
-        interval_days=1,
-        season_months=None,
-        restrictions=None,
-        last_completed=None,
         suspended_until=None,
         paused_until=None,
         skip_today=False,
@@ -83,7 +79,6 @@ def plan(zones, evaluation=WATER_EVAL, now=NOW, factor=1.0):
         PARAMS,
         evaluation,
         zones,
-        global_restrictions=CalendarRestrictions(),
         now=now,
         duration_factor=factor,
     )
@@ -220,45 +215,6 @@ class TestGates:
         zone = make_zone(skip_today=True)
         assert self.gate_reason(zone) is SkipReason.SKIP_TODAY_REQUESTED
 
-    def test_out_of_season_zone_override(self):
-        zone = make_zone(season_months=frozenset({6}))
-        assert self.gate_reason(zone) is SkipReason.OUT_OF_SEASON
-
-    def test_cycle_months_override_wins_over_zone(self):
-        zone = make_zone(
-            season_months=frozenset({6}),
-            cycles=(make_cycle(months_override=frozenset({7})),),
-        )
-        assert plan([zone]).runs
-
-    def test_calendar_restricted_day(self):
-        zone = make_zone(restrictions=CalendarRestrictions(allowed_weekdays=frozenset({0})))
-        assert self.gate_reason(zone) is SkipReason.CALENDAR_RESTRICTED
-
-    def test_global_restrictions_apply_when_zone_has_none(self):
-        result = build_session_plan(
-            PARAMS,
-            WATER_EVAL,
-            [make_zone()],
-            global_restrictions=CalendarRestrictions(allowed_weekdays=frozenset({0})),
-            now=NOW,
-        )
-        assert result.skipped[0].reason is SkipReason.CALENDAR_RESTRICTED
-
-    def test_zone_restrictions_override_global(self):
-        result = build_session_plan(
-            PARAMS,
-            WATER_EVAL,
-            [make_zone(restrictions=CalendarRestrictions())],
-            global_restrictions=CalendarRestrictions(allowed_weekdays=frozenset({0})),
-            now=NOW,
-        )
-        assert result.runs
-
-    def test_not_due(self):
-        zone = make_zone(interval_days=3, last_completed=date(2026, 7, 16))
-        assert self.gate_reason(zone) is SkipReason.NOT_DUE
-
     def test_session_skip_applies_to_eligible_zones(self):
         assert self.gate_reason(make_zone(), evaluation=BUDGET_SKIP_EVAL) is (
             SkipReason.BUDGET_SUFFICIENT
@@ -281,110 +237,97 @@ class TestGates:
         )
 
 
-class TestWeekdayGate:
-    def test_skips_when_today_not_scheduled(self):
-        cycle = make_cycle(days=frozenset({0, 1}))  # Mon, Tue only
+class TestCalendarGate:
+    """The program calendar is the only thing that decides watering days."""
+
+    def test_weekday_program_runs_on_its_day(self):
+        cycle = make_cycle(calendar=ProgramCalendar.weekdays({4}))  # Friday
+        assert plan([make_zone(cycles=(cycle,))]).runs
+
+    def test_weekday_program_skips_other_days(self):
+        cycle = make_cycle(calendar=ProgramCalendar.weekdays({0, 1}))
         result = plan([make_zone(cycles=(cycle,))])
         assert not result.runs
-        assert result.skipped[0].reason is SkipReason.DAY_NOT_SCHEDULED
+        assert result.skipped[0].reason is SkipReason.CALENDAR_NOT_TODAY
 
-    def test_runs_when_today_scheduled(self):
-        cycle = make_cycle(days=frozenset({4}))  # Friday
-        result = plan([make_zone(cycles=(cycle,))])
-        assert len(result.runs) == 1
+    def test_daily_program_always_runs(self):
+        assert plan([make_zone()]).runs
 
-    def test_day_less_program_unaffected(self):
-        result = plan([make_zone()])  # make_cycle() has days=None
-        assert len(result.runs) == 1
+    def test_interval_program_gates_following_days(self):
+        cycle = make_cycle(calendar=ProgramCalendar.interval(3), last_completed=TODAY)
+        for offset in (1, 2):
+            result = plan([make_zone(cycles=(cycle,))], now=NOW + timedelta(days=offset))
+            assert not result.runs
+            assert result.skipped[0].reason is SkipReason.CALENDAR_NOT_TODAY
+        assert plan([make_zone(cycles=(cycle,))], now=NOW + timedelta(days=3)).runs
 
-    def test_day_not_scheduled_is_silent(self):
-        assert SkipReason.DAY_NOT_SCHEDULED.silent is True
+    def test_interval_program_retries_the_day_after_a_skip(self):
+        # Nothing completed yesterday, so the marker stays put and the program
+        # is due again today.
+        cycle = make_cycle(calendar=ProgramCalendar.interval(1), last_completed=date(2026, 7, 16))
+        assert plan([make_zone(cycles=(cycle,))]).runs
 
-
-class TestMultipleDailyCycles:
-    """A completed cycle establishes the watering day; it must not close it.
-
-    Regression: a zone with a morning and an evening cycle only ever ran the
-    morning one, because the first completion wrote ``last_completed=today``
-    and every later trigger of the same day was gated as NOT_DUE.
-    """
-
-    def evening(self):
-        return make_cycle("evening")
-
-    def test_later_cycle_runs_after_an_earlier_one_completed_today(self):
-        # The runtime plans one cycle per trigger: this is the evening trigger
-        # of a zone whose morning cycle already completed today.
-        zone = make_zone(last_completed=TODAY, cycles=(self.evening(),))
-        result = plan([zone])
-        assert [run.cycle_id for run in result.runs] == ["evening"]
-
-    def test_all_remaining_cycles_of_the_day_are_planned(self):
-        zone = make_zone(last_completed=TODAY, cycles=(make_cycle("morning"), self.evening()))
-        result = plan([zone])
+    def test_two_programs_keep_independent_cadences(self):
+        # The 1.3.3 defect must not reappear one level down: the morning
+        # program completing today must not consume the evening program's
+        # cadence.
+        morning = make_cycle("morning", calendar=ProgramCalendar.interval(3), last_completed=TODAY)
+        evening = make_cycle("evening", calendar=ProgramCalendar.interval(3), last_completed=None)
+        result = plan([make_zone(cycles=(morning, evening))])
         assert [run.cycle_id for run in result.runs] == ["morning", "evening"]
-        assert not result.skipped
 
-    def test_long_interval_does_not_truncate_the_established_day(self):
-        zone = make_zone(interval_days=7, last_completed=TODAY, cycles=(self.evening(),))
+    def test_completed_today_keeps_running_the_rest_of_the_day(self):
+        cycle = make_cycle(calendar=ProgramCalendar.interval(3), last_completed=TODAY)
+        assert plan([make_zone(cycles=(cycle,))]).runs
+
+    def test_parity_program_runs_on_a_matching_day(self):
+        # NOW is 2026-07-17, an odd day.
+        assert plan([make_zone(cycles=(make_cycle(calendar=ProgramCalendar.odd()),))]).runs
+
+    def test_parity_program_skips_a_mismatching_day(self):
+        result = plan([make_zone(cycles=(make_cycle(calendar=ProgramCalendar.even()),))])
+        assert not result.runs
+        assert result.skipped[0].reason is SkipReason.CALENDAR_NOT_TODAY
+
+    def test_zone_gates_still_win_for_reporting(self):
+        zone = make_zone(
+            enabled=False,
+            cycles=(
+                make_cycle(
+                    calendar=ProgramCalendar.weekdays({0}),
+                ),
+            ),
+        )
+        assert plan([zone]).skipped[0].reason is SkipReason.ZONE_DISABLED
+
+    def test_calendar_not_today_is_silent(self):
+        assert SkipReason.CALENDAR_NOT_TODAY.silent is True
+
+
+class TestSeason:
+    """Season is a program property, with the hub value as the default."""
+
+    def test_program_season_excludes_the_month(self):
+        zone = make_zone(cycles=(make_cycle(season_months=frozenset({6})),))
+        result = plan([zone])
+        assert not result.runs
+        assert result.skipped[0].reason is SkipReason.OUT_OF_SEASON
+
+    def test_program_season_includes_the_month(self):
+        zone = make_zone(cycles=(make_cycle(season_months=frozenset({7})),))
         assert plan([zone]).runs
 
-    def test_cadence_still_gates_the_following_days(self):
-        # Completed today, N=3: tomorrow and the day after stay NOT_DUE.
-        zone = make_zone(interval_days=3, last_completed=TODAY, cycles=(self.evening(),))
-        for offset in (1, 2):
-            result = plan([zone], now=NOW + timedelta(days=offset))
-            assert not result.runs
-            assert result.skipped[0].reason is SkipReason.NOT_DUE
-        assert plan([zone], now=NOW + timedelta(days=3)).runs
+    def test_two_programs_hold_different_seasons(self):
+        # §1: in the shoulder seasons only the evening program is turned off.
+        summer = make_cycle("summer", season_months=frozenset({7}))
+        winter = make_cycle("winter", season_months=frozenset({1}))
+        result = plan([make_zone(cycles=(summer, winter))])
+        assert [run.cycle_id for run in result.runs] == ["summer"]
+        assert [item.cycle_id for item in result.skipped] == ["winter"]
+        assert result.skipped[0].reason is SkipReason.OUT_OF_SEASON
 
-    def test_other_gates_still_filter_on_an_established_day(self):
-        # Being due must not smuggle a cycle past any other gate.
-        completed = dict(last_completed=TODAY, cycles=(self.evening(),))
-        cases = [
-            (make_zone(enabled=False, **completed), SkipReason.ZONE_DISABLED),
-            (make_zone(suspended_until=datetime(2026, 8, 1), **completed), SkipReason.SUSPENDED),
-            (
-                make_zone(paused_until=datetime(2026, 7, 17, 9, 0), **completed),
-                SkipReason.PAUSED,
-            ),
-            (make_zone(skip_today=True, **completed), SkipReason.SKIP_TODAY_REQUESTED),
-            (make_zone(season_months=frozenset({6}), **completed), SkipReason.OUT_OF_SEASON),
-            (
-                make_zone(
-                    restrictions=CalendarRestrictions(allowed_weekdays=frozenset({0})),
-                    **completed,
-                ),
-                SkipReason.CALENDAR_RESTRICTED,
-            ),
-            (
-                make_zone(last_completed=TODAY, cycles=(make_cycle("evening", enabled=False),)),
-                SkipReason.CYCLE_DISABLED,
-            ),
-            (
-                make_zone(
-                    last_completed=TODAY,
-                    cycles=(make_cycle("evening", days=frozenset({0, 1})),),
-                ),
-                SkipReason.DAY_NOT_SCHEDULED,
-            ),
-        ]
-        for zone, expected in cases:
-            result = plan([zone])
-            assert not result.runs, expected
-            assert result.skipped[0].reason is expected
-
-    def test_session_skip_still_applies_on_an_established_day(self):
-        zone = make_zone(last_completed=TODAY, cycles=(self.evening(),))
-        result = plan([zone], evaluation=BUDGET_SKIP_EVAL)
-        assert not result.runs
-        assert result.skipped[0].reason is SkipReason.BUDGET_SUFFICIENT
-
-    def test_zone_skipped_all_day_is_due_again_tomorrow(self):
-        # Nothing completed (rain/budget/fault): the marker keeps yesterday's
-        # date and the zone retries the next day.
-        zone = make_zone(interval_days=1, last_completed=date(2026, 7, 16))
-        assert plan([zone], now=NOW + timedelta(days=1)).runs
+    def test_hub_default_applies_without_an_override(self):
+        assert plan([make_zone()]).runs  # July is in the default season
 
 
 class TestSkipReasonConsolidation:

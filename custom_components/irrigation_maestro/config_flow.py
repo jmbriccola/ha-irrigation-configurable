@@ -57,7 +57,6 @@ _CURVE_SOURCE_COPY: Final = "copy"
 
 _MAX_DURATION_MIN: Final = 1440
 _MAX_OFFSET_MIN: Final = 360
-_MAX_INTERVAL_DAYS: Final = 60
 
 _HUB_OPTIONAL_ENTITIES: Final = (
     const.CONF_RAIN_SENSOR,
@@ -746,43 +745,26 @@ class ZoneSubentryFlowHandler(ConfigSubentryFlow):
                 min_value=1, max_value=1000
             ),
             # Range enforced in code so the user gets a friendly error.
-            vol.Required(const.CONF_INTERVAL_DAYS, default=const.DEFAULT_INTERVAL_DAYS): _number(
-                unit="days"
-            ),
         }
         if groups:
             schema[vol.Optional(const.CONF_COMPATIBILITY_GROUP)] = _select(
                 groups, translation_key="compatibility_group"
             )
-        schema[vol.Optional(const.CONF_ZONE_SEASON_MONTHS)] = _months_select()
         return vol.Schema(schema)
 
     def _zone_suggested_values(self) -> dict[str, Any]:
-        suggested = {
-            key: value
-            for key, value in self._zone_data.items()
-            if key != const.CONF_ZONE_SEASON_MONTHS
-        }
-        if const.CONF_ZONE_SEASON_MONTHS in self._zone_data:
-            suggested[const.CONF_ZONE_SEASON_MONTHS] = [
-                str(month) for month in self._zone_data[const.CONF_ZONE_SEASON_MONTHS]
-            ]
-        return suggested
+        return dict(self._zone_data)
 
     def _zone_data_from_input(
         self, user_input: dict[str, Any]
     ) -> tuple[dict[str, Any], dict[str, str]]:
         """Build the zone-basics dict; returns (data, errors)."""
         errors: dict[str, str] = {}
-        interval = int(user_input[const.CONF_INTERVAL_DAYS])
-        if not 1 <= interval <= _MAX_INTERVAL_DAYS:
-            errors[const.CONF_INTERVAL_DAYS] = "interval_out_of_range"
         data: dict[str, Any] = {
             const.CONF_ZONE_NAME: user_input[const.CONF_ZONE_NAME],
             const.CONF_VALVE_ENTITY: user_input[const.CONF_VALVE_ENTITY],
             const.CONF_ADJUSTMENT_PCT: int(user_input[const.CONF_ADJUSTMENT_PCT]),
             const.CONF_ORDER: int(user_input[const.CONF_ORDER]),
-            const.CONF_INTERVAL_DAYS: interval,
         }
         for key in (
             const.CONF_ZONE_ICON,
@@ -798,9 +780,6 @@ class ZoneSubentryFlowHandler(ConfigSubentryFlow):
         ):
             if key in user_input:
                 data[key] = float(user_input[key])
-        months = sorted(int(m) for m in user_input.get(const.CONF_ZONE_SEASON_MONTHS, []))
-        if months:
-            data[const.CONF_ZONE_SEASON_MONTHS] = months
         return data, errors
 
     async def async_step_user(self, user_input: dict[str, Any] | None = None) -> SubentryFlowResult:

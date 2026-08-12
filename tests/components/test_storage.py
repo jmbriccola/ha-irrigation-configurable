@@ -22,7 +22,7 @@ async def test_fresh_state_defaults(hass: HomeAssistant) -> None:
     assert state.temps_for(TODAY) == (None, None, None, None)
     assert state.rains_for(TODAY) == (0.0, 0.0, 0.0, 0.0)
     assert state.staging_mm == 0.0
-    assert state.last_completed("zone1") is None
+    assert state.last_completed("zone1", "c1") is None
     assert state.manual_stop_at is None
     assert state.suspended_until("zone1") is None
     assert state.consumption_liters == 0.0
@@ -51,7 +51,7 @@ async def test_persistence_roundtrip(hass: HomeAssistant) -> None:
     state = await make_state(hass)
     state.record_temp(TODAY, 31.5)
     state.add_rain(TODAY, 2.8, PARAMS)
-    state.set_last_completed("zone1", TODAY)
+    state.set_last_completed("zone1", "c1", TODAY)
     state.set_manual_stop(NOW)
     state.set_suspended_until("zone1", NOW)
     state.add_consumption(120.5, period_start=TODAY)
@@ -61,7 +61,7 @@ async def test_persistence_roundtrip(hass: HomeAssistant) -> None:
     reloaded = await make_state(hass)
     assert reloaded.temps_for(TODAY) == (None, None, None, 31.5)
     assert reloaded.rains_for(TODAY)[0] == 2.8
-    assert reloaded.last_completed("zone1") == TODAY
+    assert reloaded.last_completed("zone1", "c1") == TODAY
     assert reloaded.manual_stop_at == NOW
     assert reloaded.suspended_until("zone1") == NOW
     assert reloaded.consumption_liters == 120.5

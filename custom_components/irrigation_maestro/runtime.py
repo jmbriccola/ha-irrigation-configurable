@@ -474,10 +474,12 @@ class IrrigationRuntime:
         return zone.to_spec(
             enabled=self.state.zone_enabled(zone.zone_id),
             cycles=tuple(
-                cycle.to_spec(enabled=self.state.cycle_enabled(zone.zone_id, cycle.cycle_id))
+                cycle.to_spec(
+                    enabled=self.state.cycle_enabled(zone.zone_id, cycle.cycle_id),
+                    last_completed=self.state.last_completed(zone.zone_id, cycle.cycle_id),
+                )
                 for cycle in cycles
             ),
-            last_completed=self.state.last_completed(zone.zone_id),
             suspended_until=self.state.suspended_until(zone.zone_id),
             paused_until=self.state.paused_until(zone.zone_id) or self.state.paused_until(None),
             skip_today=self.state.skip_today_date(zone.zone_id) == dt_util.now().date(),
@@ -500,7 +502,6 @@ class IrrigationRuntime:
                 self.hub.engine_params,
                 evaluation,
                 [self._zone_spec(zone.config, [cycle])],
-                global_restrictions=self.hub.restrictions,
                 now=dt_util.now(),
                 duration_factor=factor,
             )
@@ -648,7 +649,6 @@ class IrrigationRuntime:
             self.hub.engine_params,
             evaluation,
             specs,
-            global_restrictions=self.hub.restrictions,
             now=dt_util.now(),
             duration_factor=factor,
         )
@@ -709,7 +709,7 @@ class IrrigationRuntime:
         self.state.set_last_outcome(zone_id, outcome)
         self.state.record_outcome(today, zone_id, cycle_id, result)
         if result == RESULT_COMPLETED and scheduled:
-            self.state.set_last_completed(zone_id, today)
+            self.state.set_last_completed(zone_id, cycle_id, today)
         self.state.schedule_save()
 
         event_map = {

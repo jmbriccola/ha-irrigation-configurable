@@ -178,13 +178,14 @@ async def test_numbers_write_back_to_subentry_data(
     zone_id = entry.runtime_data.zone_ids[0]
 
     order = role_state(hass, "zone_order", zone_id)
-    interval = role_state(hass, "zone_interval", zone_id)
     adjustment = role_state(hass, "zone_adjustment", zone_id)
     assert order is not None and float(order.state) == 100
-    assert interval is not None and float(interval.state) == 1
     assert adjustment is not None and float(adjustment.state) == 100
+    # The cadence moved into the program calendar, so the zone has no
+    # interval number entity any more.
+    assert role_state(hass, "zone_interval", zone_id) is None
 
-    for entity, value in ((order, 5), (interval, 7), (adjustment, 120)):
+    for entity, value in ((order, 5), (adjustment, 120)):
         await hass.services.async_call(
             "number", "set_value", {"entity_id": entity.entity_id, "value": value}, blocking=True
         )
@@ -192,12 +193,10 @@ async def test_numbers_write_back_to_subentry_data(
 
     subentry = entry.subentries[zone_id]
     assert subentry.data["order"] == 5
-    assert subentry.data["interval_days"] == 7
     assert subentry.data["adjustment_pct"] == 120
     # The runtime applied the change in place.
     config = entry.runtime_data.zones[zone_id].config
     assert config.order == 5
-    assert config.interval_days == 7
     assert config.adjustment_pct == 120
     order = role_state(hass, "zone_order", zone_id)
     assert order is not None and float(order.state) == 5
@@ -363,7 +362,7 @@ async def test_zone_state_exposes_schedule_fields(
     state = role_state(hass, "zone_state", zone_id)
     assert state is not None
     cycle = _first_cycle_attr(hass, state.entity_id)
-    assert cycle["days"] is None  # day-less program
+    assert cycle["calendar"] == {"mode": "weekdays", "days": [0, 1, 2, 3, 4, 5, 6]}
     assert cycle["day_minutes"] is None  # no per-day overrides
     assert isinstance(cycle["amount"], int)  # derived from the duration curve
     assert isinstance(cycle["heat"], int)
@@ -390,7 +389,7 @@ async def test_zone_state_exposes_per_day_schedule_fields(
                     "min_value": 1.0,
                     "max_value": 60.0,
                 },
-                "days": [0, 2, 4],
+                "calendar": {"mode": "weekdays", "days": [0, 2, 4]},
                 "day_minutes": {"0": 10, "4": 20},
             }
         ],
@@ -401,7 +400,7 @@ async def test_zone_state_exposes_per_day_schedule_fields(
     state = role_state(hass, "zone_state", zone_id)
     assert state is not None
     cycle = _first_cycle_attr(hass, state.entity_id)
-    assert cycle["days"] == [0, 2, 4]
+    assert cycle["calendar"] == {"mode": "weekdays", "days": [0, 2, 4]}
     assert cycle["day_minutes"] == {"0": 10, "4": 20}
     assert isinstance(cycle["amount"], int)
     assert isinstance(cycle["heat"], int)

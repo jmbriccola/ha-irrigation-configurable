@@ -257,7 +257,7 @@ class ZoneStateSensor(MaestroZoneEntity, SensorEntity):
             "name": cycle.name,
             "enabled": self._runtime.state.cycle_enabled(self._zone_id, cycle.cycle_id),
             "trigger": _trigger_dict(cycle.trigger),
-            "days": sorted(cycle.days) if cycle.days is not None else None,
+            "calendar": cycle.calendar.to_config(),
             "day_minutes": ({str(k): v for k, v in cycle.day_minutes.items()} or None),
             "amount": amount,
             "heat": heat,

@@ -10,7 +10,6 @@ from custom_components.irrigation_maestro.models import (
     HubConfig,
     ZoneConfig,
     engine_params_from_config,
-    restrictions_from_config,
 )
 from homeassistant import config_entries
 from homeassistant.core import HomeAssistant, ServiceCall
@@ -282,28 +281,21 @@ async def test_options_engine_invalid_weights(
 
 
 async def test_options_restrictions(hass: HomeAssistant, hub_entry: MockConfigEntry) -> None:
-    """Restrictions parse weekdays, parity and window text."""
+    """Restrictions constrain hours only; days belong to the program calendar."""
     result = await _options_section(hass, hub_entry, "restrictions")
     result = await hass.config_entries.options.async_configure(
         result["flow_id"],
-        {
-            const.CONF_ALLOWED_WEEKDAYS: ["2", "0"],
-            const.CONF_PARITY: "odd",
-            const.CONF_FORBIDDEN_WINDOWS: "08:00-10:30, 22:00-23:15",
-        },
+        {const.CONF_FORBIDDEN_WINDOWS: "08:00-10:30, 22:00-23:15"},
     )
     assert result["type"] is FlowResultType.CREATE_ENTRY
 
     stored = hub_entry.options[const.CONF_RESTRICTIONS]
-    assert stored[const.CONF_ALLOWED_WEEKDAYS] == [0, 2]
-    assert stored[const.CONF_PARITY] == "odd"
     assert stored[const.CONF_FORBIDDEN_WINDOWS] == [
         {"start": "08:00", "end": "10:30"},
         {"start": "22:00", "end": "23:15"},
     ]
-    restrictions = restrictions_from_config(stored)
-    assert restrictions is not None
-    assert restrictions.allowed_weekdays == frozenset({0, 2})
+    assert const.CONF_ALLOWED_WEEKDAYS not in stored
+    assert const.CONF_PARITY not in stored
 
 
 async def test_options_restrictions_invalid_window(
@@ -398,7 +390,6 @@ async def test_zone_creation_two_cycles(hass: HomeAssistant, hub_entry: MockConf
         {
             const.CONF_ZONE_NAME: "Front lawn",
             const.CONF_VALVE_ENTITY: "valve.front",
-            const.CONF_INTERVAL_DAYS: 2,
         },
     )
     # No cycles yet: finishing must not be offered.
@@ -486,27 +477,9 @@ async def test_zone_creation_two_cycles(hass: HomeAssistant, hub_entry: MockConf
     # The stored data must parse into the typed zone model.
     zone = ZoneConfig.from_subentry(subentry.subentry_id, data, templates={})
     assert zone.name == "Front lawn"
-    assert zone.interval_days == 2
     assert zone.cycles[0].trigger.offset_s == -3300
     assert zone.cycles[1].curve.points == ((10.0, 5.0), (25.0, 15.0), (35.0, 30.0))
     assert zone.cycles[1].soak_max_run_min == 10
-
-
-async def test_zone_interval_validation(hass: HomeAssistant, hub_entry: MockConfigEntry) -> None:
-    """An out-of-range interval is a friendly form error."""
-    result = await hass.config_entries.subentries.async_init(
-        (hub_entry.entry_id, ZONE), context={"source": config_entries.SOURCE_USER}
-    )
-    result = await hass.config_entries.subentries.async_configure(
-        result["flow_id"],
-        {
-            const.CONF_ZONE_NAME: "Zone",
-            const.CONF_VALVE_ENTITY: "valve.z",
-            const.CONF_INTERVAL_DAYS: 61,
-        },
-    )
-    assert result["type"] is FlowResultType.FORM
-    assert result["errors"] == {const.CONF_INTERVAL_DAYS: "interval_out_of_range"}
 
 
 async def test_zone_curve_text_errors(hass: HomeAssistant, hub_entry: MockConfigEntry) -> None:
@@ -692,7 +665,6 @@ async def test_zone_reconfigure_rename_and_cycle_edit(
         {
             const.CONF_ZONE_NAME: "Lawn North",
             const.CONF_VALVE_ENTITY: "valve.lawn",
-            const.CONF_INTERVAL_DAYS: 4,
         },
     )
     assert result["type"] is FlowResultType.MENU
@@ -742,7 +714,6 @@ async def test_zone_reconfigure_rename_and_cycle_edit(
     assert subentry.title == "Lawn North"
     data = dict(subentry.data)
     assert data[const.CONF_ZONE_NAME] == "Lawn North"
-    assert data[const.CONF_INTERVAL_DAYS] == 4
     cycles = data[const.CONF_CYCLES]
     assert len(cycles) == 1
     # The id survived the edit untouched.

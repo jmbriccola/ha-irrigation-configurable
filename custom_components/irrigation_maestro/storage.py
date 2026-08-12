@@ -114,12 +114,21 @@ class RuntimeState:
 
     # Per-zone state --------------------------------------------------------
 
-    def last_completed(self, zone_id: str) -> date | None:
-        raw = self._data["last_completed"].get(zone_id)
+    @staticmethod
+    def _marker_key(zone_id: str, program_id: str) -> str:
+        return f"{zone_id}:{program_id}"
+
+    def last_completed(self, zone_id: str, program_id: str) -> date | None:
+        """The program's own last watering day.
+
+        Per program, not per zone: cadence is a program property, and a shared
+        marker would let one program consume another's cadence.
+        """
+        raw = self._data["last_completed"].get(self._marker_key(zone_id, program_id))
         return date.fromisoformat(raw) if raw else None
 
-    def set_last_completed(self, zone_id: str, day: date) -> None:
-        self._data["last_completed"][zone_id] = day.isoformat()
+    def set_last_completed(self, zone_id: str, program_id: str, day: date) -> None:
+        self._data["last_completed"][self._marker_key(zone_id, program_id)] = day.isoformat()
 
     def suspended_until(self, zone_id: str) -> datetime | None:
         raw = self._data["suspended_until"].get(zone_id)
@@ -181,7 +190,6 @@ class RuntimeState:
     def drop_zone(self, zone_id: str) -> None:
         """Forget all state of a removed zone."""
         for key in (
-            "last_completed",
             "suspended_until",
             "paused_until",
             "skip_today",
@@ -189,11 +197,13 @@ class RuntimeState:
             "zone_enabled",
         ):
             self._data[key].pop(zone_id, None)
-        self._data["cycle_enabled"] = {
-            key: value
-            for key, value in self._data["cycle_enabled"].items()
-            if not key.startswith(f"{zone_id}:")
-        }
+        prefix = f"{zone_id}:"
+        for key in ("cycle_enabled", "last_completed"):
+            self._data[key] = {
+                item: value
+                for item, value in self._data[key].items()
+                if not item.startswith(prefix)
+            }
 
     # Manual stop -----------------------------------------------------------
 

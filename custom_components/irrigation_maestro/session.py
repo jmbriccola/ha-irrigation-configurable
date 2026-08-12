@@ -317,8 +317,11 @@ class SessionRunner:
     # Internals --------------------------------------------------------------
 
     def _restrictions(self, zone: ZoneRuntime) -> Any:
-        if zone.config.restrictions is not None:
-            return zone.config.restrictions
+        """The hub's forbidden time windows.
+
+        Restrictions are hours-only from 2.0.0 and no longer vary per zone;
+        which *days* a zone waters is decided by each program's calendar.
+        """
         return self._runtime.hub.restrictions
 
     def _session_expired(self) -> bool:
