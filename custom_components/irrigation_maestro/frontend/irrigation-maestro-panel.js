@@ -3809,9 +3809,6 @@ He.styles = F`
       background: var(--imc-accent, #3a6df0);
       color: #fff;
     }
-    .parity-seg {
-      margin-top: 10px;
-    }
     .window-row {
       display: flex;
       align-items: center;

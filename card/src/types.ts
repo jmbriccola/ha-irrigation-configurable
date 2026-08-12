@@ -120,7 +120,6 @@ export interface CycleCurve {
 export interface CalendarInfo {
   mode: "weekdays" | "interval" | "parity";
   days?: number[];
-  interval_days?: number;
   parity?: "odd" | "even";
 }
 
