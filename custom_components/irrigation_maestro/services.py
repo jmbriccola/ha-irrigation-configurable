@@ -846,8 +846,8 @@ async def _async_set_restrictions(call: ServiceCall) -> None:
     if ATTR_FORBIDDEN_WINDOWS in call.data:
         restrictions[const.CONF_FORBIDDEN_WINDOWS] = [
             {
-                const.CONF_WINDOW_START: w[ATTR_WINDOW_START],
-                const.CONF_WINDOW_END: w[ATTR_WINDOW_END],
+                const.CONF_WINDOW_START: str(w[ATTR_WINDOW_START])[:5],
+                const.CONF_WINDOW_END: str(w[ATTR_WINDOW_END])[:5],
             }
             for w in call.data[ATTR_FORBIDDEN_WINDOWS]
         ]

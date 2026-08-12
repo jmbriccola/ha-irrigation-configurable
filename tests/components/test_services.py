@@ -948,3 +948,27 @@ async def test_set_restrictions(hass, freezer):
     assert hub.restrictions.allowed_weekdays == frozenset({0, 2, 4})
     assert str(hub.restrictions.parity) == "odd"
     assert len(hub.restrictions.forbidden_windows) == 1
+
+
+async def test_set_restrictions_normalizes_window_times(hass, freezer):
+    freezer.move_to(START)
+    park = MockValvePark(hass)
+    park.add("valve.pots")
+    mock_weather(hass)
+    entry = await setup_hub(hass, [zone_data("Pots", "valve.pots")])
+    await hass.services.async_call(
+        DOMAIN,
+        "set_restrictions",
+        {
+            "forbidden_windows": [{"start": "22:00:00", "end": "06:00:00"}],
+        },
+        blocking=True,
+    )
+    from custom_components.irrigation_maestro.models import HubConfig
+
+    hub = HubConfig.from_options(dict(entry.options))
+    assert len(hub.restrictions.forbidden_windows) == 1
+    # Verify the stored values in options are normalized to HH:MM
+    window_data = entry.options[const.CONF_RESTRICTIONS][const.CONF_FORBIDDEN_WINDOWS][0]
+    assert window_data[const.CONF_WINDOW_START] == "22:00"
+    assert window_data[const.CONF_WINDOW_END] == "06:00"
