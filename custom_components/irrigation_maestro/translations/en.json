@@ -610,12 +610,30 @@
       "name": "Set simple curve",
       "description": "Builds a duration curve from a base amount and a hot-day boost, then saves it to a program.",
       "fields": {
-        "zone_id": { "name": "Zone", "description": "The zone owning the program." },
-        "cycle_id": { "name": "Program", "description": "The program whose curve is set." },
-        "amount": { "name": "Amount (min at 25°)", "description": "Watering minutes on a mild day." },
-        "heat": { "name": "Hot-day boost (extra min at 35°)", "description": "Extra minutes on a hot day vs a mild one." },
-        "min_value": { "name": "Never less than (min)", "description": "Optional lower limit." },
-        "max_value": { "name": "Never more than (min)", "description": "Optional upper limit." }
+        "zone_id": {
+          "name": "Zone",
+          "description": "The zone owning the program."
+        },
+        "cycle_id": {
+          "name": "Program",
+          "description": "The program whose curve is set."
+        },
+        "amount": {
+          "name": "Amount (min at 25°)",
+          "description": "Watering minutes on a mild day."
+        },
+        "heat": {
+          "name": "Hot-day boost (extra min at 35°)",
+          "description": "Extra minutes on a hot day vs a mild one."
+        },
+        "min_value": {
+          "name": "Never less than (min)",
+          "description": "Optional lower limit."
+        },
+        "max_value": {
+          "name": "Never more than (min)",
+          "description": "Optional upper limit."
+        }
       }
     },
     "export_config": {
@@ -636,114 +654,258 @@
       "name": "Set program schedule",
       "description": "Sets the days and start time of a program.",
       "fields": {
-        "zone_id": { "name": "Zone", "description": "The zone the program belongs to." },
-        "program_id": { "name": "Program", "description": "The program to change." },
-        "days": { "name": "Days", "description": "Weekdays it runs (Monday–Sunday). Leave empty for every day." },
-        "start_kind": { "name": "Start type", "description": "Fixed time or sunrise/sunset." },
-        "start_time": { "name": "Start time", "description": "When it starts, for a fixed-time start." },
-        "start_event": { "name": "Sun event", "description": "Sunrise or sunset, for a sun start." },
-        "start_offset_min": { "name": "Offset (min)", "description": "Minutes before (−) or after (+) the sun event." }
+        "zone_id": {
+          "name": "Zone",
+          "description": "The zone the program belongs to."
+        },
+        "program_id": {
+          "name": "Program",
+          "description": "The program to change."
+        },
+        "days": {
+          "name": "Days",
+          "description": "Weekdays it runs (Monday–Sunday). Leave empty for every day."
+        },
+        "start_kind": {
+          "name": "Start type",
+          "description": "Fixed time or sunrise/sunset."
+        },
+        "start_time": {
+          "name": "Start time",
+          "description": "When it starts, for a fixed-time start."
+        },
+        "start_event": {
+          "name": "Sun event",
+          "description": "Sunrise or sunset, for a sun start."
+        },
+        "start_offset_min": {
+          "name": "Offset (min)",
+          "description": "Minutes before (−) or after (+) the sun event."
+        }
       }
     },
     "set_program_minutes": {
       "name": "Set program minutes",
       "description": "Sets a program's watering minutes, either the same every day or per weekday. Not available for volume-target programs.",
       "fields": {
-        "zone_id": { "name": "Zone", "description": "The zone the program belongs to." },
-        "program_id": { "name": "Program", "description": "The program to change." },
-        "minutes": { "name": "Minutes", "description": "Same watering minutes every scheduled day. Exclusive with per-day minutes." },
-        "day_minutes": { "name": "Per-day minutes", "description": "Minutes per weekday (0 = Monday … 6 = Sunday), e.g. Monday 15, Wednesday 20. Exclusive with minutes." }
+        "zone_id": {
+          "name": "Zone",
+          "description": "The zone the program belongs to."
+        },
+        "program_id": {
+          "name": "Program",
+          "description": "The program to change."
+        },
+        "minutes": {
+          "name": "Minutes",
+          "description": "Same watering minutes every scheduled day. Exclusive with per-day minutes."
+        },
+        "day_minutes": {
+          "name": "Per-day minutes",
+          "description": "Minutes per weekday (0 = Monday … 6 = Sunday), e.g. Monday 15, Wednesday 20. Exclusive with minutes."
+        }
       }
     },
     "add_program": {
       "name": "Add program",
       "description": "Adds a new program to a zone, optionally copied from an existing one.",
       "fields": {
-        "zone_id": { "name": "Zone", "description": "The zone to add the program to." },
-        "name": { "name": "Name", "description": "The new program's name. Defaults to 'Program', or the source name followed by ' (copy)' when copying." },
-        "copy_from": { "name": "Copy from", "description": "An existing program on the same zone to copy the schedule and curve from." }
+        "zone_id": {
+          "name": "Zone",
+          "description": "The zone to add the program to."
+        },
+        "name": {
+          "name": "Name",
+          "description": "The new program's name. Defaults to 'Program', or the source name followed by ' (copy)' when copying."
+        },
+        "copy_from": {
+          "name": "Copy from",
+          "description": "An existing program on the same zone to copy the schedule and curve from."
+        }
       }
     },
     "remove_program": {
       "name": "Remove program",
       "description": "Removes a program from a zone. A zone must keep at least one program.",
       "fields": {
-        "zone_id": { "name": "Zone", "description": "The zone owning the program." },
-        "program_id": { "name": "Program", "description": "The program to remove." }
+        "zone_id": {
+          "name": "Zone",
+          "description": "The zone owning the program."
+        },
+        "program_id": {
+          "name": "Program",
+          "description": "The program to remove."
+        }
       }
     },
     "rename_program": {
       "name": "Rename program",
       "description": "Renames a program.",
       "fields": {
-        "zone_id": { "name": "Zone", "description": "The zone owning the program." },
-        "program_id": { "name": "Program", "description": "The program to rename." },
-        "name": { "name": "Name", "description": "The program's new name." }
+        "zone_id": {
+          "name": "Zone",
+          "description": "The zone owning the program."
+        },
+        "program_id": {
+          "name": "Program",
+          "description": "The program to rename."
+        },
+        "name": {
+          "name": "Name",
+          "description": "The program's new name."
+        }
       }
     },
     "add_zone": {
       "name": "Add zone",
       "description": "Creates a new zone with a default watering program, in place with no reload required. Returns the new zone's id as the response.",
       "fields": {
-        "name": { "name": "Name", "description": "A friendly name for this circuit, e.g. Vegetable beds or Front lawn." },
-        "valve_entity": { "name": "Valve", "description": "The valve or switch entity that opens this circuit." },
-        "area_m2": { "name": "Area (m²)", "description": "Circuit surface, used only to show minutes to mm conversions. Optional." },
-        "icon": { "name": "Icon", "description": "Icon shown for this zone's device. Leave empty for the default." }
+        "name": {
+          "name": "Name",
+          "description": "A friendly name for this circuit, e.g. Vegetable beds or Front lawn."
+        },
+        "valve_entity": {
+          "name": "Valve",
+          "description": "The valve or switch entity that opens this circuit."
+        },
+        "area_m2": {
+          "name": "Area (m²)",
+          "description": "Circuit surface, used only to show minutes to mm conversions. Optional."
+        },
+        "icon": {
+          "name": "Icon",
+          "description": "Icon shown for this zone's device. Leave empty for the default."
+        }
       }
     },
     "update_zone": {
       "name": "Update zone",
       "description": "Updates one or more of a zone's settings in place; only the provided fields change.",
       "fields": {
-        "zone_id": { "name": "Zone", "description": "The zone to update." },
-        "name": { "name": "Name", "description": "A friendly name for this circuit, e.g. Vegetable beds or Front lawn." },
-        "valve_entity": { "name": "Valve", "description": "The valve or switch entity that opens this circuit." },
-        "area_m2": { "name": "Area (m²)", "description": "Circuit surface, used only to show minutes to mm conversions." },
-        "icon": { "name": "Icon", "description": "Icon shown for this zone's device." },
-        "flow_sensor": { "name": "Flow sensor", "description": "This zone's own flow meter (L/min). If empty, the shared line meter is used when available." },
-        "nominal_flow_lpm": { "name": "Nominal flow (L/min)", "description": "Expected flow while watering; enables leak, no-flow and out-of-range detection. Needs a flow meter." },
-        "flow_tolerance_pct": { "name": "Flow tolerance (%)", "description": "How far the real flow may stray from the nominal value before it's flagged." },
-        "adjustment_pct": { "name": "Adjustment (%)", "description": "Scales every watering time up or down. 100 means unchanged." },
-        "order": { "name": "Order", "description": "Watering sequence: lower numbers water first." },
-        "interval_days": { "name": "Watering interval (days)", "description": "Water at most every N days, from 1 to 60." },
-        "compatibility_group": { "name": "Compatibility group", "description": "Only used when the hub allows more than one concurrent zone. Zones in the same group may run together." },
-        "season_months": { "name": "Season months override", "description": "Water only in these months, overriding the hub season. Leave empty to follow the hub." }
+        "zone_id": {
+          "name": "Zone",
+          "description": "The zone to update."
+        },
+        "name": {
+          "name": "Name",
+          "description": "A friendly name for this circuit, e.g. Vegetable beds or Front lawn."
+        },
+        "valve_entity": {
+          "name": "Valve",
+          "description": "The valve or switch entity that opens this circuit."
+        },
+        "area_m2": {
+          "name": "Area (m²)",
+          "description": "Circuit surface, used only to show minutes to mm conversions."
+        },
+        "icon": {
+          "name": "Icon",
+          "description": "Icon shown for this zone's device."
+        },
+        "flow_sensor": {
+          "name": "Flow sensor",
+          "description": "This zone's own flow meter (L/min). If empty, the shared line meter is used when available."
+        },
+        "nominal_flow_lpm": {
+          "name": "Nominal flow (L/min)",
+          "description": "Expected flow while watering; enables leak, no-flow and out-of-range detection. Needs a flow meter."
+        },
+        "flow_tolerance_pct": {
+          "name": "Flow tolerance (%)",
+          "description": "How far the real flow may stray from the nominal value before it's flagged."
+        },
+        "adjustment_pct": {
+          "name": "Adjustment (%)",
+          "description": "Scales every watering time up or down. 100 means unchanged."
+        },
+        "order": {
+          "name": "Order",
+          "description": "Watering sequence: lower numbers water first."
+        },
+        "interval_days": {
+          "name": "Watering interval (days)",
+          "description": "Water at most every N days, from 1 to 60."
+        },
+        "compatibility_group": {
+          "name": "Compatibility group",
+          "description": "Only used when the hub allows more than one concurrent zone. Zones in the same group may run together."
+        },
+        "season_months": {
+          "name": "Season months override",
+          "description": "Water only in these months, overriding the hub season. Leave empty to follow the hub."
+        }
       }
     },
     "remove_zone": {
       "name": "Remove zone",
       "description": "Deletes a zone and its programs in place, with no reload required.",
       "fields": {
-        "zone_id": { "name": "Zone", "description": "The zone to remove." }
+        "zone_id": {
+          "name": "Zone",
+          "description": "The zone to remove."
+        }
       }
     },
     "set_weather_sources": {
       "name": "Set weather and sensors",
       "description": "Sets the hub's weather entity and optional shared sensors in place, with no reload required.",
       "fields": {
-        "weather_entity": { "name": "Weather entity", "description": "Required. A weather entity that provides temperature and precipitation forecasts." },
-        "rain_sensor": { "name": "Rain sensor", "description": "A sensor reporting today's total rainfall in mm. Leave empty to clear it; omit to leave it unchanged." },
-        "outdoor_temp_sensor": { "name": "Outdoor temperature sensor", "description": "Use a real thermometer instead of the weather entity for the daily temperature maxima. Leave empty to clear it; omit to leave it unchanged." },
-        "line_flow_sensor": { "name": "Line flow sensor", "description": "A single flow meter (L/min) on the manifold, shared by zones that don't have their own. Leave empty to clear it; omit to leave it unchanged." },
-        "master_valve": { "name": "Master valve / pump", "description": "A valve or switch opened before the first zone and closed after the last. Leave empty to clear it; omit to leave it unchanged." }
+        "weather_entity": {
+          "name": "Weather entity",
+          "description": "Required. A weather entity that provides temperature and precipitation forecasts."
+        },
+        "rain_sensor": {
+          "name": "Rain sensor",
+          "description": "A sensor reporting today's total rainfall in mm. Leave empty to clear it; omit to leave it unchanged."
+        },
+        "outdoor_temp_sensor": {
+          "name": "Outdoor temperature sensor",
+          "description": "Use a real thermometer instead of the weather entity for the daily temperature maxima. Leave empty to clear it; omit to leave it unchanged."
+        },
+        "line_flow_sensor": {
+          "name": "Line flow sensor",
+          "description": "A single flow meter (L/min) on the manifold, shared by zones that don't have their own. Leave empty to clear it; omit to leave it unchanged."
+        },
+        "master_valve": {
+          "name": "Master valve / pump",
+          "description": "A valve or switch opened before the first zone and closed after the last. Leave empty to clear it; omit to leave it unchanged."
+        }
       }
     },
     "set_consumption_budget": {
       "name": "Set consumption budget",
       "description": "Sets the hub's monthly water cap and what happens once it is exceeded, in place.",
       "fields": {
-        "liters_per_month": { "name": "Monthly budget (liters)", "description": "Total liters allowed per calendar month. Omit or set to zero to disable the budget." },
-        "action": { "name": "Action when exceeded", "description": "What happens once the budget is used up: notify only warns, reduce shortens every program, suspend stops watering until next month." },
-        "reduce_pct": { "name": "Reduction percentage", "description": "By how much each program is shortened when the action is reduce watering." }
+        "liters_per_month": {
+          "name": "Monthly budget (liters)",
+          "description": "Total liters allowed per calendar month. Omit or set to zero to disable the budget."
+        },
+        "action": {
+          "name": "Action when exceeded",
+          "description": "What happens once the budget is used up: notify only warns, reduce shortens every program, suspend stops watering until next month."
+        },
+        "reduce_pct": {
+          "name": "Reduction percentage",
+          "description": "By how much each program is shortened when the action is reduce watering."
+        }
       }
     },
     "set_restrictions": {
       "name": "Set restrictions",
       "description": "Sets the hub's calendar watering restrictions in place, with no reload required.",
       "fields": {
-        "allowed_weekdays": { "name": "Allowed weekdays", "description": "Water only on the selected days. Leave empty to allow every day." },
-        "parity": { "name": "Day-of-month parity", "description": "Restrict watering to odd or even days of the month, or none for no restriction." },
-        "forbidden_windows": { "name": "Forbidden time windows", "description": "Times when watering is not allowed. Empty means no forbidden times. A running program is cut short rather than run into one." }
+        "allowed_weekdays": {
+          "name": "Allowed weekdays",
+          "description": "Water only on the selected days. Leave empty to allow every day."
+        },
+        "parity": {
+          "name": "Day-of-month parity",
+          "description": "Restrict watering to odd or even days of the month, or none for no restriction."
+        },
+        "forbidden_windows": {
+          "name": "Forbidden time windows",
+          "description": "Times when watering is not allowed. Empty means no forbidden times. A running program is cut short rather than run into one."
+        }
       }
     }
   },
@@ -763,6 +925,26 @@
     "sentinel_missing_outcome": {
       "title": "Scheduled watering did not run",
       "description": "No outcome was recorded today for: {cycles}. The trigger probably never fired (Home Assistant was off at trigger time, or an unexpected error occurred)."
+    },
+    "migration_cadence_dropped": {
+      "title": "Watering cadence replaced by the weekday schedule",
+      "description": "These programs had both a weekday schedule and a per-zone \"every N days\" cadence, which silently cancelled each other out — some of the days you selected never watered. The weekday schedule is now the only one in effect, so they water on the days you chose: {items}."
+    },
+    "migration_weekdays_dropped": {
+      "title": "Allowed-days limit no longer applies to some programs",
+      "description": "These programs water on an \"every N days\" cadence, which cannot also be limited to specific weekdays. Their cadence is unchanged, but the allowed-days limit no longer applies to them. If you must comply with it, set their calendar to specific weekdays: {items}."
+    },
+    "migration_parity_dropped": {
+      "title": "Odd/even day rule no longer applies to some programs",
+      "description": "The odd/even day rule was a global restriction; it is now one of the three calendar modes a program can use, and a program can only have one. These programs kept the calendar they already had, so the odd/even rule no longer applies to them. If your local ordinance requires it, set their calendar to odd or even days: {items}."
+    },
+    "migration_program_disabled": {
+      "title": "Some programs could never water and were disabled",
+      "description": "The days these programs were scheduled on were never allowed by the global allowed-days limit, so they never watered. They have been disabled so this is visible rather than silent. Pick days that are actually allowed and enable them again: {items}."
+    },
+    "migration_zone_restrictions_dropped": {
+      "title": "Per-zone restrictions were removed",
+      "description": "These zones carried their own calendar restrictions, which had no interface and could only be set by editing exported configuration. Restrictions are now hub-wide and cover forbidden hours only; watering days are set on each program: {items}."
     }
   },
   "exceptions": {

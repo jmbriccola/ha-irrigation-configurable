@@ -610,12 +610,30 @@
       "name": "Imposta curva semplice",
       "description": "Costruisce una curva a durata da una quantità base e un incremento per i giorni caldi, poi la salva su un programma.",
       "fields": {
-        "zone_id": { "name": "Zona", "description": "La zona a cui appartiene il programma." },
-        "cycle_id": { "name": "Programma", "description": "Il programma di cui impostare la curva." },
-        "amount": { "name": "Quanta acqua (min a 25°)", "description": "Minuti di irrigazione in una giornata mite." },
-        "heat": { "name": "Di più quando caldo (min extra a 35°)", "description": "Minuti extra in una giornata calda rispetto a una mite." },
-        "min_value": { "name": "Mai meno di (min)", "description": "Limite inferiore facoltativo." },
-        "max_value": { "name": "Mai più di (min)", "description": "Limite superiore facoltativo." }
+        "zone_id": {
+          "name": "Zona",
+          "description": "La zona a cui appartiene il programma."
+        },
+        "cycle_id": {
+          "name": "Programma",
+          "description": "Il programma di cui impostare la curva."
+        },
+        "amount": {
+          "name": "Quanta acqua (min a 25°)",
+          "description": "Minuti di irrigazione in una giornata mite."
+        },
+        "heat": {
+          "name": "Di più quando caldo (min extra a 35°)",
+          "description": "Minuti extra in una giornata calda rispetto a una mite."
+        },
+        "min_value": {
+          "name": "Mai meno di (min)",
+          "description": "Limite inferiore facoltativo."
+        },
+        "max_value": {
+          "name": "Mai più di (min)",
+          "description": "Limite superiore facoltativo."
+        }
       }
     },
     "export_config": {
@@ -636,114 +654,258 @@
       "name": "Imposta la programmazione",
       "description": "Imposta i giorni e l'orario di partenza di un programma.",
       "fields": {
-        "zone_id": { "name": "Zona", "description": "La zona a cui appartiene il programma." },
-        "program_id": { "name": "Programma", "description": "Il programma da modificare." },
-        "days": { "name": "Giorni", "description": "Giorni della settimana in cui parte (lunedì–domenica). Lascia vuoto per tutti i giorni." },
-        "start_kind": { "name": "Tipo di partenza", "description": "Orario fisso oppure alba/tramonto." },
-        "start_time": { "name": "Orario di partenza", "description": "L'orario di partenza, per una partenza a orario fisso." },
-        "start_event": { "name": "Evento solare", "description": "Alba o tramonto, per una partenza solare." },
-        "start_offset_min": { "name": "Scarto (min)", "description": "Minuti prima (−) o dopo (+) l'evento solare." }
+        "zone_id": {
+          "name": "Zona",
+          "description": "La zona a cui appartiene il programma."
+        },
+        "program_id": {
+          "name": "Programma",
+          "description": "Il programma da modificare."
+        },
+        "days": {
+          "name": "Giorni",
+          "description": "Giorni della settimana in cui parte (lunedì–domenica). Lascia vuoto per tutti i giorni."
+        },
+        "start_kind": {
+          "name": "Tipo di partenza",
+          "description": "Orario fisso oppure alba/tramonto."
+        },
+        "start_time": {
+          "name": "Orario di partenza",
+          "description": "L'orario di partenza, per una partenza a orario fisso."
+        },
+        "start_event": {
+          "name": "Evento solare",
+          "description": "Alba o tramonto, per una partenza solare."
+        },
+        "start_offset_min": {
+          "name": "Scarto (min)",
+          "description": "Minuti prima (−) o dopo (+) l'evento solare."
+        }
       }
     },
     "set_program_minutes": {
       "name": "Imposta i minuti del programma",
       "description": "Imposta i minuti di irrigazione di un programma, uguali ogni giorno oppure per singolo giorno della settimana. Non disponibile per i programmi a volume target.",
       "fields": {
-        "zone_id": { "name": "Zona", "description": "La zona a cui appartiene il programma." },
-        "program_id": { "name": "Programma", "description": "Il programma da modificare." },
-        "minutes": { "name": "Minuti", "description": "Stessi minuti di irrigazione in ogni giorno programmato. Esclusivo rispetto ai minuti per giorno." },
-        "day_minutes": { "name": "Minuti per giorno", "description": "Minuti per giorno della settimana (0 = lunedì … 6 = domenica), es. lunedì 15, mercoledì 20. Esclusivo rispetto a minuti." }
+        "zone_id": {
+          "name": "Zona",
+          "description": "La zona a cui appartiene il programma."
+        },
+        "program_id": {
+          "name": "Programma",
+          "description": "Il programma da modificare."
+        },
+        "minutes": {
+          "name": "Minuti",
+          "description": "Stessi minuti di irrigazione in ogni giorno programmato. Esclusivo rispetto ai minuti per giorno."
+        },
+        "day_minutes": {
+          "name": "Minuti per giorno",
+          "description": "Minuti per giorno della settimana (0 = lunedì … 6 = domenica), es. lunedì 15, mercoledì 20. Esclusivo rispetto a minuti."
+        }
       }
     },
     "add_program": {
       "name": "Aggiungi programma",
       "description": "Aggiunge un nuovo programma a una zona, eventualmente copiato da uno esistente.",
       "fields": {
-        "zone_id": { "name": "Zona", "description": "La zona a cui aggiungere il programma." },
-        "name": { "name": "Nome", "description": "Il nome del nuovo programma. Predefinito 'Program', oppure il nome di origine seguito da ' (copy)' se copiato." },
-        "copy_from": { "name": "Copia da", "description": "Un programma esistente sulla stessa zona da cui copiare programmazione e curva." }
+        "zone_id": {
+          "name": "Zona",
+          "description": "La zona a cui aggiungere il programma."
+        },
+        "name": {
+          "name": "Nome",
+          "description": "Il nome del nuovo programma. Predefinito 'Program', oppure il nome di origine seguito da ' (copy)' se copiato."
+        },
+        "copy_from": {
+          "name": "Copia da",
+          "description": "Un programma esistente sulla stessa zona da cui copiare programmazione e curva."
+        }
       }
     },
     "remove_program": {
       "name": "Rimuovi programma",
       "description": "Rimuove un programma da una zona. Una zona deve mantenere almeno un programma.",
       "fields": {
-        "zone_id": { "name": "Zona", "description": "La zona a cui appartiene il programma." },
-        "program_id": { "name": "Programma", "description": "Il programma da rimuovere." }
+        "zone_id": {
+          "name": "Zona",
+          "description": "La zona a cui appartiene il programma."
+        },
+        "program_id": {
+          "name": "Programma",
+          "description": "Il programma da rimuovere."
+        }
       }
     },
     "rename_program": {
       "name": "Rinomina programma",
       "description": "Rinomina un programma.",
       "fields": {
-        "zone_id": { "name": "Zona", "description": "La zona a cui appartiene il programma." },
-        "program_id": { "name": "Programma", "description": "Il programma da rinominare." },
-        "name": { "name": "Nome", "description": "Il nuovo nome del programma." }
+        "zone_id": {
+          "name": "Zona",
+          "description": "La zona a cui appartiene il programma."
+        },
+        "program_id": {
+          "name": "Programma",
+          "description": "Il programma da rinominare."
+        },
+        "name": {
+          "name": "Nome",
+          "description": "Il nuovo nome del programma."
+        }
       }
     },
     "add_zone": {
       "name": "Aggiungi zona",
       "description": "Crea una nuova zona con un programma di irrigazione predefinito, sul posto e senza bisogno di ricaricare l'integrazione. Restituisce l'id della nuova zona come risposta.",
       "fields": {
-        "name": { "name": "Nome", "description": "Un nome comprensibile per questo circuito, es. \"Orto\" o \"Prato davanti\"." },
-        "valve_entity": { "name": "Valvola", "description": "L'entità valvola o interruttore che apre questo circuito." },
-        "area_m2": { "name": "Superficie (m²)", "description": "Superficie del circuito, usata solo per mostrare le conversioni minuti-mm. Facoltativa." },
-        "icon": { "name": "Icona", "description": "Icona mostrata per il dispositivo di questa zona. Vuoto per quella predefinita." }
+        "name": {
+          "name": "Nome",
+          "description": "Un nome comprensibile per questo circuito, es. \"Orto\" o \"Prato davanti\"."
+        },
+        "valve_entity": {
+          "name": "Valvola",
+          "description": "L'entità valvola o interruttore che apre questo circuito."
+        },
+        "area_m2": {
+          "name": "Superficie (m²)",
+          "description": "Superficie del circuito, usata solo per mostrare le conversioni minuti-mm. Facoltativa."
+        },
+        "icon": {
+          "name": "Icona",
+          "description": "Icona mostrata per il dispositivo di questa zona. Vuoto per quella predefinita."
+        }
       }
     },
     "update_zone": {
       "name": "Modifica zona",
       "description": "Aggiorna una o più impostazioni di una zona sul posto; cambiano solo i campi forniti.",
       "fields": {
-        "zone_id": { "name": "Zona", "description": "La zona da modificare." },
-        "name": { "name": "Nome", "description": "Un nome comprensibile per questo circuito, es. \"Orto\" o \"Prato davanti\"." },
-        "valve_entity": { "name": "Valvola", "description": "L'entità valvola o interruttore che apre questo circuito." },
-        "area_m2": { "name": "Superficie (m²)", "description": "Superficie del circuito, usata solo per mostrare le conversioni minuti-mm." },
-        "icon": { "name": "Icona", "description": "Icona mostrata per il dispositivo di questa zona." },
-        "flow_sensor": { "name": "Sensore di portata", "description": "Il flussometro proprio della zona (L/min). Se vuoto, si usa il contatore di linea condiviso, quando disponibile." },
-        "nominal_flow_lpm": { "name": "Portata nominale (L/min)", "description": "Portata attesa durante l'irrigazione; abilita il rilevamento di perdite, flusso assente e valori fuori range. Serve un flussometro." },
-        "flow_tolerance_pct": { "name": "Tolleranza di portata (%)", "description": "Di quanto la portata reale può discostarsi da quella nominale prima di essere segnalata." },
-        "adjustment_pct": { "name": "Correzione (%)", "description": "Scala tutti i tempi di irrigazione. 100 significa invariato." },
-        "order": { "name": "Ordine", "description": "Sequenza di irrigazione: i numeri più bassi irrigano per primi." },
-        "interval_days": { "name": "Intervallo di irrigazione (giorni)", "description": "Irriga al più ogni N giorni, da 1 a 60." },
-        "compatibility_group": { "name": "Gruppo di compatibilità", "description": "Usato solo quando l'hub consente più zone contemporanee. Le zone nello stesso gruppo possono irrigare insieme." },
-        "season_months": { "name": "Deroga ai mesi della stagione", "description": "Irriga solo in questi mesi, in deroga alla stagione dell'hub. Lascia vuoto per seguire l'hub." }
+        "zone_id": {
+          "name": "Zona",
+          "description": "La zona da modificare."
+        },
+        "name": {
+          "name": "Nome",
+          "description": "Un nome comprensibile per questo circuito, es. \"Orto\" o \"Prato davanti\"."
+        },
+        "valve_entity": {
+          "name": "Valvola",
+          "description": "L'entità valvola o interruttore che apre questo circuito."
+        },
+        "area_m2": {
+          "name": "Superficie (m²)",
+          "description": "Superficie del circuito, usata solo per mostrare le conversioni minuti-mm."
+        },
+        "icon": {
+          "name": "Icona",
+          "description": "Icona mostrata per il dispositivo di questa zona."
+        },
+        "flow_sensor": {
+          "name": "Sensore di portata",
+          "description": "Il flussometro proprio della zona (L/min). Se vuoto, si usa il contatore di linea condiviso, quando disponibile."
+        },
+        "nominal_flow_lpm": {
+          "name": "Portata nominale (L/min)",
+          "description": "Portata attesa durante l'irrigazione; abilita il rilevamento di perdite, flusso assente e valori fuori range. Serve un flussometro."
+        },
+        "flow_tolerance_pct": {
+          "name": "Tolleranza di portata (%)",
+          "description": "Di quanto la portata reale può discostarsi da quella nominale prima di essere segnalata."
+        },
+        "adjustment_pct": {
+          "name": "Correzione (%)",
+          "description": "Scala tutti i tempi di irrigazione. 100 significa invariato."
+        },
+        "order": {
+          "name": "Ordine",
+          "description": "Sequenza di irrigazione: i numeri più bassi irrigano per primi."
+        },
+        "interval_days": {
+          "name": "Intervallo di irrigazione (giorni)",
+          "description": "Irriga al più ogni N giorni, da 1 a 60."
+        },
+        "compatibility_group": {
+          "name": "Gruppo di compatibilità",
+          "description": "Usato solo quando l'hub consente più zone contemporanee. Le zone nello stesso gruppo possono irrigare insieme."
+        },
+        "season_months": {
+          "name": "Deroga ai mesi della stagione",
+          "description": "Irriga solo in questi mesi, in deroga alla stagione dell'hub. Lascia vuoto per seguire l'hub."
+        }
       }
     },
     "remove_zone": {
       "name": "Rimuovi zona",
       "description": "Elimina una zona e i suoi programmi sul posto, senza bisogno di ricaricare l'integrazione.",
       "fields": {
-        "zone_id": { "name": "Zona", "description": "La zona da rimuovere." }
+        "zone_id": {
+          "name": "Zona",
+          "description": "La zona da rimuovere."
+        }
       }
     },
     "set_weather_sources": {
       "name": "Imposta meteo e sensori",
       "description": "Imposta l'entità meteo dell'hub e i sensori condivisi opzionali sul posto, senza bisogno di ricaricare l'integrazione.",
       "fields": {
-        "weather_entity": { "name": "Entità meteo", "description": "Obbligatoria. Un'entità meteo che fornisce previsioni di temperatura e precipitazioni." },
-        "rain_sensor": { "name": "Sensore pioggia", "description": "Un sensore con la pioggia totale di oggi in mm. Lascia vuoto per rimuoverlo; ometti per lasciarlo invariato." },
-        "outdoor_temp_sensor": { "name": "Sensore temperatura esterna", "description": "Usa un termometro reale al posto dell'entità meteo per le massime giornaliere. Lascia vuoto per rimuoverlo; ometti per lasciarlo invariato." },
-        "line_flow_sensor": { "name": "Sensore di portata di linea", "description": "Un unico contatore di portata (L/min) sul collettore, condiviso dalle zone che non ne hanno uno proprio. Lascia vuoto per rimuoverlo; ometti per lasciarlo invariato." },
-        "master_valve": { "name": "Valvola master / pompa", "description": "Una valvola o un interruttore aperto prima della prima zona e chiuso dopo l'ultima. Lascia vuoto per rimuoverla; ometti per lasciarla invariata." }
+        "weather_entity": {
+          "name": "Entità meteo",
+          "description": "Obbligatoria. Un'entità meteo che fornisce previsioni di temperatura e precipitazioni."
+        },
+        "rain_sensor": {
+          "name": "Sensore pioggia",
+          "description": "Un sensore con la pioggia totale di oggi in mm. Lascia vuoto per rimuoverlo; ometti per lasciarlo invariato."
+        },
+        "outdoor_temp_sensor": {
+          "name": "Sensore temperatura esterna",
+          "description": "Usa un termometro reale al posto dell'entità meteo per le massime giornaliere. Lascia vuoto per rimuoverlo; ometti per lasciarlo invariato."
+        },
+        "line_flow_sensor": {
+          "name": "Sensore di portata di linea",
+          "description": "Un unico contatore di portata (L/min) sul collettore, condiviso dalle zone che non ne hanno uno proprio. Lascia vuoto per rimuoverlo; ometti per lasciarlo invariato."
+        },
+        "master_valve": {
+          "name": "Valvola master / pompa",
+          "description": "Una valvola o un interruttore aperto prima della prima zona e chiuso dopo l'ultima. Lascia vuoto per rimuoverla; ometti per lasciarla invariata."
+        }
       }
     },
     "set_consumption_budget": {
       "name": "Budget consumo",
       "description": "Imposta il tetto mensile di consumo dell'hub e cosa succede al superamento, sul posto.",
       "fields": {
-        "liters_per_month": { "name": "Budget mensile (litri)", "description": "Litri totali consentiti al mese. Ometti o imposta a zero per disattivare il budget." },
-        "action": { "name": "Azione al superamento", "description": "Cosa succede una volta esaurito il budget: solo notifica avvisa, riduci accorcia ogni programma, sospendi ferma l'irrigazione fino al mese successivo." },
-        "reduce_pct": { "name": "Percentuale di riduzione", "description": "Di quanto viene accorciato ogni programma quando l'azione è riduci l'irrigazione." }
+        "liters_per_month": {
+          "name": "Budget mensile (litri)",
+          "description": "Litri totali consentiti al mese. Ometti o imposta a zero per disattivare il budget."
+        },
+        "action": {
+          "name": "Azione al superamento",
+          "description": "Cosa succede una volta esaurito il budget: solo notifica avvisa, riduci accorcia ogni programma, sospendi ferma l'irrigazione fino al mese successivo."
+        },
+        "reduce_pct": {
+          "name": "Percentuale di riduzione",
+          "description": "Di quanto viene accorciato ogni programma quando l'azione è riduci l'irrigazione."
+        }
       }
     },
     "set_restrictions": {
       "name": "Restrizioni",
       "description": "Imposta le restrizioni di calendario per l'irrigazione dell'hub sul posto, senza bisogno di ricaricare l'integrazione.",
       "fields": {
-        "allowed_weekdays": { "name": "Giorni consentiti", "description": "Irriga solo nei giorni selezionati. Lascia vuoto per consentirli tutti." },
-        "parity": { "name": "Parità del giorno del mese", "description": "Limita l'irrigazione ai giorni pari o dispari del mese, oppure nessuna restrizione." },
-        "forbidden_windows": { "name": "Finestre vietate", "description": "Orari in cui l'irrigazione non è consentita. Vuoto significa nessun divieto. Un programma in corso viene troncato invece di sconfinare." }
+        "allowed_weekdays": {
+          "name": "Giorni consentiti",
+          "description": "Irriga solo nei giorni selezionati. Lascia vuoto per consentirli tutti."
+        },
+        "parity": {
+          "name": "Parità del giorno del mese",
+          "description": "Limita l'irrigazione ai giorni pari o dispari del mese, oppure nessuna restrizione."
+        },
+        "forbidden_windows": {
+          "name": "Finestre vietate",
+          "description": "Orari in cui l'irrigazione non è consentita. Vuoto significa nessun divieto. Un programma in corso viene troncato invece di sconfinare."
+        }
       }
     }
   },
@@ -763,6 +925,26 @@
     "sentinel_missing_outcome": {
       "title": "Irrigazione programmata non eseguita",
       "description": "Oggi non è stato registrato alcun esito per: {cycles}. Probabilmente l'attivazione non è mai scattata (Home Assistant spento all'orario previsto, o un errore imprevisto)."
+    },
+    "migration_cadence_dropped": {
+      "title": "Cadenza sostituita dai giorni della settimana",
+      "description": "Questi programmi avevano sia i giorni della settimana sia una cadenza \"ogni N giorni\" a livello di zona, che si annullavano a vicenda in silenzio — alcuni dei giorni scelti non irrigavano mai. Ora vale solo il calendario a giorni, quindi irrigano nei giorni che avevi scelto: {items}."
+    },
+    "migration_weekdays_dropped": {
+      "title": "Il limite sui giorni consentiti non vale più per alcuni programmi",
+      "description": "Questi programmi irrigano con cadenza \"ogni N giorni\", che non può essere limitata anche a giorni specifici della settimana. La cadenza resta invariata, ma il limite sui giorni consentiti non si applica più. Se devi rispettarlo, imposta il loro calendario sui giorni della settimana: {items}."
+    },
+    "migration_parity_dropped": {
+      "title": "La regola pari/dispari non vale più per alcuni programmi",
+      "description": "La regola pari/dispari era una restrizione globale; ora è una delle tre modalità di calendario del programma, e un programma può averne una sola. Questi programmi hanno mantenuto il calendario che avevano, quindi la regola pari/dispari non si applica più. Se l'ordinanza comunale la richiede, imposta il loro calendario su giorni pari o dispari: {items}."
+    },
+    "migration_program_disabled": {
+      "title": "Alcuni programmi non potevano irrigare e sono stati disattivati",
+      "description": "I giorni su cui erano programmati non erano mai consentiti dal limite globale sui giorni, quindi non hanno mai irrigato. Sono stati disattivati perché la cosa sia visibile invece che silenziosa. Scegli giorni effettivamente consentiti e riattivali: {items}."
+    },
+    "migration_zone_restrictions_dropped": {
+      "title": "Le restrizioni per zona sono state rimosse",
+      "description": "Queste zone avevano restrizioni di calendario proprie, che non avevano interfaccia e si potevano impostare solo modificando la configurazione esportata. Le restrizioni ora sono globali e riguardano solo le fasce orarie vietate; i giorni di irrigazione si impostano su ogni programma: {items}."
     }
   },
   "exceptions": {
