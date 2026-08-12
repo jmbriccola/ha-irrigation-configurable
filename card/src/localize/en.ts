@@ -98,6 +98,7 @@ export const en = {
   "program_editor.calendar": "Calendar",
   "program_editor.season": "Season (empty = all year as configured on the hub)",
   "reason.calendar_not_today": "Not a watering day",
+  "program.toggle_unavailable": "Enable switch unavailable",
   "reason.not_due": "Not due yet",
   "reason.calendar_restricted": "Calendar restriction",
   "reason.zone_disabled": "Zone disabled",

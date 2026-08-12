@@ -8,6 +8,7 @@ import { pickLanguage, localize } from "../localize/localize";
 import { readCycles, type ZoneBundle } from "../discovery";
 import { describeTrigger } from "../format";
 import { describeCalendar } from "./calendar-editor";
+import { programToggleStyles, renderProgramToggle } from "./program-toggle";
 import "./program-editor";
 import "./program-wizard";
 
@@ -234,25 +235,9 @@ export class ImcProgramList extends LitElement {
           <div class="meta">
             ${describeTrigger(c.trigger, lang)} · ${this._minutesSummary(lang, c)}
           </div>
-          ${cycleSwitch
-            ? html`<div
-                class="toggle-row"
-                role="switch"
-                tabindex="0"
-                aria-checked=${switchOn ? "true" : "false"}
-                @click=${() => this._onToggle(zone.zoneId, c, cycleSwitch)}
-                @keydown=${(ev: KeyboardEvent) =>
-                  this._onToggleKeydown(ev, zone.zoneId, c, cycleSwitch)}
-              >
-                <span class="switch ${switchOn ? "on" : ""}"></span>
-                <span
-                  >${localize(
-                    lang,
-                    switchOn ? "zone.cycle_enabled" : "zone.cycle_disabled",
-                  )}</span
-                >
-              </div>`
-            : nothing}
+          ${renderProgramToggle(lang, cycleSwitch, () => {
+            if (cycleSwitch) this._onToggle(zone.zoneId, c, cycleSwitch);
+          })}
           ${c.cycle_id
             ? html`<div class="actions">
                 <button
@@ -277,6 +262,7 @@ export class ImcProgramList extends LitElement {
                 .hass=${hass}
                 .zoneId=${zone.zoneId}
                 .cycle=${c}
+                .cycleSwitch=${cycleSwitch}
                 .weightedTemp=${this.weightedTemp}
                 @imc-program-save-schedule=${() => (this._editingId = undefined)}
                 @imc-program-save-minutes=${() => (this._editingId = undefined)}
@@ -309,18 +295,6 @@ export class ImcProgramList extends LitElement {
   }
 
   /** Enter/Space activate the toggle, mirroring zone-row.ts's header keydown pattern. */
-  private _onToggleKeydown(
-    ev: KeyboardEvent,
-    zoneId: string,
-    c: CycleInfo,
-    entity: HassEntity,
-  ): void {
-    if (ev.key === "Enter" || ev.key === " ") {
-      ev.preventDefault();
-      this._onToggle(zoneId, c, entity);
-    }
-  }
-
   private _onRename(lang: string, zoneId: string, c: CycleInfo): void {
     if (!c.cycle_id) return;
     const current = c.name ?? "";

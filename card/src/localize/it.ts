@@ -100,6 +100,7 @@ export const it: Record<keyof typeof en, string> = {
   "program_editor.calendar": "Calendario",
   "program_editor.season": "Stagione (vuoto = come impostato nell'hub)",
   "reason.calendar_not_today": "Non è un giorno di irrigazione",
+  "program.toggle_unavailable": "Interruttore non disponibile",
   "reason.not_due": "Non ancora in programma",
   "reason.calendar_restricted": "Limitazione di calendario",
   "reason.zone_disabled": "Zona disabilitata",

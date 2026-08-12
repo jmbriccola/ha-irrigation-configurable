@@ -11,12 +11,13 @@ import {
 } from "../schedule-math";
 import { localize, pickLanguage } from "../localize/localize";
 import { asNumber, clamp, defineElement } from "../types";
-import type { CycleInfo, HomeAssistant } from "../types";
+import type { CycleInfo, HassEntity, HomeAssistant } from "../types";
 // Side-effect import: registers <imc-curve-editor>, reused verbatim as the
 // "heat response" control inside the advanced drawer below.
 import "../curve-editor";
 import "./calendar-editor";
 import { type CalendarConfig, normaliseCalendar } from "./calendar-editor";
+import { programToggleStyles, renderProgramToggle } from "./program-toggle";
 import type { CurveSavePayload } from "../curve-editor";
 
 /**
@@ -96,6 +97,8 @@ const OFFSET_STEP = 5;
 
 export class ImcProgramEditor extends LitElement {
   @property({ attribute: false }) hass?: HomeAssistant;
+  /** The program's `cycle_enabled` switch, passed down by the program list. */
+  @property({ attribute: false }) cycleSwitch?: HassEntity;
   @property() zoneId = "";
   @property({ attribute: false }) cycle?: CycleInfo;
   @property({ attribute: false }) weightedTemp?: number;
@@ -133,6 +136,7 @@ export class ImcProgramEditor extends LitElement {
   }
 
   static override styles = css`
+    ${programToggleStyles}
     :host {
       display: block;
       border: 1px solid var(--divider-color, rgba(127, 127, 127, 0.25));
@@ -367,6 +371,8 @@ export class ImcProgramEditor extends LitElement {
     const labels = weekdayLabels(lang);
 
     return html`
+      ${renderProgramToggle(lang, this.cycleSwitch, () => this._onToggleEnabled())}
+
       <div class="section-label">${localize(lang, "program_editor.calendar")}</div>
       <imc-calendar-editor
         .calendar=${this._calendar}
@@ -581,6 +587,24 @@ export class ImcProgramEditor extends LitElement {
       );
     }
     return map;
+  }
+
+  /** Reuses `imc-program-toggle`, so the panel needs no new plumbing. */
+  private _onToggleEnabled(): void {
+    const entity = this.cycleSwitch;
+    if (!entity || !this.cycle?.cycle_id) return;
+    this.dispatchEvent(
+      new CustomEvent("imc-program-toggle", {
+        detail: {
+          zoneId: this.zoneId,
+          programId: this.cycle.cycle_id,
+          entityId: entity.entity_id,
+          enabled: entity.state !== "on",
+        },
+        bubbles: true,
+        composed: true,
+      }),
+    );
   }
 
   private _save(): void {
