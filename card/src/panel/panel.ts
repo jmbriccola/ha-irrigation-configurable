@@ -68,16 +68,23 @@ export class IrrigationMaestroPanel extends LitElement {
       return await this.hass.callService(domain, service, data, undefined, false, returnResponse);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      this._error = message;
-      if (this._errorTimer !== undefined) {
-        window.clearTimeout(this._errorTimer);
-      }
-      this._errorTimer = window.setTimeout(() => {
-        this._error = undefined;
-        this._errorTimer = undefined;
-      }, 6000);
+      this._showError(message);
       return undefined;
     }
+  }
+
+  /** Surface a message in the `_error` toast, auto-dismissed after 6s — shared
+   *  by `_call`'s failure path and any other spot (e.g. `_onEditZone`) that
+   *  needs to report a non-`_call` failure the same way. */
+  private _showError(message: string): void {
+    this._error = message;
+    if (this._errorTimer !== undefined) {
+      window.clearTimeout(this._errorTimer);
+    }
+    this._errorTimer = window.setTimeout(() => {
+      this._error = undefined;
+      this._errorTimer = undefined;
+    }, 6000);
   }
 
   /**
@@ -103,6 +110,13 @@ export class IrrigationMaestroPanel extends LitElement {
     if (cfg) {
       this._editingZoneId = zoneId;
       this._editingZone = cfg.zones[zoneId] ?? {};
+    } else {
+      // `_readConfig()` returning undefined here is NOT a `_call` exception
+      // (that path already populates `_error` on its own) — it's a
+      // service-succeeded-but-unusable-payload case (missing/non-string/
+      // unparseable), which would otherwise fail silently with no visible
+      // feedback to the user.
+      this._showError(localize(pickLanguage(this.hass), "panel.config_read_failed"));
     }
   }
 
@@ -116,9 +130,16 @@ export class IrrigationMaestroPanel extends LitElement {
    * spreads the patch directly. `add_zone` is a response service — its id
    * comes back nested under `res.response["zone_id"]`, mirroring
    * `_onWizardFinish`'s `program_id` handling above.
+   *
+   * Editing state is only cleared on SUCCESS — `_call` returns `undefined`
+   * on a failed service call (having already populated `_error`), so a
+   * failed add/update leaves `_editingZone`/`_editingZoneId` untouched and
+   * the editor stays open with the user's input intact, rather than
+   * silently discarding it behind the 6s error toast.
    */
   private async _onZoneSave(ev: CustomEvent<ZoneSaveDetail>): Promise<void> {
     const d = ev.detail;
+    let success: boolean;
     if (d.mode === "add") {
       const p = d.patch;
       const add: Record<string, unknown> = { name: p.name, valve_entity: p.valve_entity };
@@ -126,12 +147,19 @@ export class IrrigationMaestroPanel extends LitElement {
       if (p.icon !== undefined) add["icon"] = p.icon;
       const res = await this._call("irrigation_maestro", "add_zone", add, true);
       const zoneId = res?.response?.["zone_id"];
-      if (typeof zoneId === "string" && zoneId) this._selectedZoneId = zoneId;
+      success = typeof zoneId === "string" && zoneId !== "";
+      if (success) this._selectedZoneId = zoneId as string;
     } else {
-      await this._call("irrigation_maestro", "update_zone", { zone_id: d.zoneId, ...d.patch });
+      const res = await this._call("irrigation_maestro", "update_zone", {
+        zone_id: d.zoneId,
+        ...d.patch,
+      });
+      success = !!res;
     }
-    this._editingZone = undefined;
-    this._editingZoneId = undefined;
+    if (success) {
+      this._editingZone = undefined;
+      this._editingZoneId = undefined;
+    }
   }
 
   private async _onZoneRemove(ev: CustomEvent<ZoneRemoveDetail>): Promise<void> {
@@ -375,11 +403,49 @@ export class IrrigationMaestroPanel extends LitElement {
     this._relevantIds = model.entityIds;
     this._statesCount = Object.keys(hass.states).length;
 
+    // Checked BEFORE the empty-zones early-return below: the create form
+    // must be reachable even with zero zones (that's exactly how a fresh
+    // install — hub configured, no zones yet — creates its first one, via
+    // the ＋ button in the empty state). If this check lived after that
+    // early-return, opening the create form from a zero-zone state would be
+    // impossible — the early-return would fire first every time and the
+    // editing state would never get rendered.
+    if (this._editingZone !== undefined) {
+      return html`
+        <div
+          class="wrap ${this.narrow ? "narrow" : ""}"
+          @imc-zone-save=${this._onZoneSave}
+          @imc-zone-remove=${this._onZoneRemove}
+          @imc-zone-cancel=${this._onZoneCancel}
+        >
+          <header><h1>${localize(lang, "panel.title")}</h1></header>
+          ${this._error ? html`<div class="error">${this._error}</div>` : nothing}
+          <imc-zone-editor
+            .hass=${hass}
+            .zone=${this._editingZone ?? undefined}
+            .zoneId=${this._editingZoneId}
+          ></imc-zone-editor>
+        </div>
+      `;
+    }
+
     if (!model.found || model.zones.length === 0) {
       return html`
         <div class="wrap">
           <header><h1>${localize(lang, "panel.title")}</h1></header>
+          ${this._error ? html`<div class="error">${this._error}</div>` : nothing}
           <div class="empty">${localize(lang, "panel.no_zones")}</div>
+          <div class="tabs">
+            <div
+              class="tab add"
+              @click=${() => {
+                this._editingZone = null;
+                this._editingZoneId = undefined;
+              }}
+            >
+              ＋ ${localize(lang, "zone.add")}
+            </div>
+          </div>
         </div>
       `;
     }
@@ -400,55 +466,41 @@ export class IrrigationMaestroPanel extends LitElement {
         @imc-program-remove=${this._onProgramRemove}
         @imc-wizard-finish=${this._onWizardFinish}
         @imc-wizard-cancel=${() => undefined}
-        @imc-zone-save=${this._onZoneSave}
-        @imc-zone-remove=${this._onZoneRemove}
-        @imc-zone-cancel=${this._onZoneCancel}
       >
         <header><h1>${localize(lang, "panel.title")}</h1></header>
         ${this._renderWeatherContext(model, lang, weightedTemp)}
         ${this._error ? html`<div class="error">${this._error}</div>` : nothing}
-        ${this._editingZone !== undefined
-          ? html`<imc-zone-editor
-              .hass=${hass}
-              .zone=${this._editingZone ?? undefined}
-              .zoneId=${this._editingZoneId}
-            ></imc-zone-editor>`
-          : html`
-              <div class="tabs">
-                ${model.zones.map(
-                  (z) => html`
-                    <div
-                      class="tab ${z.zoneId === selected.zoneId ? "sel" : ""}"
-                      @click=${() => (this._selectedZoneId = z.zoneId)}
-                    >
-                      ${z.name}
-                    </div>
-                  `,
-                )}
-                <div
-                  class="tab add"
-                  @click=${() => {
-                    this._editingZone = null;
-                    this._editingZoneId = undefined;
-                  }}
-                >
-                  ＋ ${localize(lang, "zone.add")}
-                </div>
+        <div class="tabs">
+          ${model.zones.map(
+            (z) => html`
+              <div
+                class="tab ${z.zoneId === selected.zoneId ? "sel" : ""}"
+                @click=${() => (this._selectedZoneId = z.zoneId)}
+              >
+                ${z.name}
               </div>
-              <div class="zone-toolbar">
-                <span
-                  class="edit-zone-link"
-                  @click=${() => this._onEditZone(selected.zoneId)}
-                >
-                  ✎ ${localize(lang, "zone.edit")}
-                </span>
-              </div>
-              <imc-program-list
-                .hass=${hass}
-                .zone=${selected}
-                .weightedTemp=${weightedTemp}
-              ></imc-program-list>
-            `}
+            `,
+          )}
+          <div
+            class="tab add"
+            @click=${() => {
+              this._editingZone = null;
+              this._editingZoneId = undefined;
+            }}
+          >
+            ＋ ${localize(lang, "zone.add")}
+          </div>
+        </div>
+        <div class="zone-toolbar">
+          <span class="edit-zone-link" @click=${() => this._onEditZone(selected.zoneId)}>
+            ✎ ${localize(lang, "zone.edit")}
+          </span>
+        </div>
+        <imc-program-list
+          .hass=${hass}
+          .zone=${selected}
+          .weightedTemp=${weightedTemp}
+        ></imc-program-list>
       </div>
     `;
   }

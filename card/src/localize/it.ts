@@ -34,6 +34,7 @@ export const it: Record<keyof typeof en, string> = {
   "panel.weather_temp": "meteo: {temp}°",
   "panel.budget_ok": "budget acqua OK",
   "panel.budget_low": "budget acqua basso",
+  "panel.config_read_failed": "Impossibile leggere la configurazione attuale.",
 
   // Editor programma (pannello)
   "program_editor.days": "Giorni",

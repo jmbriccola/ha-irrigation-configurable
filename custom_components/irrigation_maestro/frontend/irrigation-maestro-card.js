@@ -639,6 +639,7 @@ const C = {
   "panel.weather_temp": "weather: {temp}°",
   "panel.budget_ok": "water budget OK",
   "panel.budget_low": "water budget low",
+  "panel.config_read_failed": "Couldn't read the current configuration.",
   // Program editor (panel)
   "program_editor.days": "Days",
   "program_editor.start": "When does it start?",
@@ -844,6 +845,7 @@ const C = {
   "panel.weather_temp": "meteo: {temp}°",
   "panel.budget_ok": "budget acqua OK",
   "panel.budget_low": "budget acqua basso",
+  "panel.config_read_failed": "Impossibile leggere la configurazione attuale.",
   // Editor programma (pannello)
   "program_editor.days": "Giorni",
   "program_editor.start": "Orario di partenza",
