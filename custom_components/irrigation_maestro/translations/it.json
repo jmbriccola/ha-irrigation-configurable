@@ -680,6 +680,71 @@
         "program_id": { "name": "Programma", "description": "Il programma da rinominare." },
         "name": { "name": "Nome", "description": "Il nuovo nome del programma." }
       }
+    },
+    "add_zone": {
+      "name": "Aggiungi zona",
+      "description": "Crea una nuova zona con un programma di irrigazione predefinito, sul posto e senza bisogno di ricaricare l'integrazione. Restituisce l'id della nuova zona come risposta.",
+      "fields": {
+        "name": { "name": "Nome", "description": "Un nome comprensibile per questo circuito, es. \"Orto\" o \"Prato davanti\"." },
+        "valve_entity": { "name": "Valvola", "description": "L'entità valvola o interruttore che apre questo circuito." },
+        "area_m2": { "name": "Superficie (m²)", "description": "Superficie del circuito, usata solo per mostrare le conversioni minuti-mm. Facoltativa." },
+        "icon": { "name": "Icona", "description": "Icona mostrata per il dispositivo di questa zona. Vuoto per quella predefinita." }
+      }
+    },
+    "update_zone": {
+      "name": "Modifica zona",
+      "description": "Aggiorna una o più impostazioni di una zona sul posto; cambiano solo i campi forniti.",
+      "fields": {
+        "zone_id": { "name": "Zona", "description": "La zona da modificare." },
+        "name": { "name": "Nome", "description": "Un nome comprensibile per questo circuito, es. \"Orto\" o \"Prato davanti\"." },
+        "valve_entity": { "name": "Valvola", "description": "L'entità valvola o interruttore che apre questo circuito." },
+        "area_m2": { "name": "Superficie (m²)", "description": "Superficie del circuito, usata solo per mostrare le conversioni minuti-mm." },
+        "icon": { "name": "Icona", "description": "Icona mostrata per il dispositivo di questa zona." },
+        "flow_sensor": { "name": "Sensore di portata", "description": "Il flussometro proprio della zona (L/min). Se vuoto, si usa il contatore di linea condiviso, quando disponibile." },
+        "nominal_flow_lpm": { "name": "Portata nominale (L/min)", "description": "Portata attesa durante l'irrigazione; abilita il rilevamento di perdite, flusso assente e valori fuori range. Serve un flussometro." },
+        "flow_tolerance_pct": { "name": "Tolleranza di portata (%)", "description": "Di quanto la portata reale può discostarsi da quella nominale prima di essere segnalata." },
+        "adjustment_pct": { "name": "Correzione (%)", "description": "Scala tutti i tempi di irrigazione. 100 significa invariato." },
+        "order": { "name": "Ordine", "description": "Sequenza di irrigazione: i numeri più bassi irrigano per primi." },
+        "interval_days": { "name": "Intervallo di irrigazione (giorni)", "description": "Irriga al più ogni N giorni, da 1 a 60." },
+        "compatibility_group": { "name": "Gruppo di compatibilità", "description": "Usato solo quando l'hub consente più zone contemporanee. Le zone nello stesso gruppo possono irrigare insieme." },
+        "season_months": { "name": "Deroga ai mesi della stagione", "description": "Irriga solo in questi mesi, in deroga alla stagione dell'hub. Lascia vuoto per seguire l'hub." }
+      }
+    },
+    "remove_zone": {
+      "name": "Rimuovi zona",
+      "description": "Elimina una zona e i suoi programmi sul posto, senza bisogno di ricaricare l'integrazione.",
+      "fields": {
+        "zone_id": { "name": "Zona", "description": "La zona da rimuovere." }
+      }
+    },
+    "set_weather_sources": {
+      "name": "Imposta meteo e sensori",
+      "description": "Imposta l'entità meteo dell'hub e i sensori condivisi opzionali sul posto, senza bisogno di ricaricare l'integrazione.",
+      "fields": {
+        "weather_entity": { "name": "Entità meteo", "description": "Obbligatoria. Un'entità meteo che fornisce previsioni di temperatura e precipitazioni." },
+        "rain_sensor": { "name": "Sensore pioggia", "description": "Un sensore con la pioggia totale di oggi in mm. Lascia vuoto per rimuoverlo; ometti per lasciarlo invariato." },
+        "outdoor_temp_sensor": { "name": "Sensore temperatura esterna", "description": "Usa un termometro reale al posto dell'entità meteo per le massime giornaliere. Lascia vuoto per rimuoverlo; ometti per lasciarlo invariato." },
+        "line_flow_sensor": { "name": "Sensore di portata di linea", "description": "Un unico contatore di portata (L/min) sul collettore, condiviso dalle zone che non ne hanno uno proprio. Lascia vuoto per rimuoverlo; ometti per lasciarlo invariato." },
+        "master_valve": { "name": "Valvola master / pompa", "description": "Una valvola o un interruttore aperto prima della prima zona e chiuso dopo l'ultima. Lascia vuoto per rimuoverla; ometti per lasciarla invariata." }
+      }
+    },
+    "set_consumption_budget": {
+      "name": "Budget consumo",
+      "description": "Imposta il tetto mensile di consumo dell'hub e cosa succede al superamento, sul posto.",
+      "fields": {
+        "liters_per_month": { "name": "Budget mensile (litri)", "description": "Litri totali consentiti al mese. Ometti o imposta a zero per disattivare il budget." },
+        "action": { "name": "Azione al superamento", "description": "Cosa succede una volta esaurito il budget: solo notifica avvisa, riduci accorcia ogni programma, sospendi ferma l'irrigazione fino al mese successivo." },
+        "reduce_pct": { "name": "Percentuale di riduzione", "description": "Di quanto viene accorciato ogni programma quando l'azione è riduci l'irrigazione." }
+      }
+    },
+    "set_restrictions": {
+      "name": "Restrizioni",
+      "description": "Imposta le restrizioni di calendario per l'irrigazione dell'hub sul posto, senza bisogno di ricaricare l'integrazione.",
+      "fields": {
+        "allowed_weekdays": { "name": "Giorni consentiti", "description": "Irriga solo nei giorni selezionati. Lascia vuoto per consentirli tutti." },
+        "parity": { "name": "Parità del giorno del mese", "description": "Limita l'irrigazione ai giorni pari o dispari del mese, oppure nessuna restrizione." },
+        "forbidden_windows": { "name": "Finestre vietate", "description": "Orari in cui l'irrigazione non è consentita. Vuoto significa nessun divieto. Un programma in corso viene troncato invece di sconfinare." }
+      }
     }
   },
   "issues": {

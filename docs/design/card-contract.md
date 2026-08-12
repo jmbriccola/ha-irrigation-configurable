@@ -122,6 +122,48 @@ The card now also **writes** curves: the simple sliders call
   program (`cannot_remove_last_program` if it's the last one).
 - `rename_program` changes only a program's display name.
 
+### Configuration services
+
+Six additional services manage the hub and its zones directly — a scripting
+surface for the same settings the config flow exposes, useful for
+automations, YAML-driven setups, or bulk changes:
+
+| service | fields |
+|---|---|
+| `add_zone` | `name` (required), `valve_entity` (required, valve/switch), `area_m2` (optional), `icon` (optional); supports response `{"zone_id": ...}` |
+| `update_zone` | `zone_id` (required) + any of: `name`, `valve_entity` (valve/switch), `area_m2`, `icon`, `flow_sensor` (sensor), `nominal_flow_lpm`, `flow_tolerance_pct` (1-100), `adjustment_pct` (10-300), `order` (1-1000), `interval_days` (1-60), `compatibility_group`, `season_months` (list of 1-12) — only the fields passed are changed |
+| `remove_zone` | `zone_id` (required) |
+| `set_weather_sources` | `weather_entity` (required, weather), `rain_sensor`/`outdoor_temp_sensor`/`line_flow_sensor` (sensor, optional), `master_valve` (valve/switch, optional) |
+| `set_consumption_budget` | `liters_per_month` (optional; omitted/zero disables the budget), `action` (required: notify/reduce/suspend), `reduce_pct` (1-100, used when action is reduce) |
+| `set_restrictions` | `allowed_weekdays` (list of 0-6, empty = every day), `parity` (odd/even/none), `forbidden_windows` (list of `{start, end}` time-of-day pairs) |
+
+- `add_zone` creates the zone with a default program (every day, sunrise
+  start, 15′ mild + 8′ hot boost) — the same seed the config flow's zone
+  wizard uses — and returns the new zone's id (the `zone_id` attribute above)
+  as its service response.
+- `update_zone` and `remove_zone` mirror the "Edit zone" and zone-removal
+  paths of the config flow's zone subentry, but as a single service call
+  instead of a multi-step wizard.
+- `set_weather_sources`, `set_consumption_budget` and `set_restrictions`
+  patch the hub's options in place — `set_weather_sources` requires
+  `weather_entity` on every call (the hub always needs one); the optional
+  sensor/valve fields on it follow the merge rule used by `_write_hub_options`:
+  present and non-empty sets the value, present and empty clears it, and
+  omitting the field entirely leaves the current value unchanged.
+- All six apply their change **in place** via
+  `config_entries.async_add_subentry` / `async_update_subentry` /
+  `async_remove_subentry` (zones) or an options update (hub settings) — no
+  integration reload is required, the same way the `set_program_*` /
+  `*_program` services above already work. Zone writes are validated before
+  persisting (`invalid_zone`) and hub-option writes are validated before
+  persisting (`invalid_hub_settings`); a failed validation leaves the prior
+  configuration untouched.
+- The config flow (initial setup wizard, "Configure" on the hub, "Add
+  zone"/"Configure" on a zone subentry) **remains a fully supported
+  alternative** to these services — nothing here replaces it. Phase A ships
+  only the service layer; a dedicated zone editor / settings view in the
+  card or panel that calls these services from the UI is Phase B.
+
 ## Events
 
 `irrigation_maestro_<event>` with `event` one of: `session_started`,

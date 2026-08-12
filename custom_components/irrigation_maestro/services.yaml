@@ -311,3 +311,247 @@ rename_program:
       example: Morning
       selector:
         text:
+
+add_zone:
+  fields:
+    name:
+      required: true
+      example: Vegetable beds
+      selector:
+        text:
+    valve_entity:
+      required: true
+      example: valve.garden_zone_1
+      selector:
+        entity:
+          domain:
+            - valve
+            - switch
+    area_m2:
+      example: 12.5
+      selector:
+        number:
+          min: 0
+          step: 0.1
+          unit_of_measurement: m²
+          mode: box
+    icon:
+      example: mdi:sprinkler
+      selector:
+        icon:
+
+update_zone:
+  fields:
+    zone_id:
+      required: true
+      example: 1b2f3c4d5e6f
+      selector:
+        text:
+    name:
+      example: Vegetable beds
+      selector:
+        text:
+    valve_entity:
+      example: valve.garden_zone_1
+      selector:
+        entity:
+          domain:
+            - valve
+            - switch
+    area_m2:
+      example: 12.5
+      selector:
+        number:
+          min: 0
+          step: 0.1
+          unit_of_measurement: m²
+          mode: box
+    icon:
+      example: mdi:sprinkler
+      selector:
+        icon:
+    flow_sensor:
+      example: sensor.garden_zone_1_flow
+      selector:
+        entity:
+          domain: sensor
+    nominal_flow_lpm:
+      example: 8
+      selector:
+        number:
+          min: 0
+          step: 0.1
+          unit_of_measurement: L/min
+          mode: box
+    flow_tolerance_pct:
+      example: 25
+      selector:
+        number:
+          min: 1
+          max: 100
+          step: 1
+          unit_of_measurement: "%"
+          mode: box
+    adjustment_pct:
+      example: 100
+      selector:
+        number:
+          min: 10
+          max: 300
+          step: 1
+          unit_of_measurement: "%"
+          mode: box
+    order:
+      example: 100
+      selector:
+        number:
+          min: 1
+          max: 1000
+          step: 1
+          mode: box
+    interval_days:
+      example: 3
+      selector:
+        number:
+          min: 1
+          max: 60
+          step: 1
+          unit_of_measurement: days
+          mode: box
+    compatibility_group:
+      example: drip
+      selector:
+        text:
+    season_months:
+      example: "[3, 4, 5, 6, 7, 8, 9, 10]"
+      selector:
+        select:
+          multiple: true
+          options:
+            - value: "1"
+              label: Jan
+            - value: "2"
+              label: Feb
+            - value: "3"
+              label: Mar
+            - value: "4"
+              label: Apr
+            - value: "5"
+              label: May
+            - value: "6"
+              label: Jun
+            - value: "7"
+              label: Jul
+            - value: "8"
+              label: Aug
+            - value: "9"
+              label: Sep
+            - value: "10"
+              label: Oct
+            - value: "11"
+              label: Nov
+            - value: "12"
+              label: Dec
+
+remove_zone:
+  fields:
+    zone_id:
+      required: true
+      example: 1b2f3c4d5e6f
+      selector:
+        text:
+
+set_weather_sources:
+  fields:
+    weather_entity:
+      required: true
+      example: weather.home
+      selector:
+        entity:
+          domain: weather
+    rain_sensor:
+      example: sensor.rain_today
+      selector:
+        entity:
+          domain: sensor
+    outdoor_temp_sensor:
+      example: sensor.outdoor_temperature
+      selector:
+        entity:
+          domain: sensor
+    line_flow_sensor:
+      example: sensor.line_flow
+      selector:
+        entity:
+          domain: sensor
+    master_valve:
+      example: switch.pump_relay
+      selector:
+        entity:
+          domain:
+            - valve
+            - switch
+
+set_consumption_budget:
+  fields:
+    liters_per_month:
+      example: 5000
+      selector:
+        number:
+          min: 0
+          step: 1
+          unit_of_measurement: L
+          mode: box
+    action:
+      required: true
+      example: notify
+      selector:
+        select:
+          options:
+            - notify
+            - reduce
+            - suspend
+    reduce_pct:
+      example: 50
+      selector:
+        number:
+          min: 1
+          max: 100
+          step: 1
+          unit_of_measurement: "%"
+          mode: box
+
+set_restrictions:
+  fields:
+    allowed_weekdays:
+      example: "[0, 2, 4]"
+      selector:
+        select:
+          multiple: true
+          options:
+            - value: "0"
+              label: Mon
+            - value: "1"
+              label: Tue
+            - value: "2"
+              label: Wed
+            - value: "3"
+              label: Thu
+            - value: "4"
+              label: Fri
+            - value: "5"
+              label: Sat
+            - value: "6"
+              label: Sun
+    parity:
+      example: none
+      selector:
+        select:
+          options:
+            - odd
+            - even
+            - none
+    forbidden_windows:
+      example: '[{"start": "08:00", "end": "10:30"}]'
+      selector:
+        object:
