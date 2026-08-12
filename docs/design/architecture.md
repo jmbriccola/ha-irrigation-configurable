@@ -102,12 +102,16 @@ flow_tolerance_pct: float = 25
 area_m2: float | None        # enables minutes<->mm display conversions
 adjustment_pct: int = 100    # after curve, before clamps
 order: int = 100
-interval_days: int = 3       # cadence N (runtime-adjustable via number entity)
 compatibility_group: str | None
-season_months: list[int] | None      # None -> hub default
-restrictions_override: {...} | None  # same shape as hub restrictions
+# 2.0.0: the zone owns no calendar. Cadence, season and restrictions all
+# moved onto the program, so there is one source of truth for "when".
 cycles:
   - id: str                  # stable 8-hex, generated once
+    calendar:                # discriminated union, exactly one mode
+      {mode: "weekdays", days: [0..6]}
+      | {mode: "interval", interval_days: int}
+      | {mode: "parity",   parity: "odd" | "even"}
+    season_months: list[int] | None   # None -> hub default
     name: str
     enabled_default: true    # runtime toggle lives in a switch entity
     trigger: {kind: "sun", event: sunrise|sunset, offset_s: int}
@@ -162,7 +166,8 @@ while that zone is watering stops it safely first.
   available days — missing days redistribute their weight proportionally, never
   counted as 0 °C), rain budget, forecast credit (cap → hot-halving), dynamic
   skip threshold, immediate-skip checks, staged-rain handling.
-- `scheduling.py` — calendar-day cadence, season windows, weekday/parity/
+- `calendar.py` — the program calendar union and `calendar_allows`
+- `scheduling.py` — cadence helper, season windows, forbidden-window/
   forbidden-window restrictions, next-eligible-slot computation, retry-on-skip
   semantics, must-finish-by truncation math.
 - `planner.py` — turns (configs + snapshot + runtime state + clock) into a

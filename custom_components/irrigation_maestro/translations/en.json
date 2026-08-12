@@ -147,13 +147,9 @@
         "title": "Calendar restrictions",
         "description": "Optional rules for municipal or consortium watering ordinances. Leave everything empty if you have no restrictions. Zones can override these individually.",
         "data": {
-          "allowed_weekdays": "Allowed weekdays",
-          "parity": "Day-of-month parity",
           "forbidden_windows": "Forbidden time windows"
         },
         "data_description": {
-          "allowed_weekdays": "Water only on the selected days. Leave empty to allow every day.",
-          "parity": "Restrict watering to odd or even days of the month (some ordinances alternate by house number).",
           "forbidden_windows": "Times when watering is not allowed, e.g. '08:00-10:30, 22:00-23:15'. Empty = no forbidden times. A running program is cut short rather than run into one."
         }
       },
@@ -221,7 +217,6 @@
             "area_m2": "Area (m², optional)",
             "adjustment_pct": "Adjustment (%)",
             "order": "Order",
-            "interval_days": "Watering interval (days)",
             "compatibility_group": "Compatibility group (optional)",
             "season_months": "Season months override (optional)"
           },
@@ -235,7 +230,6 @@
             "area_m2": "Circuit surface, used only to show minutes ↔ mm conversions. Optional.",
             "adjustment_pct": "Scales every watering time up or down (e.g. 70 for a shaded bed, 130 for a sunny one). 100 = unchanged.",
             "order": "Watering sequence: lower numbers water first. Default 100.",
-            "interval_days": "Water at most every N days (1–60). 1 = every day, 3 = every third day. Default 3.",
             "compatibility_group": "Only used when the hub allows more than one concurrent zone. Zones in the same group may run together.",
             "season_months": "Water only in these months, overriding the hub season. Empty = follow the hub (March–October)."
           }
@@ -252,7 +246,6 @@
             "area_m2": "Area (m², optional)",
             "adjustment_pct": "Adjustment (%)",
             "order": "Order",
-            "interval_days": "Watering interval (days)",
             "compatibility_group": "Compatibility group (optional)",
             "season_months": "Season months override (optional)"
           },
@@ -266,7 +259,6 @@
             "area_m2": "Circuit surface, used only to show minutes ↔ mm conversions. Optional.",
             "adjustment_pct": "Scales every watering time up or down (e.g. 70 for a shaded bed, 130 for a sunny one). 100 = unchanged.",
             "order": "Watering sequence: lower numbers water first. Default 100.",
-            "interval_days": "Water at most every N days (1–60). 1 = every day, 3 = every third day. Default 3.",
             "compatibility_group": "Only used when the hub allows more than one concurrent zone. Zones in the same group may run together.",
             "season_months": "Water only in these months, overriding the hub season. Empty = follow the hub (March–October)."
           }
@@ -388,7 +380,6 @@
         }
       },
       "error": {
-        "interval_out_of_range": "The interval must be between 1 and 60 days.",
         "offset_out_of_range": "The offset must be within ±360 minutes.",
         "invalid_points_format": "Use comma-separated 'temperature:value' pairs, e.g. '10:5, 25:15'.",
         "curve_empty": "Enter at least one control point.",
@@ -663,8 +654,8 @@
           "description": "The program to change."
         },
         "days": {
-          "name": "Days",
-          "description": "Weekdays it runs (Monday–Sunday). Leave empty for every day."
+          "name": "Weekdays",
+          "description": "Used by the \"weekdays\" mode: 0 = Monday … 6 = Sunday. Empty means every day."
         },
         "start_kind": {
           "name": "Start type",
@@ -681,6 +672,22 @@
         "start_offset_min": {
           "name": "Offset (min)",
           "description": "Minutes before (−) or after (+) the sun event."
+        },
+        "calendar_mode": {
+          "name": "Calendar mode",
+          "description": "How the program picks its watering days: weekdays, every N days, or odd/even. Exactly one mode is active."
+        },
+        "interval_days": {
+          "name": "Interval (days)",
+          "description": "Used by the \"interval\" mode: water at most every N days, counted from the day this program last completed."
+        },
+        "parity": {
+          "name": "Odd/even days",
+          "description": "Used by the \"parity\" mode: water only on odd or only on even days of the month."
+        },
+        "season_months": {
+          "name": "Season (months)",
+          "description": "Months this program runs in. Leave empty to follow the hub's season."
         }
       }
     },
@@ -822,17 +829,9 @@
           "name": "Order",
           "description": "Watering sequence: lower numbers water first."
         },
-        "interval_days": {
-          "name": "Watering interval (days)",
-          "description": "Water at most every N days, from 1 to 60."
-        },
         "compatibility_group": {
           "name": "Compatibility group",
           "description": "Only used when the hub allows more than one concurrent zone. Zones in the same group may run together."
-        },
-        "season_months": {
-          "name": "Season months override",
-          "description": "Water only in these months, overriding the hub season. Leave empty to follow the hub."
         }
       }
     },
@@ -894,14 +893,6 @@
       "name": "Set restrictions",
       "description": "Sets the hub's calendar watering restrictions in place, with no reload required.",
       "fields": {
-        "allowed_weekdays": {
-          "name": "Allowed weekdays",
-          "description": "Water only on the selected days. Leave empty to allow every day."
-        },
-        "parity": {
-          "name": "Day-of-month parity",
-          "description": "Restrict watering to odd or even days of the month, or none for no restriction."
-        },
         "forbidden_windows": {
           "name": "Forbidden time windows",
           "description": "Times when watering is not allowed. Empty means no forbidden times. A running program is cut short rather than run into one."
@@ -998,6 +989,21 @@
     },
     "invalid_hub_settings": {
       "message": "The settings are not valid ({error})."
+    },
+    "calendar_field_required": {
+      "message": "The {mode} calendar mode needs its own field: interval_days for \"interval\", parity for \"parity\"."
+    },
+    "calendar_weekdays_empty": {
+      "message": "A weekday calendar needs at least one day, otherwise the program would never water."
+    },
+    "calendar_interval_below_one": {
+      "message": "The interval must be at least one day."
+    },
+    "calendar_unknown_mode": {
+      "message": "Unknown calendar mode."
+    },
+    "calendar_unknown_parity": {
+      "message": "The parity calendar mode needs \"odd\" or \"even\"."
     }
   },
   "selector": {
@@ -1026,13 +1032,6 @@
         "4": "Friday",
         "5": "Saturday",
         "6": "Sunday"
-      }
-    },
-    "parity": {
-      "options": {
-        "none": "No restriction",
-        "odd": "Odd days only",
-        "even": "Even days only"
       }
     },
     "stale_weather_policy": {

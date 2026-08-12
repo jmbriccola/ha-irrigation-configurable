@@ -147,13 +147,9 @@
         "title": "Restrizioni di calendario",
         "description": "Regole facoltative per ordinanze comunali o consortili sull'irrigazione. Lascia tutto vuoto se non hai restrizioni. Le zone possono derogare singolarmente.",
         "data": {
-          "allowed_weekdays": "Giorni della settimana consentiti",
-          "parity": "Parità del giorno del mese",
           "forbidden_windows": "Fasce orarie vietate"
         },
         "data_description": {
-          "allowed_weekdays": "Irriga solo nei giorni selezionati. Lascia vuoto per consentirli tutti.",
-          "parity": "Limita l'irrigazione ai giorni pari o dispari del mese (alcune ordinanze alternano per numero civico).",
           "forbidden_windows": "Orari in cui l'irrigazione non è consentita, es. '08:00-10:30, 22:00-23:15'. Vuoto = nessun divieto. Un programma in corso viene troncato invece di sconfinare."
         }
       },
@@ -221,7 +217,6 @@
             "area_m2": "Superficie (m², facoltativa)",
             "adjustment_pct": "Correzione (%)",
             "order": "Ordine",
-            "interval_days": "Intervallo di irrigazione (giorni)",
             "compatibility_group": "Gruppo di compatibilità (facoltativo)",
             "season_months": "Deroga ai mesi della stagione (facoltativa)"
           },
@@ -235,7 +230,6 @@
             "area_m2": "Superficie del circuito, usata solo per mostrare le conversioni minuti ↔ mm. Facoltativa.",
             "adjustment_pct": "Scala tutti i tempi di irrigazione (es. 70 per un'aiuola in ombra, 130 per una assolata). 100 = invariato.",
             "order": "Sequenza di irrigazione: i numeri più bassi irrigano per primi. Default 100.",
-            "interval_days": "Irriga al più ogni N giorni (1–60). 1 = tutti i giorni, 3 = un giorno su tre. Default 3.",
             "compatibility_group": "Usato solo quando l'hub consente più zone contemporanee. Le zone nello stesso gruppo possono irrigare insieme.",
             "season_months": "Irriga solo in questi mesi, in deroga alla stagione dell'hub. Vuoto = segui l'hub (marzo–ottobre)."
           }
@@ -252,7 +246,6 @@
             "area_m2": "Superficie (m², facoltativa)",
             "adjustment_pct": "Correzione (%)",
             "order": "Ordine",
-            "interval_days": "Intervallo di irrigazione (giorni)",
             "compatibility_group": "Gruppo di compatibilità (facoltativo)",
             "season_months": "Deroga ai mesi della stagione (facoltativa)"
           },
@@ -266,7 +259,6 @@
             "area_m2": "Superficie del circuito, usata solo per mostrare le conversioni minuti ↔ mm. Facoltativa.",
             "adjustment_pct": "Scala tutti i tempi di irrigazione (es. 70 per un'aiuola in ombra, 130 per una assolata). 100 = invariato.",
             "order": "Sequenza di irrigazione: i numeri più bassi irrigano per primi. Default 100.",
-            "interval_days": "Irriga al più ogni N giorni (1–60). 1 = tutti i giorni, 3 = un giorno su tre. Default 3.",
             "compatibility_group": "Usato solo quando l'hub consente più zone contemporanee. Le zone nello stesso gruppo possono irrigare insieme.",
             "season_months": "Irriga solo in questi mesi, in deroga alla stagione dell'hub. Vuoto = segui l'hub (marzo–ottobre)."
           }
@@ -388,7 +380,6 @@
         }
       },
       "error": {
-        "interval_out_of_range": "L'intervallo deve essere compreso tra 1 e 60 giorni.",
         "offset_out_of_range": "Lo scostamento deve rientrare in ±360 minuti.",
         "invalid_points_format": "Usa coppie 'temperatura:valore' separate da virgola, ad esempio '10:5, 25:15'.",
         "curve_empty": "Inserisci almeno un punto di controllo.",
@@ -663,8 +654,8 @@
           "description": "Il programma da modificare."
         },
         "days": {
-          "name": "Giorni",
-          "description": "Giorni della settimana in cui parte (lunedì–domenica). Lascia vuoto per tutti i giorni."
+          "name": "Giorni della settimana",
+          "description": "Usato dalla modalità \"weekdays\": 0 = lunedì … 6 = domenica. Vuoto significa tutti i giorni."
         },
         "start_kind": {
           "name": "Tipo di partenza",
@@ -681,6 +672,22 @@
         "start_offset_min": {
           "name": "Scarto (min)",
           "description": "Minuti prima (−) o dopo (+) l'evento solare."
+        },
+        "calendar_mode": {
+          "name": "Modalità calendario",
+          "description": "Come il programma sceglie i giorni di irrigazione: giorni della settimana, ogni N giorni, oppure pari/dispari. È attiva esattamente una modalità."
+        },
+        "interval_days": {
+          "name": "Intervallo (giorni)",
+          "description": "Usato dalla modalità \"interval\": irriga al più ogni N giorni, contati dal giorno in cui questo programma ha completato l'ultima volta."
+        },
+        "parity": {
+          "name": "Giorni pari/dispari",
+          "description": "Usato dalla modalità \"parity\": irriga solo nei giorni dispari o solo nei pari del mese."
+        },
+        "season_months": {
+          "name": "Stagione (mesi)",
+          "description": "Mesi in cui questo programma è attivo. Lascia vuoto per seguire la stagione dell'hub."
         }
       }
     },
@@ -822,17 +829,9 @@
           "name": "Ordine",
           "description": "Sequenza di irrigazione: i numeri più bassi irrigano per primi."
         },
-        "interval_days": {
-          "name": "Intervallo di irrigazione (giorni)",
-          "description": "Irriga al più ogni N giorni, da 1 a 60."
-        },
         "compatibility_group": {
           "name": "Gruppo di compatibilità",
           "description": "Usato solo quando l'hub consente più zone contemporanee. Le zone nello stesso gruppo possono irrigare insieme."
-        },
-        "season_months": {
-          "name": "Deroga ai mesi della stagione",
-          "description": "Irriga solo in questi mesi, in deroga alla stagione dell'hub. Lascia vuoto per seguire l'hub."
         }
       }
     },
@@ -894,14 +893,6 @@
       "name": "Restrizioni",
       "description": "Imposta le restrizioni di calendario per l'irrigazione dell'hub sul posto, senza bisogno di ricaricare l'integrazione.",
       "fields": {
-        "allowed_weekdays": {
-          "name": "Giorni consentiti",
-          "description": "Irriga solo nei giorni selezionati. Lascia vuoto per consentirli tutti."
-        },
-        "parity": {
-          "name": "Parità del giorno del mese",
-          "description": "Limita l'irrigazione ai giorni pari o dispari del mese, oppure nessuna restrizione."
-        },
         "forbidden_windows": {
           "name": "Finestre vietate",
           "description": "Orari in cui l'irrigazione non è consentita. Vuoto significa nessun divieto. Un programma in corso viene troncato invece di sconfinare."
@@ -998,6 +989,21 @@
     },
     "invalid_hub_settings": {
       "message": "Le impostazioni non sono valide ({error})."
+    },
+    "calendar_field_required": {
+      "message": "La modalità {mode} richiede il suo campo: interval_days per \"interval\", parity per \"parity\"."
+    },
+    "calendar_weekdays_empty": {
+      "message": "Un calendario a giorni della settimana richiede almeno un giorno, altrimenti il programma non irrigherebbe mai."
+    },
+    "calendar_interval_below_one": {
+      "message": "L'intervallo deve essere di almeno un giorno."
+    },
+    "calendar_unknown_mode": {
+      "message": "Modalità di calendario sconosciuta."
+    },
+    "calendar_unknown_parity": {
+      "message": "La modalità pari/dispari richiede \"odd\" oppure \"even\"."
     }
   },
   "selector": {
@@ -1026,13 +1032,6 @@
         "4": "Venerdì",
         "5": "Sabato",
         "6": "Domenica"
-      }
-    },
-    "parity": {
-      "options": {
-        "none": "Nessuna restrizione",
-        "odd": "Solo giorni dispari",
-        "even": "Solo giorni pari"
       }
     },
     "stale_weather_policy": {

@@ -4,6 +4,86 @@ All notable changes to this project are documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/).
 
+## [2.0.0] - 2026-08-12
+
+### Changed — breaking
+
+- **Watering days now have one owner: the program.** Up to four separate
+  mechanisms used to decide whether a zone watered today — a weekday grid on
+  the program, an "every N days" cadence on the zone, and the hub's allowed
+  weekdays and odd/even parity. They were edited on four different screens,
+  combined silently, and skipped silently when they disagreed.
+
+  The observable symptom: a program set to Mon/Wed/Fri on a zone with the
+  default cadence of 3 days watered **only on Monday and Friday**. Wednesday
+  is two days after Monday, the cadence demanded three, and the skip reason
+  was silent — no notification, no repair issue, nothing in the UI. A program
+  whose days fell outside the hub's allowed weekdays never watered at all,
+  equally silently.
+
+  Each program now has exactly **one calendar mode**:
+  - **weekdays** — the days you pick
+  - **every N days** — counted from the day *that program* last completed, so
+    a day skipped for rain or budget still retries
+  - **odd/even** — days of the month, for municipal parity ordinances
+
+  Because the modes are mutually exclusive, two schedules can no longer
+  cancel each other out — the conflict is unrepresentable rather than merely
+  detected. Each program also carries **its own season months**, which is
+  what the "turn off only the evening program in the shoulder seasons" case
+  always needed.
+
+- **Zones no longer carry a calendar.** The watering-interval field, the
+  per-zone season and the per-zone restrictions override are gone, along with
+  the zone's watering-interval **number entity**.
+
+- **Restrictions constrain hours only.** The hub keeps forbidden time
+  windows, which still truncate a run already in progress so it cannot
+  overrun into the window. The allowed-weekday grid and the odd/even control
+  are gone: they were the second and third weekday choosers.
+
+- **Services.** `set_program_schedule` takes `calendar_mode` plus the field of
+  that mode (`days`, `interval_days` or `parity`) and an optional
+  `season_months`. `update_zone` no longer accepts `interval_days` or
+  `season_months`. `set_restrictions` no longer accepts `allowed_weekdays` or
+  `parity`.
+
+- **Entity IDs are unchanged**, so existing automations keep working. Only
+  display names and translations moved from "cycle" to "program".
+
+### Migration
+
+Existing installations are converted automatically on upgrade. Where the old
+combination is expressible, the watering days are preserved exactly — this is
+asserted in the test suite by comparing 60 days of watering before and after.
+Where it is not, the migration keeps the delivered water volume unchanged and
+raises a **repair issue** naming the affected programs, rather than changing
+behaviour silently:
+
+- *Watering cadence replaced by the weekday schedule* — the program had both;
+  the days you picked win, and it now waters on all of them.
+- *Allowed-days limit no longer applies* — a program on an "every N days"
+  cadence cannot also be limited to weekdays. Its cadence is untouched; set
+  its calendar to weekdays if you must comply with the limit.
+- *Odd/even rule no longer applies* — same reason: a program has one mode.
+- *Program disabled* — its days were never allowed by the hub limit, so it
+  never watered. Now visible instead of silent.
+- *Per-zone restrictions removed* — they had no interface and were reachable
+  only by editing exported configuration.
+
+The hub's allowed weekdays are **intersected** into weekday calendars rather
+than discarded, so a restricted zone does not silently become a daily one.
+
+**After upgrading, open ⚙️ → each zone → each program and check its
+calendar**, especially if you see a repair issue.
+
+### Fixed
+
+- **Next run** no longer promises a run on a day the zone will skip. It
+  projects each program forward until a day passes every gate — calendar,
+  season, suspension, pause and skip-today — so a suspended zone reports when
+  watering resumes instead of tomorrow.
+
 ## [1.3.3] - 2026-08-12
 
 ### Fixed
