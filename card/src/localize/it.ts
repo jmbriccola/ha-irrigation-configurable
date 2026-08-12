@@ -214,4 +214,21 @@ export const it: Record<keyof typeof en, string> = {
   "editor.saved": "Curva aggiornata.",
   "editor.save_error": "Non è stato possibile salvare la curva: {error}",
   "editor.volume_note": "Questo programma usa una curva a volume (litri). Modificala nelle impostazioni della zona.",
+
+  // Editor zona (pannello)
+  "zone.add": "Aggiungi zona",
+  "zone.edit": "Modifica zona",
+  "zone.delete": "Elimina zona",
+  "zone.field_name": "Nome",
+  "zone.field_valve": "Valvola",
+  "zone.field_area": "Area (m²)",
+  "zone.advanced": "Avanzate",
+  "zone.field_flow_sensor": "Sensore di portata",
+  "zone.field_flow_nominal": "Portata nominale (L/min)",
+  "zone.field_flow_tolerance": "Tolleranza di portata (%)",
+  "zone.field_adjustment": "Correzione (%)",
+  "zone.field_order": "Ordine",
+  "zone.field_interval": "Intervallo di irrigazione (giorni)",
+  "zone.field_season": "Deroga ai mesi della stagione",
+  "zone.field_group": "Gruppo di compatibilità",
 };

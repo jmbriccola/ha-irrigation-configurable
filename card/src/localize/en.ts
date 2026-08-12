@@ -211,4 +211,21 @@ export const en = {
   "editor.saved": "Curve updated.",
   "editor.save_error": "Couldn't save the curve: {error}",
   "editor.volume_note": "This program uses a volume curve (liters). Edit it in the zone settings.",
+
+  // Zone editor (panel)
+  "zone.add": "Add zone",
+  "zone.edit": "Edit zone",
+  "zone.delete": "Delete zone",
+  "zone.field_name": "Name",
+  "zone.field_valve": "Valve",
+  "zone.field_area": "Area (m²)",
+  "zone.advanced": "Advanced",
+  "zone.field_flow_sensor": "Flow sensor",
+  "zone.field_flow_nominal": "Nominal flow (L/min)",
+  "zone.field_flow_tolerance": "Flow tolerance (%)",
+  "zone.field_adjustment": "Adjustment (%)",
+  "zone.field_order": "Order",
+  "zone.field_interval": "Watering interval (days)",
+  "zone.field_season": "Season months override",
+  "zone.field_group": "Compatibility group",
 } as const;
