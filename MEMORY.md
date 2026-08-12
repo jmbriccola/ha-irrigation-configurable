@@ -108,6 +108,12 @@ details harvested from it (kept as engine behaviour):
 - Migration v1→v2 lives in `migration.py`, is idempotent (a program that
   already has a calendar is never rewritten), and reports anything it could
   not express as a repair issue instead of changing behaviour silently.
+- **One editor per setting (2.1.0).** Every setting except the weather engine
+  is edited in the panel; the config-flow options menu keeps only
+  `engine_advanced`. Do not re-add a config-flow step for something the panel
+  already edits — that is duplicated surface, and the reason it is safe to
+  remove is that services remain callable from Developer Tools when the panel
+  cannot load. Installer parameters live behind collapsed Advanced drawers.
 - Volume-mode cycle whose meter disappears degrades to a duration run of its
   volume-safety-timeout minutes (never guesses liters).
 - Flow out-of-range → anomaly notification only; zero-flow → interrupt.

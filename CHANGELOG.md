@@ -4,6 +4,49 @@ All notable changes to this project are documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/).
 
+## [2.1.0] - 2026-08-12
+
+### Added
+
+- **The dashboard now configures everything except the weather engine.**
+  Eighteen settings previously existed only inside the integration's option
+  screens, which meant leaving the irrigation panel to change them. They are
+  now editable in ⚙️ Impostazioni, and each has a service behind it:
+  - **Notifications** — enable each event and pick the notify services it
+    calls, saved per event as you toggle.
+  - **▸ Advanced: session and safety** — maximum session length, must-finish-by,
+    wait for free valves, block after a manual stop, settle pause, sentinel
+    time.
+  - **▸ Advanced: valves and concurrency** — open/close/switch confirmation
+    timeouts, startup close timeout, watchdog maximum, zones at once,
+    compatibility groups, master valve pre-open and post-close.
+  The advanced sections are collapsed by default and every field states its
+  unit and its default, so it is clear what "empty" means before changing it.
+- **Cycle-and-soak and the volume safety timeout** are editable per program,
+  in the editor's Advanced drawer.
+- New services for all of the above: `set_session_limits`, `set_valve_safety`,
+  `set_concurrency`, `set_notifications`, `set_program_advanced`. Every field
+  is optional and absent means unchanged.
+
+### Fixed
+
+- **The program enable toggle no longer disappears.** When the program's
+  switch entity could not be found the control rendered nothing at all — no
+  switch and no explanation. It now shows as visibly unavailable with a
+  reason. This mattered because the 2.0.0 migration can disable a program
+  whose calendar could never water and then asks you, in a repair issue, to
+  enable it again.
+- **The toggle is also in the program editor**, not only in the program list —
+  the screen you land on when you click ✎ is the natural place to disable the
+  program you are looking at.
+
+### Changed
+
+- The integration's **options menu now offers only the weather engine**.
+  Everything else moved to the panel, so each setting has exactly one editor.
+  First-run setup and zone creation are unchanged. If the panel ever fails to
+  load, every setting stays reachable from Developer Tools → Actions.
+
 ## [2.0.0] - 2026-08-12
 
 ### Changed — breaking

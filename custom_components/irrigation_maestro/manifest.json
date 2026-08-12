@@ -1,13 +1,20 @@
 {
   "domain": "irrigation_maestro",
   "name": "Irrigation Maestro",
-  "codeowners": ["@jmbriccola"],
+  "codeowners": [
+    "@jmbriccola"
+  ],
   "config_flow": true,
-  "dependencies": ["frontend", "http", "lovelace", "panel_custom"],
+  "dependencies": [
+    "frontend",
+    "http",
+    "lovelace",
+    "panel_custom"
+  ],
   "documentation": "https://github.com/jmbriccola/ha-irrigation-configurable",
   "integration_type": "hub",
   "iot_class": "calculated",
   "issue_tracker": "https://github.com/jmbriccola/ha-irrigation-configurable/issues",
   "requirements": [],
-  "version": "2.0.0"
+  "version": "2.1.0"
 }
