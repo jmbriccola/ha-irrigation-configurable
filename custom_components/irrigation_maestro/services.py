@@ -58,6 +58,9 @@ SERVICE_REMOVE_ZONE: Final = "remove_zone"
 SERVICE_SET_WEATHER_SOURCES: Final = "set_weather_sources"
 SERVICE_SET_CONSUMPTION_BUDGET: Final = "set_consumption_budget"
 SERVICE_SET_RESTRICTIONS: Final = "set_restrictions"
+SERVICE_SET_SESSION_LIMITS: Final = "set_session_limits"
+SERVICE_SET_VALVE_SAFETY: Final = "set_valve_safety"
+SERVICE_SET_CONCURRENCY: Final = "set_concurrency"
 
 ATTR_ZONE_ID: Final = "zone_id"
 ATTR_CYCLE_ID: Final = "cycle_id"
@@ -104,6 +107,21 @@ ATTR_CALENDAR_MODE: Final = "calendar_mode"
 ATTR_FORBIDDEN_WINDOWS: Final = "forbidden_windows"
 ATTR_WINDOW_START: Final = "start"
 ATTR_WINDOW_END: Final = "end"
+ATTR_SESSION_MAX_MIN: Final = "session_max_min"
+ATTR_MUST_FINISH_BY: Final = "must_finish_by"
+ATTR_WAIT_FREE_MIN: Final = "wait_free_min"
+ATTR_MANUAL_BLOCK_MIN: Final = "manual_block_min"
+ATTR_SETTLE_PAUSE_S: Final = "settle_pause_s"
+ATTR_SENTINEL_TIME: Final = "sentinel_time"
+ATTR_OPEN_CONFIRM_S: Final = "open_confirm_s"
+ATTR_CLOSE_CONFIRM_S: Final = "close_confirm_s"
+ATTR_SWITCH_CONFIRM_S: Final = "switch_confirm_s"
+ATTR_STARTUP_VALVE_TIMEOUT_S: Final = "startup_valve_timeout_s"
+ATTR_WATCHDOG_MAX_MIN: Final = "watchdog_max_min"
+ATTR_MAX_CONCURRENT: Final = "max_concurrent"
+ATTR_COMPATIBILITY_GROUPS: Final = "compatibility_groups"
+ATTR_MASTER_PRE_OPEN_S: Final = "master_pre_open_s"
+ATTR_MASTER_POST_CLOSE_S: Final = "master_post_close_s"
 
 _DATA_SERVICES_REGISTERED: Final = "services_registered"
 
@@ -280,7 +298,62 @@ _WEATHER_OPT_KEYS: Final = {
     ATTR_MASTER_VALVE: const.CONF_MASTER_VALVE,
 }
 
+
 # attr -> zone-data const key, with the coercion already applied by the schema
+def _seconds(low: int, high: int) -> Any:
+    return vol.All(vol.Coerce(int), vol.Range(min=low, max=high))
+
+
+_SESSION_LIMIT_KEYS: Final = {
+    ATTR_SESSION_MAX_MIN: const.CONF_SESSION_MAX_MIN,
+    ATTR_MUST_FINISH_BY: const.CONF_MUST_FINISH_BY,
+    ATTR_WAIT_FREE_MIN: const.CONF_WAIT_FREE_MIN,
+    ATTR_MANUAL_BLOCK_MIN: const.CONF_MANUAL_BLOCK_MIN,
+    ATTR_SETTLE_PAUSE_S: const.CONF_SETTLE_PAUSE_S,
+    ATTR_SENTINEL_TIME: const.CONF_SENTINEL_TIME,
+}
+_VALVE_SAFETY_KEYS: Final = {
+    ATTR_OPEN_CONFIRM_S: const.CONF_OPEN_CONFIRM_S,
+    ATTR_CLOSE_CONFIRM_S: const.CONF_CLOSE_CONFIRM_S,
+    ATTR_SWITCH_CONFIRM_S: const.CONF_SWITCH_CONFIRM_S,
+    ATTR_STARTUP_VALVE_TIMEOUT_S: const.CONF_STARTUP_VALVE_TIMEOUT_S,
+    ATTR_WATCHDOG_MAX_MIN: const.CONF_WATCHDOG_MAX_MIN,
+}
+_CONCURRENCY_KEYS: Final = {
+    ATTR_MAX_CONCURRENT: const.CONF_MAX_CONCURRENT,
+    ATTR_COMPATIBILITY_GROUPS: const.CONF_COMPATIBILITY_GROUPS,
+    ATTR_MASTER_PRE_OPEN_S: const.CONF_MASTER_PRE_OPEN_S,
+    ATTR_MASTER_POST_CLOSE_S: const.CONF_MASTER_POST_CLOSE_S,
+}
+
+_SET_SESSION_LIMITS_SCHEMA = vol.Schema(
+    {
+        vol.Optional(ATTR_SESSION_MAX_MIN): _seconds(1, 1440),
+        vol.Optional(ATTR_MUST_FINISH_BY): cv.string,
+        vol.Optional(ATTR_WAIT_FREE_MIN): _seconds(0, 120),
+        vol.Optional(ATTR_MANUAL_BLOCK_MIN): _seconds(0, 1440),
+        vol.Optional(ATTR_SETTLE_PAUSE_S): _seconds(0, 600),
+        vol.Optional(ATTR_SENTINEL_TIME): cv.string,
+    }
+)
+_SET_VALVE_SAFETY_SCHEMA = vol.Schema(
+    {
+        vol.Optional(ATTR_OPEN_CONFIRM_S): _seconds(1, 300),
+        vol.Optional(ATTR_CLOSE_CONFIRM_S): _seconds(1, 300),
+        vol.Optional(ATTR_SWITCH_CONFIRM_S): _seconds(1, 300),
+        vol.Optional(ATTR_STARTUP_VALVE_TIMEOUT_S): _seconds(1, 600),
+        vol.Optional(ATTR_WATCHDOG_MAX_MIN): _seconds(1, 1440),
+    }
+)
+_SET_CONCURRENCY_SCHEMA = vol.Schema(
+    {
+        vol.Optional(ATTR_MAX_CONCURRENT): _seconds(1, 10),
+        vol.Optional(ATTR_COMPATIBILITY_GROUPS): cv.string,
+        vol.Optional(ATTR_MASTER_PRE_OPEN_S): _seconds(0, 600),
+        vol.Optional(ATTR_MASTER_POST_CLOSE_S): _seconds(0, 600),
+    }
+)
+
 _ZONE_PATCH_KEYS: Final = {
     ATTR_NAME: const.CONF_ZONE_NAME,
     ATTR_VALVE_ENTITY: const.CONF_VALVE_ENTITY,
@@ -857,6 +930,35 @@ async def _async_set_consumption_budget(call: ServiceCall) -> None:
     _write_hub_options(hass, entry, merged)
 
 
+def _patch_hub_options(call: ServiceCall, mapping: dict[str, str]) -> None:
+    """Apply the fields present in the call to the hub options.
+
+    Absent means unchanged, matching update_zone. The COMPLETE dict goes
+    through _write_hub_options, which validates it via HubConfig.from_options
+    before anything is persisted, so a bad combination fails the call rather
+    than reaching the runtime.
+    """
+    hass = call.hass
+    entry = _loaded_entry(hass)
+    options = dict(entry.options)
+    for attr, conf_key in mapping.items():
+        if attr in call.data:
+            options[conf_key] = call.data[attr]
+    _write_hub_options(hass, entry, options)
+
+
+async def _async_set_session_limits(call: ServiceCall) -> None:
+    _patch_hub_options(call, _SESSION_LIMIT_KEYS)
+
+
+async def _async_set_valve_safety(call: ServiceCall) -> None:
+    _patch_hub_options(call, _VALVE_SAFETY_KEYS)
+
+
+async def _async_set_concurrency(call: ServiceCall) -> None:
+    _patch_hub_options(call, _CONCURRENCY_KEYS)
+
+
 async def _async_set_restrictions(call: ServiceCall) -> None:
     """Forbidden time-of-day windows.
 
@@ -1027,3 +1129,9 @@ def async_setup_services(hass: HomeAssistant) -> None:
     hass.services.async_register(
         DOMAIN, SERVICE_SET_RESTRICTIONS, _async_set_restrictions, _SET_RESTRICTIONS_SCHEMA
     )
+    for name, handler, schema in (
+        (SERVICE_SET_SESSION_LIMITS, _async_set_session_limits, _SET_SESSION_LIMITS_SCHEMA),
+        (SERVICE_SET_VALVE_SAFETY, _async_set_valve_safety, _SET_VALVE_SAFETY_SCHEMA),
+        (SERVICE_SET_CONCURRENCY, _async_set_concurrency, _SET_CONCURRENCY_SCHEMA),
+    ):
+        hass.services.async_register(DOMAIN, name, handler, schema)

@@ -542,3 +542,72 @@ set_restrictions:
       example: '[{"start": "08:00", "end": "10:30"}]'
       selector:
         object:
+
+set_session_limits:
+  fields:
+    session_max_min:
+      example: 120
+      selector:
+        number: { min: 1, max: 1440, step: 1, unit_of_measurement: min, mode: box }
+    must_finish_by:
+      example: "06:00"
+      selector:
+        time:
+    wait_free_min:
+      example: 5
+      selector:
+        number: { min: 0, max: 120, step: 1, unit_of_measurement: min, mode: box }
+    manual_block_min:
+      example: 30
+      selector:
+        number: { min: 0, max: 1440, step: 1, unit_of_measurement: min, mode: box }
+    settle_pause_s:
+      example: 60
+      selector:
+        number: { min: 0, max: 600, step: 1, unit_of_measurement: s, mode: box }
+    sentinel_time:
+      example: "23:30"
+      selector:
+        time:
+
+set_valve_safety:
+  fields:
+    open_confirm_s:
+      example: 10
+      selector:
+        number: { min: 1, max: 300, step: 1, unit_of_measurement: s, mode: box }
+    close_confirm_s:
+      example: 15
+      selector:
+        number: { min: 1, max: 300, step: 1, unit_of_measurement: s, mode: box }
+    switch_confirm_s:
+      example: 8
+      selector:
+        number: { min: 1, max: 300, step: 1, unit_of_measurement: s, mode: box }
+    startup_valve_timeout_s:
+      example: 30
+      selector:
+        number: { min: 1, max: 600, step: 1, unit_of_measurement: s, mode: box }
+    watchdog_max_min:
+      example: 45
+      selector:
+        number: { min: 1, max: 1440, step: 1, unit_of_measurement: min, mode: box }
+
+set_concurrency:
+  fields:
+    max_concurrent:
+      example: 1
+      selector:
+        number: { min: 1, max: 10, step: 1, mode: box }
+    compatibility_groups:
+      example: drip,lawn
+      selector:
+        text:
+    master_pre_open_s:
+      example: 5
+      selector:
+        number: { min: 0, max: 600, step: 1, unit_of_measurement: s, mode: box }
+    master_post_close_s:
+      example: 3
+      selector:
+        number: { min: 0, max: 600, step: 1, unit_of_measurement: s, mode: box }
