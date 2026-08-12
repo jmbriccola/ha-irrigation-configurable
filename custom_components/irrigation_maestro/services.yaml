@@ -190,6 +190,60 @@ set_program_schedule:
       example: a1b2c3d4
       selector:
         text:
+    calendar_mode:
+      example: weekdays
+      selector:
+        select:
+          options:
+            - weekdays
+            - interval
+            - parity
+    interval_days:
+      example: 3
+      selector:
+        number:
+          min: 1
+          max: 60
+          step: 1
+          unit_of_measurement: days
+          mode: box
+    parity:
+      example: odd
+      selector:
+        select:
+          options:
+            - odd
+            - even
+    season_months:
+      example: "[6, 7, 8]"
+      selector:
+        select:
+          multiple: true
+          options:
+            - value: "1"
+              label: Jan
+            - value: "2"
+              label: Feb
+            - value: "3"
+              label: Mar
+            - value: "4"
+              label: Apr
+            - value: "5"
+              label: May
+            - value: "6"
+              label: Jun
+            - value: "7"
+              label: Jul
+            - value: "8"
+              label: Aug
+            - value: "9"
+              label: Sep
+            - value: "10"
+              label: Oct
+            - value: "11"
+              label: Nov
+            - value: "12"
+              label: Dec
     days:
       example: "[0, 2, 4]"
       selector:
@@ -409,49 +463,10 @@ update_zone:
           max: 1000
           step: 1
           mode: box
-    interval_days:
-      example: 3
-      selector:
-        number:
-          min: 1
-          max: 60
-          step: 1
-          unit_of_measurement: days
-          mode: box
     compatibility_group:
       example: drip
       selector:
         text:
-    season_months:
-      example: "[3, 4, 5, 6, 7, 8, 9, 10]"
-      selector:
-        select:
-          multiple: true
-          options:
-            - value: "1"
-              label: Jan
-            - value: "2"
-              label: Feb
-            - value: "3"
-              label: Mar
-            - value: "4"
-              label: Apr
-            - value: "5"
-              label: May
-            - value: "6"
-              label: Jun
-            - value: "7"
-              label: Jul
-            - value: "8"
-              label: Aug
-            - value: "9"
-              label: Sep
-            - value: "10"
-              label: Oct
-            - value: "11"
-              label: Nov
-            - value: "12"
-              label: Dec
 
 remove_zone:
   fields:
@@ -523,34 +538,6 @@ set_consumption_budget:
 
 set_restrictions:
   fields:
-    allowed_weekdays:
-      example: "[0, 2, 4]"
-      selector:
-        select:
-          multiple: true
-          options:
-            - value: "0"
-              label: Mon
-            - value: "1"
-              label: Tue
-            - value: "2"
-              label: Wed
-            - value: "3"
-              label: Thu
-            - value: "4"
-              label: Fri
-            - value: "5"
-              label: Sat
-            - value: "6"
-              label: Sun
-    parity:
-      example: none
-      selector:
-        select:
-          options:
-            - odd
-            - even
-            - none
     forbidden_windows:
       example: '[{"start": "08:00", "end": "10:30"}]'
       selector:

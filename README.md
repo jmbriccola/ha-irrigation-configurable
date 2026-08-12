@@ -33,13 +33,17 @@ Irrigation Maestro is built around two ideas:
   field-validated presets included; shared curve templates and copy-between-
   cycles for many-zone setups; optional **volume mode** (liters) with flow
   meter; optional **cycle-and-soak** with cross-zone interleaving.
-- **Calendar-day cadence** per zone (default every 3 days, retries after
-  skips). The cadence counts watering *days*, not cycles: on a watering day
-  every enabled cycle of the zone runs, and the counter restarts from the day
-  a cycle completed. Seasonal windows (default March–October), per-zone adjustment
-  factor, and **watering-ordinance restrictions**: allowed weekdays, odd/even
-  day schemes, forbidden time windows (running cycles are truncated rather
-  than overrun into a window).
+- **One calendar per program**, in exactly one of three mutually exclusive
+  modes: specific **weekdays**, **every N days** (counted from the day that
+  program last completed, so a skipped day retries), or **odd/even** days of
+  the month for municipal parity ordinances. Because the modes cannot be
+  combined, two schedules can never silently cancel each other out. Each
+  program also carries its own **season** (months), defaulting to the hub's —
+  so a zone can keep its morning program all season and run the evening one
+  only in high summer.
+- **Per-zone adjustment factor** and hub-wide **forbidden time windows**: a
+  cycle already running is truncated rather than allowed to overrun into a
+  window. Windows constrain hours only; watering days belong to the program.
 - **Weather engine** (§ details below) with a single forecast fetch per
   session, stage-and-commit rain estimation without a rain sensor, and a
   configurable stale-weather policy.
