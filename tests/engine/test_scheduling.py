@@ -31,15 +31,36 @@ class TestCadence:
     def test_not_due_before_interval(self):
         assert not is_due(date(2026, 7, 15), date(2026, 7, 17), interval_days=3)
 
-    def test_completed_today_not_due(self):
-        assert not is_due(date(2026, 7, 17), date(2026, 7, 17), interval_days=1)
+    def test_completed_today_stays_due_for_the_rest_of_the_day(self):
+        # A completed cycle ESTABLISHES today as a watering day, it does not
+        # close it: the zone's remaining cycles must still run (§1).
+        assert is_due(date(2026, 7, 17), date(2026, 7, 17), interval_days=1)
+
+    def test_completed_today_stays_due_regardless_of_interval(self):
+        # The cadence counts days between watering days, so a long interval
+        # must not truncate the watering day it just established.
+        assert is_due(date(2026, 7, 17), date(2026, 7, 17), interval_days=7)
 
     def test_interval_one_waters_every_day(self):
         assert is_due(date(2026, 7, 16), date(2026, 7, 17), interval_days=1)
 
+    def test_multi_day_interval_still_gates_following_days(self):
+        # Completed Monday with N=3: Tue/Wed wait, Thursday is due again.
+        monday = date(2026, 7, 13)
+        assert not is_due(monday, date(2026, 7, 14), interval_days=3)
+        assert not is_due(monday, date(2026, 7, 15), interval_days=3)
+        assert is_due(monday, date(2026, 7, 16), interval_days=3)
+
     def test_retry_days_after_skip(self):
         # Last completed 5 days ago with N=3: still due (retries until it completes).
         assert is_due(date(2026, 7, 12), date(2026, 7, 17), interval_days=3)
+
+    def test_future_last_completed_does_not_lock_the_zone_out(self):
+        # Clock skew, a timezone change or a restored old store can leave a
+        # date in the future. Counting days would go negative and silently
+        # freeze the zone forever; staying due lets the next completed cycle
+        # rewrite the marker to today and self-heal.
+        assert is_due(date(2026, 7, 20), date(2026, 7, 17), interval_days=3)
 
 
 class TestDayAllowed:
