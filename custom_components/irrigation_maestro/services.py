@@ -32,6 +32,17 @@ from .engine.calendar import ProgramCalendar
 from .engine.curves import CurveError, CurveKind, validate_points
 from .engine.semantic import points_from_semantic, semantic_from_curve
 from .models import CycleConfig, HubConfig, ZoneConfig
+from .notify import (
+    EVENT_ANOMALY,
+    EVENT_CANCELLED,
+    EVENT_COMPLETED,
+    EVENT_CONSUMPTION_BUDGET,
+    EVENT_INTERRUPTED,
+    EVENT_SENTINEL,
+    EVENT_SESSION_OVERRUN,
+    EVENT_SKIPPED,
+    EVENT_WATCHDOG,
+)
 from .runtime import IrrigationRuntime
 
 SERVICE_RUN_ZONE: Final = "run_zone"
@@ -61,6 +72,8 @@ SERVICE_SET_RESTRICTIONS: Final = "set_restrictions"
 SERVICE_SET_SESSION_LIMITS: Final = "set_session_limits"
 SERVICE_SET_VALVE_SAFETY: Final = "set_valve_safety"
 SERVICE_SET_CONCURRENCY: Final = "set_concurrency"
+SERVICE_SET_NOTIFICATIONS: Final = "set_notifications"
+SERVICE_SET_PROGRAM_ADVANCED: Final = "set_program_advanced"
 
 ATTR_ZONE_ID: Final = "zone_id"
 ATTR_CYCLE_ID: Final = "cycle_id"
@@ -122,6 +135,12 @@ ATTR_MAX_CONCURRENT: Final = "max_concurrent"
 ATTR_COMPATIBILITY_GROUPS: Final = "compatibility_groups"
 ATTR_MASTER_PRE_OPEN_S: Final = "master_pre_open_s"
 ATTR_MASTER_POST_CLOSE_S: Final = "master_post_close_s"
+ATTR_EVENT: Final = "event"
+ATTR_ENABLED: Final = "enabled"
+ATTR_SERVICES: Final = "services"
+ATTR_SOAK_MAX_RUN_MIN: Final = "soak_max_run_min"
+ATTR_SOAK_PAUSE_MIN: Final = "soak_pause_min"
+ATTR_VOLUME_SAFETY_TIMEOUT_MIN: Final = "volume_safety_timeout_min"
 
 _DATA_SERVICES_REGISTERED: Final = "services_registered"
 
@@ -326,6 +345,37 @@ _CONCURRENCY_KEYS: Final = {
     ATTR_MASTER_POST_CLOSE_S: const.CONF_MASTER_POST_CLOSE_S,
 }
 
+# Built from notify.py so a renamed event cannot drift out of sync here.
+_NOTIFY_EVENTS: Final = (
+    EVENT_COMPLETED,
+    EVENT_SKIPPED,
+    EVENT_INTERRUPTED,
+    EVENT_CANCELLED,
+    EVENT_ANOMALY,
+    EVENT_WATCHDOG,
+    EVENT_SENTINEL,
+    EVENT_SESSION_OVERRUN,
+    EVENT_CONSUMPTION_BUDGET,
+)
+
+_SET_PROGRAM_ADVANCED_SCHEMA = vol.Schema(
+    {
+        vol.Required(ATTR_ZONE_ID): cv.string,
+        vol.Required(ATTR_PROGRAM_ID): cv.string,
+        vol.Optional(ATTR_SOAK_MAX_RUN_MIN): vol.All(vol.Coerce(int), vol.Range(min=1, max=1440)),
+        vol.Optional(ATTR_SOAK_PAUSE_MIN): vol.All(vol.Coerce(int), vol.Range(min=0, max=1440)),
+        vol.Optional(ATTR_VOLUME_SAFETY_TIMEOUT_MIN): vol.All(
+            vol.Coerce(int), vol.Range(min=1, max=1440)
+        ),
+    }
+)
+_SET_NOTIFICATIONS_SCHEMA = vol.Schema(
+    {
+        vol.Required(ATTR_EVENT): vol.In(_NOTIFY_EVENTS),
+        vol.Optional(ATTR_ENABLED): cv.boolean,
+        vol.Optional(ATTR_SERVICES): vol.All(cv.ensure_list, [cv.string]),
+    }
+)
 _SET_SESSION_LIMITS_SCHEMA = vol.Schema(
     {
         vol.Optional(ATTR_SESSION_MAX_MIN): _seconds(1, 1440),
@@ -947,6 +997,54 @@ def _patch_hub_options(call: ServiceCall, mapping: dict[str, str]) -> None:
     _write_hub_options(hass, entry, options)
 
 
+async def _async_set_program_advanced(call: ServiceCall) -> None:
+    """Cycle-and-soak and the volume safety timeout, per program."""
+    hass, entry, zone_id, program_id = _program_context(call)
+    runtime = cast(IrrigationRuntime, entry.runtime_data)
+    cycle = runtime.zones[zone_id].config.cycle(program_id)
+    existing_max_run = cycle.soak_max_run_min if cycle else None
+    new_max_run = call.data.get(ATTR_SOAK_MAX_RUN_MIN, existing_max_run)
+    if call.data.get(ATTR_SOAK_PAUSE_MIN) and not new_max_run:
+        # The run would never be split, so the pause would silently do nothing.
+        raise ServiceValidationError(
+            translation_domain=DOMAIN, translation_key="soak_pause_without_max_run"
+        )
+
+    def mutate(item: dict[str, Any]) -> None:
+        for attr, conf_key in (
+            (ATTR_SOAK_MAX_RUN_MIN, const.CONF_SOAK_MAX_RUN_MIN),
+            (ATTR_SOAK_PAUSE_MIN, const.CONF_SOAK_PAUSE_MIN),
+            (ATTR_VOLUME_SAFETY_TIMEOUT_MIN, const.CONF_VOLUME_SAFETY_TIMEOUT_MIN),
+        ):
+            if attr in call.data:
+                item[conf_key] = call.data[attr]
+
+    _update_cycle(hass, entry, zone_id, program_id, mutate)
+
+
+async def _async_set_notifications(call: ServiceCall) -> None:
+    """Enable/disable one event and set the notify services it calls.
+
+    One event per call: a caller never has to post the whole nested structure
+    back, and so cannot clobber the events it did not mean to touch.
+    """
+    hass = call.hass
+    entry = _loaded_entry(hass)
+    options = dict(entry.options)
+    notifications = {
+        key: dict(value) for key, value in options.get(const.CONF_NOTIFICATIONS, {}).items()
+    }
+    event = call.data[ATTR_EVENT]
+    current = notifications.get(event, {})
+    if ATTR_ENABLED in call.data:
+        current[const.CONF_NOTIFY_ENABLED] = call.data[ATTR_ENABLED]
+    if ATTR_SERVICES in call.data:
+        current[const.CONF_NOTIFY_SERVICES] = list(call.data[ATTR_SERVICES])
+    notifications[event] = current
+    options[const.CONF_NOTIFICATIONS] = notifications
+    _write_hub_options(hass, entry, options)
+
+
 async def _async_set_session_limits(call: ServiceCall) -> None:
     _patch_hub_options(call, _SESSION_LIMIT_KEYS)
 
@@ -1133,5 +1231,11 @@ def async_setup_services(hass: HomeAssistant) -> None:
         (SERVICE_SET_SESSION_LIMITS, _async_set_session_limits, _SET_SESSION_LIMITS_SCHEMA),
         (SERVICE_SET_VALVE_SAFETY, _async_set_valve_safety, _SET_VALVE_SAFETY_SCHEMA),
         (SERVICE_SET_CONCURRENCY, _async_set_concurrency, _SET_CONCURRENCY_SCHEMA),
+        (SERVICE_SET_NOTIFICATIONS, _async_set_notifications, _SET_NOTIFICATIONS_SCHEMA),
+        (
+            SERVICE_SET_PROGRAM_ADVANCED,
+            _async_set_program_advanced,
+            _SET_PROGRAM_ADVANCED_SCHEMA,
+        ),
     ):
         hass.services.async_register(DOMAIN, name, handler, schema)
