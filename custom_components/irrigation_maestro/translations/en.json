@@ -1004,6 +1004,9 @@
     },
     "calendar_unknown_parity": {
       "message": "The parity calendar mode needs \"odd\" or \"even\"."
+    },
+    "soak_pause_without_max_run": {
+      "message": "A soak pause needs a maximum run length: without one the run is never split, so the pause would do nothing."
     }
   },
   "selector": {

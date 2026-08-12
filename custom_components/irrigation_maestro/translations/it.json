@@ -1004,6 +1004,9 @@
     },
     "calendar_unknown_parity": {
       "message": "La modalità pari/dispari richiede \"odd\" oppure \"even\"."
+    },
+    "soak_pause_without_max_run": {
+      "message": "La pausa di ammollo richiede una durata massima per corsa: senza, la corsa non viene mai divisa e la pausa non farebbe nulla."
     }
   },
   "selector": {

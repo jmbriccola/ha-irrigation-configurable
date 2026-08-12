@@ -611,3 +611,54 @@ set_concurrency:
       example: 3
       selector:
         number: { min: 0, max: 600, step: 1, unit_of_measurement: s, mode: box }
+
+set_notifications:
+  fields:
+    event:
+      required: true
+      example: completed
+      selector:
+        select:
+          options:
+            - completed
+            - skipped
+            - interrupted
+            - cancelled
+            - anomaly
+            - watchdog
+            - sentinel
+            - session_overrun
+            - consumption_budget
+    enabled:
+      example: true
+      selector:
+        boolean:
+    services:
+      example: '["notify.mobile_app"]'
+      selector:
+        object:
+
+set_program_advanced:
+  fields:
+    zone_id:
+      required: true
+      example: 1b2f3c4d5e6f
+      selector:
+        text:
+    program_id:
+      required: true
+      example: a1b2c3d4
+      selector:
+        text:
+    soak_max_run_min:
+      example: 10
+      selector:
+        number: { min: 1, max: 1440, step: 1, unit_of_measurement: min, mode: box }
+    soak_pause_min:
+      example: 15
+      selector:
+        number: { min: 0, max: 1440, step: 1, unit_of_measurement: min, mode: box }
+    volume_safety_timeout_min:
+      example: 45
+      selector:
+        number: { min: 1, max: 1440, step: 1, unit_of_measurement: min, mode: box }

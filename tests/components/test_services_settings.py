@@ -105,3 +105,115 @@ async def test_settings_apply_without_a_reload(hass: HomeAssistant) -> None:
     await hass.services.async_call(DOMAIN, "set_concurrency", {"max_concurrent": 3}, blocking=True)
     await hass.async_block_till_done()
     assert entry.runtime_data.hub.max_concurrent == 3
+
+
+async def test_notifications_updates_one_event_only(hass: HomeAssistant) -> None:
+    entry = await setup_hub(
+        hass,
+        [zone_data("Pots", "valve.pots")],
+        {"notifications": {"completed": {"enabled": True, "services": ["notify.a"]}}},
+    )
+    await hass.services.async_call(
+        DOMAIN,
+        "set_notifications",
+        {"event": "anomaly", "enabled": True, "services": ["notify.b"]},
+        blocking=True,
+    )
+    stored = entry.options["notifications"]
+    assert stored["anomaly"] == {"enabled": True, "services": ["notify.b"]}
+    # The event the caller did not name must survive untouched.
+    assert stored["completed"] == {"enabled": True, "services": ["notify.a"]}
+
+
+async def test_notifications_can_disable_an_event(hass: HomeAssistant) -> None:
+    entry = await setup_hub(hass, [zone_data("Pots", "valve.pots")])
+    await hass.services.async_call(
+        DOMAIN, "set_notifications", {"event": "skipped", "enabled": False}, blocking=True
+    )
+    assert entry.options["notifications"]["skipped"]["enabled"] is False
+
+
+async def test_notifications_keeps_services_when_only_toggling(hass: HomeAssistant) -> None:
+    entry = await setup_hub(
+        hass,
+        [zone_data("Pots", "valve.pots")],
+        {"notifications": {"watchdog": {"enabled": True, "services": ["notify.a"]}}},
+    )
+    await hass.services.async_call(
+        DOMAIN, "set_notifications", {"event": "watchdog", "enabled": False}, blocking=True
+    )
+    stored = entry.options["notifications"]["watchdog"]
+    assert stored == {"enabled": False, "services": ["notify.a"]}
+
+
+async def test_notifications_rejects_an_unknown_event(hass: HomeAssistant) -> None:
+    await setup_hub(hass, [zone_data("Pots", "valve.pots")])
+    with pytest.raises(vol.Invalid):
+        await hass.services.async_call(
+            DOMAIN, "set_notifications", {"event": "not_an_event"}, blocking=True
+        )
+
+
+async def test_set_program_advanced_round_trips(hass: HomeAssistant) -> None:
+    entry = await setup_hub(hass, [zone_data("Pots", "valve.pots")])
+    zone_id = entry.runtime_data.zone_ids[0]
+    await hass.services.async_call(
+        DOMAIN,
+        "set_program_advanced",
+        {
+            "zone_id": zone_id,
+            "program_id": "cy_pots",
+            "soak_max_run_min": 10,
+            "soak_pause_min": 15,
+        },
+        blocking=True,
+    )
+    cycle = entry.runtime_data.zones[zone_id].config.cycle("cy_pots")
+    assert cycle.soak_max_run_min == 10
+    assert cycle.soak_pause_min == 15
+
+
+async def test_set_program_advanced_sets_the_volume_timeout(hass: HomeAssistant) -> None:
+    entry = await setup_hub(hass, [zone_data("Pots", "valve.pots")])
+    zone_id = entry.runtime_data.zone_ids[0]
+    await hass.services.async_call(
+        DOMAIN,
+        "set_program_advanced",
+        {"zone_id": zone_id, "program_id": "cy_pots", "volume_safety_timeout_min": 45},
+        blocking=True,
+    )
+    assert entry.runtime_data.zones[zone_id].config.cycle("cy_pots").volume_safety_timeout_min == 45
+
+
+async def test_soak_pause_without_a_max_run_is_rejected(hass: HomeAssistant) -> None:
+    # A pause with nothing to pause between is a configuration mistake, not a
+    # no-op: the run would never be split, so the pause silently does nothing.
+    from homeassistant.exceptions import ServiceValidationError
+
+    entry = await setup_hub(hass, [zone_data("Pots", "valve.pots")])
+    zone_id = entry.runtime_data.zone_ids[0]
+    with pytest.raises(ServiceValidationError):
+        await hass.services.async_call(
+            DOMAIN,
+            "set_program_advanced",
+            {"zone_id": zone_id, "program_id": "cy_pots", "soak_pause_min": 15},
+            blocking=True,
+        )
+
+
+async def test_soak_pause_is_allowed_when_a_max_run_already_exists(hass: HomeAssistant) -> None:
+    entry = await setup_hub(hass, [zone_data("Pots", "valve.pots")])
+    zone_id = entry.runtime_data.zone_ids[0]
+    await hass.services.async_call(
+        DOMAIN,
+        "set_program_advanced",
+        {"zone_id": zone_id, "program_id": "cy_pots", "soak_max_run_min": 10},
+        blocking=True,
+    )
+    await hass.services.async_call(
+        DOMAIN,
+        "set_program_advanced",
+        {"zone_id": zone_id, "program_id": "cy_pots", "soak_pause_min": 20},
+        blocking=True,
+    )
+    assert entry.runtime_data.zones[zone_id].config.cycle("cy_pots").soak_pause_min == 20
