@@ -12,9 +12,10 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import date, datetime
 
+from .calendar import ProgramCalendar, calendar_allows
 from .curves import Curve, CurveKind, curve_value
 from .model import EngineParams, SessionEvaluation, SkipReason
-from .scheduling import CalendarRestrictions, day_allowed, is_due, split_soak
+from .scheduling import split_soak
 from .semantic import ANCHORS, points_from_semantic
 
 _DEFAULT_VOLUME_TIMEOUT_MIN = 30
@@ -27,11 +28,12 @@ class CycleSpec:
     cycle_id: str
     enabled: bool
     curve: Curve
+    calendar: ProgramCalendar = field(default_factory=ProgramCalendar.daily)
+    season_months: frozenset[int] | None = None
+    last_completed: date | None = None
     soak_max_run_min: int | None = None
     soak_pause_min: int = 0
-    months_override: frozenset[int] | None = None
     volume_safety_timeout_min: int | None = None
-    days: frozenset[int] | None = None
     day_minutes: dict[int, int] = field(default_factory=dict)
 
 
@@ -44,10 +46,6 @@ class ZoneSpec:
     enabled: bool
     order: int
     adjustment_pct: float
-    interval_days: int
-    season_months: frozenset[int] | None
-    restrictions: CalendarRestrictions | None
-    last_completed: date | None
     suspended_until: datetime | None
     paused_until: datetime | None
     skip_today: bool
@@ -113,13 +111,12 @@ class SessionPlan:
         return groups
 
 
-def _zone_gate(
-    params: EngineParams,
-    zone: ZoneSpec,
-    restrictions: CalendarRestrictions,
-    now: datetime,
-) -> SkipReason | None:
-    """Zone-level eligibility, in reporting priority order."""
+def _zone_gate(params: EngineParams, zone: ZoneSpec, now: datetime) -> SkipReason | None:
+    """Zone-level eligibility, in reporting priority order.
+
+    Calendar decisions belong to the program, not the zone: a zone no longer
+    holds a cadence or a season of its own.
+    """
     if not zone.enabled:
         return SkipReason.ZONE_DISABLED
     if zone.suspended_until is not None and zone.suspended_until > now:
@@ -128,10 +125,6 @@ def _zone_gate(
         return SkipReason.PAUSED
     if zone.skip_today:
         return SkipReason.SKIP_TODAY_REQUESTED
-    if not day_allowed(now.date(), restrictions):
-        return SkipReason.CALENDAR_RESTRICTED
-    if not is_due(zone.last_completed, now.date(), zone.interval_days):
-        return SkipReason.NOT_DUE
     return None
 
 
@@ -167,7 +160,6 @@ def build_session_plan(
     evaluation: SessionEvaluation,
     zones: list[ZoneSpec],
     *,
-    global_restrictions: CalendarRestrictions,
     now: datetime,
     duration_factor: float = 1.0,
 ) -> SessionPlan:
@@ -176,19 +168,19 @@ def build_session_plan(
     skipped: list[SkippedCycle] = []
 
     for zone in zones:
-        restrictions = zone.restrictions if zone.restrictions is not None else (global_restrictions)
-        zone_months = zone.season_months if zone.season_months is not None else params.season_months
-        zone_reason = _zone_gate(params, zone, restrictions, now)
+        zone_reason = _zone_gate(params, zone, now)
 
         for cycle in zone.cycles:
-            months = cycle.months_override if cycle.months_override is not None else zone_months
+            months = (
+                cycle.season_months if cycle.season_months is not None else params.season_months
+            )
             reason: SkipReason | None
             if zone_reason is not None:
                 reason = zone_reason
             elif not cycle.enabled:
                 reason = SkipReason.CYCLE_DISABLED
-            elif cycle.days is not None and now.weekday() not in cycle.days:
-                reason = SkipReason.DAY_NOT_SCHEDULED
+            elif not calendar_allows(cycle.calendar, now.date(), cycle.last_completed):
+                reason = SkipReason.CALENDAR_NOT_TODAY
             elif now.month not in months:
                 reason = SkipReason.OUT_OF_SEASON
             elif evaluation.skip_reason is SkipReason.OUT_OF_SEASON:

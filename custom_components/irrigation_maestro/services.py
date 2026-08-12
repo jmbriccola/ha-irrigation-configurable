@@ -28,6 +28,7 @@ from homeassistant.util import dt as dt_util
 
 from . import const
 from .const import DOMAIN, SUBENTRY_TYPE_ZONE
+from .engine.calendar import ProgramCalendar
 from .engine.curves import CurveError, CurveKind, validate_points
 from .engine.semantic import points_from_semantic, semantic_from_curve
 from .models import CycleConfig, HubConfig, ZoneConfig
@@ -100,6 +101,7 @@ ATTR_ACTION: Final = "action"
 ATTR_REDUCE_PCT: Final = "reduce_pct"
 ATTR_ALLOWED_WEEKDAYS: Final = "allowed_weekdays"
 ATTR_PARITY: Final = "parity"
+ATTR_CALENDAR_MODE: Final = "calendar_mode"
 ATTR_FORBIDDEN_WINDOWS: Final = "forbidden_windows"
 ATTR_WINDOW_START: Final = "start"
 ATTR_WINDOW_END: Final = "end"
@@ -167,12 +169,19 @@ _IMPORT_CONFIG_SCHEMA = vol.Schema({vol.Required(ATTR_PAYLOAD): cv.string})
 _EMPTY_SCHEMA = vol.Schema({})
 
 _WEEKDAYS = vol.All([vol.All(vol.Coerce(int), vol.Range(min=0, max=6))], vol.Length(max=7))
+_MONTHS = vol.All([vol.All(vol.Coerce(int), vol.Range(min=1, max=12))], vol.Length(max=12))
 
 _SET_PROGRAM_SCHEDULE_SCHEMA = vol.Schema(
     {
         vol.Required(ATTR_ZONE_ID): cv.string,
         vol.Required(ATTR_PROGRAM_ID): cv.string,
+        vol.Optional(ATTR_CALENDAR_MODE, default="weekdays"): vol.In(
+            ["weekdays", "interval", "parity"]
+        ),
         vol.Optional(ATTR_DAYS, default=list): _WEEKDAYS,
+        vol.Optional(ATTR_INTERVAL_DAYS): vol.All(vol.Coerce(int), vol.Range(min=1, max=60)),
+        vol.Optional(ATTR_PARITY): vol.In(["odd", "even"]),
+        vol.Optional(ATTR_SEASON_MONTHS): _MONTHS,
         vol.Required(ATTR_START_KIND): vol.In(["time", "sun"]),
         vol.Optional(ATTR_START_TIME): cv.string,
         vol.Optional(ATTR_START_EVENT): vol.In(["sunrise", "sunset"]),
@@ -230,9 +239,7 @@ _UPDATE_ZONE_SCHEMA = vol.Schema(
         ),
         vol.Optional(ATTR_ADJUSTMENT_PCT): vol.All(vol.Coerce(int), vol.Range(min=10, max=300)),
         vol.Optional(ATTR_ORDER): vol.All(vol.Coerce(int), vol.Range(min=1, max=1000)),
-        vol.Optional(ATTR_INTERVAL_DAYS): vol.All(vol.Coerce(int), vol.Range(min=1, max=60)),
         vol.Optional(ATTR_COMPATIBILITY_GROUP): cv.string,
-        vol.Optional(ATTR_SEASON_MONTHS): [vol.All(vol.Coerce(int), vol.Range(min=1, max=12))],
     }
 )
 _REMOVE_ZONE_SCHEMA = vol.Schema({vol.Required(ATTR_ZONE_ID): cv.string})
@@ -261,8 +268,6 @@ _WINDOW_SCHEMA = vol.Schema(
 )
 _SET_RESTRICTIONS_SCHEMA = vol.Schema(
     {
-        vol.Optional(ATTR_ALLOWED_WEEKDAYS): [vol.All(vol.Coerce(int), vol.Range(min=0, max=6))],
-        vol.Optional(ATTR_PARITY): vol.In(["odd", "even", "none"]),
         vol.Optional(ATTR_FORBIDDEN_WINDOWS): [_WINDOW_SCHEMA],
     }
 )
@@ -287,9 +292,7 @@ _ZONE_PATCH_KEYS: Final = {
     ATTR_FLOW_TOLERANCE_PCT: const.CONF_FLOW_TOLERANCE_PCT,
     ATTR_ADJUSTMENT_PCT: const.CONF_ADJUSTMENT_PCT,
     ATTR_ORDER: const.CONF_ORDER,
-    ATTR_INTERVAL_DAYS: const.CONF_INTERVAL_DAYS,
     ATTR_COMPATIBILITY_GROUP: const.CONF_COMPATIBILITY_GROUP,
-    ATTR_SEASON_MONTHS: const.CONF_ZONE_SEASON_MONTHS,
 }
 
 
@@ -598,9 +601,31 @@ def _program_context(call: ServiceCall) -> tuple[HomeAssistant, ConfigEntry, str
     return hass, entry, zone_id, program_id
 
 
+def _calendar_from_call(call: ServiceCall) -> dict[str, Any]:
+    """The whole calendar as one mode. Switching mode leaves no residue."""
+    mode = call.data[ATTR_CALENDAR_MODE]
+    try:
+        if mode == "interval":
+            calendar = ProgramCalendar.interval(call.data[ATTR_INTERVAL_DAYS])
+        elif mode == "parity":
+            parity = call.data[ATTR_PARITY]
+            calendar = ProgramCalendar.odd() if parity == "odd" else ProgramCalendar.even()
+        else:
+            days = sorted(set(call.data[ATTR_DAYS]))
+            calendar = ProgramCalendar.weekdays(days) if days else ProgramCalendar.daily()
+    except KeyError as err:
+        raise ServiceValidationError(
+            translation_domain=DOMAIN,
+            translation_key="calendar_field_required",
+            translation_placeholders={"mode": mode},
+        ) from err
+    return calendar.to_config()
+
+
 async def _async_set_program_schedule(call: ServiceCall) -> None:
     hass, entry, zone_id, program_id = _program_context(call)
-    days = sorted(set(call.data[ATTR_DAYS]))
+    calendar = _calendar_from_call(call)
+    season = call.data.get(ATTR_SEASON_MONTHS)
     kind = call.data[ATTR_START_KIND]
     trigger: dict[str, Any]
     if kind == "time":
@@ -627,10 +652,10 @@ async def _async_set_program_schedule(call: ServiceCall) -> None:
         }
 
     def mutate(item: dict[str, Any]) -> None:
-        if days:
-            item[const.CONF_CYCLE_DAYS] = days
-        else:
-            item.pop(const.CONF_CYCLE_DAYS, None)  # empty = every day
+        item[const.CONF_CALENDAR] = calendar
+        item.pop(const.CONF_CYCLE_DAYS, None)  # legacy v1 key, never revived
+        if season is not None:
+            item[const.CONF_SEASON_MONTHS] = sorted(set(season))
         item[const.CONF_TRIGGER] = trigger
 
     _update_cycle(hass, entry, zone_id, program_id, mutate)
@@ -834,15 +859,15 @@ async def _async_set_consumption_budget(call: ServiceCall) -> None:
 
 
 async def _async_set_restrictions(call: ServiceCall) -> None:
+    """Forbidden time-of-day windows.
+
+    Restrictions constrain hours only from 2.0.0. Which *days* a zone waters
+    is a program calendar decision — keeping a second weekday chooser here is
+    what let two schedules silently cancel each other out.
+    """
     hass = call.hass
     entry = _loaded_entry(hass)
     restrictions: dict[str, Any] = {}
-    allowed_weekdays = call.data.get(ATTR_ALLOWED_WEEKDAYS)
-    if allowed_weekdays:
-        restrictions[const.CONF_ALLOWED_WEEKDAYS] = sorted(set(allowed_weekdays))
-    parity = call.data.get(ATTR_PARITY)
-    if parity and parity != "none":
-        restrictions[const.CONF_PARITY] = parity
     if ATTR_FORBIDDEN_WINDOWS in call.data:
         restrictions[const.CONF_FORBIDDEN_WINDOWS] = [
             {

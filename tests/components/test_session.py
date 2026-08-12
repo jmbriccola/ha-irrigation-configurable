@@ -30,29 +30,30 @@ def zone_data(
     at: str = "05:30",
     minutes: float = 3.0,
     order: int = 100,
+    calendar: dict[str, Any] | None = None,
     cycles: list[dict[str, Any]] | None = None,
     **extra: Any,
 ) -> dict[str, Any]:
     """Zone subentry data with a fixed-duration curve for fast tests."""
     if cycles is None:
-        cycles = [
-            {
-                "id": f"cy_{name.lower()}",
-                "name": "Morning",
-                "enabled": True,
-                "trigger": {"kind": "time", "at": at},
-                "curve": {
-                    "points": [[20.0, minutes]],
-                    "min_value": 1.0,
-                    "max_value": 60.0,
-                },
-            }
-        ]
+        cycle: dict[str, Any] = {
+            "id": f"cy_{name.lower()}",
+            "name": "Morning",
+            "enabled": True,
+            "trigger": {"kind": "time", "at": at},
+            "curve": {
+                "points": [[20.0, minutes]],
+                "min_value": 1.0,
+                "max_value": 60.0,
+            },
+        }
+        if calendar is not None:
+            cycle["calendar"] = calendar
+        cycles = [cycle]
     return {
         "name": name,
         "valve_entity": valve,
         "order": order,
-        "interval_days": 1,
         "cycles": cycles,
         **extra,
     }
@@ -168,7 +169,7 @@ async def test_scheduled_cycle_runs_to_completion(
     assert events[0].data["zone_name"] == "Pots"
 
     runtime = entry.runtime_data
-    assert runtime.state.last_completed(runtime.zone_ids[0]) == dt_util.now().date()
+    assert runtime.state.last_completed(runtime.zone_ids[0], "cy_pots") == dt_util.now().date()
     assert runtime.state.last_outcome(runtime.zone_ids[0])["result"] == "completed"
 
 
@@ -255,7 +256,7 @@ async def test_second_daily_cycle_runs_after_the_first_completed(
 
     runtime = entry.runtime_data
     zone_id = runtime.zone_ids[0]
-    assert runtime.state.last_completed(zone_id) == dt_util.now().date()
+    assert runtime.state.last_completed(zone_id, "cy_morning") == dt_util.now().date()
 
     await advance(hass, freezer, 56 * 60)  # evening trigger at 06:30
     assert hass.states.get("valve.pots").state == "open"
@@ -268,30 +269,39 @@ async def test_second_daily_cycle_runs_after_the_first_completed(
 async def test_manual_run_does_not_establish_the_watering_day(
     hass: HomeAssistant, freezer: FrozenDateTimeFactory
 ) -> None:
-    """A manual run waters off-cadence: it must not mark the day as watered,
-    nor unblock a scheduled cycle that the cadence still holds back."""
+    """A manual run waters off-calendar: it must not mark the day as watered,
+    nor unblock a scheduled program the calendar still holds back."""
     freezer.move_to(START)
     park = MockValvePark(hass)
     park.add("valve.pots")
     mock_weather(hass)
-    entry = await setup_hub(hass, [zone_data("Pots", "valve.pots", interval_days=3)])
+    entry = await setup_hub(
+        hass,
+        [
+            zone_data(
+                "Pots",
+                "valve.pots",
+                calendar={"mode": "interval", "interval_days": 3},
+            )
+        ],
+    )
 
     runtime = entry.runtime_data
     zone_id = runtime.zone_ids[0]
     yesterday = dt_util.now().date() - timedelta(days=1)
-    runtime.state.set_last_completed(zone_id, yesterday)  # N=3 -> today is NOT_DUE
+    runtime.state.set_last_completed(zone_id, "cy_pots", yesterday)  # interval 3 -> not today
 
     await hass.services.async_call(DOMAIN, "run_zone", {"zone_id": zone_id}, blocking=True)
     await advance(hass, freezer, 5 * 60)
     assert ("open_valve", "valve.pots") in park.commands
-    assert runtime.state.last_completed(zone_id) == yesterday
+    assert runtime.state.last_completed(zone_id, "cy_pots") == yesterday
 
     # The 05:30 scheduled trigger is still held back by the cadence.
     park.commands.clear()
     await advance(hass, freezer, 26 * 60)
     assert ("open_valve", "valve.pots") not in park.commands
-    assert runtime.state.last_outcome(zone_id)["reason_key"] == "not_due"
-    assert runtime.state.last_completed(zone_id) == yesterday
+    assert runtime.state.last_outcome(zone_id)["reason_key"] == "calendar_not_today"
+    assert runtime.state.last_completed(zone_id, "cy_pots") == yesterday
 
 
 async def test_manual_close_interrupts_and_blocks_queue(

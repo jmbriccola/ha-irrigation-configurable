@@ -15,6 +15,7 @@ from datetime import date, datetime, time
 from typing import Any, Self
 
 from . import const
+from .engine.calendar import ProgramCalendar
 from .engine.curves import PRESET_LAWN, PRESET_POTS, Curve, CurveError, CurveKind
 from .engine.model import EngineParams
 from .engine.planner import CycleSpec, ZoneSpec
@@ -119,17 +120,17 @@ class CycleConfig:
     trigger: CycleTrigger
     curve: Curve
     curve_config: dict[str, Any]
-    months_override: frozenset[int] | None = None
+    calendar: ProgramCalendar = field(default_factory=ProgramCalendar.daily)
+    season_months: frozenset[int] | None = None
     soak_max_run_min: int | None = None
     soak_pause_min: int = 0
     volume_safety_timeout_min: int | None = None
-    days: frozenset[int] | None = None
     day_minutes: dict[int, int] = field(default_factory=dict)
 
     @classmethod
     def from_config(cls, config: dict[str, Any], templates: dict[str, Any]) -> Self:
-        months = config.get(const.CONF_MONTHS_OVERRIDE)
-        days_raw = config.get(const.CONF_CYCLE_DAYS)
+        months = config.get(const.CONF_SEASON_MONTHS)
+        calendar_raw = config.get(const.CONF_CALENDAR)
         day_minutes_raw = config.get(const.CONF_CYCLE_DAY_MINUTES, {})
         return cls(
             cycle_id=config[const.CONF_CYCLE_ID],
@@ -138,24 +139,29 @@ class CycleConfig:
             trigger=CycleTrigger.from_config(config[const.CONF_TRIGGER]),
             curve=resolve_curve(config[const.CONF_CURVE], templates),
             curve_config=dict(config[const.CONF_CURVE]),
-            months_override=frozenset(months) if months is not None else None,
+            calendar=(
+                ProgramCalendar.from_config(calendar_raw)
+                if calendar_raw is not None
+                else ProgramCalendar.daily()
+            ),
+            season_months=frozenset(months) if months is not None else None,
             soak_max_run_min=config.get(const.CONF_SOAK_MAX_RUN_MIN),
             soak_pause_min=int(config.get(const.CONF_SOAK_PAUSE_MIN, 0)),
             volume_safety_timeout_min=config.get(const.CONF_VOLUME_SAFETY_TIMEOUT_MIN),
-            days=frozenset(int(d) for d in days_raw) if days_raw is not None else None,
             day_minutes={int(k): int(v) for k, v in day_minutes_raw.items()},
         )
 
-    def to_spec(self, *, enabled: bool) -> CycleSpec:
+    def to_spec(self, *, enabled: bool, last_completed: date | None = None) -> CycleSpec:
         return CycleSpec(
             cycle_id=self.cycle_id,
             enabled=enabled,
             curve=self.curve,
+            calendar=self.calendar,
+            season_months=self.season_months,
+            last_completed=last_completed,
             soak_max_run_min=self.soak_max_run_min,
             soak_pause_min=self.soak_pause_min,
-            months_override=self.months_override,
             volume_safety_timeout_min=self.volume_safety_timeout_min,
-            days=self.days,
             day_minutes=self.day_minutes,
         )
 
@@ -174,17 +180,13 @@ class ZoneConfig:
     area_m2: float | None
     adjustment_pct: float
     order: int
-    interval_days: int
     compatibility_group: str | None
-    season_months: frozenset[int] | None
-    restrictions: CalendarRestrictions | None
     cycles: tuple[CycleConfig, ...]
 
     @classmethod
     def from_subentry(
         cls, subentry_id: str, data: dict[str, Any], *, templates: dict[str, Any]
     ) -> Self:
-        months = data.get(const.CONF_ZONE_SEASON_MONTHS)
         return cls(
             zone_id=subentry_id,
             name=data[const.CONF_ZONE_NAME],
@@ -198,10 +200,7 @@ class ZoneConfig:
             area_m2=data.get(const.CONF_AREA_M2),
             adjustment_pct=float(data.get(const.CONF_ADJUSTMENT_PCT, const.DEFAULT_ADJUSTMENT_PCT)),
             order=int(data.get(const.CONF_ORDER, const.DEFAULT_ORDER)),
-            interval_days=int(data.get(const.CONF_INTERVAL_DAYS, const.DEFAULT_INTERVAL_DAYS)),
             compatibility_group=data.get(const.CONF_COMPATIBILITY_GROUP),
-            season_months=frozenset(months) if months is not None else None,
-            restrictions=restrictions_from_config(data.get(const.CONF_ZONE_RESTRICTIONS)),
             cycles=tuple(
                 CycleConfig.from_config(cycle, templates)
                 for cycle in data.get(const.CONF_CYCLES, [])
@@ -221,7 +220,6 @@ class ZoneConfig:
         *,
         enabled: bool,
         cycles: tuple[CycleSpec, ...],
-        last_completed: date | None,
         suspended_until: datetime | None,
         paused_until: datetime | None,
         skip_today: bool,
@@ -233,10 +231,6 @@ class ZoneConfig:
             enabled=enabled,
             order=self.order,
             adjustment_pct=self.adjustment_pct,
-            interval_days=self.interval_days,
-            season_months=self.season_months,
-            restrictions=self.restrictions,
-            last_completed=last_completed,
             suspended_until=suspended_until,
             paused_until=paused_until,
             skip_today=skip_today,

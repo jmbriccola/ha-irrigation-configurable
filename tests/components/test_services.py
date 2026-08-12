@@ -40,7 +40,7 @@ async def test_run_zone_with_duration_override(
     assert outcome["result"] == "completed"
     assert outcome["duration_min"] == 2
     # Manual runs never advance the cadence counter.
-    assert runtime.state.last_completed(zone_id) is None
+    assert runtime.state.last_completed(zone_id, "cy_pots") is None
 
 
 async def test_manual_run_uses_per_day_minutes(
@@ -475,6 +475,7 @@ async def test_set_program_schedule_writes_days_and_time(
         {
             "zone_id": zone_id,
             "program_id": program_id,
+            "calendar_mode": "weekdays",
             "days": [0, 2, 4],
             "start_kind": "time",
             "start_time": "07:15",
@@ -482,7 +483,7 @@ async def test_set_program_schedule_writes_days_and_time(
         blocking=True,
     )
     cycle = runtime.zones[zone_id].config.cycles[0]
-    assert cycle.days == frozenset({0, 2, 4})
+    assert cycle.calendar.to_config() == {"mode": "weekdays", "days": [0, 2, 4]}
     assert cycle.trigger.kind == "time"
     assert cycle.trigger.at.strftime("%H:%M") == "07:15"
 
@@ -837,13 +838,13 @@ async def test_update_zone_patches_in_place(hass, freezer):
     await hass.services.async_call(
         DOMAIN,
         "update_zone",
-        {"zone_id": zid, "name": "Vasi", "area_m2": 5, "interval_days": 4},
+        {"zone_id": zid, "name": "Vasi", "area_m2": 5, "compatibility_group": "g1"},
         blocking=True,
     )
     zone = runtime.zones[zid].config
     assert zone.name == "Vasi"
     assert zone.area_m2 == 5
-    assert zone.interval_days == 4
+    assert zone.compatibility_group == "g1"
     assert len(zone.cycles) == cycles_before  # programs preserved
 
 
@@ -961,8 +962,6 @@ async def test_set_restrictions(hass, freezer):
         DOMAIN,
         "set_restrictions",
         {
-            "allowed_weekdays": [0, 2, 4],
-            "parity": "odd",
             "forbidden_windows": [{"start": "22:00", "end": "06:00"}],
         },
         blocking=True,
@@ -970,8 +969,6 @@ async def test_set_restrictions(hass, freezer):
     from custom_components.irrigation_maestro.models import HubConfig
 
     hub = HubConfig.from_options(dict(entry.options))
-    assert hub.restrictions.allowed_weekdays == frozenset({0, 2, 4})
-    assert str(hub.restrictions.parity) == "odd"
     assert len(hub.restrictions.forbidden_windows) == 1
 
 

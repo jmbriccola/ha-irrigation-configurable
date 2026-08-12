@@ -10,7 +10,7 @@ from __future__ import annotations
 from typing import Any
 
 from homeassistant.components.number import NumberEntity, NumberMode
-from homeassistant.const import PERCENTAGE, UnitOfTime
+from homeassistant.const import PERCENTAGE
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity import Entity
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
@@ -18,10 +18,8 @@ from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from . import IrrigationConfigEntry
 from .const import (
     CONF_ADJUSTMENT_PCT,
-    CONF_INTERVAL_DAYS,
     CONF_ORDER,
     DEFAULT_ADJUSTMENT_PCT,
-    DEFAULT_INTERVAL_DAYS,
     DEFAULT_ORDER,
 )
 from .entity import MaestroZoneEntity, async_add_zone_entities, async_ensure_hub_device
@@ -40,7 +38,6 @@ async def async_setup_entry(
     def _zone_numbers(zone_id: str) -> list[Entity]:
         return [
             ZoneOrderNumber(runtime, zone_id),
-            ZoneIntervalNumber(runtime, zone_id),
             ZoneAdjustmentNumber(runtime, zone_id),
         ]
 
@@ -82,20 +79,6 @@ class ZoneOrderNumber(ZoneConfigNumber):
 
     def __init__(self, runtime: IrrigationRuntime, zone_id: str) -> None:
         super().__init__(runtime, zone_id, "zone_order")
-
-
-class ZoneIntervalNumber(ZoneConfigNumber):
-    """Cadence: water at most every N days."""
-
-    _attr_native_min_value = 1
-    _attr_native_max_value = 60
-    _attr_native_step = 1
-    _attr_native_unit_of_measurement = UnitOfTime.DAYS
-    _key = CONF_INTERVAL_DAYS
-    _default = DEFAULT_INTERVAL_DAYS
-
-    def __init__(self, runtime: IrrigationRuntime, zone_id: str) -> None:
-        super().__init__(runtime, zone_id, "zone_interval")
 
 
 class ZoneAdjustmentNumber(ZoneConfigNumber):
