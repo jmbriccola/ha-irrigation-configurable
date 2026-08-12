@@ -12,7 +12,7 @@ from custom_components.irrigation_maestro.models import (
     engine_params_from_config,
 )
 from homeassistant import config_entries
-from homeassistant.core import HomeAssistant, ServiceCall
+from homeassistant.core import HomeAssistant
 from homeassistant.data_entry_flow import FlowResultType
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
@@ -163,69 +163,6 @@ async def test_hub_single_instance(hass: HomeAssistant, hub_entry: MockConfigEnt
 # Options flow
 
 
-async def test_options_general(hass: HomeAssistant, hub_entry: MockConfigEntry) -> None:
-    """General section stores entities, delays and parsed groups."""
-    result = await _options_section(hass, hub_entry, "general")
-    result = await hass.config_entries.options.async_configure(
-        result["flow_id"],
-        {
-            const.CONF_WEATHER_ENTITY: "weather.home",
-            const.CONF_MASTER_VALVE: "switch.pump",
-            const.CONF_MASTER_PRE_OPEN_S: 10,
-            const.CONF_MASTER_POST_CLOSE_S: 7,
-            const.CONF_MAX_CONCURRENT: 2,
-            const.CONF_COMPATIBILITY_GROUPS: "front, back",
-        },
-    )
-    assert result["type"] is FlowResultType.CREATE_ENTRY
-
-    options = hub_entry.options
-    assert options[const.CONF_MASTER_VALVE] == "switch.pump"
-    assert options[const.CONF_MASTER_PRE_OPEN_S] == 10
-    assert options[const.CONF_MASTER_POST_CLOSE_S] == 7
-    assert options[const.CONF_MAX_CONCURRENT] == 2
-    assert options[const.CONF_COMPATIBILITY_GROUPS] == ["front", "back"]
-    assert const.CONF_RAIN_SENSOR not in options
-    assert HubConfig.from_options(dict(options)).compatibility_groups == ("front", "back")
-
-
-async def test_options_safety_and_merge(hass: HomeAssistant, hub_entry: MockConfigEntry) -> None:
-    """Safety section round-trips and preserves keys from other sections."""
-    # Populate an unrelated section first.
-    result = await _options_section(hass, hub_entry, "general")
-    await hass.config_entries.options.async_configure(
-        result["flow_id"],
-        {
-            const.CONF_WEATHER_ENTITY: "weather.home",
-            const.CONF_MASTER_VALVE: "switch.pump",
-        },
-    )
-
-    result = await _options_section(hass, hub_entry, "safety")
-    result = await hass.config_entries.options.async_configure(
-        result["flow_id"],
-        {
-            const.CONF_SETTLE_PAUSE_S: 90,
-            const.CONF_SENTINEL_TIME: "13:15:00",
-            const.CONF_SESSION_MAX_MIN: 120,
-        },
-    )
-    assert result["type"] is FlowResultType.CREATE_ENTRY
-
-    options = hub_entry.options
-    assert options[const.CONF_SETTLE_PAUSE_S] == 90
-    assert options[const.CONF_SENTINEL_TIME] == "13:15"
-    assert options[const.CONF_SESSION_MAX_MIN] == 120
-    # Defaults were materialized, optional empty fields were not.
-    assert options[const.CONF_WATCHDOG_MAX_MIN] == const.DEFAULT_WATCHDOG_MAX_MIN
-    assert const.CONF_MUST_FINISH_BY not in options
-    # The general section keys survived the safety save.
-    assert options[const.CONF_MASTER_VALVE] == "switch.pump"
-    hub = HubConfig.from_options(dict(options))
-    assert hub.sentinel_time.hour == 13
-    assert hub.session_max_min == 120
-
-
 async def test_options_engine_roundtrip_and_reset(
     hass: HomeAssistant, hub_entry: MockConfigEntry
 ) -> None:
@@ -278,89 +215,6 @@ async def test_options_engine_invalid_weights(
     assert result["type"] is FlowResultType.FORM
     assert result["errors"] == {const.CONF_TEMP_WEIGHTS: "invalid_temp_weights"}
     assert const.CONF_ENGINE not in hub_entry.options
-
-
-async def test_options_restrictions(hass: HomeAssistant, hub_entry: MockConfigEntry) -> None:
-    """Restrictions constrain hours only; days belong to the program calendar."""
-    result = await _options_section(hass, hub_entry, "restrictions")
-    result = await hass.config_entries.options.async_configure(
-        result["flow_id"],
-        {const.CONF_FORBIDDEN_WINDOWS: "08:00-10:30, 22:00-23:15"},
-    )
-    assert result["type"] is FlowResultType.CREATE_ENTRY
-
-    stored = hub_entry.options[const.CONF_RESTRICTIONS]
-    assert stored[const.CONF_FORBIDDEN_WINDOWS] == [
-        {"start": "08:00", "end": "10:30"},
-        {"start": "22:00", "end": "23:15"},
-    ]
-    assert const.CONF_ALLOWED_WEEKDAYS not in stored
-    assert const.CONF_PARITY not in stored
-
-
-async def test_options_restrictions_invalid_window(
-    hass: HomeAssistant, hub_entry: MockConfigEntry
-) -> None:
-    """A malformed window string is a friendly form error."""
-    result = await _options_section(hass, hub_entry, "restrictions")
-    result = await hass.config_entries.options.async_configure(
-        result["flow_id"],
-        {const.CONF_PARITY: "none", const.CONF_FORBIDDEN_WINDOWS: "8-9"},
-    )
-    assert result["type"] is FlowResultType.FORM
-    assert result["errors"] == {const.CONF_FORBIDDEN_WINDOWS: "invalid_time_window"}
-
-
-async def test_options_notifications(hass: HomeAssistant, hub_entry: MockConfigEntry) -> None:
-    """Notify services are listed dynamically and one event round-trips."""
-
-    async def fake_notify(call: ServiceCall) -> None:
-        return
-
-    hass.services.async_register("notify", "fake_mobile", fake_notify)
-
-    result = await _options_section(hass, hub_entry, "notifications")
-    result = await hass.config_entries.options.async_configure(
-        result["flow_id"], {"event": "completed"}
-    )
-    assert result["type"] is FlowResultType.FORM
-    assert result["step_id"] == "notifications_event"
-    services_selector = _schema_selector(result, const.CONF_NOTIFY_SERVICES)
-    assert "fake_mobile" in services_selector.config["options"]
-
-    result = await hass.config_entries.options.async_configure(
-        result["flow_id"],
-        {
-            const.CONF_NOTIFY_ENABLED: True,
-            const.CONF_NOTIFY_SERVICES: ["fake_mobile"],
-            const.CONF_NOTIFY_PRIORITY: "high",
-        },
-    )
-    assert result["type"] is FlowResultType.CREATE_ENTRY
-    assert hub_entry.options[const.CONF_NOTIFICATIONS]["completed"] == {
-        const.CONF_NOTIFY_ENABLED: True,
-        const.CONF_NOTIFY_SERVICES: ["fake_mobile"],
-        const.CONF_NOTIFY_PRIORITY: "high",
-    }
-
-
-async def test_options_consumption_budget(hass: HomeAssistant, hub_entry: MockConfigEntry) -> None:
-    """Budget section round-trips through the typed hub model."""
-    result = await _options_section(hass, hub_entry, "consumption_budget")
-    result = await hass.config_entries.options.async_configure(
-        result["flow_id"],
-        {
-            const.CONF_BUDGET_LITERS: 5000,
-            const.CONF_BUDGET_ACTION: const.BUDGET_ACTION_REDUCE,
-            const.CONF_BUDGET_REDUCE_PCT: 40,
-        },
-    )
-    assert result["type"] is FlowResultType.CREATE_ENTRY
-
-    hub = HubConfig.from_options(dict(hub_entry.options))
-    assert hub.consumption_budget_liters == 5000
-    assert hub.consumption_action == const.BUDGET_ACTION_REDUCE
-    assert hub.consumption_reduce_pct == 40
 
 
 # ---------------------------------------------------------------------------
@@ -726,3 +580,21 @@ async def test_zone_reconfigure_rename_and_cycle_edit(
     }
     zone = ZoneConfig.from_subentry(subentry_id, data, templates={})
     assert zone.cycles[0].cycle_id == LAWN_CYCLE_ID
+
+
+async def test_options_menu_only_offers_the_weather_engine(
+    hass: HomeAssistant, hub_entry: MockConfigEntry
+) -> None:
+    """Everything else moved to the panel: one editor per setting."""
+    result = await hass.config_entries.options.async_init(hub_entry.entry_id)
+    assert result["type"] is FlowResultType.MENU
+    assert set(result["menu_options"]) == {"engine_advanced"}
+
+
+async def test_first_run_still_works(hass: HomeAssistant) -> None:
+    """The config flow keeps what the panel cannot do before the hub exists."""
+    result = await hass.config_entries.flow.async_init(
+        const.DOMAIN, context={"source": config_entries.SOURCE_USER}
+    )
+    assert result["type"] is FlowResultType.FORM
+    assert result["step_id"] == "user"
