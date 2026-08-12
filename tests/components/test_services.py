@@ -822,3 +822,54 @@ async def test_add_zone_rejects_invalid(hass, freezer):
         await hass.services.async_call(
             DOMAIN, "add_zone", {"name": "X"}, blocking=True, return_response=True
         )
+
+
+async def test_update_zone_patches_in_place(hass, freezer):
+    freezer.move_to(START)
+    park = MockValvePark(hass)
+    park.add("valve.pots")
+    mock_weather(hass)
+    entry = await setup_hub(hass, [zone_data("Pots", "valve.pots")])
+    runtime = entry.runtime_data
+    zid = runtime.zone_ids[0]
+    cycles_before = len(runtime.zones[zid].config.cycles)
+
+    await hass.services.async_call(
+        DOMAIN,
+        "update_zone",
+        {"zone_id": zid, "name": "Vasi", "area_m2": 5, "interval_days": 4},
+        blocking=True,
+    )
+    zone = runtime.zones[zid].config
+    assert zone.name == "Vasi"
+    assert zone.area_m2 == 5
+    assert zone.interval_days == 4
+    assert len(zone.cycles) == cycles_before  # programs preserved
+
+
+async def test_update_zone_unknown(hass, freezer):
+    freezer.move_to(START)
+    park = MockValvePark(hass)
+    park.add("valve.pots")
+    mock_weather(hass)
+    await setup_hub(hass, [zone_data("Pots", "valve.pots")])
+    with pytest.raises(ServiceValidationError):
+        await hass.services.async_call(
+            DOMAIN, "update_zone", {"zone_id": "nope", "name": "X"}, blocking=True
+        )
+
+
+async def test_remove_zone(hass, freezer):
+    freezer.move_to(START)
+    park = MockValvePark(hass)
+    park.add("valve.pots")
+    park.add("valve.b")
+    mock_weather(hass)
+    entry = await setup_hub(hass, [zone_data("Pots", "valve.pots"), zone_data("B", "valve.b")])
+    runtime = entry.runtime_data
+    victim = runtime.zone_ids[0]
+
+    await hass.services.async_call(DOMAIN, "remove_zone", {"zone_id": victim}, blocking=True)
+    await hass.async_block_till_done()
+    assert victim not in runtime.zone_ids
+    assert not any(s.attributes.get("zone_id") == victim for s in hass.states.async_all("sensor"))

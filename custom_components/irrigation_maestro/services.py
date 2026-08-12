@@ -216,6 +216,42 @@ _ADD_ZONE_SCHEMA = vol.Schema(
         vol.Optional(ATTR_ICON): cv.string,
     }
 )
+_UPDATE_ZONE_SCHEMA = vol.Schema(
+    {
+        vol.Required(ATTR_ZONE_ID): cv.string,
+        vol.Optional(ATTR_NAME): cv.string,
+        vol.Optional(ATTR_VALVE_ENTITY): cv.string,
+        vol.Optional(ATTR_AREA_M2): vol.Coerce(float),
+        vol.Optional(ATTR_ICON): cv.string,
+        vol.Optional(ATTR_FLOW_SENSOR): cv.string,
+        vol.Optional(ATTR_NOMINAL_FLOW_LPM): vol.All(vol.Coerce(float), vol.Range(min=0)),
+        vol.Optional(ATTR_FLOW_TOLERANCE_PCT): vol.All(
+            vol.Coerce(float), vol.Range(min=1, max=100)
+        ),
+        vol.Optional(ATTR_ADJUSTMENT_PCT): vol.All(vol.Coerce(int), vol.Range(min=10, max=300)),
+        vol.Optional(ATTR_ORDER): vol.All(vol.Coerce(int), vol.Range(min=1, max=1000)),
+        vol.Optional(ATTR_INTERVAL_DAYS): vol.All(vol.Coerce(int), vol.Range(min=1, max=60)),
+        vol.Optional(ATTR_COMPATIBILITY_GROUP): cv.string,
+        vol.Optional(ATTR_SEASON_MONTHS): [vol.All(vol.Coerce(int), vol.Range(min=1, max=12))],
+    }
+)
+_REMOVE_ZONE_SCHEMA = vol.Schema({vol.Required(ATTR_ZONE_ID): cv.string})
+
+# attr -> zone-data const key, with the coercion already applied by the schema
+_ZONE_PATCH_KEYS: Final = {
+    ATTR_NAME: const.CONF_ZONE_NAME,
+    ATTR_VALVE_ENTITY: const.CONF_VALVE_ENTITY,
+    ATTR_AREA_M2: const.CONF_AREA_M2,
+    ATTR_ICON: const.CONF_ZONE_ICON,
+    ATTR_FLOW_SENSOR: const.CONF_FLOW_SENSOR,
+    ATTR_NOMINAL_FLOW_LPM: const.CONF_NOMINAL_FLOW_LPM,
+    ATTR_FLOW_TOLERANCE_PCT: const.CONF_FLOW_TOLERANCE_PCT,
+    ATTR_ADJUSTMENT_PCT: const.CONF_ADJUSTMENT_PCT,
+    ATTR_ORDER: const.CONF_ORDER,
+    ATTR_INTERVAL_DAYS: const.CONF_INTERVAL_DAYS,
+    ATTR_COMPATIBILITY_GROUP: const.CONF_COMPATIBILITY_GROUP,
+    ATTR_SEASON_MONTHS: const.CONF_ZONE_SEASON_MONTHS,
+}
 
 
 def _default_program(name: str) -> dict[str, Any]:
@@ -687,6 +723,31 @@ async def _async_add_zone(call: ServiceCall) -> ServiceResponse:
     return {"zone_id": subentry.subentry_id}
 
 
+async def _async_update_zone(call: ServiceCall) -> None:
+    hass = call.hass
+    entry = _loaded_entry(hass)
+    runtime = cast(IrrigationRuntime, entry.runtime_data)
+    zone_id: str = call.data[ATTR_ZONE_ID]
+    _require_zone(runtime, zone_id)
+    subentry = entry.subentries[zone_id]
+    data = dict(subentry.data)  # preserves CONF_CYCLES + untouched keys
+    for attr, conf_key in _ZONE_PATCH_KEYS.items():
+        if attr in call.data:
+            data[conf_key] = call.data[attr]
+    _validate_zone(data, runtime.hub.curve_templates)
+    title = call.data.get(ATTR_NAME, subentry.title)
+    hass.config_entries.async_update_subentry(entry, subentry, data=data, title=title)
+
+
+async def _async_remove_zone(call: ServiceCall) -> None:
+    hass = call.hass
+    entry = _loaded_entry(hass)
+    runtime = cast(IrrigationRuntime, entry.runtime_data)
+    zone_id: str = call.data[ATTR_ZONE_ID]
+    _require_zone(runtime, zone_id)
+    hass.config_entries.async_remove_subentry(entry, zone_id)
+
+
 async def _async_export_config(call: ServiceCall) -> ServiceResponse:
     entry = _loaded_entry(call.hass)
     payload = {
@@ -815,4 +876,10 @@ def async_setup_services(hass: HomeAssistant) -> None:
         _async_add_zone,
         _ADD_ZONE_SCHEMA,
         supports_response=SupportsResponse.OPTIONAL,
+    )
+    hass.services.async_register(
+        DOMAIN, SERVICE_UPDATE_ZONE, _async_update_zone, _UPDATE_ZONE_SCHEMA
+    )
+    hass.services.async_register(
+        DOMAIN, SERVICE_REMOVE_ZONE, _async_remove_zone, _REMOVE_ZONE_SCHEMA
     )
