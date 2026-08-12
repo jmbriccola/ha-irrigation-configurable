@@ -745,6 +745,9 @@
     },
     "invalid_program": {
       "message": "The program is not valid ({error})."
+    },
+    "invalid_zone": {
+      "message": "The zone is not valid ({error})."
     }
   },
   "selector": {

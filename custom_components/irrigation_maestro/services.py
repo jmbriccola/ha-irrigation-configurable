@@ -9,11 +9,12 @@ from __future__ import annotations
 
 import json
 from collections.abc import Callable
+from types import MappingProxyType
 from typing import Any, Final, cast
 from uuid import uuid4
 
 import voluptuous as vol
-from homeassistant.config_entries import ConfigEntry, ConfigEntryState
+from homeassistant.config_entries import ConfigEntry, ConfigEntryState, ConfigSubentry
 from homeassistant.core import (
     HomeAssistant,
     ServiceCall,
@@ -50,6 +51,12 @@ SERVICE_SET_PROGRAM_MINUTES: Final = "set_program_minutes"
 SERVICE_ADD_PROGRAM: Final = "add_program"
 SERVICE_REMOVE_PROGRAM: Final = "remove_program"
 SERVICE_RENAME_PROGRAM: Final = "rename_program"
+SERVICE_ADD_ZONE: Final = "add_zone"
+SERVICE_UPDATE_ZONE: Final = "update_zone"
+SERVICE_REMOVE_ZONE: Final = "remove_zone"
+SERVICE_SET_WEATHER_SOURCES: Final = "set_weather_sources"
+SERVICE_SET_CONSUMPTION_BUDGET: Final = "set_consumption_budget"
+SERVICE_SET_RESTRICTIONS: Final = "set_restrictions"
 
 ATTR_ZONE_ID: Final = "zone_id"
 ATTR_CYCLE_ID: Final = "cycle_id"
@@ -73,6 +80,29 @@ ATTR_MINUTES: Final = "minutes"
 ATTR_DAY_MINUTES: Final = "day_minutes"
 ATTR_NAME: Final = "name"
 ATTR_COPY_FROM: Final = "copy_from"
+ATTR_VALVE_ENTITY: Final = "valve_entity"
+ATTR_AREA_M2: Final = "area_m2"
+ATTR_ICON: Final = "icon"
+ATTR_FLOW_SENSOR: Final = "flow_sensor"
+ATTR_NOMINAL_FLOW_LPM: Final = "nominal_flow_lpm"
+ATTR_FLOW_TOLERANCE_PCT: Final = "flow_tolerance_pct"
+ATTR_ADJUSTMENT_PCT: Final = "adjustment_pct"
+ATTR_INTERVAL_DAYS: Final = "interval_days"
+ATTR_COMPATIBILITY_GROUP: Final = "compatibility_group"
+ATTR_SEASON_MONTHS: Final = "season_months"
+ATTR_WEATHER_ENTITY: Final = "weather_entity"
+ATTR_RAIN_SENSOR: Final = "rain_sensor"
+ATTR_OUTDOOR_TEMP_SENSOR: Final = "outdoor_temp_sensor"
+ATTR_LINE_FLOW_SENSOR: Final = "line_flow_sensor"
+ATTR_MASTER_VALVE: Final = "master_valve"
+ATTR_LITERS_PER_MONTH: Final = "liters_per_month"
+ATTR_ACTION: Final = "action"
+ATTR_REDUCE_PCT: Final = "reduce_pct"
+ATTR_ALLOWED_WEEKDAYS: Final = "allowed_weekdays"
+ATTR_PARITY: Final = "parity"
+ATTR_FORBIDDEN_WINDOWS: Final = "forbidden_windows"
+ATTR_WINDOW_START: Final = "start"
+ATTR_WINDOW_END: Final = "end"
 
 _DATA_SERVICES_REGISTERED: Final = "services_registered"
 
@@ -176,6 +206,14 @@ _RENAME_PROGRAM_SCHEMA = vol.Schema(
         vol.Required(ATTR_ZONE_ID): cv.string,
         vol.Required(ATTR_PROGRAM_ID): cv.string,
         vol.Required(ATTR_NAME): cv.string,
+    }
+)
+_ADD_ZONE_SCHEMA = vol.Schema(
+    {
+        vol.Required(ATTR_NAME): cv.string,
+        vol.Required(ATTR_VALVE_ENTITY): cv.string,
+        vol.Optional(ATTR_AREA_M2): vol.Coerce(float),
+        vol.Optional(ATTR_ICON): cv.string,
     }
 )
 
@@ -306,6 +344,18 @@ def _validate_program(program: dict[str, Any], templates: dict[str, Any]) -> Non
         raise ServiceValidationError(
             translation_domain=DOMAIN,
             translation_key="invalid_program",
+            translation_placeholders={"error": str(err)},
+        ) from err
+
+
+def _validate_zone(data: dict[str, Any], templates: dict[str, Any]) -> None:
+    """Round-trip a zone dict through the typed model before persisting."""
+    try:
+        ZoneConfig.from_subentry("probe", data, templates=templates)
+    except (CurveError, ValueError, KeyError, TypeError) as err:
+        raise ServiceValidationError(
+            translation_domain=DOMAIN,
+            translation_key="invalid_zone",
             translation_placeholders={"error": str(err)},
         ) from err
 
@@ -610,6 +660,33 @@ async def _async_rename_program(call: ServiceCall) -> None:
     _update_cycle(hass, entry, zone_id, program_id, mutate)
 
 
+async def _async_add_zone(call: ServiceCall) -> ServiceResponse:
+    hass = call.hass
+    entry = _loaded_entry(hass)
+    runtime = cast(IrrigationRuntime, entry.runtime_data)
+    name: str = call.data[ATTR_NAME]
+    data: dict[str, Any] = {
+        const.CONF_ZONE_NAME: name,
+        const.CONF_VALVE_ENTITY: call.data[ATTR_VALVE_ENTITY],
+        const.CONF_CYCLES: [_default_program(name)],
+    }
+    if ATTR_AREA_M2 in call.data:
+        data[const.CONF_AREA_M2] = float(call.data[ATTR_AREA_M2])
+    if ATTR_ICON in call.data:
+        data[const.CONF_ZONE_ICON] = call.data[ATTR_ICON]
+
+    _validate_zone(data, runtime.hub.curve_templates)
+
+    subentry = ConfigSubentry(
+        subentry_type=SUBENTRY_TYPE_ZONE,
+        data=MappingProxyType(data),
+        title=name,
+        unique_id=None,
+    )
+    hass.config_entries.async_add_subentry(entry, subentry)
+    return {"zone_id": subentry.subentry_id}
+
+
 async def _async_export_config(call: ServiceCall) -> ServiceResponse:
     entry = _loaded_entry(call.hass)
     payload = {
@@ -731,4 +808,11 @@ def async_setup_services(hass: HomeAssistant) -> None:
     )
     hass.services.async_register(
         DOMAIN, SERVICE_RENAME_PROGRAM, _async_rename_program, _RENAME_PROGRAM_SCHEMA
+    )
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_ADD_ZONE,
+        _async_add_zone,
+        _ADD_ZONE_SCHEMA,
+        supports_response=SupportsResponse.OPTIONAL,
     )

@@ -776,3 +776,49 @@ async def test_rename_program(hass: HomeAssistant, freezer: FrozenDateTimeFactor
         blocking=True,
     )
     assert runtime.zones[zone_id].config.cycle(pid).name == "Alba"
+
+
+async def test_add_zone_creates_zone_in_place(hass, freezer):
+    freezer.move_to(START)
+    park = MockValvePark(hass)
+    park.add("valve.pots")
+    park.add("valve.newzone")
+    mock_weather(hass)
+    entry = await setup_hub(hass, [zone_data("Pots", "valve.pots")])
+    runtime = entry.runtime_data
+    before = set(runtime.zone_ids)
+
+    resp = await hass.services.async_call(
+        DOMAIN,
+        "add_zone",
+        {"name": "Aiuole", "valve_entity": "valve.newzone", "area_m2": 12},
+        blocking=True,
+        return_response=True,
+    )
+    await hass.async_block_till_done()
+    new_id = resp["zone_id"]
+    assert new_id not in before
+    assert new_id in runtime.zone_ids
+    zone = runtime.zones[new_id].config
+    assert zone.name == "Aiuole"
+    assert zone.valve_entity == "valve.newzone"
+    assert len(zone.cycles) == 1  # seeded default program
+    # entities reconciled in place (no reload): a zone_state sensor exists
+    assert any(s.attributes.get("zone_id") == new_id for s in hass.states.async_all("sensor"))
+
+
+async def test_add_zone_rejects_invalid(hass, freezer):
+    freezer.move_to(START)
+    park = MockValvePark(hass)
+    park.add("valve.pots")
+    mock_weather(hass)
+    await setup_hub(hass, [zone_data("Pots", "valve.pots")])
+    with pytest.raises(vol.Invalid):
+        # missing required valve_entity -> schema validation rejects before
+        # the handler ever runs (same pattern as
+        # test_set_simple_curve_rejects_out_of_range: MultipleInvalid is
+        # raised by HA's service registry, not wrapped as
+        # ServiceValidationError).
+        await hass.services.async_call(
+            DOMAIN, "add_zone", {"name": "X"}, blocking=True, return_response=True
+        )
