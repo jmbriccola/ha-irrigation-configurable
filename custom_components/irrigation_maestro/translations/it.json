@@ -816,6 +816,18 @@
     "migration_day_minutes_dropped": {
       "title": "I minuti di irrigazione per giorno sono stati eliminati per alcuni programmi",
       "description": "Questi programmi avevano minuti di irrigazione per singolo giorno, ma la loro curva a 25 °C irriga per zero minuti, quindi i minuti non potevano essere espressi come percentuale di essa e sono stati eliminati. Imposta la curva del programma, poi imposta di nuovo i minuti per giorno: {items}."
+    },
+    "notifications_enabled_without_target": {
+      "title": "Notifiche abilitate senza destinatario",
+      "description": "Questi eventi sono abilitati ma non hanno nessun destinatario notify, quindi sembrano configurati e non mandano nulla: {events}. Apri Irrigazione → Impostazioni → Notifiche e scegli un destinatario, oppure disabilitali."
+    },
+    "notifications_silent": {
+      "title": "Irrigation Maestro non ti avviserà",
+      "description": "Nessuno degli eventi che un impianto di irrigazione non dovrebbe mai perdere — guasto di una valvola, anomalia di portata, irrigazione non eseguita, ciclo interrotto — raggiunge qualcuno. Se il watchdog chiude d'autorità una valvola o un ciclo non parte, nessuno lo saprà. Apri Irrigazione → Impostazioni → Notifiche per configurarle."
+    },
+    "notify_target_missing": {
+      "title": "Destinatario delle notifiche non più esistente",
+      "description": "Il servizio notify.{service} è configurato per l'evento \"{event}\" ma non esiste più, quindi quell'avviso si sta perdendo. Apri Irrigazione → Impostazioni → Notifiche e scegli un destinatario esistente."
     }
   },
   "exceptions": {

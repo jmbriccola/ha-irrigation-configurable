@@ -28,6 +28,8 @@ from custom_components.irrigation_maestro.notify import (
 from homeassistant.core import HomeAssistant, ServiceCall
 from homeassistant.helpers import issue_registry as ir
 
+from .test_session import setup_hub, zone_data
+
 
 def test_the_groups_partition_every_event() -> None:
     grouped = [event for events in EVENT_GROUPS.values() for event in events]
@@ -189,3 +191,58 @@ async def test_a_disabled_event_never_sends(hass: HomeAssistant, services: list[
     await notifier.async_notify(EVENT_WATCHDOG, title="t", message="m")
     await hass.async_block_till_done()
     assert calls == []
+
+
+async def test_a_hub_with_no_notification_config_reports_being_mute(
+    hass: HomeAssistant,
+) -> None:
+    await setup_hub(hass, [zone_data("Pots", "valve.pots")])
+    registry = ir.async_get(hass)
+    assert registry.async_get_issue(DOMAIN, "notifications_silent") is not None
+
+
+async def test_the_field_install_shape_raises_the_enabled_without_target_issue(
+    hass: HomeAssistant,
+) -> None:
+    await setup_hub(
+        hass,
+        [zone_data("Pots", "valve.pots")],
+        {"notifications": {"interrupted": {"enabled": True, "services": []}}},
+    )
+    registry = ir.async_get(hass)
+    issue = registry.async_get_issue(DOMAIN, "notifications_enabled_without_target")
+    assert issue is not None
+    assert issue.translation_placeholders is not None
+    assert issue.translation_placeholders["events"] == "interrupted"
+
+
+async def test_covering_the_essential_events_withdraws_both_issues(hass: HomeAssistant) -> None:
+    await setup_hub(hass, [zone_data("Pots", "valve.pots")])
+    registry = ir.async_get(hass)
+    assert registry.async_get_issue(DOMAIN, "notifications_silent") is not None
+
+    await hass.services.async_call(
+        DOMAIN,
+        "set_notifications",
+        {
+            "events": ["watchdog", "anomaly", "sentinel", "interrupted"],
+            "enabled": True,
+            "services": ["phone"],
+        },
+        blocking=True,
+    )
+    await hass.async_block_till_done()
+    assert registry.async_get_issue(DOMAIN, "notifications_silent") is None
+    assert registry.async_get_issue(DOMAIN, "notifications_enabled_without_target") is None
+
+
+async def test_covering_only_some_essential_events_is_not_reported_as_mute(
+    hass: HomeAssistant,
+) -> None:
+    await setup_hub(
+        hass,
+        [zone_data("Pots", "valve.pots")],
+        {"notifications": {"watchdog": {"enabled": True, "services": ["phone"]}}},
+    )
+    registry = ir.async_get(hass)
+    assert registry.async_get_issue(DOMAIN, "notifications_silent") is None
