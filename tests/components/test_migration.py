@@ -396,3 +396,29 @@ class TestPerDayMinutesConversion:
         assert "day_minutes" not in cycle
         assert "day_intensity_pct" not in cycle
         assert [note.kind for note in notes] == ["day_minutes_dropped"]
+
+    def test_day_minutes_without_a_curve_key_does_not_raise(self) -> None:
+        """M4: a program carrying day_minutes but no curve key at all must
+        not crash the migration with a KeyError -- it should be treated the
+        same as a curve worth zero at the reference: reported, not invented."""
+        zone = {
+            "name": "Pots",
+            "valve_entity": "valve.pots",
+            "cycles": [{"id": "c1", "name": "Morning", "day_minutes": {"0": 30}}],
+        }
+        data, notes = migrate_zone_v2_to_v3(zone, {})
+        cycle = data["cycles"][0]
+        assert "day_minutes" not in cycle
+        assert "day_intensity_pct" not in cycle
+        assert [note.kind for note in notes] == ["day_minutes_dropped"]
+
+    def test_unresolvable_template_does_not_orphan_day_minutes(self) -> None:
+        """M4: the unresolvable-template branch used to `continue` before the
+        day_minutes pop, permanently stranding that legacy key on exactly the
+        programs that already needed a repair issue. It must be gone from the
+        migrated cycle regardless of whether the curve resolved."""
+        data, notes = migrate_zone_v2_to_v3(self._zone({"template": "gone"}, {"0": 30}), {})
+        cycle = data["cycles"][0]
+        assert "day_minutes" not in cycle
+        assert "day_intensity_pct" not in cycle
+        assert {note.kind for note in notes} == {"curve_template_missing", "day_minutes_dropped"}

@@ -160,6 +160,11 @@ def migrate_zone_v2_to_v3(
     for raw_cycle in zone.get(const.CONF_CYCLES, []):
         cycle = dict(raw_cycle)
         name = str(cycle.get(const.CONF_CYCLE_NAME, ""))
+        # Popped up front, unconditionally: a cycle with no curve key at all,
+        # or one whose template reference cannot be resolved below, must not
+        # orphan this legacy key on exactly the program that already needs
+        # attention.
+        day_minutes = cycle.pop(const.CONF_CYCLE_DAY_MINUTES, None)
         curve = dict(cycle.get(const.CONF_CURVE, {}))
         if const.CONF_CURVE_TEMPLATE in curve:
             try:
@@ -174,18 +179,20 @@ def migrate_zone_v2_to_v3(
                         {"template": curve[const.CONF_CURVE_TEMPLATE]},
                     )
                 )
-                cycles.append(cycle)
-                continue
-            cycle[const.CONF_CURVE] = {
-                const.CONF_CURVE_POINTS: [[temp, value] for temp, value in resolved.points],
-                const.CONF_CURVE_MIN: resolved.min_value,
-                const.CONF_CURVE_MAX: resolved.max_value,
-                const.CONF_CURVE_KIND: str(resolved.kind),
-            }
+            else:
+                cycle[const.CONF_CURVE] = {
+                    const.CONF_CURVE_POINTS: [[temp, value] for temp, value in resolved.points],
+                    const.CONF_CURVE_MIN: resolved.min_value,
+                    const.CONF_CURVE_MAX: resolved.max_value,
+                    const.CONF_CURVE_KIND: str(resolved.kind),
+                }
 
-        day_minutes = cycle.pop(const.CONF_CYCLE_DAY_MINUTES, None)
         if day_minutes:
-            points = cycle[const.CONF_CURVE].get(const.CONF_CURVE_POINTS)
+            # .get(..., {}) rather than cycle[CONF_CURVE]: a cycle can reach
+            # here with no curve key (nothing above ever set one) or with an
+            # unresolved template (no CONF_CURVE_POINTS in it either) -- both
+            # must fall through to "nothing to scale into" below, not raise.
+            points = cycle.get(const.CONF_CURVE, {}).get(const.CONF_CURVE_POINTS)
             reference = (
                 interpolate([(float(t), float(v)) for t, v in points], const.CURVE_REFERENCE_TEMP_C)
                 if points
