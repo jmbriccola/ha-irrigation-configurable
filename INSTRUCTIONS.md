@@ -23,7 +23,9 @@ card) day to day. For concepts and formulas see the [README](README.md).
      the first zone of each session and closed after the last.
 
 The hub is created with sensible defaults; everything else lives in the
-hub's **Configure** menu (options) and in the zones you add next.
+**Irrigazione** panel's settings (§6) and in the zones you add next — the
+hub's **Configure** menu only holds the weather engine's advanced
+parameters (§3).
 
 ## 2. Add zones
 
@@ -51,26 +53,20 @@ service) — there is deliberately no drag-and-drop in the panel.
 
 ## 3. Hub options (Configure)
 
-- **General**: the entities from step 1, master valve pre/post delays,
-  **max concurrent zones** (keep 1 unless your pressure allows more — then
-  assign zones to a shared *compatibility group*), compatibility groups.
-- **Safety & timing**: settle pause between zones, manual-stop block window,
-  watchdog maximum, open/close/switch confirmation windows, wait-for-free
-  timeout, startup valve timeout, sentinel time, optional session limits
-  (max minutes and/or must-finish-by).
-- **Engine (advanced)**: every weight and threshold of the decision engine,
-  with a **reset to defaults** switch. Season months live here too.
-- **Restrictions** (watering ordinances): allowed weekdays, odd/even day of
-  month, forbidden time windows (`08:00-10:30, 22:00-06:00`). Zones can
-  override them individually. Queued work slides to the first allowed slot;
-  a running cycle is truncated rather than allowed to overrun into a window.
-- **Notifications**: per event type (completed, skipped, interrupted,
-  cancelled, anomaly, watchdog, sentinel, session overrun, consumption
-  budget) choose enabled, target `notify.*` services and priority. Skips
-  sharing a reason produce **one** aggregated message.
-- **Consumption budget**: liters per month and the action on exceeding it —
-  notify only, reduce durations by a percentage, or suspend until the next
-  month.
+*Settings → Devices & services → Irrigation Maestro → Configure* opens onto
+a single section now:
+
+- **Engine (advanced)**: every weight and threshold of the weather decision
+  engine, with a **reset to defaults** switch. Season months, the
+  stale-weather threshold and its fail-open/fail-closed policy live here
+  too — it stays a config-flow step because it is field-validated and
+  deliberately out of the dashboard's reach.
+
+General settings (master valve pre/post delays, max concurrent zones,
+compatibility groups), safety & timing, restrictions, notifications and the
+consumption budget all moved to the panel's **⚙️ Impostazioni** (§6) — this
+page no longer offers them. The weather entity and its sensors, set once
+during initial hub setup above, are edited from there too from then on.
 
 ## 4. Day-to-day use
 
@@ -141,17 +137,28 @@ hub settings, all in one place.
    %, order, watering interval, season-month override and compatibility
    group — only the fields you change are updated. A **🗑 Elimina zona**
    button (with a confirmation prompt) removes the zone.
-6. **⚙️ Impostazioni**, in the header, opens three independently-saved
-   sections: **Weather & sensors** (weather entity, rain/outdoor-temperature/
-   line-flow sensors, master valve), **Consumption budget** (liters per
-   month and the action on exceeding it — notify, reduce, suspend) and
-   **Calendar restrictions** (allowed weekdays, odd/even parity, forbidden
-   time windows) — each with its own Save button.
+6. **⚙️ Impostazioni**, in the header, holds the everyday hub settings, each
+   saved independently: **Weather & sensors** (weather entity, rain/
+   outdoor-temperature/line-flow sensors, master valve), **Consumption
+   budget** (liters per month and the action on exceeding it — notify,
+   reduce, suspend), **Calendar restrictions** (allowed weekdays, odd/even
+   parity, forbidden time windows) and **Notifications** (per event type —
+   completed, skipped, interrupted, cancelled, anomaly, watchdog, sentinel,
+   session overrun, consumption budget — enabled, target `notify.*` service
+   and priority; skips sharing a reason produce one aggregated message).
+   Two collapsed **Advanced** drawers hold the rest: **session and safety**
+   (max session length, must-finish-by, wait-for-free-valves, block window
+   after a manual stop, settle pause between zones, sentinel time) and
+   **valves and concurrency** (open/close/switch confirmation windows,
+   startup close timeout, watchdog maximum, max concurrent zones and
+   compatibility groups, master valve pre-open/post-close delays).
 
-Expert parameters (engine weights/thresholds, safety timings, notification
-routing — §3 above) aren't in the panel; they stay in the hub's **Configure**
-menu (the config flow), which also remains the way to do the **initial hub
-setup**. Zones and programs, though, are created and edited from the panel
+Expert parameters — the weather engine's weights and thresholds (§3 above)
+— aren't in the panel; they stay in the hub's **Configure** menu (the
+config flow), which also remains the way to do the **initial hub setup**.
+Everything else "Configure" used to hold, safety timings and notification
+routing included, is an ordinary panel setting now (point 6 above), not a
+config-flow step. Zones and programs are created and edited from the panel
 only — the config flow has no zone step, so there is nothing to keep in
 sync.
 

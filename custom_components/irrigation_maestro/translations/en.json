@@ -878,77 +878,11 @@
         "12": "December"
       }
     },
-    "weekday": {
-      "options": {
-        "0": "Monday",
-        "1": "Tuesday",
-        "2": "Wednesday",
-        "3": "Thursday",
-        "4": "Friday",
-        "5": "Saturday",
-        "6": "Sunday"
-      }
-    },
     "stale_weather_policy": {
       "options": {
         "fail_open": "Water anyway (fail open)",
         "fail_closed": "Skip watering (fail closed)"
       }
-    },
-    "notify_event": {
-      "options": {
-        "completed": "Program completed",
-        "skipped": "Program skipped",
-        "interrupted": "Program interrupted",
-        "cancelled": "Program cancelled",
-        "anomaly": "Anomaly",
-        "watchdog": "Watchdog intervention",
-        "sentinel": "Sentinel: watering did not run",
-        "session_overrun": "Session time limit reached",
-        "consumption_budget": "Consumption budget exceeded"
-      }
-    },
-    "notify_priority": {
-      "options": {
-        "normal": "Normal",
-        "high": "High"
-      }
-    },
-    "trigger_kind": {
-      "options": {
-        "sun": "Sun event",
-        "time": "Fixed time"
-      }
-    },
-    "sun_event": {
-      "options": {
-        "sunrise": "Sunrise",
-        "sunset": "Sunset"
-      }
-    },
-    "curve_kind": {
-      "options": {
-        "duration": "Duration (minutes)",
-        "volume": "Volume (liters)"
-      }
-    },
-    "budget_action": {
-      "options": {
-        "notify": "Notify only",
-        "reduce": "Reduce watering",
-        "suspend": "Suspend watering"
-      }
-    },
-    "curve_source": {
-      "options": {
-        "preset_pots": "Preset: potted plants",
-        "preset_lawn": "Preset: lawn",
-        "custom": "Custom curve",
-        "copy": "Copy from an existing program"
-      }
-    },
-    "copy_source": {
-      "options": {}
     }
   }
 }

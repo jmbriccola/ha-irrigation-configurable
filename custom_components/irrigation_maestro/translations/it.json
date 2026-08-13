@@ -878,77 +878,11 @@
         "12": "Dicembre"
       }
     },
-    "weekday": {
-      "options": {
-        "0": "Lunedì",
-        "1": "Martedì",
-        "2": "Mercoledì",
-        "3": "Giovedì",
-        "4": "Venerdì",
-        "5": "Sabato",
-        "6": "Domenica"
-      }
-    },
     "stale_weather_policy": {
       "options": {
         "fail_open": "Irriga comunque (fail open)",
         "fail_closed": "Salta l'irrigazione (fail closed)"
       }
-    },
-    "notify_event": {
-      "options": {
-        "completed": "Programma completato",
-        "skipped": "Programma saltato",
-        "interrupted": "Programma interrotto",
-        "cancelled": "Programma annullato",
-        "anomaly": "Anomalia",
-        "watchdog": "Intervento del watchdog",
-        "sentinel": "Sentinella: irrigazione non eseguita",
-        "session_overrun": "Limite di durata della sessione raggiunto",
-        "consumption_budget": "Budget di consumo superato"
-      }
-    },
-    "notify_priority": {
-      "options": {
-        "normal": "Normale",
-        "high": "Alta"
-      }
-    },
-    "trigger_kind": {
-      "options": {
-        "sun": "Evento solare",
-        "time": "Orario fisso"
-      }
-    },
-    "sun_event": {
-      "options": {
-        "sunrise": "Alba",
-        "sunset": "Tramonto"
-      }
-    },
-    "curve_kind": {
-      "options": {
-        "duration": "Durata (minuti)",
-        "volume": "Volume (litri)"
-      }
-    },
-    "budget_action": {
-      "options": {
-        "notify": "Solo notifica",
-        "reduce": "Riduci l'irrigazione",
-        "suspend": "Sospendi l'irrigazione"
-      }
-    },
-    "curve_source": {
-      "options": {
-        "preset_pots": "Preset: piante in vaso",
-        "preset_lawn": "Preset: prato",
-        "custom": "Curva personalizzata",
-        "copy": "Copia da un programma esistente"
-      }
-    },
-    "copy_source": {
-      "options": {}
     }
   }
 }

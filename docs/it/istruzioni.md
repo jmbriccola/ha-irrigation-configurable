@@ -24,8 +24,10 @@ e la [guida rapida](guida-rapida.md).
    - **Valvola master / pompa** (opzionale) — `valve` o `switch` aperta prima
      della prima zona di ogni sessione e chiusa dopo l'ultima.
 
-L'hub nasce con default sensati; tutto il resto è nel menu **Configura**
-dell'hub (opzioni) e nelle zone che aggiungerai.
+L'hub nasce con default sensati; tutto il resto è nelle impostazioni del
+pannello **Irrigazione** (§6) e nelle zone che aggiungerai — il menu
+**Configura** dell'hub contiene solo i parametri avanzati del motore meteo
+(§3).
 
 ## 2. Aggiungere le zone
 
@@ -55,29 +57,21 @@ per sviluppatori → Azioni; vedi l'elenco dei servizi nel README).
 
 ## 3. Opzioni dell'hub (Configura)
 
-- **Generale**: le entità del passo 1, ritardi pre/post della master,
-  **zone simultanee massime** (lascia 1 se la pressione non consente di
-  più — altrimenti assegna le zone a un *gruppo di compatibilità* comune).
-- **Sicurezza e tempi**: pausa di assestamento tra zone, finestra di blocco
-  post-stop manuale, massimo del watchdog, finestre di conferma
-  apertura/chiusura/switch, timeout attesa-valvole-libere, timeout valvole
-  all'avvio, orario della sentinella, limiti di sessione opzionali (durata
-  massima e/o orario must-finish-by).
-- **Motore (avanzate)**: ogni peso e soglia del motore decisionale, con
-  interruttore di **reset ai default**. Qui vivono anche i mesi di stagione.
-- **Restrizioni** (ordinanze idriche): giorni della settimana consentiti,
-  schema giorni pari/dispari, finestre orarie vietate (`08:00-10:30,
-  22:00-06:00`). Le zone possono avere override individuali. La coda slitta
-  al primo slot consentito; un ciclo in corso viene troncato invece di
-  sconfinare nella finestra vietata.
-- **Notifiche**: per ogni tipo di evento (completato, saltato, interrotto,
-  annullato, anomalia, watchdog, sentinella, sforamento sessione, budget
-  consumo) scegli abilitazione, servizi `notify.*` di destinazione e
-  priorità. I salti con lo stesso motivo producono **una sola** notifica
-  aggregata.
-- **Budget di consumo**: litri al mese e azione al superamento — solo
-  notifica, riduzione percentuale delle durate, o sospensione fino al mese
-  successivo.
+*Impostazioni → Dispositivi e servizi → Irrigation Maestro → Configura* ora
+apre direttamente su un'unica sezione:
+
+- **Motore (avanzate)**: ogni peso e soglia del motore decisionale meteo,
+  con interruttore di **reset ai default**. Qui vivono anche i mesi di
+  stagione, la soglia di meteo scaduto e la relativa policy fail-open/
+  fail-closed — resta un passo del config flow perché è validato sui campi
+  e volutamente fuori dalla portata del pannello.
+
+Le impostazioni generali (ritardi pre/post della master, zone simultanee
+massime, gruppi di compatibilità), sicurezza e tempi, restrizioni, notifiche
+e budget di consumo sono passate tutte al pannello, in
+**⚙️ Impostazioni** (§6) — questa pagina non le offre più. Anche l'entità
+meteo e i suoi sensori, impostati una volta nella configurazione iniziale
+qui sopra, da quel momento in poi si modificano da lì.
 
 ## 4. Uso quotidiano
 
@@ -153,20 +147,34 @@ e le impostazioni quotidiane dell'hub, tutto in un unico posto.
    irrigazione, deroga ai mesi di stagione e gruppo di compatibilità — si
    aggiornano solo i campi che modifichi. Il pulsante **🗑 Elimina zona**
    (con richiesta di conferma) rimuove la zona.
-6. **⚙️ Impostazioni**, nell'intestazione, apre tre sezioni salvate
-   indipendentemente: **Meteo e sensori** (entità meteo, sensori
-   pioggia/temperatura esterna/portata di linea, valvola principale),
-   **Budget di consumo** (litri al mese e azione al superamento — notifica,
-   riduci, sospendi) e **Restrizioni calendario** (giorni consentiti,
-   parità pari/dispari, finestre orarie vietate) — ognuna con il proprio
-   pulsante Salva.
+6. **⚙️ Impostazioni**, nell'intestazione, contiene le impostazioni
+   quotidiane dell'hub, ciascuna salvata per conto proprio: **Meteo e
+   sensori** (entità meteo, sensori pioggia/temperatura esterna/portata di
+   linea, valvola principale), **Budget di consumo** (litri al mese e
+   azione al superamento — notifica, riduci, sospendi), **Restrizioni
+   calendario** (giorni consentiti, parità pari/dispari, finestre orarie
+   vietate) e **Notifiche** (per ogni tipo di evento — completato, saltato,
+   interrotto, annullato, anomalia, watchdog, sentinella, sforamento
+   sessione, budget di consumo — abilitazione, servizio `notify.*` di
+   destinazione e priorità; i salti con lo stesso motivo producono una sola
+   notifica aggregata). Due cassetti **Avanzate**, chiusi per default,
+   contengono il resto: **sessione e sicurezza** (durata massima di
+   sessione, orario must-finish-by, attesa valvole libere, finestra di
+   blocco dopo uno stop manuale, pausa di assestamento tra zone, orario
+   della sentinella) e **valvole e concorrenza** (finestre di conferma
+   apertura/chiusura/switch, timeout di chiusura all'avvio, massimo del
+   watchdog, zone simultanee massime e gruppi di compatibilità, ritardi
+   pre-apertura/post-chiusura della valvola master).
 
-I parametri avanzati (pesi/soglie del motore, tempistiche di sicurezza,
-instradamento delle notifiche — §3 sopra) non sono nel pannello: restano nel
-menu **Configura** dell'hub (il config flow), che resta anche il modo per
-fare la **configurazione iniziale** dell'hub. Le zone e i programmi, invece,
-si creano e si modificano solo dal pannello — il config flow non ha più un
-passo per le zone, quindi non c'è nulla da tenere sincronizzato.
+I parametri esperti — pesi e soglie del motore meteo (§3 sopra) — non sono
+nel pannello: restano nel menu **Configura** dell'hub (il config flow), che
+resta anche il modo per fare la **configurazione iniziale** dell'hub. Tutto
+il resto che "Configura" offriva un tempo, tempistiche di sicurezza e
+instradamento delle notifiche compresi, è ormai un'impostazione del
+pannello come le altre (punto 6 sopra), non più un passo del config flow.
+Le zone e i programmi, invece, si creano e si modificano solo dal pannello
+— il config flow non ha più un passo per le zone, quindi non c'è nulla da
+tenere sincronizzato.
 
 Il pannello e la card della dashboard leggono e scrivono gli stessi
 programmi: usa l'uno, l'altra, o entrambi — non serve migrare nulla. La card

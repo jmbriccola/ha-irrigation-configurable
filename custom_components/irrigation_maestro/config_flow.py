@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import re
 from collections.abc import Iterable, Mapping, Sequence
 from typing import Any, Final, Literal
 
@@ -22,7 +21,6 @@ from .engine.model import EngineParams
 
 # Form-only keys (never stored under these names).
 _FIELD_RESET: Final = "reset_to_defaults"
-_FIELD_EVENT: Final = "event"
 
 # EngineParams fields without a const.py alias (keys must match the dataclass).
 _CONF_STAGE_COMMIT_MINUTE: Final = "stage_commit_minute"
@@ -31,27 +29,12 @@ _CONF_HOURLY_STAGING_CAP: Final = "hourly_staging_cap_mm"
 
 _ENGINE_DEFAULTS: Final = EngineParams()
 
-NOTIFY_EVENTS: Final[tuple[str, ...]] = (
-    "completed",
-    "skipped",
-    "interrupted",
-    "cancelled",
-    "anomaly",
-    "watchdog",
-    "sentinel",
-    "session_overrun",
-    "consumption_budget",
-)
-NOTIFY_PRIORITIES: Final[tuple[str, ...]] = ("normal", "high")
-
 _HUB_OPTIONAL_ENTITIES: Final = (
     const.CONF_RAIN_SENSOR,
     const.CONF_OUTDOOR_TEMP_SENSOR,
     const.CONF_LINE_FLOW_SENSOR,
     const.CONF_MASTER_VALVE,
 )
-
-_TIME_WINDOW_RE: Final = re.compile(r"^([01]\d|2[0-3]):([0-5]\d)\s*-\s*([01]\d|2[0-3]):([0-5]\d)$")
 
 
 # ---------------------------------------------------------------------------
@@ -101,10 +84,6 @@ def _months_select() -> selector.SelectSelector:
     return _select([str(month) for month in range(1, 13)], translation_key="month", multiple=True)
 
 
-def _weekdays_select() -> selector.SelectSelector:
-    return _select([str(day) for day in range(7)], translation_key="weekday", multiple=True)
-
-
 # ---------------------------------------------------------------------------
 # Text parsing helpers (comma-separated user input)
 
@@ -118,40 +97,6 @@ def _parse_float_list(text: str, expected: int) -> list[float]:
 
 def _format_float_list(values: Iterable[float]) -> str:
     return ", ".join(f"{value:g}" for value in values)
-
-
-def _parse_windows_text(text: str) -> list[dict[str, str]]:
-    """Parse '08:00-10:30, 22:00-23:00' into window dicts; ValueError on failure."""
-    windows: list[dict[str, str]] = []
-    for chunk in text.split(","):
-        item = chunk.strip()
-        if not item:
-            continue
-        match = _TIME_WINDOW_RE.match(item)
-        if match is None:
-            raise ValueError(f"invalid window: {item}")
-        windows.append(
-            {
-                const.CONF_WINDOW_START: f"{match[1]}:{match[2]}",
-                const.CONF_WINDOW_END: f"{match[3]}:{match[4]}",
-            }
-        )
-    return windows
-
-
-def _format_windows(windows: Iterable[Mapping[str, str]]) -> str:
-    return ", ".join(
-        f"{window[const.CONF_WINDOW_START]}-{window[const.CONF_WINDOW_END]}" for window in windows
-    )
-
-
-def _parse_name_list(text: str) -> list[str]:
-    return [chunk.strip() for chunk in text.split(",") if chunk.strip()]
-
-
-def _hh_mm(value: str) -> str:
-    """Normalize a TimeSelector value ('HH:MM:SS' or 'HH:MM') to 'HH:MM'."""
-    return value[:5]
 
 
 def _hub_entities_schema() -> vol.Schema:

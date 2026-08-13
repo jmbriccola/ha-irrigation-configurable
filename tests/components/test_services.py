@@ -1659,3 +1659,43 @@ async def test_import_config_reports_dropped_day_minutes_as_repair_issue(
 
     registry = ir.async_get(hass)
     assert registry.async_get_issue(DOMAIN, "migration_day_minutes_dropped") is not None
+
+
+async def test_import_config_rejects_a_malformed_payload_cleanly(hass: HomeAssistant) -> None:
+    """A hand-edited backup must produce a translated error, not a traceback.
+
+    The v2 -> v3 migration this service runs on every imported zone must be
+    covered by the same translated-error contract as the rest of import: a
+    zone shaped so the migration itself blows up (not just the later typed
+    parse) still has to come back as ServiceValidationError, and nothing may
+    be written on the way there.
+    """
+    mock_weather(hass)
+    entry = await setup_hub(hass, [zone_data("Pots", "valve.pots")])
+    zone_id = entry.runtime_data.zone_ids[0]
+    before = dict(entry.subentries[zone_id].data)
+    payload = json.dumps({"options": dict(entry.options), "zones": {zone_id: {"cycles": "abc"}}})
+
+    with pytest.raises(ServiceValidationError):
+        await hass.services.async_call(DOMAIN, "import_config", {"payload": payload}, blocking=True)
+    # Atomic: nothing written on the way to the error.
+    assert dict(entry.subentries[zone_id].data) == before
+
+
+async def test_set_curve_rejects_a_point_value_over_a_day(hass: HomeAssistant) -> None:
+    """The config flow's only bound on a curve point's value (1440 minutes)
+    disappeared with the flow itself. Now that set_curve is the authoring
+    surface, the bound must live in its schema instead."""
+    mock_weather(hass)
+    entry = await setup_hub(hass, [zone_data("Pots", "valve.pots")])
+    zone_id = entry.runtime_data.zone_ids[0]
+
+    with pytest.raises(vol.Invalid):
+        await hass.services.async_call(
+            DOMAIN,
+            "set_curve",
+            {"zone_id": zone_id, "cycle_id": "cy_pots", "points": [[10, 5000]]},
+            blocking=True,
+        )
+    # Schema validation runs before the handler: nothing was written.
+    assert entry.subentries[zone_id].data["cycles"][0]["curve"]["points"] == [[20.0, 3.0]]

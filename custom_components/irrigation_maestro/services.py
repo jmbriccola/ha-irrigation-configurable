@@ -149,14 +149,19 @@ ATTR_VOLUME_SAFETY_TIMEOUT_MIN: Final = "volume_safety_timeout_min"
 _DATA_SERVICES_REGISTERED: Final = "services_registered"
 
 
+_CURVE_POINT_VALUE_RANGE: Final = vol.Range(min=0, max=1440)
+
+
 def _curve_point(value: Any) -> list[float]:
-    """One [temperature, value] control point."""
+    """One [temperature, value] control point; value capped at a day (1440 min)."""
     if not isinstance(value, list | tuple) or len(value) != 2:
         raise vol.Invalid("each point must be a [temperature, value] pair")
     try:
-        return [float(value[0]), float(value[1])]
+        temperature, point_value = float(value[0]), float(value[1])
     except (TypeError, ValueError) as err:
         raise vol.Invalid("point entries must be numbers") from err
+    _CURVE_POINT_VALUE_RANGE(point_value)
+    return [temperature, point_value]
 
 
 _RUN_ZONE_SCHEMA = vol.Schema(
@@ -752,8 +757,8 @@ async def _async_set_program_schedule(call: ServiceCall) -> None:
         trigger = {
             const.CONF_TRIGGER_KIND: const.TRIGGER_KIND_TIME,
             # HA's TimeSelector (and services.yaml examples) may emit "HH:MM:SS";
-            # _parse_time only understands "HH:MM" — normalize the same way
-            # config_flow._hh_mm does before persisting.
+            # _parse_time only understands "HH:MM" — normalize by truncating
+            # before persisting.
             const.CONF_TRIGGER_AT: call.data[ATTR_START_TIME][:5],
         }
     else:
@@ -1220,31 +1225,37 @@ async def _async_import_config(call: ServiceCall) -> None:
     if not isinstance(options, dict) or not isinstance(zones, dict):
         raise _invalid_payload()
 
-    # A payload exported from a pre-3.0 install still carries v2-shaped zone
-    # data: curve template references and a day_minutes map. The v2 -> v3
-    # migration only ever runs on a config-entry version bump, so an entry
-    # already at v3 never sees it -- writing the payload verbatim would
-    # silently revive both defects that migration removed. Run every zone
-    # through the same migration the entry-version upgrade uses, using the
-    # imported options' templates the same way async_migrate_entry does. A
-    # v3 payload passes through unchanged, so applying this unconditionally
-    # is correct for both a legacy export and a current one.
-    templates = options.get(const.CONF_CURVE_TEMPLATES, {})
-    migration_notes: list[MigrationNote] = []
-    migrated_zones: dict[str, Any] = {}
-    for zone_id, data in zones.items():
-        if isinstance(data, dict):
-            migrated, zone_notes = migrate_zone_v2_to_v3(data, templates)
-            migration_notes.extend(zone_notes)
-            migrated_zones[zone_id] = migrated
-        else:
-            migrated_zones[zone_id] = data
-    zones = migrated_zones
-
     # Validate everything before touching anything: import is all-or-nothing.
-    # Parsing through the typed models is the same code path setup uses, so a
-    # payload that passes here cannot break the entry afterwards.
+    # Both the v2 -> v3 migration and the typed-model parse below run on
+    # data a user may have hand-edited, so any failure in either -- not just
+    # the parse -- must come back as the same translated refusal instead of
+    # a bare traceback.
     try:
+        # A payload exported from a pre-3.0 install still carries v2-shaped
+        # zone data: curve template references and a day_minutes map. The
+        # v2 -> v3 migration only ever runs on a config-entry version bump,
+        # so an entry already at v3 never sees it -- writing the payload
+        # verbatim would silently revive both defects that migration
+        # removed. Run every zone through the same migration the
+        # entry-version upgrade uses, using the imported options' templates
+        # the same way async_migrate_entry does. A v3 payload passes through
+        # unchanged, so applying this unconditionally is correct for both a
+        # legacy export and a current one.
+        templates = options.get(const.CONF_CURVE_TEMPLATES, {})
+        migration_notes: list[MigrationNote] = []
+        migrated_zones: dict[str, Any] = {}
+        for zone_id, data in zones.items():
+            if isinstance(data, dict):
+                migrated, zone_notes = migrate_zone_v2_to_v3(data, templates)
+                migration_notes.extend(zone_notes)
+                migrated_zones[zone_id] = migrated
+            else:
+                migrated_zones[zone_id] = data
+        zones = migrated_zones
+
+        # Parsing through the typed models is the same code path setup
+        # uses, so a payload that passes here cannot break the entry
+        # afterwards.
         hub_config = HubConfig.from_options(options)
         for zone_id, data in zones.items():
             if isinstance(data, dict):
