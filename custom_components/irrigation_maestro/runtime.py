@@ -915,7 +915,7 @@ class IrrigationRuntime:
         affected. Multiplying the whole total by a single factor would be
         exactly the plausible-but-false number this feature removes.
         """
-        rescaled: list[str] = []
+        rescaled: dict[str, str] = {}
         for zone in self.zones.values():
             reader = self.flow_reader_for(zone)
             if reader is None:
@@ -926,7 +926,7 @@ class IrrigationRuntime:
                 and reading.unit != CANONICAL_UNIT
                 and reader.entity_id not in rescaled
             ):
-                rescaled.append(reader.entity_id)
+                rescaled[reader.entity_id] = reading.unit
         if not rescaled:
             ir.async_delete_issue(self.hass, DOMAIN, "flow_unit_corrected")
             return
@@ -937,7 +937,11 @@ class IrrigationRuntime:
             is_fixable=False,
             severity=ir.IssueSeverity.WARNING,
             translation_key="flow_unit_corrected",
-            translation_placeholders={"sensors": ", ".join(rescaled)},
+            translation_placeholders={
+                "sensors": ", ".join(
+                    f"{entity_id} ({unit})" for entity_id, unit in rescaled.items()
+                )
+            },
         )
 
     def _report_weather_unavailable(self) -> None:
