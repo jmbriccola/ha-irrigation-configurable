@@ -499,3 +499,52 @@ async def test_next_run_skips_past_a_suspension(
     assert next_run is not None
     # Suspended until January, and the default season starts in March.
     assert next_run.state.startswith("2027-03-01T05:30")
+
+
+async def test_zone_state_publishes_everything_the_panel_reads_back(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    """The sensor is the panel's only read-back path.
+
+    Regression: the panel wrote the calendar correctly but the sensor/reader
+    pair drifted, so a saved change never came back and looked ignored. Every
+    field the panel can edit must survive the round trip.
+    """
+    freezer.move_to(START)
+    MockValvePark(hass).add("valve.pots")
+    mock_weather(hass)
+    entry = await setup_hub(hass, [zone_data("Pots", "valve.pots")])
+    zone_id = entry.runtime_data.zone_ids[0]
+
+    await hass.services.async_call(
+        DOMAIN,
+        "set_program_schedule",
+        {
+            "zone_id": zone_id,
+            "program_id": "cy_pots",
+            "calendar_mode": "interval",
+            "interval_days": 3,
+            "season_months": [6, 7, 8],
+            "start_kind": "time",
+            "start_time": "05:30",
+        },
+        blocking=True,
+    )
+    await hass.services.async_call(
+        DOMAIN,
+        "set_program_advanced",
+        {
+            "zone_id": zone_id,
+            "program_id": "cy_pots",
+            "soak_max_run_min": 10,
+            "soak_pause_min": 15,
+        },
+        blocking=True,
+    )
+    await hass.async_block_till_done()
+
+    cycle = role_state(hass, "zone_state", zone_id).attributes["cycles"][0]
+    assert cycle["calendar"] == {"mode": "interval", "interval_days": 3}
+    assert cycle["season_months"] == [6, 7, 8]
+    assert cycle["soak_max_run_min"] == 10
+    assert cycle["soak_pause_min"] == 15

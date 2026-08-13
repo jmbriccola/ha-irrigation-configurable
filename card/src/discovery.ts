@@ -133,10 +133,23 @@ export function readCycles(zone: ZoneBundle): CycleInfo[] {
       trigger: (c["trigger"] as CycleInfo["trigger"]) ?? undefined,
       curve: (c["curve"] as CycleInfo["curve"]) ?? undefined,
     };
-    const days = c["days"];
-    if (Array.isArray(days)) {
-      info.days = days.map((d) => asNumber(d)).filter((d): d is number => d !== undefined);
+    // The read-back path must track what sensor._cycle_dict publishes. It
+    // drifted once — `days` was replaced by `calendar` in 2.0.0 and this was
+    // not updated, so every program displayed as "every day" no matter what
+    // was stored, and a saved change looked ignored.
+    const calendar = c["calendar"];
+    if (calendar && typeof calendar === "object") {
+      info.calendar = calendar as CycleInfo["calendar"];
     }
+    const season = c["season_months"];
+    if (Array.isArray(season)) {
+      info.season_months = season
+        .map((m) => asNumber(m))
+        .filter((m): m is number => m !== undefined);
+    }
+    info.soak_max_run_min = asNumber(c["soak_max_run_min"]);
+    info.soak_pause_min = asNumber(c["soak_pause_min"]);
+    info.volume_safety_timeout_min = asNumber(c["volume_safety_timeout_min"]);
     const dm = c["day_minutes"];
     if (dm && typeof dm === "object") {
       const map: Record<string, number> = {};
