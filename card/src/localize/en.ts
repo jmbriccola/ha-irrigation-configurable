@@ -281,7 +281,9 @@ export const en = {
   "notify.no_recipients":
     "This instance has no notify service yet. Set one up first — the companion app, Telegram, e-mail — and it will appear here.",
   "notify.send_test": "Send a test",
-  "notify.test_ok": "Delivered",
+  // "Sent", not "Delivered": the service learns only that notify.<service>
+  // accepted the call without raising — a push can still die downstream.
+  "notify.test_ok": "Sent",
   "notify.test_failed": "Not delivered: {error}",
   "notify.preset_recommended": "Recommended",
   "notify.preset_critical": "Critical only",

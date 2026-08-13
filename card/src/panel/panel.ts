@@ -230,10 +230,19 @@ export class IrrigationMaestroPanel extends LitElement {
    * rewrites the hub options and wakes the update listener, so one call per
    * event would be nine config reloads for one Save. The status is re-read
    * afterwards so the banner and the wizard reflect what is now stored.
+   *
+   * The sequence STOPS at the first failure. `buildSaveCalls` always emits
+   * the enabling calls first and the disable-the-remainder call last, so
+   * carrying on past a failed enable would switch previously-enabled events
+   * off while the intended enables never landed — driving the install toward
+   * exactly the configured-looking-but-mute state this feature exists to
+   * prevent. The re-read still runs, so the wizard shows the true state
+   * rather than the one the user asked for.
    */
   private async _onSaveNotifications(ev: CustomEvent<SetNotificationsCall[]>): Promise<void> {
     for (const call of ev.detail) {
-      await this._saveSettings("set_notifications", { ...call });
+      const saved = await this._saveSettings("set_notifications", { ...call });
+      if (!saved) break;
     }
     await this._loadNotificationStatus();
   }
@@ -360,13 +369,18 @@ export class IrrigationMaestroPanel extends LitElement {
     this._view = "zones";
   }
 
-  /** Shared path for the settings services: skip empty patches, toast on success. */
-  private async _saveSettings(service: string, data: Record<string, unknown>): Promise<void> {
-    if (Object.keys(data).length === 0) return;
+  /**
+   * Shared path for the settings services: skip empty patches, toast on
+   * success. Reports whether the call actually landed — a caller issuing a
+   * SEQUENCE of them (`_onSaveNotifications`) must stop at the first failure
+   * rather than run the rest of the sequence against a half-written state.
+   */
+  private async _saveSettings(service: string, data: Record<string, unknown>): Promise<boolean> {
+    if (Object.keys(data).length === 0) return true;
     const res = await this._call("irrigation_maestro", service, data);
-    if (res !== undefined) {
-      this._showNotice(localize(pickLanguage(this.hass), "panel.saved_settings"));
-    }
+    if (res === undefined) return false;
+    this._showNotice(localize(pickLanguage(this.hass), "panel.saved_settings"));
+    return true;
   }
 
   private _onSaveSchedule(ev: CustomEvent<ProgramScheduleSaveDetail>): void {
