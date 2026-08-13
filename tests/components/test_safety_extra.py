@@ -463,3 +463,67 @@ async def test_a_unit_lost_mid_cycle_freezes_litres_without_crashing(
     assert outcome["result"] == "completed"  # no crash, no interrupt
     registry = ir.async_get(hass)
     assert registry.async_get_issue(DOMAIN, "flow_unit_unknown_sensor.flow") is not None
+
+
+async def test_a_unit_that_returns_just_before_a_check_does_not_trip_the_guard(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    """The window a unit comes back in is part blind, so it cannot be judged.
+
+    The grace window elapses on the wall clock whether or not the meter is
+    readable, but litres only accrue once it is. A unit that returns two
+    seconds before a periodic check leaves 1 L/min x 2 s = 0.03 L behind, which
+    the guard would weigh against ZERO_FLOW_EPSILON_L = 0.1 L and interrupt a
+    perfectly healthy run for -- the entry edge's bug, on the recovery edge.
+    """
+    freezer.move_to(START)
+    park = MockValvePark(hass)
+    park.add("valve.a")
+    hass.states.async_set("sensor.flow", "1.0", {"unit_of_measurement": "L/min"})
+    mock_weather(hass)
+    entry = await setup_hub(
+        hass,
+        [
+            zone_data(
+                "Alpha", "valve.a", minutes=10, flow_sensor="sensor.flow", nominal_flow_lpm=1.0
+            )
+        ],
+    )
+    runtime = entry.runtime_data
+    zone_id = runtime.zone_ids[0]
+
+    await advance(hass, freezer, 31 * 60)
+    assert hass.states.get("valve.a").state == "open"
+
+    # The monitor is started in the same synchronous block that stamps
+    # started_at, so its periodic checks fall on started_at + 120 s * k. The
+    # test steers by that clock rather than by the advance offsets, which say
+    # nothing about where in a window they land.
+    started_at = runtime.session.active_runs[zone_id].started_at
+    assert started_at is not None
+
+    async def advance_to(elapsed_s: float) -> None:
+        remaining = elapsed_s - (dt_util.utcnow() - started_at).total_seconds()
+        assert remaining > 0, "the checkpoint is already behind us"
+        await advance(hass, freezer, remaining, step=1.0)
+
+    # One healthy window (2.0 L, well clear of the threshold), then the unit
+    # disappears and the check at 240 s goes blind.
+    await advance_to(130)
+    assert hass.states.get("valve.a").state == "open"
+    hass.states.async_set("sensor.flow", "1.0")
+    await hass.async_block_till_done()
+
+    await advance_to(358)
+    assert hass.states.get("valve.a").state == "open"
+
+    # The unit returns 2 s before the check at 360 s: 0.03 L in that window.
+    hass.states.async_set("sensor.flow", "1.0", {"unit_of_measurement": "L/min"})
+    await hass.async_block_till_done()
+    await advance_to(365)
+    assert hass.states.get("valve.a").state == "open"
+
+    await advance(hass, freezer, 5 * 60)
+    outcome = runtime.state.last_outcome(zone_id)
+    assert outcome["result"] == "completed"
+    assert outcome["reason_key"] != "no_flow"

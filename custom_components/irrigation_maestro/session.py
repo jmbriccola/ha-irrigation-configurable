@@ -109,6 +109,11 @@ class FlowMonitor:
     nothing, chases no volume target, checks no range, and above all does NOT
     trip the zero-flow guard, which fires when too few litres accrue in the
     grace window and would otherwise interrupt every run on such a meter.
+
+    The window in which a unit comes back is skipped for the same reason: the
+    grace window elapses on the wall clock whether or not the meter is
+    readable, so a unit that returns part-way through one leaves too few
+    litres behind to be judged by.
     """
 
     ZERO_FLOW_GRACE_S = 120
@@ -141,6 +146,7 @@ class FlowMonitor:
         self._range_notified = False
         self._unsubs: list[CALLBACK_TYPE] = []
         self.unit_known = True
+        self._unit_recovered = False
 
     def _read(self) -> float:
         """Current flow in L/min; 0.0 and unit_known=False when unresolvable."""
@@ -153,6 +159,9 @@ class FlowMonitor:
             return 0.0
         if not self.unit_known:
             self._runtime.clear_flow_unit_unknown(self._sensor)
+            # The window this happened in is now part blind, part measured;
+            # _periodic_check must not judge it. Cleared when it consumes it.
+            self._unit_recovered = True
         self.unit_known = True
         return reading.lpm
 
@@ -218,6 +227,14 @@ class FlowMonitor:
             return
         if self._volume_target is not None and self.liters >= self._volume_target:
             self._on_volume_reached()
+            return
+        if self._unit_recovered:
+            # The unit came back part-way through this window, so only part of
+            # it was measurable and its litres cannot be weighed against a
+            # full window's threshold. Judge the next whole one instead.
+            self._unit_recovered = False
+            self._liters_at_last_check = self.liters
+            self._schedule_periodic_check()
             return
         delta = self.liters - self._liters_at_last_check
         self._liters_at_last_check = self.liters
