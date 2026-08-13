@@ -115,8 +115,19 @@ time, where the consequence is a degraded run rather than a failed edit.
 Offered where the sensor is configured — the zone editor's Advanced drawer next
 to the flow-sensor field, and the settings sensors section — with the detected
 unit proposed as the default and a visible note saying which one won. Added to
-`add_zone`, `update_zone` and `set_weather_sources` (schema **and**
-`services.yaml`).
+`update_zone` and `set_weather_sources` (schema **and** `services.yaml`).
+
+**Not** to `add_zone`, correcting this document's first draft: that service
+deliberately accepts only `name` / `valve_entity` / `area_m2` / `icon` and
+creates the zone with a default program — `flow_sensor` itself is not among
+them, so a unit override there would have nothing to attach to. The card
+guards against sending more (`card/src/panel/zone-editor.ts`, "defense in
+depth"), and widening the schema would break a deliberate contract.
+
+The override is also **clearable**: an empty string removes it and detection
+resumes. No other zone field has clear-on-empty semantics, and this one does
+because the panel offers "detected automatically" as a real choice — a picker
+that cannot return to its own default is a lying control.
 
 ## Existing installations
 
