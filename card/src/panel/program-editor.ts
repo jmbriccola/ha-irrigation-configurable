@@ -775,9 +775,12 @@ export class ImcProgramEditor extends LitElement {
 
     // Base comes from the WORKING (unsaved) state, not the saved `cycle`
     // prop, so the preview moves live as the user drags a stepper —
-    // matching the wizard's live preview (program-wizard.ts). The real
-    // curve is evaluated at `t`, so the preview cannot diverge from what
-    // the engine will actually deliver.
+    // matching the wizard's live preview (program-wizard.ts). This is the
+    // program's OWN curve and intensity, BEFORE the zone's adjustment
+    // factor: the engine multiplies by zone.adjustment_pct on top
+    // (engine/planner.py), and that factor is not published on the zone
+    // sensor, so this preview cannot account for it. A zone adjusted to
+    // 70% shows this same figure everywhere in the card and waters less.
     const base = this._sameForAll
       ? this._uniformMinutes
       : (this._dayMinutes[String(today)] ?? this._uniformMinutes);

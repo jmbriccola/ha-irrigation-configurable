@@ -59,21 +59,35 @@ call the same value `program_id` in their fields, for the user-facing name):
   `set_program_schedule`.
 - `intensity_pct` / `day_intensity_pct`: the program's watering **strength**,
   stored separately from `curve.points`' **shape**. `intensity_pct` is a
-  uniform percentage applied to every point of the curve (`curve_value`'s
-  adjustment argument); `day_intensity_pct` is an optional
-  `{"<weekday>": <percent>}` override — a weekday missing from the map falls
-  back to `intensity_pct`. Both are written only by `set_program_minutes`
-  (below), which is the sole writer of either field: nudging minutes never
-  rewrites `curve.points`. An explicit curve write (`set_curve`) always
-  resets `intensity_pct` to `100.0` and clears `day_intensity_pct` — see "the
-  intensity reset rule" under the curve services below.
+  uniform percentage applied to every point of the curve; `day_intensity_pct`
+  is an optional `{"<weekday>": <percent>}` override — a weekday missing from
+  the map falls back to `intensity_pct`. Both are written only by
+  `set_program_minutes` (below), which is the sole writer of either field:
+  nudging minutes never rewrites `curve.points`. An explicit curve write
+  (`set_curve`) always resets `intensity_pct` to `100.0` and clears
+  `day_intensity_pct` — see "the intensity reset rule" under the curve
+  services below.
+  **`intensity_pct` is not the whole of `curve_value`'s adjustment
+  argument.** The engine multiplies it by the zone's `adjustment_pct` before
+  calling `curve_value` (`zone.adjustment_pct * factor / 100.0` in
+  `engine/planner.py`), and `adjustment_pct` is a *zone* setting, not a
+  program one. It is deliberately not published on `zone_state` or any
+  other entity, so the card cannot fold it into a preview: a zone adjusted
+  to 70% waters 30% less than every figure the card shows (program editor,
+  wizard, curve editor) for that zone's programs, everywhere, with no way
+  for the card to know or say so. Folding it in naively would make things
+  worse, not better — the minutes stepper feeds `set_program_minutes`, which
+  computes its intensity from the curve's *pre-adjustment* value, so a
+  preview that already included the zone factor would not match what that
+  service derives from the number the user is looking at.
 - The sensor publishes only the stored shape: `curve.points`, `intensity_pct`
   and `day_intensity_pct`. As of 3.0.0 it no longer also publishes
   `day_minutes` / `amount` / `heat` — those were derived display values kept
   only as a bridge for the 2.x card's two-slider editor. The card now derives
   the minutes it displays (uniform and per-day) from `curve.points` and
   `intensity_pct` (plus `day_intensity_pct`) itself, client-side, the same
-  way the curve editor's "with today's weather" line already does.
+  way the curve editor's "with today's weather" line already does — **before**
+  the zone's `adjustment_pct`, per the note above.
 
 `degraded` keys: `switch_valve` (no position feedback), `no_flow_meter`,
 `line_meter_shared`, `no_hourly_forecast`, `volume_mode_unavailable`.
