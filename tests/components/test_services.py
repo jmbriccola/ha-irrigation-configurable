@@ -593,6 +593,43 @@ async def test_set_program_minutes_uniform_sets_intensity_and_clears_per_day(
     assert runtime.zones[zone_id].config.cycles[0].day_intensity_pct == {}  # per-day cleared
 
 
+async def test_set_program_minutes_uniform_clears_existing_per_day_override(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    """A non-empty per-day override must be wiped by a subsequent uniform
+    call. Starting from an already-empty override (as other tests do) can't
+    tell "cleared" from "was never set" apart."""
+    freezer.move_to(START)
+    mock_weather(hass)
+    entry = await setup_hub(hass, [zone_data("Pots", "valve.pots")])
+    runtime = entry.runtime_data
+    zone_id = runtime.zone_ids[0]
+    program_id = runtime.zones[zone_id].config.cycles[0].cycle_id
+
+    await hass.services.async_call(
+        DOMAIN,
+        "set_program_minutes",
+        {"zone_id": zone_id, "program_id": program_id, "day_minutes": {"0": 10}},
+        blocking=True,
+    )
+    await hass.async_block_till_done()
+    # The override must actually be there, or clearing it proves nothing.
+    stored = entry.subentries[zone_id].data["cycles"][0]
+    assert stored["day_intensity_pct"]  # non-empty
+
+    await hass.services.async_call(
+        DOMAIN,
+        "set_program_minutes",
+        {"zone_id": zone_id, "program_id": program_id, "minutes": 18},
+        blocking=True,
+    )
+    await hass.async_block_till_done()
+
+    stored = entry.subentries[zone_id].data["cycles"][0]
+    assert stored["intensity_pct"] == 600.0
+    assert "day_intensity_pct" not in stored
+
+
 async def test_set_program_minutes_per_day_sets_day_intensity(
     hass: HomeAssistant, freezer: FrozenDateTimeFactory
 ) -> None:
