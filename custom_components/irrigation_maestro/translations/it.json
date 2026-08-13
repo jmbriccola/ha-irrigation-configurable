@@ -1012,6 +1012,9 @@
     "simple_curve_on_volume": {
       "message": "Le curve semplici sono solo a durata; questo programma usa una curva a volume. Modificala nelle impostazioni della zona."
     },
+    "volume_requires_flow": {
+      "message": "Il programma {cycle_id} misura l'acqua in litri, il che richiede un misuratore di portata funzionante, e questa zona non ne ha uno. Assegna un sensore di portata alla zona, oppure modifica il programma perché irrighi per una durata in minuti."
+    },
     "invalid_payload": {
       "message": "Il payload non è una configurazione esportata valida."
     },
