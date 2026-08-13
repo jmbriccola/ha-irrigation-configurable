@@ -51,19 +51,18 @@ describe("dayIntensity", () => {
 });
 
 describe("dayBase", () => {
+  // dayBase's SETTING-only nature -- that it has no channel for a zone's
+  // adjustment_pct to enter through -- is a fact about its *signature* (see
+  // the module doc on dayDelivery/previewMinutes), which TypeScript already
+  // enforces at compile time: there is no third parameter to pass one
+  // through even if a caller wanted to. A separate runtime test asserting
+  // "dayBase(CYCLE, 3) is 30" could only ever repeat the assertion below --
+  // a byte-for-byte duplicate that stays green even if dayBase somehow
+  // grew an adjustment parameter later -- so there is deliberately no such
+  // test here.
   it("is the scaled minutes at the reference temperature", () => {
     expect(dayBase(CYCLE, 3)).toBe(30); // 20 * 1.5
     expect(dayBase(CYCLE, 0)).toBe(10); // 20 * 0.5
-  });
-
-  it("is the SETTING: untouched by the zone's adjustment_pct", () => {
-    // dayBase has no adjustment parameter at all -- it feeds the minutes
-    // stepper and set_program_minutes, which must never see a
-    // post-adjustment number (see the module doc on dayDelivery/previewMinutes).
-    // This test pins that by construction: dayBase(CYCLE, 3) is 30 no
-    // matter what a zone's adjustment_pct is, because there's nowhere to
-    // even pass one in.
-    expect(dayBase(CYCLE, 3)).toBe(30);
   });
 });
 
@@ -105,14 +104,17 @@ describe("previewMinutes", () => {
     expect(previewMinutes(CYCLE, 20, 35, 70)).toBe(22);
   });
 
+  // "Comparing the omitted-argument call against an explicit 100" was
+  // dropped here as its own test: that comparison alone passes even if
+  // adjustmentPct were ignored completely (both calls would then just
+  // ignore whatever, or nothing, was passed, and trivially agree). The
+  // test below keeps that comparison only alongside a concrete,
+  // independently-computed expectation, which is what actually pins the
+  // default -- if the default silently broke (e.g. read as NaN), the
+  // second assertion would catch it even though the first could not.
   it("is unchanged from today's behaviour at a 100% (no-op) adjustment", () => {
-    // Omitting the parameter defaults to 100 -- the pre-adjustment figure.
     expect(previewMinutes(CYCLE, 20, 35)).toBe(previewMinutes(CYCLE, 20, 35, 100));
     expect(previewMinutes(CYCLE, 20, 35)).toBe(32); // raw(35) unscaled
-  });
-
-  it("reads an absent adjustment as 100 (the engine's own default)", () => {
-    expect(previewMinutes(CYCLE, 20, 35)).toBe(previewMinutes(CYCLE, 20, 35, 100));
   });
 });
 
