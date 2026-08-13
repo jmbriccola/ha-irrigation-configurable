@@ -343,6 +343,29 @@ add_program:
       selector:
         text:
 
+duplicate_program:
+  fields:
+    zone_id:
+      required: true
+      example: 01J8ZQ
+      selector:
+        text:
+    program_id:
+      required: true
+      example: a1b2c3d4
+      selector:
+        text:
+    target_zone_id:
+      required: false
+      example: 01J8ZR
+      selector:
+        text:
+    name:
+      required: false
+      example: Morning (copy)
+      selector:
+        text:
+
 remove_program:
   fields:
     zone_id:

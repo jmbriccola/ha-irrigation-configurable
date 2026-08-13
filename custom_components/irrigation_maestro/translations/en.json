@@ -634,6 +634,28 @@
         }
       }
     },
+    "duplicate_program": {
+      "name": "Duplicate program",
+      "description": "Copies a program's schedule and curve into a new program, in the same zone or a different one.",
+      "fields": {
+        "zone_id": {
+          "name": "Zone",
+          "description": "The zone owning the source program."
+        },
+        "program_id": {
+          "name": "Program",
+          "description": "The program to duplicate."
+        },
+        "target_zone_id": {
+          "name": "Target zone",
+          "description": "The zone to create the duplicate in. Defaults to the source zone."
+        },
+        "name": {
+          "name": "Name",
+          "description": "The duplicate's name. Defaults to the source name followed by ' (copy)'."
+        }
+      }
+    },
     "remove_program": {
       "name": "Remove program",
       "description": "Removes a program from a zone. A zone must keep at least one program.",

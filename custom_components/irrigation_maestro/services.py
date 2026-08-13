@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 from collections.abc import Callable
+from copy import deepcopy
 from types import MappingProxyType
 from typing import Any, Final, cast
 from uuid import uuid4
@@ -31,7 +32,7 @@ from .const import DOMAIN, SUBENTRY_TYPE_ZONE
 from .engine.calendar import ProgramCalendar
 from .engine.curves import CurveError, CurveKind, interpolate, validate_points
 from .engine.semantic import points_from_semantic
-from .models import CycleConfig, HubConfig, ZoneConfig
+from .models import CycleConfig, HubConfig, ZoneConfig, resolve_curve
 from .notify import (
     EVENT_ANOMALY,
     EVENT_CANCELLED,
@@ -61,6 +62,7 @@ SERVICE_IMPORT_CONFIG: Final = "import_config"
 SERVICE_SET_PROGRAM_SCHEDULE: Final = "set_program_schedule"
 SERVICE_SET_PROGRAM_MINUTES: Final = "set_program_minutes"
 SERVICE_ADD_PROGRAM: Final = "add_program"
+SERVICE_DUPLICATE_PROGRAM: Final = "duplicate_program"
 SERVICE_REMOVE_PROGRAM: Final = "remove_program"
 SERVICE_RENAME_PROGRAM: Final = "rename_program"
 SERVICE_ADD_ZONE: Final = "add_zone"
@@ -89,6 +91,7 @@ ATTR_MAX_VALUE: Final = "max_value"
 ATTR_KIND: Final = "kind"
 ATTR_PAYLOAD: Final = "payload"
 ATTR_PROGRAM_ID: Final = "program_id"
+ATTR_TARGET_ZONE_ID: Final = "target_zone_id"
 ATTR_DAYS: Final = "days"
 ATTR_START_KIND: Final = "start_kind"
 ATTR_START_TIME: Final = "start_time"
@@ -243,6 +246,14 @@ _ADD_PROGRAM_SCHEMA = vol.Schema(
         vol.Required(ATTR_ZONE_ID): cv.string,
         vol.Optional(ATTR_NAME): cv.string,
         vol.Optional(ATTR_COPY_FROM): cv.string,
+    }
+)
+_DUPLICATE_PROGRAM_SCHEMA = vol.Schema(
+    {
+        vol.Required(ATTR_ZONE_ID): cv.string,
+        vol.Required(ATTR_PROGRAM_ID): cv.string,
+        vol.Optional(ATTR_TARGET_ZONE_ID): cv.string,
+        vol.Optional(ATTR_NAME): cv.string,
     }
 )
 _REMOVE_PROGRAM_SCHEMA = vol.Schema(
@@ -882,6 +893,71 @@ async def _async_add_program(call: ServiceCall) -> ServiceResponse:
     return {"program_id": program[const.CONF_CYCLE_ID]}
 
 
+def _unique_program_name(cycles: list[dict[str, Any]], preferred: str) -> str:
+    """A name no program in the target zone already uses."""
+    taken = {str(cycle.get(const.CONF_CYCLE_NAME, "")) for cycle in cycles}
+    if preferred not in taken:
+        return preferred
+    for suffix in range(2, 100):
+        candidate = f"{preferred} {suffix}"
+        if candidate not in taken:
+            return candidate
+    return f"{preferred} {uuid4().hex[:4]}"
+
+
+async def _async_duplicate_program(call: ServiceCall) -> ServiceResponse:
+    hass = call.hass
+    entry = _loaded_entry(hass)
+    runtime = cast(IrrigationRuntime, entry.runtime_data)
+    zone_id: str = call.data[ATTR_ZONE_ID]
+    _require_zone(runtime, zone_id)
+    target_zone_id: str = call.data.get(ATTR_TARGET_ZONE_ID, zone_id)
+    _require_zone(runtime, target_zone_id)
+    program_id: str = call.data[ATTR_PROGRAM_ID]
+
+    source = next(
+        (
+            dict(item)
+            for item in entry.subentries[zone_id].data.get(const.CONF_CYCLES, [])
+            if item.get(const.CONF_CYCLE_ID) == program_id
+        ),
+        None,
+    )
+    if source is None:
+        raise ServiceValidationError(
+            translation_domain=DOMAIN,
+            translation_key="unknown_program",
+            translation_placeholders={"program_id": program_id},
+        )
+
+    target = entry.subentries[target_zone_id]
+    cycles = [dict(item) for item in target.data.get(const.CONF_CYCLES, [])]
+
+    program = deepcopy(source)
+    # A fresh id is what keeps runtime state out of the copy: last_completed
+    # and outcome_log are keyed by program, so the duplicate starts unmarked.
+    program[const.CONF_CYCLE_ID] = uuid4().hex[:8]
+    preferred = call.data.get(ATTR_NAME, f"{source.get(const.CONF_CYCLE_NAME, 'Program')} (copy)")
+    program[const.CONF_CYCLE_NAME] = _unique_program_name(cycles, str(preferred))
+
+    curve = resolve_curve(program[const.CONF_CURVE], runtime.hub.curve_templates)
+    if curve.kind is CurveKind.VOLUME and not runtime.zone_has_flow_meter(
+        runtime.zones[target_zone_id].config
+    ):
+        raise ServiceValidationError(
+            translation_domain=DOMAIN,
+            translation_key="volume_requires_flow",
+            translation_placeholders={"cycle_id": program[const.CONF_CYCLE_ID]},
+        )
+
+    _validate_program(program, runtime.hub.curve_templates)
+    cycles.append(program)
+    hass.config_entries.async_update_subentry(
+        entry, target, data={**target.data, const.CONF_CYCLES: cycles}
+    )
+    return {"program_id": program[const.CONF_CYCLE_ID]}
+
+
 async def _async_remove_program(call: ServiceCall) -> None:
     hass = call.hass
     entry = _loaded_entry(hass)
@@ -1210,6 +1286,13 @@ def async_setup_services(hass: HomeAssistant) -> None:
         SERVICE_ADD_PROGRAM,
         _async_add_program,
         _ADD_PROGRAM_SCHEMA,
+        supports_response=SupportsResponse.OPTIONAL,
+    )
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_DUPLICATE_PROGRAM,
+        _async_duplicate_program,
+        _DUPLICATE_PROGRAM_SCHEMA,
         supports_response=SupportsResponse.OPTIONAL,
     )
     hass.services.async_register(

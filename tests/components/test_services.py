@@ -825,6 +825,121 @@ async def test_add_program_validates_through_typed_model_before_persist(
     assert len(runtime.zones[zone_id].config.cycles) == len(before_cycles)
 
 
+async def test_duplicate_program_is_a_fresh_program(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    freezer.move_to(START)
+    mock_weather(hass)
+    entry = await setup_hub(hass, [zone_data("Pots", "valve.pots")])
+    zone_id = entry.runtime_data.zone_ids[0]
+    # A watering marker on the source: the duplicate must not inherit cadence.
+    entry.runtime_data.state.set_last_completed(zone_id, "cy_pots", dt_util.now().date())
+
+    response = await hass.services.async_call(
+        DOMAIN,
+        "duplicate_program",
+        {"zone_id": zone_id, "program_id": "cy_pots"},
+        blocking=True,
+        return_response=True,
+    )
+    await hass.async_block_till_done()
+
+    new_id = response["program_id"]
+    assert new_id != "cy_pots"
+    cycles = entry.subentries[zone_id].data["cycles"]
+    assert len(cycles) == 2
+    duplicate = next(c for c in cycles if c["id"] == new_id)
+    source = next(c for c in cycles if c["id"] == "cy_pots")
+    assert duplicate["curve"] == source["curve"]
+    assert duplicate["name"] == "Morning (copy)"
+    assert entry.runtime_data.state.last_completed(zone_id, new_id) is None
+
+
+async def test_duplicate_program_name_does_not_collide(hass: HomeAssistant) -> None:
+    mock_weather(hass)
+    entry = await setup_hub(hass, [zone_data("Pots", "valve.pots")])
+    zone_id = entry.runtime_data.zone_ids[0]
+
+    for _ in range(2):
+        await hass.services.async_call(
+            DOMAIN,
+            "duplicate_program",
+            {"zone_id": zone_id, "program_id": "cy_pots"},
+            blocking=True,
+            return_response=True,
+        )
+        await hass.async_block_till_done()
+
+    names = [c["name"] for c in entry.subentries[zone_id].data["cycles"]]
+    assert names == ["Morning", "Morning (copy)", "Morning (copy) 2"]
+
+
+async def test_duplicate_program_into_another_zone(hass: HomeAssistant) -> None:
+    mock_weather(hass)
+    entry = await setup_hub(
+        hass,
+        [zone_data("Pots", "valve.pots"), zone_data("Lawn", "valve.lawn")],
+    )
+    pots, lawn = entry.runtime_data.zone_ids[0], entry.runtime_data.zone_ids[1]
+
+    response = await hass.services.async_call(
+        DOMAIN,
+        "duplicate_program",
+        {"zone_id": pots, "program_id": "cy_pots", "target_zone_id": lawn, "name": "Borrowed"},
+        blocking=True,
+        return_response=True,
+    )
+    await hass.async_block_till_done()
+
+    assert len(entry.subentries[pots].data["cycles"]) == 1
+    lawn_cycles = entry.subentries[lawn].data["cycles"]
+    assert [c["name"] for c in lawn_cycles] == ["Morning", "Borrowed"]
+    assert lawn_cycles[1]["id"] == response["program_id"]
+
+
+async def test_duplicate_volume_program_into_a_meterless_zone_is_refused(
+    hass: HomeAssistant,
+) -> None:
+    """Documented behaviour: refuse, rather than silently degrade the copy to
+    a timed run in a zone that cannot measure liters."""
+    mock_weather(hass)
+    entry = await setup_hub(
+        hass,
+        [
+            zone_data(
+                "Pots",
+                "valve.pots",
+                flow_sensor="sensor.pots_flow",
+                cycles=[
+                    {
+                        "id": "c1",
+                        "name": "Morning",
+                        "trigger": {"kind": "time", "at": "05:30"},
+                        "curve": {
+                            "points": [[20.0, 30.0]],
+                            "min_value": 1.0,
+                            "max_value": 100.0,
+                            "kind": "volume",
+                        },
+                    }
+                ],
+            ),
+            zone_data("Lawn", "valve.lawn"),
+        ],
+    )
+    hass.states.async_set("sensor.pots_flow", "5.0")
+    pots, lawn = entry.runtime_data.zone_ids[0], entry.runtime_data.zone_ids[1]
+
+    with pytest.raises(ServiceValidationError):
+        await hass.services.async_call(
+            DOMAIN,
+            "duplicate_program",
+            {"zone_id": pots, "program_id": "c1", "target_zone_id": lawn},
+            blocking=True,
+            return_response=True,
+        )
+
+
 async def test_remove_program_refuses_last(
     hass: HomeAssistant, freezer: FrozenDateTimeFactory
 ) -> None:

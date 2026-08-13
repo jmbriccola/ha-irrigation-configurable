@@ -634,6 +634,28 @@
         }
       }
     },
+    "duplicate_program": {
+      "name": "Duplica programma",
+      "description": "Copia programmazione e curva di un programma in un nuovo programma, nella stessa zona o in un'altra.",
+      "fields": {
+        "zone_id": {
+          "name": "Zona",
+          "description": "La zona a cui appartiene il programma di origine."
+        },
+        "program_id": {
+          "name": "Programma",
+          "description": "Il programma da duplicare."
+        },
+        "target_zone_id": {
+          "name": "Zona di destinazione",
+          "description": "La zona in cui creare il duplicato. Predefinita la zona di origine."
+        },
+        "name": {
+          "name": "Nome",
+          "description": "Il nome del duplicato. Predefinito il nome di origine seguito da ' (copy)'."
+        }
+      }
+    },
     "remove_program": {
       "name": "Rimuovi programma",
       "description": "Rimuove un programma da una zona. Una zona deve mantenere almeno un programma.",
