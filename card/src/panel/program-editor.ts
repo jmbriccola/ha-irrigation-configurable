@@ -119,6 +119,9 @@ export class ImcProgramEditor extends LitElement {
   @property() zoneId = "";
   @property({ attribute: false }) cycle?: CycleInfo;
   @property({ attribute: false }) weightedTemp?: number;
+  /** Passed down to the embedded `imc-curve-editor` — whether the zone has a
+   *  usable flow meter, gating that editor's volume option. */
+  @property({ type: Boolean }) zoneHasFlowMeter = false;
 
   @state() private _calendar: CalendarConfig = { mode: "weekdays", days: [...WEEKDAYS] };
   @state() private _seasonMonths: number[] = [];
@@ -553,6 +556,7 @@ export class ImcProgramEditor extends LitElement {
         .cycle=${this.cycle}
         .weightedTemp=${this.weightedTemp}
         .language=${pickLanguage(this.hass)}
+        .zoneHasFlowMeter=${this.zoneHasFlowMeter}
         @imc-curve-save=${this._onCurveSave}
         @imc-curve-cancel=${() => (this._advancedOpen = false)}
       ></imc-curve-editor>

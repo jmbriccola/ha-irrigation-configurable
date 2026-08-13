@@ -333,24 +333,14 @@ export class IrrigationMaestroPanel extends LitElement {
    */
   private _onCurveSave(ev: CustomEvent<ProgramCurveSaveDetail>): void {
     const { zoneId, curve } = ev.detail;
-    if (curve.mode === "simple") {
-      void this._call("irrigation_maestro", "set_simple_curve", {
-        zone_id: zoneId,
-        cycle_id: curve.cycleId,
-        amount: curve.amount,
-        heat: curve.heat,
-        min_value: curve.min,
-        max_value: curve.max,
-      });
-    } else {
-      void this._call("irrigation_maestro", "set_curve", {
-        zone_id: zoneId,
-        cycle_id: curve.cycleId,
-        points: curve.points,
-        min_value: curve.min,
-        max_value: curve.max,
-      });
-    }
+    void this._call("irrigation_maestro", "set_curve", {
+      zone_id: zoneId,
+      cycle_id: curve.cycleId,
+      points: curve.points,
+      min_value: curve.min,
+      max_value: curve.max,
+      kind: curve.kind,
+    });
   }
 
   /**

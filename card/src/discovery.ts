@@ -119,6 +119,15 @@ export function discover(hass: HomeAssistant): MaestroModel {
   return { found: entityIds.length > 0, hub, zones, entityIds };
 }
 
+/** A zone can measure litres when its `degraded` list does NOT report
+ *  `no_flow_meter` (docs/design/card-contract.md) — gates the curve
+ *  editor's volume option, mirroring the backend's own `volume_requires_flow`
+ *  guard on `set_curve`. */
+export function zoneHasFlowMeter(zone: ZoneBundle): boolean {
+  const degraded = asArray(zone.state?.attributes?.["degraded"]);
+  return !degraded.some((item) => asString(item) === "no_flow_meter");
+}
+
 /** Read a zone's programs (cycles) from its state entity attribute, typed. */
 export function readCycles(zone: ZoneBundle): CycleInfo[] {
   const raw = asArray(zone.state?.attributes?.["cycles"]);

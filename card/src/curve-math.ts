@@ -2,29 +2,16 @@
  * Shared curve math for the card.
  *
  * `rawValue`/`scaledValue`/`previewFromMinutes`/`validatePoints` mirror
- * `custom_components/irrigation_maestro/engine/curves.py` EXACTLY — keep the two in
- * lockstep (guarded by curve-math.test.ts). The semantic mapping
- * (`pointsFromSemantic`/`semanticFromPoints`/`curveValue`) mirrors
- * `engine/semantic.py` and is used by `curve-editor.ts` only; it is retired
- * once that editor is rewritten to author real curves directly.
+ * `custom_components/irrigation_maestro/engine/curves.py` EXACTLY — keep the
+ * two in lockstep (guarded by curve-math.test.ts). The old semantic mapping
+ * (`pointsFromSemantic`/`semanticFromPoints`/`curveValue`, mirroring
+ * `engine/semantic.py`) was retired once `curve-editor.ts` became a real
+ * point editor that authors curves directly instead of deriving them from a
+ * semantic amount/heat pair.
  */
 import { asNumber } from "./types";
 
-export const COOL = 12;
-export const MILD = 25;
-export const HOT = 35;
-export const AMOUNT_MIN = 3;
-export const AMOUNT_MAX = 45;
-export const HEAT_MIN = 0;
-export const HEAT_MAX = 30;
-
-const SLOPE_SPAN = (MILD - COOL) / 10; // 1.3
-
 export type CurvePoint = readonly [number, number];
-
-function clamp(value: number, low: number, high: number): number {
-  return Math.max(low, Math.min(high, value));
-}
 
 /**
  * Round-half-to-even (banker's rounding), matching Python's built-in
@@ -37,43 +24,6 @@ export function roundHalfEven(x: number): number {
   if (d < 0.5) return f;
   if (d > 0.5) return f + 1;
   return f % 2 === 0 ? f : f + 1;
-}
-
-export function pointsFromSemantic(
-  amount: number,
-  heat: number,
-): [CurvePoint, CurvePoint, CurvePoint] {
-  const cool = Math.max(0, roundHalfEven(amount - SLOPE_SPAN * heat));
-  return [
-    [COOL, cool],
-    [MILD, amount],
-    [HOT, amount + heat],
-  ];
-}
-
-export function curveValue(
-  points: CurvePoint[],
-  temp: number,
-  min?: number,
-  max?: number,
-): number {
-  return scaledValue(points, temp, 100, min, max);
-}
-
-export function semanticFromPoints(
-  points: CurvePoint[],
-  min?: number,
-  max?: number,
-): {
-  amount: number;
-  heat: number;
-} {
-  const mild = curveValue(points, MILD, min, max);
-  const hot = curveValue(points, HOT, min, max);
-  return {
-    amount: clamp(roundHalfEven(mild), AMOUNT_MIN, AMOUNT_MAX),
-    heat: clamp(roundHalfEven(hot - mild), HEAT_MIN, HEAT_MAX),
-  };
 }
 
 export function parseCurvePoints(raw: unknown): CurvePoint[] {

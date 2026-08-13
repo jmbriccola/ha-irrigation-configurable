@@ -1,7 +1,7 @@
 import { css, html, LitElement, nothing } from "lit";
 import type { TemplateResult } from "lit";
 import { property, state } from "lit/decorators.js";
-import type { ZoneBundle } from "./discovery";
+import { zoneHasFlowMeter, type ZoneBundle } from "./discovery";
 import type { CycleInfo, ZoneAction, ZoneState } from "./types";
 import {
   asArray,
@@ -574,23 +574,21 @@ export class ImcZoneRow extends LitElement {
       );
     }
 
-    const isVolume = curve?.kind === "volume";
     const editing = !!cycleId && this._editingCycle === cycleId;
-    const editButton =
-      isVolume || !cycleId
-        ? nothing
-        : html`<button
-            class="link-btn"
-            @click=${() =>
-              (this._editingCycle = editing ? undefined : cycleId)}
-          >
-            ${localize(lang, "editor.edit_curve")}
-          </button>`;
+    const editButton = !cycleId
+      ? nothing
+      : html`<button
+          class="link-btn"
+          @click=${() => (this._editingCycle = editing ? undefined : cycleId)}
+        >
+          ${localize(lang, "editor.edit_curve")}
+        </button>`;
     const editor = editing
       ? html`<imc-curve-editor
           .language=${lang}
           .cycle=${cycle}
           .weightedTemp=${this.weightedTemp}
+          .zoneHasFlowMeter=${this.zone ? zoneHasFlowMeter(this.zone) : false}
           @imc-curve-save=${this._onCurveSave}
           @imc-curve-cancel=${() => (this._editingCycle = undefined)}
         ></imc-curve-editor>`
@@ -624,26 +622,15 @@ export class ImcZoneRow extends LitElement {
     const zoneId = this.zone?.zoneId;
     if (!zoneId) return;
     const d = ev.detail;
-    if (d.mode === "simple") {
-      this._dispatch({
-        action: "save-simple-curve",
-        zoneId,
-        cycleId: d.cycleId,
-        amount: d.amount,
-        heat: d.heat,
-        min: d.min,
-        max: d.max,
-      });
-    } else {
-      this._dispatch({
-        action: "save-curve",
-        zoneId,
-        cycleId: d.cycleId,
-        points: d.points,
-        min: d.min,
-        max: d.max,
-      });
-    }
+    this._dispatch({
+      action: "save-curve",
+      zoneId,
+      cycleId: d.cycleId,
+      points: d.points,
+      min: d.min,
+      max: d.max,
+      kind: d.kind,
+    });
     this._editingCycle = undefined;
   }
 

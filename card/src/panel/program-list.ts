@@ -5,7 +5,7 @@ import type { HassEntity, HomeAssistant } from "../types";
 import { asString, defineElement } from "../types";
 import type { CycleInfo } from "../types";
 import { pickLanguage, localize } from "../localize/localize";
-import { readCycles, type ZoneBundle } from "../discovery";
+import { readCycles, zoneHasFlowMeter, type ZoneBundle } from "../discovery";
 import { describeTrigger } from "../format";
 import { describeCalendar } from "./calendar-editor";
 import { programToggleStyles, renderProgramToggle } from "./program-toggle";
@@ -264,6 +264,7 @@ export class ImcProgramList extends LitElement {
                 .cycle=${c}
                 .cycleSwitch=${cycleSwitch}
                 .weightedTemp=${this.weightedTemp}
+                .zoneHasFlowMeter=${zoneHasFlowMeter(zone)}
                 @imc-program-save-schedule=${() => (this._editingId = undefined)}
                 @imc-program-save-minutes=${() => (this._editingId = undefined)}
                 @imc-program-cancel=${() => (this._editingId = undefined)}

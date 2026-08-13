@@ -4,18 +4,18 @@
  * Copyright (c) Jacopo Maria Briccola
  * @license MIT
  */
-const he = globalThis, ke = he.ShadowRoot && (he.ShadyCSS === void 0 || he.ShadyCSS.nativeShadow) && "adoptedStyleSheets" in Document.prototype && "replace" in CSSStyleSheet.prototype, Ce = /* @__PURE__ */ Symbol(), He = /* @__PURE__ */ new WeakMap();
-let at = class {
+const ae = globalThis, xe = ae.ShadowRoot && (ae.ShadyCSS === void 0 || ae.ShadyCSS.nativeShadow) && "adoptedStyleSheets" in Document.prototype && "replace" in CSSStyleSheet.prototype, $e = /* @__PURE__ */ Symbol(), Ie = /* @__PURE__ */ new WeakMap();
+let tt = class {
   constructor(e, t, i) {
-    if (this._$cssResult$ = !0, i !== Ce) throw Error("CSSResult is not constructable. Use `unsafeCSS` or `css` instead.");
+    if (this._$cssResult$ = !0, i !== $e) throw Error("CSSResult is not constructable. Use `unsafeCSS` or `css` instead.");
     this.cssText = e, this.t = t;
   }
   get styleSheet() {
     let e = this.o;
     const t = this.t;
-    if (ke && e === void 0) {
+    if (xe && e === void 0) {
       const i = t !== void 0 && t.length === 1;
-      i && (e = He.get(t)), e === void 0 && ((this.o = e = new CSSStyleSheet()).replaceSync(this.cssText), i && He.set(t, e));
+      i && (e = Ie.get(t)), e === void 0 && ((this.o = e = new CSSStyleSheet()).replaceSync(this.cssText), i && Ie.set(t, e));
     }
     return e;
   }
@@ -23,28 +23,28 @@ let at = class {
     return this.cssText;
   }
 };
-const xt = (n) => new at(typeof n == "string" ? n : n + "", void 0, Ce), X = (n, ...e) => {
-  const t = n.length === 1 ? n[0] : e.reduce((i, o, s) => i + ((a) => {
-    if (a._$cssResult$ === !0) return a.cssText;
-    if (typeof a == "number") return a;
-    throw Error("Value passed to 'css' function must be a 'css' function result: " + a + ". Use 'unsafeCSS' to pass non-literal values, but take care to ensure page security.");
+const ht = (n) => new tt(typeof n == "string" ? n : n + "", void 0, $e), Z = (n, ...e) => {
+  const t = n.length === 1 ? n[0] : e.reduce((i, o, s) => i + ((r) => {
+    if (r._$cssResult$ === !0) return r.cssText;
+    if (typeof r == "number") return r;
+    throw Error("Value passed to 'css' function must be a 'css' function result: " + r + ". Use 'unsafeCSS' to pass non-literal values, but take care to ensure page security.");
   })(o) + n[s + 1], n[0]);
-  return new at(t, n, Ce);
-}, $t = (n, e) => {
-  if (ke) n.adoptedStyleSheets = e.map((t) => t instanceof CSSStyleSheet ? t : t.styleSheet);
+  return new tt(t, n, $e);
+}, _t = (n, e) => {
+  if (xe) n.adoptedStyleSheets = e.map((t) => t instanceof CSSStyleSheet ? t : t.styleSheet);
   else for (const t of e) {
-    const i = document.createElement("style"), o = he.litNonce;
+    const i = document.createElement("style"), o = ae.litNonce;
     o !== void 0 && i.setAttribute("nonce", o), i.textContent = t.cssText, n.appendChild(i);
   }
-}, Le = ke ? (n) => n : (n) => n instanceof CSSStyleSheet ? ((e) => {
+}, De = xe ? (n) => n : (n) => n instanceof CSSStyleSheet ? ((e) => {
   let t = "";
   for (const i of e.cssRules) t += i.cssText;
-  return xt(t);
+  return ht(t);
 })(n) : n;
-const { is: wt, defineProperty: zt, getOwnPropertyDescriptor: At, getOwnPropertyNames: St, getOwnPropertySymbols: kt, getPrototypeOf: Ct } = Object, fe = globalThis, Fe = fe.trustedTypes, Et = Fe ? Fe.emptyScript : "", Mt = fe.reactiveElementPolyfillSupport, oe = (n, e) => n, me = { toAttribute(n, e) {
+const { is: mt, defineProperty: gt, getOwnPropertyDescriptor: ft, getOwnPropertyNames: vt, getOwnPropertySymbols: bt, getPrototypeOf: yt } = Object, pe = globalThis, Oe = pe.trustedTypes, xt = Oe ? Oe.emptyScript : "", $t = pe.reactiveElementPolyfillSupport, Y = (n, e) => n, le = { toAttribute(n, e) {
   switch (e) {
     case Boolean:
-      n = n ? Et : null;
+      n = n ? xt : null;
       break;
     case Object:
     case Array:
@@ -69,44 +69,44 @@ const { is: wt, defineProperty: zt, getOwnPropertyDescriptor: At, getOwnProperty
       }
   }
   return t;
-} }, Ee = (n, e) => !wt(n, e), je = { attribute: !0, type: String, converter: me, reflect: !1, useDefault: !1, hasChanged: Ee };
-Symbol.metadata ??= /* @__PURE__ */ Symbol("metadata"), fe.litPropertyMetadata ??= /* @__PURE__ */ new WeakMap();
-let B = class extends HTMLElement {
+} }, we = (n, e) => !mt(n, e), Re = { attribute: !0, type: String, converter: le, reflect: !1, useDefault: !1, hasChanged: we };
+Symbol.metadata ??= /* @__PURE__ */ Symbol("metadata"), pe.litPropertyMetadata ??= /* @__PURE__ */ new WeakMap();
+let L = class extends HTMLElement {
   static addInitializer(e) {
     this._$Ei(), (this.l ??= []).push(e);
   }
   static get observedAttributes() {
     return this.finalize(), this._$Eh && [...this._$Eh.keys()];
   }
-  static createProperty(e, t = je) {
+  static createProperty(e, t = Re) {
     if (t.state && (t.attribute = !1), this._$Ei(), this.prototype.hasOwnProperty(e) && ((t = Object.create(t)).wrapped = !0), this.elementProperties.set(e, t), !t.noAccessor) {
       const i = /* @__PURE__ */ Symbol(), o = this.getPropertyDescriptor(e, i, t);
-      o !== void 0 && zt(this.prototype, e, o);
+      o !== void 0 && gt(this.prototype, e, o);
     }
   }
   static getPropertyDescriptor(e, t, i) {
-    const { get: o, set: s } = At(this.prototype, e) ?? { get() {
+    const { get: o, set: s } = ft(this.prototype, e) ?? { get() {
       return this[t];
-    }, set(a) {
-      this[t] = a;
+    }, set(r) {
+      this[t] = r;
     } };
-    return { get: o, set(a) {
+    return { get: o, set(r) {
       const l = o?.call(this);
-      s?.call(this, a), this.requestUpdate(e, l, i);
+      s?.call(this, r), this.requestUpdate(e, l, i);
     }, configurable: !0, enumerable: !0 };
   }
   static getPropertyOptions(e) {
-    return this.elementProperties.get(e) ?? je;
+    return this.elementProperties.get(e) ?? Re;
   }
   static _$Ei() {
-    if (this.hasOwnProperty(oe("elementProperties"))) return;
-    const e = Ct(this);
+    if (this.hasOwnProperty(Y("elementProperties"))) return;
+    const e = yt(this);
     e.finalize(), e.l !== void 0 && (this.l = [...e.l]), this.elementProperties = new Map(e.elementProperties);
   }
   static finalize() {
-    if (this.hasOwnProperty(oe("finalized"))) return;
-    if (this.finalized = !0, this._$Ei(), this.hasOwnProperty(oe("properties"))) {
-      const t = this.properties, i = [...St(t), ...kt(t)];
+    if (this.hasOwnProperty(Y("finalized"))) return;
+    if (this.finalized = !0, this._$Ei(), this.hasOwnProperty(Y("properties"))) {
+      const t = this.properties, i = [...vt(t), ...bt(t)];
       for (const o of i) this.createProperty(o, t[o]);
     }
     const e = this[Symbol.metadata];
@@ -125,8 +125,8 @@ let B = class extends HTMLElement {
     const t = [];
     if (Array.isArray(e)) {
       const i = new Set(e.flat(1 / 0).reverse());
-      for (const o of i) t.unshift(Le(o));
-    } else e !== void 0 && t.push(Le(e));
+      for (const o of i) t.unshift(De(o));
+    } else e !== void 0 && t.push(De(e));
     return t;
   }
   static _$Eu(e, t) {
@@ -152,7 +152,7 @@ let B = class extends HTMLElement {
   }
   createRenderRoot() {
     const e = this.shadowRoot ?? this.attachShadow(this.constructor.shadowRootOptions);
-    return $t(e, this.constructor.elementStyles), e;
+    return _t(e, this.constructor.elementStyles), e;
   }
   connectedCallback() {
     this.renderRoot ??= this.createRenderRoot(), this.enableUpdating(!0), this._$EO?.forEach((e) => e.hostConnected?.());
@@ -168,29 +168,29 @@ let B = class extends HTMLElement {
   _$ET(e, t) {
     const i = this.constructor.elementProperties.get(e), o = this.constructor._$Eu(e, i);
     if (o !== void 0 && i.reflect === !0) {
-      const s = (i.converter?.toAttribute !== void 0 ? i.converter : me).toAttribute(t, i.type);
+      const s = (i.converter?.toAttribute !== void 0 ? i.converter : le).toAttribute(t, i.type);
       this._$Em = e, s == null ? this.removeAttribute(o) : this.setAttribute(o, s), this._$Em = null;
     }
   }
   _$AK(e, t) {
     const i = this.constructor, o = i._$Eh.get(e);
     if (o !== void 0 && this._$Em !== o) {
-      const s = i.getPropertyOptions(o), a = typeof s.converter == "function" ? { fromAttribute: s.converter } : s.converter?.fromAttribute !== void 0 ? s.converter : me;
+      const s = i.getPropertyOptions(o), r = typeof s.converter == "function" ? { fromAttribute: s.converter } : s.converter?.fromAttribute !== void 0 ? s.converter : le;
       this._$Em = o;
-      const l = a.fromAttribute(t, s.type);
+      const l = r.fromAttribute(t, s.type);
       this[o] = l ?? this._$Ej?.get(o) ?? l, this._$Em = null;
     }
   }
   requestUpdate(e, t, i, o = !1, s) {
     if (e !== void 0) {
-      const a = this.constructor;
-      if (o === !1 && (s = this[e]), i ??= a.getPropertyOptions(e), !((i.hasChanged ?? Ee)(s, t) || i.useDefault && i.reflect && s === this._$Ej?.get(e) && !this.hasAttribute(a._$Eu(e, i)))) return;
+      const r = this.constructor;
+      if (o === !1 && (s = this[e]), i ??= r.getPropertyOptions(e), !((i.hasChanged ?? we)(s, t) || i.useDefault && i.reflect && s === this._$Ej?.get(e) && !this.hasAttribute(r._$Eu(e, i)))) return;
       this.C(e, t, i);
     }
     this.isUpdatePending === !1 && (this._$ES = this._$EP());
   }
-  C(e, t, { useDefault: i, reflect: o, wrapped: s }, a) {
-    i && !(this._$Ej ??= /* @__PURE__ */ new Map()).has(e) && (this._$Ej.set(e, a ?? t ?? this[e]), s !== !0 || a !== void 0) || (this._$AL.has(e) || (this.hasUpdated || i || (t = void 0), this._$AL.set(e, t)), o === !0 && this._$Em !== e && (this._$Eq ??= /* @__PURE__ */ new Set()).add(e));
+  C(e, t, { useDefault: i, reflect: o, wrapped: s }, r) {
+    i && !(this._$Ej ??= /* @__PURE__ */ new Map()).has(e) && (this._$Ej.set(e, r ?? t ?? this[e]), s !== !0 || r !== void 0) || (this._$AL.has(e) || (this.hasUpdated || i || (t = void 0), this._$AL.set(e, t)), o === !0 && this._$Em !== e && (this._$Eq ??= /* @__PURE__ */ new Set()).add(e));
   }
   async _$EP() {
     this.isUpdatePending = !0;
@@ -214,8 +214,8 @@ let B = class extends HTMLElement {
       }
       const i = this.constructor.elementProperties;
       if (i.size > 0) for (const [o, s] of i) {
-        const { wrapped: a } = s, l = this[o];
-        a !== !0 || this._$AL.has(o) || l === void 0 || this.C(o, void 0, s, l);
+        const { wrapped: r } = s, l = this[o];
+        r !== !0 || this._$AL.has(o) || l === void 0 || this.C(o, void 0, s, l);
       }
     }
     let e = !1;
@@ -252,70 +252,70 @@ let B = class extends HTMLElement {
   firstUpdated(e) {
   }
 };
-B.elementStyles = [], B.shadowRootOptions = { mode: "open" }, B[oe("elementProperties")] = /* @__PURE__ */ new Map(), B[oe("finalized")] = /* @__PURE__ */ new Map(), Mt?.({ ReactiveElement: B }), (fe.reactiveElementVersions ??= []).push("2.1.2");
-const Me = globalThis, Be = (n) => n, _e = Me.trustedTypes, Ve = _e ? _e.createPolicy("lit-html", { createHTML: (n) => n }) : void 0, rt = "$lit$", T = `lit$${Math.random().toFixed(9).slice(2)}$`, lt = "?" + T, Tt = `<${lt}>`, H = document, ne = () => H.createComment(""), se = (n) => n === null || typeof n != "object" && typeof n != "function", Te = Array.isArray, Nt = (n) => Te(n) || typeof n?.[Symbol.iterator] == "function", $e = `[ 	
-\f\r]`, J = /<(?:(!--|\/[^a-zA-Z])|(\/?[a-zA-Z][^>\s]*)|(\/?$))/g, We = /-->/g, Ze = />/g, D = RegExp(`>|${$e}(?:([^\\s"'>=/]+)(${$e}*=${$e}*(?:[^ 	
-\f\r"'\`<>=]|("|')|))|$)`, "g"), Ge = /'/g, Qe = /"/g, ct = /^(?:script|style|textarea|title)$/i, dt = (n) => (e, ...t) => ({ _$litType$: n, strings: e, values: t }), u = dt(1), O = dt(2), G = /* @__PURE__ */ Symbol.for("lit-noChange"), d = /* @__PURE__ */ Symbol.for("lit-nothing"), Ke = /* @__PURE__ */ new WeakMap(), q = H.createTreeWalker(H, 129);
-function ut(n, e) {
-  if (!Te(n) || !n.hasOwnProperty("raw")) throw Error("invalid template strings array");
-  return Ve !== void 0 ? Ve.createHTML(e) : e;
+L.elementStyles = [], L.shadowRootOptions = { mode: "open" }, L[Y("elementProperties")] = /* @__PURE__ */ new Map(), L[Y("finalized")] = /* @__PURE__ */ new Map(), $t?.({ ReactiveElement: L }), (pe.reactiveElementVersions ??= []).push("2.1.2");
+const ze = globalThis, qe = (n) => n, ce = ze.trustedTypes, Ue = ce ? ce.createPolicy("lit-html", { createHTML: (n) => n }) : void 0, it = "$lit$", P = `lit$${Math.random().toFixed(9).slice(2)}$`, ot = "?" + P, wt = `<${ot}>`, q = document, J = () => q.createComment(""), ee = (n) => n === null || typeof n != "object" && typeof n != "function", ke = Array.isArray, zt = (n) => ke(n) || typeof n?.[Symbol.iterator] == "function", fe = `[ 	
+\f\r]`, Q = /<(?:(!--|\/[^a-zA-Z])|(\/?[a-zA-Z][^>\s]*)|(\/?$))/g, He = /-->/g, Fe = />/g, I = RegExp(`>|${fe}(?:([^\\s"'>=/]+)(${fe}*=${fe}*(?:[^ 	
+\f\r"'\`<>=]|("|')|))|$)`, "g"), Le = /'/g, Be = /"/g, nt = /^(?:script|style|textarea|title)$/i, st = (n) => (e, ...t) => ({ _$litType$: n, strings: e, values: t }), u = st(1), D = st(2), j = /* @__PURE__ */ Symbol.for("lit-noChange"), d = /* @__PURE__ */ Symbol.for("lit-nothing"), je = /* @__PURE__ */ new WeakMap(), O = q.createTreeWalker(q, 129);
+function rt(n, e) {
+  if (!ke(n) || !n.hasOwnProperty("raw")) throw Error("invalid template strings array");
+  return Ue !== void 0 ? Ue.createHTML(e) : e;
 }
-const Pt = (n, e) => {
+const kt = (n, e) => {
   const t = n.length - 1, i = [];
-  let o, s = e === 2 ? "<svg>" : e === 3 ? "<math>" : "", a = J;
+  let o, s = e === 2 ? "<svg>" : e === 3 ? "<math>" : "", r = Q;
   for (let l = 0; l < t; l++) {
-    const r = n[l];
-    let p, h, m = -1, _ = 0;
-    for (; _ < r.length && (a.lastIndex = _, h = a.exec(r), h !== null); ) _ = a.lastIndex, a === J ? h[1] === "!--" ? a = We : h[1] !== void 0 ? a = Ze : h[2] !== void 0 ? (ct.test(h[2]) && (o = RegExp("</" + h[2], "g")), a = D) : h[3] !== void 0 && (a = D) : a === D ? h[0] === ">" ? (a = o ?? J, m = -1) : h[1] === void 0 ? m = -2 : (m = a.lastIndex - h[2].length, p = h[1], a = h[3] === void 0 ? D : h[3] === '"' ? Qe : Ge) : a === Qe || a === Ge ? a = D : a === We || a === Ze ? a = J : (a = D, o = void 0);
-    const g = a === D && n[l + 1].startsWith("/>") ? " " : "";
-    s += a === J ? r + Tt : m >= 0 ? (i.push(p), r.slice(0, m) + rt + r.slice(m) + T + g) : r + T + (m === -2 ? l : g);
+    const a = n[l];
+    let p, h, _ = -1, m = 0;
+    for (; m < a.length && (r.lastIndex = m, h = r.exec(a), h !== null); ) m = r.lastIndex, r === Q ? h[1] === "!--" ? r = He : h[1] !== void 0 ? r = Fe : h[2] !== void 0 ? (nt.test(h[2]) && (o = RegExp("</" + h[2], "g")), r = I) : h[3] !== void 0 && (r = I) : r === I ? h[0] === ">" ? (r = o ?? Q, _ = -1) : h[1] === void 0 ? _ = -2 : (_ = r.lastIndex - h[2].length, p = h[1], r = h[3] === void 0 ? I : h[3] === '"' ? Be : Le) : r === Be || r === Le ? r = I : r === He || r === Fe ? r = Q : (r = I, o = void 0);
+    const f = r === I && n[l + 1].startsWith("/>") ? " " : "";
+    s += r === Q ? a + wt : _ >= 0 ? (i.push(p), a.slice(0, _) + it + a.slice(_) + P + f) : a + P + (_ === -2 ? l : f);
   }
-  return [ut(n, s + (n[t] || "<?>") + (e === 2 ? "</svg>" : e === 3 ? "</math>" : "")), i];
+  return [rt(n, s + (n[t] || "<?>") + (e === 2 ? "</svg>" : e === 3 ? "</math>" : "")), i];
 };
-class ae {
+class te {
   constructor({ strings: e, _$litType$: t }, i) {
     let o;
     this.parts = [];
-    let s = 0, a = 0;
-    const l = e.length - 1, r = this.parts, [p, h] = Pt(e, t);
-    if (this.el = ae.createElement(p, i), q.currentNode = this.el.content, t === 2 || t === 3) {
-      const m = this.el.content.firstChild;
-      m.replaceWith(...m.childNodes);
+    let s = 0, r = 0;
+    const l = e.length - 1, a = this.parts, [p, h] = kt(e, t);
+    if (this.el = te.createElement(p, i), O.currentNode = this.el.content, t === 2 || t === 3) {
+      const _ = this.el.content.firstChild;
+      _.replaceWith(..._.childNodes);
     }
-    for (; (o = q.nextNode()) !== null && r.length < l; ) {
+    for (; (o = O.nextNode()) !== null && a.length < l; ) {
       if (o.nodeType === 1) {
-        if (o.hasAttributes()) for (const m of o.getAttributeNames()) if (m.endsWith(rt)) {
-          const _ = h[a++], g = o.getAttribute(m).split(T), x = /([.?@])?(.*)/.exec(_);
-          r.push({ type: 1, index: s, name: x[2], strings: g, ctor: x[1] === "." ? Dt : x[1] === "?" ? Ot : x[1] === "@" ? qt : ve }), o.removeAttribute(m);
-        } else m.startsWith(T) && (r.push({ type: 6, index: s }), o.removeAttribute(m));
-        if (ct.test(o.tagName)) {
-          const m = o.textContent.split(T), _ = m.length - 1;
-          if (_ > 0) {
-            o.textContent = _e ? _e.emptyScript : "";
-            for (let g = 0; g < _; g++) o.append(m[g], ne()), q.nextNode(), r.push({ type: 2, index: ++s });
-            o.append(m[_], ne());
+        if (o.hasAttributes()) for (const _ of o.getAttributeNames()) if (_.endsWith(it)) {
+          const m = h[r++], f = o.getAttribute(_).split(P), x = /([.?@])?(.*)/.exec(m);
+          a.push({ type: 1, index: s, name: x[2], strings: f, ctor: x[1] === "." ? At : x[1] === "?" ? Ct : x[1] === "@" ? Et : he }), o.removeAttribute(_);
+        } else _.startsWith(P) && (a.push({ type: 6, index: s }), o.removeAttribute(_));
+        if (nt.test(o.tagName)) {
+          const _ = o.textContent.split(P), m = _.length - 1;
+          if (m > 0) {
+            o.textContent = ce ? ce.emptyScript : "";
+            for (let f = 0; f < m; f++) o.append(_[f], J()), O.nextNode(), a.push({ type: 2, index: ++s });
+            o.append(_[m], J());
           }
         }
-      } else if (o.nodeType === 8) if (o.data === lt) r.push({ type: 2, index: s });
+      } else if (o.nodeType === 8) if (o.data === ot) a.push({ type: 2, index: s });
       else {
-        let m = -1;
-        for (; (m = o.data.indexOf(T, m + 1)) !== -1; ) r.push({ type: 7, index: s }), m += T.length - 1;
+        let _ = -1;
+        for (; (_ = o.data.indexOf(P, _ + 1)) !== -1; ) a.push({ type: 7, index: s }), _ += P.length - 1;
       }
       s++;
     }
   }
   static createElement(e, t) {
-    const i = H.createElement("template");
+    const i = q.createElement("template");
     return i.innerHTML = e, i;
   }
 }
-function Q(n, e, t = n, i) {
-  if (e === G) return e;
+function V(n, e, t = n, i) {
+  if (e === j) return e;
   let o = i !== void 0 ? t._$Co?.[i] : t._$Cl;
-  const s = se(e) ? void 0 : e._$litDirective$;
-  return o?.constructor !== s && (o?._$AO?.(!1), s === void 0 ? o = void 0 : (o = new s(n), o._$AT(n, t, i)), i !== void 0 ? (t._$Co ??= [])[i] = o : t._$Cl = o), o !== void 0 && (e = Q(n, o._$AS(n, e.values), o, i)), e;
+  const s = ee(e) ? void 0 : e._$litDirective$;
+  return o?.constructor !== s && (o?._$AO?.(!1), s === void 0 ? o = void 0 : (o = new s(n), o._$AT(n, t, i)), i !== void 0 ? (t._$Co ??= [])[i] = o : t._$Cl = o), o !== void 0 && (e = V(n, o._$AS(n, e.values), o, i)), e;
 }
-class It {
+class St {
   constructor(e, t) {
     this._$AV = [], this._$AN = void 0, this._$AD = e, this._$AM = t;
   }
@@ -326,24 +326,24 @@ class It {
     return this._$AM._$AU;
   }
   u(e) {
-    const { el: { content: t }, parts: i } = this._$AD, o = (e?.creationScope ?? H).importNode(t, !0);
-    q.currentNode = o;
-    let s = q.nextNode(), a = 0, l = 0, r = i[0];
-    for (; r !== void 0; ) {
-      if (a === r.index) {
+    const { el: { content: t }, parts: i } = this._$AD, o = (e?.creationScope ?? q).importNode(t, !0);
+    O.currentNode = o;
+    let s = O.nextNode(), r = 0, l = 0, a = i[0];
+    for (; a !== void 0; ) {
+      if (r === a.index) {
         let p;
-        r.type === 2 ? p = new le(s, s.nextSibling, this, e) : r.type === 1 ? p = new r.ctor(s, r.name, r.strings, this, e) : r.type === 6 && (p = new Rt(s, this, e)), this._$AV.push(p), r = i[++l];
+        a.type === 2 ? p = new oe(s, s.nextSibling, this, e) : a.type === 1 ? p = new a.ctor(s, a.name, a.strings, this, e) : a.type === 6 && (p = new Mt(s, this, e)), this._$AV.push(p), a = i[++l];
       }
-      a !== r?.index && (s = q.nextNode(), a++);
+      r !== a?.index && (s = O.nextNode(), r++);
     }
-    return q.currentNode = H, o;
+    return O.currentNode = q, o;
   }
   p(e) {
     let t = 0;
     for (const i of this._$AV) i !== void 0 && (i.strings !== void 0 ? (i._$AI(e, i, t), t += i.strings.length - 2) : i._$AI(e[t])), t++;
   }
 }
-class le {
+class oe {
   get _$AU() {
     return this._$AM?._$AU ?? this._$Cv;
   }
@@ -362,7 +362,7 @@ class le {
     return this._$AB;
   }
   _$AI(e, t = this) {
-    e = Q(this, e, t), se(e) ? e === d || e == null || e === "" ? (this._$AH !== d && this._$AR(), this._$AH = d) : e !== this._$AH && e !== G && this._(e) : e._$litType$ !== void 0 ? this.$(e) : e.nodeType !== void 0 ? this.T(e) : Nt(e) ? this.k(e) : this._(e);
+    e = V(this, e, t), ee(e) ? e === d || e == null || e === "" ? (this._$AH !== d && this._$AR(), this._$AH = d) : e !== this._$AH && e !== j && this._(e) : e._$litType$ !== void 0 ? this.$(e) : e.nodeType !== void 0 ? this.T(e) : zt(e) ? this.k(e) : this._(e);
   }
   O(e) {
     return this._$AA.parentNode.insertBefore(e, this._$AB);
@@ -371,38 +371,38 @@ class le {
     this._$AH !== e && (this._$AR(), this._$AH = this.O(e));
   }
   _(e) {
-    this._$AH !== d && se(this._$AH) ? this._$AA.nextSibling.data = e : this.T(H.createTextNode(e)), this._$AH = e;
+    this._$AH !== d && ee(this._$AH) ? this._$AA.nextSibling.data = e : this.T(q.createTextNode(e)), this._$AH = e;
   }
   $(e) {
-    const { values: t, _$litType$: i } = e, o = typeof i == "number" ? this._$AC(e) : (i.el === void 0 && (i.el = ae.createElement(ut(i.h, i.h[0]), this.options)), i);
+    const { values: t, _$litType$: i } = e, o = typeof i == "number" ? this._$AC(e) : (i.el === void 0 && (i.el = te.createElement(rt(i.h, i.h[0]), this.options)), i);
     if (this._$AH?._$AD === o) this._$AH.p(t);
     else {
-      const s = new It(o, this), a = s.u(this.options);
-      s.p(t), this.T(a), this._$AH = s;
+      const s = new St(o, this), r = s.u(this.options);
+      s.p(t), this.T(r), this._$AH = s;
     }
   }
   _$AC(e) {
-    let t = Ke.get(e.strings);
-    return t === void 0 && Ke.set(e.strings, t = new ae(e)), t;
+    let t = je.get(e.strings);
+    return t === void 0 && je.set(e.strings, t = new te(e)), t;
   }
   k(e) {
-    Te(this._$AH) || (this._$AH = [], this._$AR());
+    ke(this._$AH) || (this._$AH = [], this._$AR());
     const t = this._$AH;
     let i, o = 0;
-    for (const s of e) o === t.length ? t.push(i = new le(this.O(ne()), this.O(ne()), this, this.options)) : i = t[o], i._$AI(s), o++;
+    for (const s of e) o === t.length ? t.push(i = new oe(this.O(J()), this.O(J()), this, this.options)) : i = t[o], i._$AI(s), o++;
     o < t.length && (this._$AR(i && i._$AB.nextSibling, o), t.length = o);
   }
   _$AR(e = this._$AA.nextSibling, t) {
     for (this._$AP?.(!1, !0, t); e !== this._$AB; ) {
-      const i = Be(e).nextSibling;
-      Be(e).remove(), e = i;
+      const i = qe(e).nextSibling;
+      qe(e).remove(), e = i;
     }
   }
   setConnected(e) {
     this._$AM === void 0 && (this._$Cv = e, this._$AP?.(e));
   }
 }
-class ve {
+class he {
   get tagName() {
     return this.element.tagName;
   }
@@ -414,20 +414,20 @@ class ve {
   }
   _$AI(e, t = this, i, o) {
     const s = this.strings;
-    let a = !1;
-    if (s === void 0) e = Q(this, e, t, 0), a = !se(e) || e !== this._$AH && e !== G, a && (this._$AH = e);
+    let r = !1;
+    if (s === void 0) e = V(this, e, t, 0), r = !ee(e) || e !== this._$AH && e !== j, r && (this._$AH = e);
     else {
       const l = e;
-      let r, p;
-      for (e = s[0], r = 0; r < s.length - 1; r++) p = Q(this, l[i + r], t, r), p === G && (p = this._$AH[r]), a ||= !se(p) || p !== this._$AH[r], p === d ? e = d : e !== d && (e += (p ?? "") + s[r + 1]), this._$AH[r] = p;
+      let a, p;
+      for (e = s[0], a = 0; a < s.length - 1; a++) p = V(this, l[i + a], t, a), p === j && (p = this._$AH[a]), r ||= !ee(p) || p !== this._$AH[a], p === d ? e = d : e !== d && (e += (p ?? "") + s[a + 1]), this._$AH[a] = p;
     }
-    a && !o && this.j(e);
+    r && !o && this.j(e);
   }
   j(e) {
     e === d ? this.element.removeAttribute(this.name) : this.element.setAttribute(this.name, e ?? "");
   }
 }
-class Dt extends ve {
+class At extends he {
   constructor() {
     super(...arguments), this.type = 3;
   }
@@ -435,7 +435,7 @@ class Dt extends ve {
     this.element[this.name] = e === d ? void 0 : e;
   }
 }
-class Ot extends ve {
+class Ct extends he {
   constructor() {
     super(...arguments), this.type = 4;
   }
@@ -443,12 +443,12 @@ class Ot extends ve {
     this.element.toggleAttribute(this.name, !!e && e !== d);
   }
 }
-class qt extends ve {
+class Et extends he {
   constructor(e, t, i, o, s) {
     super(e, t, i, o, s), this.type = 5;
   }
   _$AI(e, t = this) {
-    if ((e = Q(this, e, t, 0) ?? d) === G) return;
+    if ((e = V(this, e, t, 0) ?? d) === j) return;
     const i = this._$AH, o = e === d && i !== d || e.capture !== i.capture || e.once !== i.once || e.passive !== i.passive, s = e !== d && (i === d || o);
     o && this.element.removeEventListener(this.name, this, i), s && this.element.addEventListener(this.name, this, e), this._$AH = e;
   }
@@ -456,7 +456,7 @@ class qt extends ve {
     typeof this._$AH == "function" ? this._$AH.call(this.options?.host ?? this.element, e) : this._$AH.handleEvent(e);
   }
 }
-class Rt {
+class Mt {
   constructor(e, t, i) {
     this.element = e, this.type = 6, this._$AN = void 0, this._$AM = t, this.options = i;
   }
@@ -464,22 +464,22 @@ class Rt {
     return this._$AM._$AU;
   }
   _$AI(e) {
-    Q(this, e);
+    V(this, e);
   }
 }
-const Ut = Me.litHtmlPolyfillSupport;
-Ut?.(ae, le), (Me.litHtmlVersions ??= []).push("3.3.3");
-const Ht = (n, e, t) => {
+const Pt = ze.litHtmlPolyfillSupport;
+Pt?.(te, oe), (ze.litHtmlVersions ??= []).push("3.3.3");
+const Tt = (n, e, t) => {
   const i = t?.renderBefore ?? e;
   let o = i._$litPart$;
   if (o === void 0) {
     const s = t?.renderBefore ?? null;
-    i._$litPart$ = o = new le(e.insertBefore(ne(), s), s, void 0, t ?? {});
+    i._$litPart$ = o = new oe(e.insertBefore(J(), s), s, void 0, t ?? {});
   }
   return o._$AI(n), o;
 };
-const Ne = globalThis;
-class k extends B {
+const Se = globalThis;
+class k extends L {
   constructor() {
     super(...arguments), this.renderOptions = { host: this }, this._$Do = void 0;
   }
@@ -489,7 +489,7 @@ class k extends B {
   }
   update(e) {
     const t = this.render();
-    this.hasUpdated || (this.renderOptions.isConnected = this.isConnected), super.update(e), this._$Do = Ht(t, this.renderRoot, this.renderOptions);
+    this.hasUpdated || (this.renderOptions.isConnected = this.isConnected), super.update(e), this._$Do = Tt(t, this.renderRoot, this.renderOptions);
   }
   connectedCallback() {
     super.connectedCallback(), this._$Do?.setConnected(!0);
@@ -498,72 +498,72 @@ class k extends B {
     super.disconnectedCallback(), this._$Do?.setConnected(!1);
   }
   render() {
-    return G;
+    return j;
   }
 }
-k._$litElement$ = !0, k.finalized = !0, Ne.litElementHydrateSupport?.({ LitElement: k });
-const Lt = Ne.litElementPolyfillSupport;
-Lt?.({ LitElement: k });
-(Ne.litElementVersions ??= []).push("4.2.2");
-const Ft = { attribute: !0, type: String, converter: me, reflect: !1, hasChanged: Ee }, jt = (n = Ft, e, t) => {
+k._$litElement$ = !0, k.finalized = !0, Se.litElementHydrateSupport?.({ LitElement: k });
+const Nt = Se.litElementPolyfillSupport;
+Nt?.({ LitElement: k });
+(Se.litElementVersions ??= []).push("4.2.2");
+const It = { attribute: !0, type: String, converter: le, reflect: !1, hasChanged: we }, Dt = (n = It, e, t) => {
   const { kind: i, metadata: o } = t;
   let s = globalThis.litPropertyMetadata.get(o);
   if (s === void 0 && globalThis.litPropertyMetadata.set(o, s = /* @__PURE__ */ new Map()), i === "setter" && ((n = Object.create(n)).wrapped = !0), s.set(t.name, n), i === "accessor") {
-    const { name: a } = t;
+    const { name: r } = t;
     return { set(l) {
-      const r = e.get.call(this);
-      e.set.call(this, l), this.requestUpdate(a, r, n, !0, l);
+      const a = e.get.call(this);
+      e.set.call(this, l), this.requestUpdate(r, a, n, !0, l);
     }, init(l) {
-      return l !== void 0 && this.C(a, void 0, n, l), l;
+      return l !== void 0 && this.C(r, void 0, n, l), l;
     } };
   }
   if (i === "setter") {
-    const { name: a } = t;
+    const { name: r } = t;
     return function(l) {
-      const r = this[a];
-      e.call(this, l), this.requestUpdate(a, r, n, !0, l);
+      const a = this[r];
+      e.call(this, l), this.requestUpdate(r, a, n, !0, l);
     };
   }
   throw Error("Unsupported decorator location: " + i);
 };
 function y(n) {
-  return (e, t) => typeof t == "object" ? jt(n, e, t) : ((i, o, s) => {
-    const a = o.hasOwnProperty(s);
-    return o.constructor.createProperty(s, i), a ? Object.getOwnPropertyDescriptor(o, s) : void 0;
+  return (e, t) => typeof t == "object" ? Dt(n, e, t) : ((i, o, s) => {
+    const r = o.hasOwnProperty(s);
+    return o.constructor.createProperty(s, i), r ? Object.getOwnPropertyDescriptor(o, s) : void 0;
   })(n, e, t);
 }
-function w(n) {
+function z(n) {
   return y({ ...n, state: !0, attribute: !1 });
 }
-const Bt = {
+const Ot = {
   show_header: !0,
   show_queue: !0,
   show_controls: !0,
   compact: !1
 };
-function f(n) {
+function g(n) {
   if (typeof n == "number" && Number.isFinite(n)) return n;
   if (typeof n == "string" && n.trim() !== "") {
     const e = Number(n);
     if (Number.isFinite(e)) return e;
   }
 }
-function b(n) {
+function v(n) {
   return typeof n == "string" && n !== "" ? n : void 0;
 }
-function Ae(n) {
+function de(n) {
   return Array.isArray(n) ? n : [];
 }
 function R(n) {
   return !n || n.state === "unavailable" || n.state === "unknown";
 }
-function Se(n, e, t) {
+function ye(n, e, t) {
   return Math.min(t, Math.max(e, n));
 }
-function Y(n, e) {
+function G(n, e) {
   customElements.get(n) || customElements.define(n, e);
 }
-const Vt = {
+const Rt = {
   hub_water_budget: "waterBudget",
   hub_skip_threshold: "skipThreshold",
   hub_weighted_temp: "weightedTemp",
@@ -572,7 +572,7 @@ const Vt = {
   hub_pause: "pauseSwitch",
   hub_evaluate: "evaluateButton",
   hub_stop_all: "stopAllButton"
-}, Wt = {
+}, qt = {
   zone_state: "state",
   zone_next_run: "nextRun",
   zone_last_outcome: "lastOutcome",
@@ -580,41 +580,44 @@ const Vt = {
   zone_order: "orderNumber",
   zone_suspend_until: "suspendUntil"
 };
-function pt(n) {
+function at(n) {
   const e = {}, t = /* @__PURE__ */ new Map(), i = [];
   for (const s of Object.values(n.states)) {
-    const a = b(s.attributes.maestro_role);
-    if (!a) continue;
+    const r = v(s.attributes.maestro_role);
+    if (!r) continue;
     i.push(s.entity_id);
-    const l = b(s.attributes.zone_id);
+    const l = v(s.attributes.zone_id);
     if (l) {
-      let r = t.get(l);
-      if (r || (r = {
+      let a = t.get(l);
+      if (a || (a = {
         zoneId: l,
         name: l,
         order: Number.MAX_SAFE_INTEGER,
         cycleSwitches: []
-      }, t.set(l, r)), a === "cycle_enabled")
-        r.cycleSwitches.push(s);
+      }, t.set(l, a)), r === "cycle_enabled")
+        a.cycleSwitches.push(s);
       else {
-        const p = Wt[a];
-        p && (r[p] = s);
+        const p = qt[r];
+        p && (a[p] = s);
       }
     } else {
-      const r = Vt[a];
-      r && (e[r] = s);
+      const a = Rt[r];
+      a && (e[a] = s);
     }
   }
   const o = [...t.values()];
   for (const s of o) {
-    const a = s.state?.attributes ?? {};
-    s.name = b(a.zone_name) ?? b(s.state?.attributes.friendly_name) ?? s.zoneId, s.order = f(a.order) ?? f(s.orderNumber?.state) ?? Number.MAX_SAFE_INTEGER;
+    const r = s.state?.attributes ?? {};
+    s.name = v(r.zone_name) ?? v(s.state?.attributes.friendly_name) ?? s.zoneId, s.order = g(r.order) ?? g(s.orderNumber?.state) ?? Number.MAX_SAFE_INTEGER;
   }
   return o.sort(
-    (s, a) => s.order - a.order || s.name.localeCompare(a.name)
+    (s, r) => s.order - r.order || s.name.localeCompare(r.name)
   ), { found: i.length > 0, hub: e, zones: o, entityIds: i };
 }
-const E = {
+function Ut(n) {
+  return !de(n.state?.attributes?.degraded).some((t) => v(t) === "no_flow_meter");
+}
+const A = {
   // Card-level messages
   "card.name": "Irrigation Maestro Card",
   "card.description": "Overview and control of the Irrigation Maestro integration: water budget, zones, queue and curves.",
@@ -782,30 +785,28 @@ const E = {
   // Curve editor
   "editor.edit_curve": "Edit curve",
   "editor.title": "How much to water by temperature",
-  "editor.amount.label": "💧 How much water",
-  "editor.amount.help": "Watering minutes on a mild day (25°). This is the baseline everything else builds on.",
-  "editor.amount.value": "{min} min at 25°",
-  "editor.amount.low": "little (3 min)",
-  "editor.amount.high": "a lot (45 min)",
-  "editor.heat.label": "🔥 How much more when it's hot",
-  "editor.heat.help": "Extra minutes on a hot day (35°) compared with a mild one. At 0 it waters the same regardless.",
-  "editor.heat.value": "+{min} min at 35°",
-  "editor.heat.low": "same (+0)",
-  "editor.heat.high": "much more (+30)",
-  "editor.graph.caption": "Live preview — watering minutes by temperature",
+  "editor.graph.caption": "Live preview — curve value by temperature",
   "editor.graph.today": "today {temp}°",
-  "editor.example.cool": "Cool · 12°",
-  "editor.example.mild": "Mild · 25°",
-  "editor.example.hot": "Hot · 35°",
-  "editor.today": "🌡️ With today's weather (weighted temperature {temp}°) it would water ≈ {min} min.",
-  "editor.advanced.toggle": "Advanced — limits and draggable points",
-  "editor.advanced.help": "For precise control. You can ignore this — the defaults are fine.",
+  "editor.preview_title": "Preview at reference temperatures",
+  "editor.today": "🌡️ With today's weather (weighted temperature {temp}°) it would give ≈ {value} {unit}.",
+  "editor.points_title": "Points",
+  "editor.point_temp": "Temperature (°C)",
+  "editor.point_value": "Value",
+  "editor.point_add": "Add a point after this one",
+  "editor.point_remove": "Remove this point",
+  "editor.kind_label": "This curve measures",
+  "editor.kind_duration": "Duration (minutes)",
+  "editor.kind_volume": "Volume (liters)",
   "editor.min.label": "⬇️ Never less than",
-  "editor.min.help": "Absolute minimum minutes, even when cold.",
+  "editor.min.help": "Absolute minimum, applied after the curve and any scaling.",
   "editor.max.label": "⬆️ Never more than",
-  "editor.max.help": "Absolute maximum minutes, even in extreme heat.",
-  "editor.drag_hint": "✋ Drag the three points (up/down) to shape the curve by hand.",
-  "editor.more_points": "Need more than three points? Edit the full curve in the zone settings.",
+  "editor.max.help": "Absolute maximum, applied after the curve and any scaling.",
+  "editor.intensity_reset": "This program waters at {pct}% of its curve. Saving a curve you edited here resets that to 100%, so the minutes will change.",
+  "editor.curve_empty": "The curve needs at least one point.",
+  "editor.curve_negative_value": "No point can have a negative value.",
+  "editor.curve_temps_not_increasing": "Temperatures must strictly increase from left to right.",
+  "editor.min_above_max": "The minimum can't be higher than the maximum.",
+  "editor.negative_clamp": "The minimum can't be negative.",
   "editor.save": "Save",
   "editor.cancel": "Cancel",
   "editor.saved": "Curve updated.",
@@ -901,7 +902,7 @@ const E = {
   "program_editor.volume_safety_timeout": "Volume safety timeout",
   "program_editor.volume_safety_timeout_hint": "Minutes after which a volume-target run stops even if the meter has not reached the target.",
   "settings.advanced_note": "Advanced parameters (engine, safety, notifications) live in Settings"
-}, Zt = {
+}, Ht = {
   // Messaggi a livello di scheda
   "card.name": "Scheda Irrigation Maestro",
   "card.description": "Panoramica e controllo dell'integrazione Irrigation Maestro: bilancio idrico, zone, coda e curve.",
@@ -1069,30 +1070,28 @@ const E = {
   // Editor curva
   "editor.edit_curve": "Modifica curva",
   "editor.title": "Quanto irrigare in base al caldo",
-  "editor.amount.label": "💧 Quanta acqua",
-  "editor.amount.help": "Minuti di irrigazione in una giornata mite (25°). È la base: tutto il resto parte da qui.",
-  "editor.amount.value": "{min} min a 25°",
-  "editor.amount.low": "poca (3 min)",
-  "editor.amount.high": "tanta (45 min)",
-  "editor.heat.label": "🔥 Quanto di più quando fa caldo",
-  "editor.heat.help": "Minuti extra in una giornata calda (35°) rispetto a una mite. A 0 irriga sempre uguale.",
-  "editor.heat.value": "+{min} min a 35°",
-  "editor.heat.low": "uguale (+0)",
-  "editor.heat.high": "molto di più (+30)",
-  "editor.graph.caption": "Anteprima dal vivo — minuti di irrigazione secondo la temperatura",
+  "editor.graph.caption": "Anteprima dal vivo — valore della curva secondo la temperatura",
   "editor.graph.today": "oggi {temp}°",
-  "editor.example.cool": "Fresco · 12°",
-  "editor.example.mild": "Mite · 25°",
-  "editor.example.hot": "Caldo · 35°",
-  "editor.today": "🌡️ Con il meteo di oggi (temperatura pesata {temp}°) irrigherebbe ≈ {min} min.",
-  "editor.advanced.toggle": "Avanzate — limiti e punti trascinabili",
-  "editor.advanced.help": "Per chi vuole il controllo preciso. Puoi ignorarle: i valori predefiniti vanno bene.",
+  "editor.preview_title": "Anteprima alle temperature di riferimento",
+  "editor.today": "🌡️ Con il meteo di oggi (temperatura pesata {temp}°) darebbe ≈ {value} {unit}.",
+  "editor.points_title": "Punti",
+  "editor.point_temp": "Temperatura (°C)",
+  "editor.point_value": "Valore",
+  "editor.point_add": "Aggiungi un punto dopo questo",
+  "editor.point_remove": "Rimuovi questo punto",
+  "editor.kind_label": "Questa curva misura",
+  "editor.kind_duration": "Durata (minuti)",
+  "editor.kind_volume": "Volume (litri)",
   "editor.min.label": "⬇️ Mai meno di",
-  "editor.min.help": "Minuti minimi assoluti, anche col freddo.",
+  "editor.min.help": "Minimo assoluto, applicato dopo la curva ed eventuali variazioni d'intensità.",
   "editor.max.label": "⬆️ Mai più di",
-  "editor.max.help": "Minuti massimi assoluti, anche col gran caldo.",
-  "editor.drag_hint": "✋ Trascina i tre punti (su/giù) per modellare la curva a mano.",
-  "editor.more_points": "Ti servono più di tre punti? La curva completa si modifica nelle impostazioni della zona.",
+  "editor.max.help": "Massimo assoluto, applicato dopo la curva ed eventuali variazioni d'intensità.",
+  "editor.intensity_reset": "Questo programma irriga al {pct}% della sua curva. Salvando una curva modificata qui riporti l'intensità al 100%, quindi i minuti erogati cambieranno.",
+  "editor.curve_empty": "La curva deve avere almeno un punto.",
+  "editor.curve_negative_value": "Nessun punto può avere un valore negativo.",
+  "editor.curve_temps_not_increasing": "Le temperature devono essere strettamente crescenti da sinistra a destra.",
+  "editor.min_above_max": "Il minimo non può essere superiore al massimo.",
+  "editor.negative_clamp": "Il minimo non può essere negativo.",
   "editor.save": "Salva",
   "editor.cancel": "Annulla",
   "editor.saved": "Curva aggiornata.",
@@ -1188,222 +1187,212 @@ const E = {
   "program_editor.volume_safety_timeout": "Timeout di sicurezza volumetrico",
   "program_editor.volume_safety_timeout_hint": "Minuti dopo i quali una corsa a volume si ferma anche se il contatore non ha raggiunto il target.",
   "settings.advanced_note": "Parametri avanzati (motore, sicurezza, notifiche) → Impostazioni"
-}, be = {
-  en: E,
-  it: Zt
+}, _e = {
+  en: A,
+  it: Ht
 };
-function ht(n) {
+function lt(n) {
   const t = (n?.locale?.language ?? n?.language ?? "en").toLowerCase().split(/[-_]/)[0] ?? "en";
-  return t in be ? t : "en";
+  return t in _e ? t : "en";
 }
-function Gt(n, e) {
+function Ft(n, e) {
   return e ? n.replace(/\{(\w+)\}/g, (t, i) => {
     const o = e[i];
     return o === void 0 ? t : String(o);
   }) : n;
 }
 function c(n, e, t) {
-  const i = be[n] ?? E;
-  return Gt(i[e] ?? E[e], t);
+  const i = _e[n] ?? A;
+  return Ft(i[e] ?? A[e], t);
 }
-function ie(n, e, t) {
-  const i = `${e}.${t}`, o = be[n] ?? E, s = E;
+function B(n, e, t) {
+  const i = `${e}.${t}`, o = _e[n] ?? A, s = A;
   return o[i] ?? s[i] ?? t;
 }
-function Qt(n, e) {
-  const t = be[n] ?? E, i = E;
+function Lt(n, e) {
+  const t = _e[n] ?? A, i = A;
   for (const o of ["queue_state", "zone_state", "outcome"]) {
-    const s = `${o}.${e}`, a = t[s] ?? i[s];
-    if (a !== void 0) return a;
+    const s = `${o}.${e}`, r = t[s] ?? i[s];
+    if (r !== void 0) return r;
   }
   return e;
 }
-const Xe = /* @__PURE__ */ new Map(), Ye = /* @__PURE__ */ new Map(), Je = /* @__PURE__ */ new Map();
-function ce(n) {
-  let e = Xe.get(n);
-  return e || (e = new Intl.RelativeTimeFormat(n, { numeric: "auto" }), Xe.set(n, e)), e;
+const Ve = /* @__PURE__ */ new Map(), We = /* @__PURE__ */ new Map(), Ze = /* @__PURE__ */ new Map();
+function ne(n) {
+  let e = Ve.get(n);
+  return e || (e = new Intl.RelativeTimeFormat(n, { numeric: "auto" }), Ve.set(n, e)), e;
 }
-function et(n, e, t = Date.now()) {
+function Ge(n, e, t = Date.now()) {
   if (!n) return;
   const i = Date.parse(n);
   if (Number.isNaN(i)) return;
   const o = Math.round((i - t) / 1e3), s = Math.abs(o);
   try {
-    return s < 60 ? ce(e).format(o, "second") : s < 3600 ? ce(e).format(Math.round(o / 60), "minute") : s < 86400 ? ce(e).format(Math.round(o / 3600), "hour") : ce(e).format(Math.round(o / 86400), "day");
+    return s < 60 ? ne(e).format(o, "second") : s < 3600 ? ne(e).format(Math.round(o / 60), "minute") : s < 86400 ? ne(e).format(Math.round(o / 3600), "hour") : ne(e).format(Math.round(o / 86400), "day");
   } catch {
     return;
   }
 }
-function Kt(n, e) {
+function Bt(n, e) {
   if (!n) return;
   const t = Date.parse(n);
   if (Number.isNaN(t)) return;
-  let i = Ye.get(e);
+  let i = We.get(e);
   return i || (i = new Intl.DateTimeFormat(e, {
     day: "numeric",
     month: "short",
     hour: "2-digit",
     minute: "2-digit"
-  }), Ye.set(e, i)), i.format(t);
+  }), We.set(e, i)), i.format(t);
 }
-function Xt(n, e) {
+function jt(n, e) {
   if (!n) return;
   const t = Date.parse(n);
   if (Number.isNaN(t)) return;
-  let i = Je.get(e);
+  let i = Ze.get(e);
   return i || (i = new Intl.DateTimeFormat(e, {
     day: "numeric",
     month: "short",
     year: "numeric"
-  }), Je.set(e, i)), i.format(t);
+  }), Ze.set(e, i)), i.format(t);
 }
-function de(n, e = 1) {
-  const t = f(n);
+function se(n, e = 1) {
+  const t = g(n);
   if (t !== void 0)
     return t.toFixed(e).replace(/\.0+$/, (i) => e > 0 ? "" : i);
 }
-function Yt(n) {
-  const e = f(n);
+function Vt(n) {
+  const e = g(n);
   if (e !== void 0) return e;
   if (n && typeof n == "object") {
     const t = n;
-    return f(t.duration_min) ?? f(t.duration) ?? f(t.minutes);
+    return g(t.duration_min) ?? g(t.duration) ?? g(t.minutes);
   }
 }
-function Jt(n, e) {
-  const t = b(n.run_started_at), i = f(n.run_duration_min);
+function Wt(n, e) {
+  const t = v(n.run_started_at), i = g(n.run_duration_min);
   if (!t || i === void 0 || i <= 0)
     return;
   const o = Date.parse(t);
   if (Number.isNaN(o)) return;
-  const s = (e - o) / 6e4, a = Se(s / i, 0, 1), l = Math.max(0, Math.ceil(i - s)), r = [], p = n.run_planned_runs;
+  const s = (e - o) / 6e4, r = ye(s / i, 0, 1), l = Math.max(0, Math.ceil(i - s)), a = [], p = n.run_planned_runs;
   if (Array.isArray(p) && p.length > 1) {
-    const h = p.map(Yt).filter((_) => _ !== void 0 && _ > 0), m = h.reduce((_, g) => _ + g, 0);
-    if (h.length > 1 && m > 0) {
-      let _ = 0;
-      for (let g = 0; g < h.length - 1; g += 1)
-        _ += h[g] ?? 0, r.push(_ / m);
+    const h = p.map(Vt).filter((m) => m !== void 0 && m > 0), _ = h.reduce((m, f) => m + f, 0);
+    if (h.length > 1 && _ > 0) {
+      let m = 0;
+      for (let f = 0; f < h.length - 1; f += 1)
+        m += h[f] ?? 0, a.push(m / _);
     }
   }
-  return { fraction: a, remainingMin: l, segmentBounds: r };
+  return { fraction: r, remainingMin: l, segmentBounds: a };
 }
-function ei(n) {
+function Zt(n) {
   const e = Math.abs(Math.round(n)), t = Math.floor(e / 3600), i = Math.round(e % 3600 / 60), o = [];
   return t > 0 && o.push(`${t} h`), i > 0 && o.push(`${i} min`), o.length === 0 && o.push(`${e} s`), o.join(" ");
 }
-function ti(n, e) {
+function Gt(n, e) {
   if (!n || typeof n != "object") return "";
   if (n.kind === "sun" && (n.event === "sunrise" || n.event === "sunset")) {
     const i = c(
       e,
       n.event === "sunrise" ? "trigger.sunrise" : "trigger.sunset"
-    ), o = f(n.offset_s) ?? 0;
+    ), o = g(n.offset_s) ?? 0;
     if (o === 0) return i;
     const s = o < 0 ? "−" : "+";
-    return `${i} ${s} ${ei(o)}`;
+    return `${i} ${s} ${Zt(o)}`;
   }
-  const t = b(n.at) ?? b(n.time);
-  return t ? c(e, "trigger.at", { time: t }) : b(n.kind) ?? "";
+  const t = v(n.at) ?? v(n.time);
+  return t ? c(e, "trigger.at", { time: t }) : v(n.kind) ?? "";
 }
-const V = 12, U = 25, W = 35, mt = 3, _t = 45, gt = 0, ft = 30, ii = (U - V) / 10;
-function tt(n, e, t) {
-  return Math.max(e, Math.min(t, n));
-}
-function N(n) {
+function Qe(n) {
   const e = Math.floor(n), t = n - e;
   return t < 0.5 ? e : t > 0.5 ? e + 1 : e % 2 === 0 ? e : e + 1;
 }
-function it(n, e) {
-  const t = Math.max(0, N(n - ii * e));
-  return [
-    [V, t],
-    [U, n],
-    [W, n + e]
-  ];
-}
-function Z(n, e, t, i) {
-  return ni(n, e, 100, t, i);
-}
-function ot(n, e, t) {
-  const i = Z(n, U, e, t), o = Z(n, W, e, t);
-  return {
-    amount: tt(N(i), mt, _t),
-    heat: tt(N(o - i), gt, ft)
-  };
-}
-function vt(n) {
+function ct(n) {
   if (!Array.isArray(n)) return [];
   const e = [];
   for (const t of n) {
     if (!Array.isArray(t) || t.length < 2) continue;
-    const i = f(t[0]), o = f(t[1]);
+    const i = g(t[0]), o = g(t[1]);
     i !== void 0 && o !== void 0 && e.push([i, o]);
   }
   return [...e].sort((t, i) => t[0] - i[0]);
 }
-function oi(n, e) {
+const Qt = 25, Kt = [5, 12, 20, 25, 30, 35, 40];
+function Xt(n, e) {
   const t = n[0], i = n[n.length - 1];
   if (!t || !i) return 0;
   if (e <= t[0]) return t[1];
   if (e >= i[0]) return i[1];
   for (let o = 0; o < n.length - 1; o++) {
-    const s = n[o], a = n[o + 1];
-    if (!s || !a) continue;
-    const [l, r] = s, [p, h] = a;
-    if (l <= e && e <= p) return r + (h - r) * (e - l) / (p - l);
+    const s = n[o], r = n[o + 1];
+    if (!s || !r) continue;
+    const [l, a] = s, [p, h] = r;
+    if (l <= e && e <= p) return a + (h - a) * (e - l) / (p - l);
   }
   return i[1];
 }
-function ni(n, e, t = 100, i, o) {
-  let s = oi(n, e) * t / 100;
+function Yt(n, e, t = 100, i, o) {
+  let s = Xt(n, e) * t / 100;
   return i !== void 0 && (s = Math.max(s, i)), o !== void 0 && (s = Math.min(s, o)), s;
 }
-var si = Object.defineProperty, ai = (n, e, t, i) => {
-  for (var o = void 0, s = n.length - 1, a; s >= 0; s--)
-    (a = n[s]) && (o = a(e, t, o) || o);
-  return o && si(e, t, o), o;
+function Jt(n) {
+  if (n.length === 0) return "curve_empty";
+  for (const e of n)
+    if (e[1] < 0) return "curve_negative_value";
+  for (let e = 1; e < n.length; e++) {
+    const t = n[e - 1], i = n[e];
+    if (!(!t || !i) && i[0] <= t[0])
+      return "curve_temps_not_increasing";
+  }
+  return null;
+}
+var ei = Object.defineProperty, ti = (n, e, t, i) => {
+  for (var o = void 0, s = n.length - 1, r; s >= 0; s--)
+    (r = n[s]) && (o = r(e, t, o) || o);
+  return o && ei(e, t, o), o;
 };
-const F = 150, j = 44, ue = 6, nt = 6, Ie = class Ie extends k {
+const H = 150, F = 44, re = 6, Ke = 6, Ce = class Ce extends k {
   render() {
-    const e = this.curve, t = vt(e?.points);
+    const e = this.curve, t = ct(e?.points);
     if (t.length === 0) return d;
-    const i = f(e?.min), o = f(e?.max), s = t.map((v) => v[0]), a = t.map((v) => v[1]);
-    i !== void 0 && a.push(i), o !== void 0 && a.push(o);
-    let l = Math.min(...s), r = Math.max(...s), p = Math.min(...a), h = Math.max(...a);
-    r - l < 1e-9 && (l -= 1, r += 1), h - p < 1e-9 && (p -= 1, h += 1);
-    const m = (v) => ue + (v - l) / (r - l) * (F - 2 * ue), _ = (v) => j - nt - (v - p) / (h - p) * (j - 2 * nt), g = t.map((v, xe) => `${xe === 0 ? "M" : "L"}${m(v[0]).toFixed(1)},${_(v[1]).toFixed(1)}`).join(" "), x = (v, xe) => O`
+    const i = g(e?.min), o = g(e?.max), s = t.map((b) => b[0]), r = t.map((b) => b[1]);
+    i !== void 0 && r.push(i), o !== void 0 && r.push(o);
+    let l = Math.min(...s), a = Math.max(...s), p = Math.min(...r), h = Math.max(...r);
+    a - l < 1e-9 && (l -= 1, a += 1), h - p < 1e-9 && (p -= 1, h += 1);
+    const _ = (b) => re + (b - l) / (a - l) * (H - 2 * re), m = (b) => F - Ke - (b - p) / (h - p) * (F - 2 * Ke), f = t.map((b, ge) => `${ge === 0 ? "M" : "L"}${_(b[0]).toFixed(1)},${m(b[1]).toFixed(1)}`).join(" "), x = (b, ge) => D`
       <line
         class="clamp"
-        x1="0" x2="${F}"
-        y1="${_(v).toFixed(1)}" y2="${_(v).toFixed(1)}"
+        x1="0" x2="${H}"
+        y1="${m(b).toFixed(1)}" y2="${m(b).toFixed(1)}"
       ></line>
-      <text class="clamp-label" x="${F - 2}" text-anchor="end"
-        y="${(_(v) - 2).toFixed(1)}">${xe}</text>
-    `, I = t[0], M = t[t.length - 1];
+      <text class="clamp-label" x="${H - 2}" text-anchor="end"
+        y="${(m(b) - 2).toFixed(1)}">${ge}</text>
+    `, N = t[0], E = t[t.length - 1];
     return u`
       <svg
-        viewBox="0 0 ${F} ${j + 10}"
-        width="${F}"
-        height="${j + 10}"
+        viewBox="0 0 ${H} ${F + 10}"
+        width="${H}"
+        height="${F + 10}"
         role="img"
         aria-hidden="true"
       >
         ${i !== void 0 ? x(i, String(i)) : d}
         ${o !== void 0 ? x(o, String(o)) : d}
-        <path class="line" d="${g}"></path>
+        <path class="line" d="${f}"></path>
         ${t.map(
-      (v) => O`<circle class="dot" r="2"
-            cx="${m(v[0]).toFixed(1)}" cy="${_(v[1]).toFixed(1)}"></circle>`
+      (b) => D`<circle class="dot" r="2"
+            cx="${_(b[0]).toFixed(1)}" cy="${m(b[1]).toFixed(1)}"></circle>`
     )}
-        ${I ? O`<text class="axis-label" x="${ue}" y="${j + 8}"
-              text-anchor="start">${I[0]}°</text>` : d}
-        ${M && M !== I ? O`<text class="axis-label" x="${F - ue}" y="${j + 8}"
-              text-anchor="end">${M[0]}°</text>` : d}
+        ${N ? D`<text class="axis-label" x="${re}" y="${F + 8}"
+              text-anchor="start">${N[0]}°</text>` : d}
+        ${E && E !== N ? D`<text class="axis-label" x="${H - re}" y="${F + 8}"
+              text-anchor="end">${E[0]}°</text>` : d}
       </svg>
     `;
   }
 };
-Ie.styles = X`
+Ce.styles = Z`
     :host {
       display: inline-block;
       line-height: 0;
@@ -1439,19 +1428,35 @@ Ie.styles = X`
       font-family: inherit;
     }
   `;
-let ge = Ie;
-ai([
+let ue = Ce;
+ti([
   y({ attribute: !1 })
-], ge.prototype, "curve");
-Y("imc-curve-sparkline", ge);
-var ri = Object.defineProperty, C = (n, e, t, i) => {
-  for (var o = void 0, s = n.length - 1, a; s >= 0; s--)
-    (a = n[s]) && (o = a(e, t, o) || o);
-  return o && ri(e, t, o), o;
+], ue.prototype, "curve");
+G("imc-curve-sparkline", ue);
+function dt(n) {
+  return [...n].sort((e, t) => e[0] - t[0]);
+}
+function ii(n, e) {
+  const t = n[e];
+  if (!t) return n;
+  const i = n[e + 1], o = i ? [(t[0] + i[0]) / 2, (t[1] + i[1]) / 2] : [t[0] + 5, t[1]];
+  return dt([...n, o]);
+}
+function oi(n, e) {
+  return n.length <= 1 ? n : n.filter((t, i) => i !== e);
+}
+function ve(n, e, t, i) {
+  const o = [...n];
+  return o[e] ? (o[e] = [t, Math.max(0, i)], o) : n;
+}
+var ni = Object.defineProperty, C = (n, e, t, i) => {
+  for (var o = void 0, s = n.length - 1, r; s >= 0; s--)
+    (r = n[s]) && (o = r(e, t, o) || o);
+  return o && ni(e, t, o), o;
 };
-const we = 320, z = 170, ee = 34, st = 12, te = 16, A = 24, pe = 5, ze = 40, De = class De extends k {
+const be = 320, S = 170, K = 34, Xe = 12, X = 16, M = 24, Ye = 5, Je = 40, et = 2, Ee = class Ee extends k {
   constructor() {
-    super(...arguments), this.language = "en", this._amount = 15, this._heat = 15, this._min = 1, this._max = 120, this._advanced = !1, this._dragged = !1, this._points = it(15, 15);
+    super(...arguments), this.language = "en", this.zoneHasFlowMeter = !1, this._points = [[Qt, 15]], this._min = 1, this._max = 120, this._kind = "duration", this._error = null;
   }
   willUpdate(e) {
     if (e.has("cycle")) {
@@ -1460,79 +1465,70 @@ const we = 320, z = 170, ee = 34, st = 12, te = 16, A = 24, pe = 5, ze = 40, De 
     }
   }
   _seedFromCycle() {
-    const e = this.cycle?.curve, t = vt(e?.points);
-    if (t.length === 0) return;
-    const i = f(e?.min) ?? 1, o = f(e?.max) ?? 120, { amount: s, heat: a } = ot(t, i, o);
-    this._amount = s, this._heat = a, this._min = i, this._max = o, this._dragged = !1, this._points = [
-      [V, N(Z(t, V))],
-      [U, N(Z(t, U))],
-      [W, N(Z(t, W))]
-    ];
+    const e = this.cycle?.curve, t = ct(e?.points);
+    t.length !== 0 && (this._points = t, this._min = g(e?.min) ?? 1, this._max = g(e?.max) ?? 120, this._kind = this.zoneHasFlowMeter && e?.kind === "volume" ? "volume" : "duration", this._error = null);
   }
-  _regen() {
-    this._points = it(this._amount, this._heat), this._dragged = !1;
+  /** The curve as the user is drawing it: unscaled (intensity 100%), since
+   *  saving always resets the program's intensity to 100% anyway. */
+  _previewValue(e) {
+    return Qe(Yt(this._points, e, 100, this._min, this._max));
   }
-  _onAmount(e) {
-    this._amount = Number(e.target.value), this._regen();
+  _unit() {
+    return c(this.language, this._kind === "volume" ? "curve.unit_volume" : "curve.unit_duration");
   }
-  _onHeat(e) {
-    this._heat = Number(e.target.value), this._regen();
+  _axisMin() {
+    return Math.min(this._points[0]?.[0] ?? Ye, Ye) - et;
   }
-  _clampedValue(e) {
-    return N(Z(this._points, e, this._min, this._max));
+  _axisMax() {
+    const e = this._points[this._points.length - 1];
+    return Math.max(e?.[0] ?? Je, Je) + et;
   }
   _sx(e) {
-    return ee + (e - pe) / (ze - pe) * (we - ee - st);
+    const t = this._axisMin(), i = this._axisMax();
+    return K + (e - t) / (i - t) * (be - K - Xe);
   }
   _graphTop() {
     return Math.max(12, ...this._points.map((e) => e[1])) + 4;
   }
   _sy(e) {
     const t = this._graphTop();
-    return z - A - e / t * (z - te - A);
+    return S - M - e / t * (S - X - M);
   }
   _valueFromY(e) {
-    const t = this._graphTop(), i = (z - A - e) / (z - te - A) * t;
-    return Math.max(0, N(i));
+    const t = this._graphTop(), i = (S - M - e) / (S - X - M) * t;
+    return Math.max(0, Qe(i));
   }
   _startDrag(e, t) {
-    if (!this._advanced) return;
     t.preventDefault();
     const i = t.currentTarget.ownerSVGElement;
     if (!i) return;
-    const o = (a) => {
+    const o = (r) => {
       const l = i.getScreenCTM();
       if (!l) return;
-      const r = i.createSVGPoint();
-      r.x = a.clientX, r.y = a.clientY;
-      const p = r.matrixTransform(l.inverse()).y, h = [...this._points], m = h[e];
-      if (!m) return;
-      h[e] = [m[0], this._valueFromY(p)], this._points = h, this._dragged = !0;
-      const { amount: _, heat: g } = ot(this._points);
-      this._amount = _, this._heat = g;
+      const a = i.createSVGPoint();
+      a.x = r.clientX, a.y = r.clientY;
+      const p = a.matrixTransform(l.inverse()).y, h = this._points[e];
+      h && (this._points = ve(this._points, e, h[0], this._valueFromY(p)), this._error = null);
     }, s = () => {
       window.removeEventListener("pointermove", o), window.removeEventListener("pointerup", s);
     };
     window.addEventListener("pointermove", o), window.addEventListener("pointerup", s);
   }
   _save() {
-    const e = this.cycle?.cycle_id ?? "", t = this._dragged ? {
-      cycleId: e,
-      mode: "advanced",
-      points: this._points.map((i) => [i[0], i[1]]),
-      min: this._min,
-      max: this._max
-    } : {
-      cycleId: e,
-      mode: "simple",
-      amount: this._amount,
-      heat: this._heat,
-      min: this._min,
-      max: this._max
-    };
-    this.dispatchEvent(
+    const e = Jt(this._points) ?? (this._min > this._max ? "min_above_max" : null) ?? (this._min < 0 ? "negative_clamp" : null);
+    if (e) {
+      this._error = e;
+      return;
+    }
+    this._error = null, this.dispatchEvent(
       new CustomEvent("imc-curve-save", {
-        detail: t,
+        detail: {
+          cycleId: this.cycle?.cycle_id ?? "",
+          points: this._points.map((t) => [t[0], t[1]]),
+          min: this._min,
+          max: this._max,
+          kind: this._kind
+        },
         bubbles: !0,
         composed: !0
       })
@@ -1545,70 +1541,28 @@ const we = 320, z = 170, ee = 34, st = 12, te = 16, A = 24, pe = 5, ze = 40, De 
   }
   render() {
     const e = this.language;
-    return this.cycle?.curve?.kind === "volume" ? u`<div class="volume-note">${c(e, "editor.volume_note")}</div>` : u`
+    return u`
       <div class="title">${c(e, "editor.title")}</div>
 
-      <div class="field">
-        <div class="row">
-          <label>${c(e, "editor.amount.label")}</label>
-          <span class="value">${c(e, "editor.amount.value", { min: this._amount })}</span>
-        </div>
-        <div class="help">${c(e, "editor.amount.help")}</div>
-        <input type="range" min=${mt} max=${_t} .value=${String(this._amount)}
-          @input=${this._onAmount} />
-        <div class="ends"><span>${c(e, "editor.amount.low")}</span><span>${c(e, "editor.amount.high")}</span></div>
-      </div>
-
-      <div class="field">
-        <div class="row">
-          <label>${c(e, "editor.heat.label")}</label>
-          <span class="value">${c(e, "editor.heat.value", { min: this._heat })}</span>
-        </div>
-        <div class="help">${c(e, "editor.heat.help")}</div>
-        <input type="range" min=${gt} max=${ft} .value=${String(this._heat)}
-          @input=${this._onHeat} />
-        <div class="ends"><span>${c(e, "editor.heat.low")}</span><span>${c(e, "editor.heat.high")}</span></div>
-      </div>
+      ${this._renderIntensityNotice(e)}
 
       <div class="graph-box">
         <div class="caption">${c(e, "editor.graph.caption")}</div>
         ${this._renderGraph(e)}
       </div>
 
+      <div class="caption">${c(e, "editor.preview_title")}</div>
       <div class="examples">
-        ${this._exampleTile(c(e, "editor.example.cool"), this._clampedValue(V))}
-        ${this._exampleTile(c(e, "editor.example.mild"), this._clampedValue(U))}
-        ${this._exampleTile(c(e, "editor.example.hot"), this._clampedValue(W))}
+        ${Kt.map((t) => this._exampleTile(`${t}°`, this._previewValue(t)))}
       </div>
 
       ${this._renderToday(e)}
 
-      <div class="advanced-toggle" @click=${() => this._advanced = !this._advanced}>
-        ${this._advanced ? "▾" : "▸"} ${c(e, "editor.advanced.toggle")}
-      </div>
-      ${this._advanced ? this._renderAdvanced(e) : d}
+      <div class="points-title">${c(e, "editor.points_title")}</div>
+      ${this._points.map((t, i) => this._renderPointRow(t, i, e))}
 
-      <div class="buttons">
-        <button class="primary" @click=${this._save}>${c(e, "editor.save")}</button>
-        <button @click=${this._cancel}>${c(e, "editor.cancel")}</button>
-      </div>
-    `;
-  }
-  _exampleTile(e, t) {
-    return u`<div class="example"><div class="lbl">${e}</div><div class="num">${t} min</div></div>`;
-  }
-  _renderToday(e) {
-    const t = this.weightedTemp;
-    if (t === void 0 || Number.isNaN(t)) return d;
-    const i = this._clampedValue(t);
-    return u`<div class="today-banner">${c(e, "editor.today", {
-      temp: Math.round(t),
-      min: i
-    })}</div>`;
-  }
-  _renderAdvanced(e) {
-    return u`
-      <div class="help">${c(e, "editor.advanced.help")}</div>
+      ${this.zoneHasFlowMeter ? this._renderKind(e) : d}
+
       <div class="limits">
         <div class="limit">
           <label>${c(e, "editor.min.label")}</label>
@@ -1616,8 +1570,8 @@ const we = 320, z = 170, ee = 34, st = 12, te = 16, A = 24, pe = 5, ze = 40, De 
           <input type="number" min="0" .value=${String(this._min)}
             @input=${(t) => {
       const i = Number(t.target.value);
-      Number.isNaN(i) || (this._min = Math.min(i, this._max));
-    }} /> min
+      Number.isNaN(i) || (this._min = i, this._error = null);
+    }} /> ${this._unit()}
         </div>
         <div class="limit">
           <label>${c(e, "editor.max.label")}</label>
@@ -1625,39 +1579,118 @@ const we = 320, z = 170, ee = 34, st = 12, te = 16, A = 24, pe = 5, ze = 40, De 
           <input type="number" min="0" .value=${String(this._max)}
             @input=${(t) => {
       const i = Number(t.target.value);
-      Number.isNaN(i) || (this._max = Math.max(i, this._min));
-    }} /> min
+      Number.isNaN(i) || (this._max = i, this._error = null);
+    }} /> ${this._unit()}
         </div>
       </div>
-      <div class="note">${c(e, "editor.drag_hint")}</div>
-      <div class="note">${c(e, "editor.more_points")}</div>
+
+      ${this._error ? u`<div class="error">${B(e, "editor", this._error)}</div>` : d}
+
+      <div class="buttons">
+        <button class="primary" @click=${this._save}>${c(e, "editor.save")}</button>
+        <button @click=${this._cancel}>${c(e, "editor.cancel")}</button>
+      </div>
     `;
   }
+  _renderIntensityNotice(e) {
+    const t = this.cycle?.intensity_pct;
+    return t === void 0 || t === 100 ? d : u`<div class="intensity-notice">
+      ${c(e, "editor.intensity_reset", { pct: Math.round(t) })}
+    </div>`;
+  }
+  _renderKind(e) {
+    return u`<div class="kind">
+      <label for="imc-curve-kind">${c(e, "editor.kind_label")}</label>
+      <select
+        id="imc-curve-kind"
+        .value=${this._kind}
+        @change=${(t) => {
+      const i = t.target.value;
+      this._kind = i === "volume" ? "volume" : "duration";
+    }}
+      >
+        <option value="duration">${c(e, "editor.kind_duration")}</option>
+        <option value="volume">${c(e, "editor.kind_volume")}</option>
+      </select>
+    </div>`;
+  }
+  _exampleTile(e, t) {
+    return u`<div class="example"><div class="lbl">${e}</div><div class="num">${t} ${this._unit()}</div></div>`;
+  }
+  _renderToday(e) {
+    const t = this.weightedTemp;
+    if (t === void 0 || Number.isNaN(t)) return d;
+    const i = this._previewValue(t);
+    return u`<div class="today-banner">${c(e, "editor.today", {
+      temp: Math.round(t),
+      value: i,
+      unit: this._unit()
+    })}</div>`;
+  }
+  _renderPointRow(e, t, i) {
+    return u`<div class="point-row">
+      <input
+        type="number"
+        step="0.5"
+        .value=${String(e[0])}
+        aria-label=${c(i, "editor.point_temp")}
+        @change=${(o) => this._editPoint(t, o, "temp")}
+      /> °C
+      <input
+        type="number"
+        min="0"
+        step="1"
+        .value=${String(e[1])}
+        aria-label=${c(i, "editor.point_value")}
+        @change=${(o) => this._editPoint(t, o, "value")}
+      /> ${this._unit()}
+      <button
+        type="button"
+        ?disabled=${this._points.length <= 1}
+        title=${c(i, "editor.point_remove")}
+        @click=${() => this._points = oi(this._points, t)}
+      >
+        ✕
+      </button>
+      <button
+        type="button"
+        title=${c(i, "editor.point_add")}
+        @click=${() => this._points = ii(this._points, t)}
+      >
+        ＋
+      </button>
+    </div>`;
+  }
+  _editPoint(e, t, i) {
+    const o = Number(t.target.value);
+    if (Number.isNaN(o)) return;
+    const s = this._points[e];
+    if (!s) return;
+    const r = i === "temp" ? ve(this._points, e, o, s[1]) : ve(this._points, e, s[0], o);
+    this._points = dt(r), this._error = null;
+  }
   _renderGraph(e) {
-    const t = [];
-    for (let a = pe; a <= ze; a += 1)
-      t.push([this._sx(a), this._sy(this._clampedValue(a))]);
-    const i = t.map((a, l) => `${l === 0 ? "M" : "L"}${a[0].toFixed(1)},${a[1].toFixed(1)}`).join(" "), o = this.weightedTemp, s = o !== void 0 && !Number.isNaN(o) && o >= pe && o <= ze;
-    return O`
-      <svg viewBox="0 0 ${we} ${z}">
-        <line class="axis" x1=${ee} y1=${te} x2=${ee} y2=${z - A}></line>
-        <line class="axis" x1=${ee} y1=${z - A} x2=${we - st} y2=${z - A}></line>
-        <text class="tick" x=${this._sx(V)} y=${z - A + 12} text-anchor="middle">12°</text>
-        <text class="tick" x=${this._sx(U)} y=${z - A + 12} text-anchor="middle">25°</text>
-        <text class="tick" x=${this._sx(W)} y=${z - A + 12} text-anchor="middle">35°</text>
-        ${s ? O`<line class="today" x1=${this._sx(o)} y1=${te} x2=${this._sx(o)} y2=${z - A}></line>
-              <text class="today-text" x=${this._sx(o)} y=${te - 4} text-anchor="middle">${c(e, "editor.graph.today", { temp: Math.round(o) })}</text>` : d}
-        <path class="curve" d=${i}></path>
+    const t = this._axisMin(), i = this._axisMax(), o = [];
+    for (let a = t; a <= i; a += 1)
+      o.push([this._sx(a), this._sy(this._previewValue(a))]);
+    const s = o.map((a, p) => `${p === 0 ? "M" : "L"}${a[0].toFixed(1)},${a[1].toFixed(1)}`).join(" "), r = this.weightedTemp, l = r !== void 0 && !Number.isNaN(r) && r >= t && r <= i;
+    return D`
+      <svg viewBox="0 0 ${be} ${S}">
+        <line class="axis" x1=${K} y1=${X} x2=${K} y2=${S - M}></line>
+        <line class="axis" x1=${K} y1=${S - M} x2=${be - Xe} y2=${S - M}></line>
+        ${l ? D`<line class="today" x1=${this._sx(r)} y1=${X} x2=${this._sx(r)} y2=${S - M}></line>
+              <text class="today-text" x=${this._sx(r)} y=${X - 4} text-anchor="middle">${c(e, "editor.graph.today", { temp: Math.round(r) })}</text>` : d}
+        <path class="curve" d=${s}></path>
         ${this._points.map(
-      (a, l) => O`<circle class="handle" r=${this._advanced ? 7 : 3.5}
-            cx=${this._sx(a[0]).toFixed(1)} cy=${this._sy(this._clampedValue(a[0])).toFixed(1)}
-            @pointerdown=${(r) => this._startDrag(l, r)}></circle>`
+      (a, p) => D`<circle class="handle" r="7"
+            cx=${this._sx(a[0]).toFixed(1)} cy=${this._sy(this._previewValue(a[0])).toFixed(1)}
+            @pointerdown=${(h) => this._startDrag(p, h)}></circle>`
     )}
       </svg>
     `;
   }
 };
-De.styles = X`
+Ee.styles = Z`
     :host {
       display: block;
       border: 1px solid var(--divider-color, rgba(127, 127, 127, 0.25));
@@ -1669,37 +1702,6 @@ De.styles = X`
       font-weight: 700;
       font-size: 1.05rem;
       margin-bottom: 12px;
-    }
-    .field {
-      margin-bottom: 16px;
-    }
-    .row {
-      display: flex;
-      justify-content: space-between;
-      align-items: baseline;
-      gap: 8px;
-    }
-    label {
-      font-weight: 600;
-    }
-    .value {
-      font-variant-numeric: tabular-nums;
-      font-weight: 700;
-      white-space: nowrap;
-    }
-    .help {
-      font-size: 0.8rem;
-      opacity: 0.7;
-      margin: 2px 0 6px;
-    }
-    input[type="range"] {
-      width: 100%;
-    }
-    .ends {
-      display: flex;
-      justify-content: space-between;
-      font-size: 0.7rem;
-      opacity: 0.5;
     }
     .graph-box {
       border: 1px solid var(--divider-color, rgba(127, 127, 127, 0.25));
@@ -1721,10 +1723,6 @@ De.styles = X`
     .axis {
       stroke: var(--secondary-text-color, #888);
       opacity: 0.4;
-    }
-    .tick {
-      fill: var(--secondary-text-color, #888);
-      font-size: 9px;
     }
     .curve {
       fill: none;
@@ -1751,9 +1749,10 @@ De.styles = X`
       display: flex;
       gap: 8px;
       margin-bottom: 10px;
+      flex-wrap: wrap;
     }
     .example {
-      flex: 1;
+      flex: 1 1 60px;
       text-align: center;
       border: 1px solid var(--divider-color, rgba(127, 127, 127, 0.25));
       border-radius: 10px;
@@ -1764,7 +1763,7 @@ De.styles = X`
       opacity: 0.6;
     }
     .example .num {
-      font-size: 1.1rem;
+      font-size: 1.05rem;
       font-weight: 700;
     }
     .today-banner {
@@ -1775,13 +1774,41 @@ De.styles = X`
       margin-bottom: 14px;
       font-size: 0.9rem;
     }
-    .advanced-toggle {
-      cursor: pointer;
-      user-select: none;
+    .intensity-notice {
+      background: color-mix(in srgb, var(--warning-color, #ffa600) 14%, transparent);
+      border: 1px solid var(--warning-color, #ffa600);
+      border-radius: 10px;
+      padding: 10px 12px;
+      margin-bottom: 14px;
       font-size: 0.85rem;
-      margin-bottom: 12px;
-      text-decoration: underline;
-      opacity: 0.85;
+    }
+    .points-title {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: var(--secondary-text-color, #727272);
+      margin: 4px 0 6px;
+    }
+    .point-row {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin-bottom: 6px;
+    }
+    .point-row input[type="number"] {
+      width: 64px;
+      text-align: center;
+    }
+    .point-row button {
+      flex: none;
+      padding: 4px 8px;
+      width: auto;
+    }
+    .kind {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 14px;
     }
     .limits {
       display: flex;
@@ -1795,9 +1822,17 @@ De.styles = X`
       width: 70px;
       text-align: center;
     }
-    .note {
-      font-size: 0.75rem;
-      opacity: 0.6;
+    label {
+      font-weight: 600;
+    }
+    .help {
+      font-size: 0.8rem;
+      opacity: 0.7;
+      margin: 2px 0 6px;
+    }
+    .error {
+      font-size: 0.85rem;
+      color: var(--error-color, #db4437);
       margin-bottom: 12px;
     }
     .buttons {
@@ -1819,12 +1854,20 @@ De.styles = X`
       color: var(--text-primary-color, #fff);
       border-color: transparent;
     }
-    .volume-note {
-      font-size: 0.9rem;
-      opacity: 0.8;
+    button:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+    }
+    select {
+      font: inherit;
+      padding: 4px 8px;
+      border-radius: 6px;
+      border: 1px solid var(--divider-color, rgba(127, 127, 127, 0.3));
+      background: var(--card-background-color, #fff);
+      color: inherit;
     }
   `;
-let $ = De;
+let $ = Ee;
 C([
   y()
 ], $.prototype, "language");
@@ -1835,33 +1878,30 @@ C([
   y({ attribute: !1 })
 ], $.prototype, "weightedTemp");
 C([
-  w()
-], $.prototype, "_amount");
+  y({ type: Boolean })
+], $.prototype, "zoneHasFlowMeter");
 C([
-  w()
-], $.prototype, "_heat");
+  z()
+], $.prototype, "_points");
 C([
-  w()
+  z()
 ], $.prototype, "_min");
 C([
-  w()
+  z()
 ], $.prototype, "_max");
 C([
-  w()
-], $.prototype, "_advanced");
+  z()
+], $.prototype, "_kind");
 C([
-  w()
-], $.prototype, "_dragged");
-C([
-  w()
-], $.prototype, "_points");
-Y("imc-curve-editor", $);
-var li = Object.defineProperty, P = (n, e, t, i) => {
-  for (var o = void 0, s = n.length - 1, a; s >= 0; s--)
-    (a = n[s]) && (o = a(e, t, o) || o);
-  return o && li(e, t, o), o;
+  z()
+], $.prototype, "_error");
+G("imc-curve-editor", $);
+var si = Object.defineProperty, T = (n, e, t, i) => {
+  for (var o = void 0, s = n.length - 1, r; s >= 0; s--)
+    (r = n[s]) && (o = r(e, t, o) || o);
+  return o && si(e, t, o), o;
 };
-const bt = {
+const ut = {
   idle: "mdi:water-outline",
   queued: "mdi:timer-sand",
   watering: "mdi:water",
@@ -1869,17 +1909,17 @@ const bt = {
   paused: "mdi:pause-circle-outline",
   suspended: "mdi:calendar-remove-outline",
   disabled: "mdi:water-off-outline"
-}, ci = [1, 4, 8, 24];
-function di(n) {
-  return n in bt;
+}, ri = [1, 4, 8, 24];
+function ai(n) {
+  return n in ut;
 }
-const Oe = class Oe extends k {
+const Me = class Me extends k {
   constructor() {
     super(...arguments), this.language = "en", this.now = Date.now(), this.compact = !1, this.showControls = !0, this._expanded = !1;
   }
   get _zoneState() {
     const e = this.zone?.state?.state;
-    return e && di(e) ? e : void 0;
+    return e && ai(e) ? e : void 0;
   }
   _dispatch(e) {
     this.dispatchEvent(
@@ -1914,9 +1954,9 @@ const Oe = class Oe extends k {
   _renderBadges() {
     const e = this.zone;
     if (!e) return d;
-    const t = e.state?.attributes ?? {}, i = [], o = b(t.suspended_until) ?? (R(e.suspendUntil) ? void 0 : e.suspendUntil?.state);
+    const t = e.state?.attributes ?? {}, i = [], o = v(t.suspended_until) ?? (R(e.suspendUntil) ? void 0 : e.suspendUntil?.state);
     if (this._zoneState === "suspended" && o) {
-      const s = Xt(o, this.language) ?? o;
+      const s = jt(o, this.language) ?? o;
       i.push(u`
         <span class="badge" title=${c(this.language, "zone.suspended_until", { date: s })}>
           <ha-icon icon="mdi:calendar-remove-outline" style="--mdc-icon-size:12px"></ha-icon>
@@ -1924,10 +1964,10 @@ const Oe = class Oe extends k {
         </span>
       `);
     }
-    for (const s of Ae(t.degraded)) {
-      const a = b(s);
-      if (!a) continue;
-      const l = ie(this.language, "degraded", a);
+    for (const s of de(t.degraded)) {
+      const r = v(s);
+      if (!r) continue;
+      const l = B(this.language, "degraded", r);
       i.push(u`
         <span class="badge" title=${l}>
           <ha-icon icon="mdi:alert-outline" style="--mdc-icon-size:12px"></ha-icon>
@@ -1941,7 +1981,7 @@ const Oe = class Oe extends k {
     const e = this.zone, t = this._zoneState;
     if (!e || t !== "watering" && t !== "soaking")
       return d;
-    const i = Jt(
+    const i = Wt(
       e.state?.attributes ?? {},
       this.now
     );
@@ -1966,12 +2006,12 @@ const Oe = class Oe extends k {
     if (!e) return d;
     const t = this.language, i = [], o = e.nextRun;
     if (o && !R(o)) {
-      const a = et(o.state, t, this.now), l = Kt(o.state, t), r = b(o.attributes.cycle_name);
-      (a || l) && i.push(u`
+      const r = Ge(o.state, t, this.now), l = Bt(o.state, t), a = v(o.attributes.cycle_name);
+      (r || l) && i.push(u`
           <span>
-            ${c(t, "zone.next_run")}: ${a ?? ""}
+            ${c(t, "zone.next_run")}: ${r ?? ""}
             ${l ? u`<span class="abs">
-                  · ${l}${r ? ` (${r})` : ""}
+                  · ${l}${a ? ` (${a})` : ""}
                 </span>` : d}
           </span>
         `);
@@ -1979,10 +2019,10 @@ const Oe = class Oe extends k {
       i.push(u`<span>${c(t, "zone.no_next_run")}</span>`);
     const s = e.lastOutcome;
     if (s && !R(s) && s.state !== "none") {
-      const a = ie(t, "outcome", s.state), l = b(s.attributes.reason_key), r = l ? ie(t, "reason", l) : void 0, p = b(s.attributes.finished_at), h = et(p, t, this.now);
+      const r = B(t, "outcome", s.state), l = v(s.attributes.reason_key), a = l ? B(t, "reason", l) : void 0, p = v(s.attributes.finished_at), h = Ge(p, t, this.now);
       i.push(u`
         <span>
-          ${c(t, "zone.last_outcome")}: ${a}${r ? ` — ${r}` : ""}${h ? u`<span class="abs"> · ${h}</span>` : d}
+          ${c(t, "zone.last_outcome")}: ${r}${a ? ` — ${a}` : ""}${h ? u`<span class="abs"> · ${h}</span>` : d}
         </span>
       `);
     }
@@ -1991,9 +2031,9 @@ const Oe = class Oe extends k {
   _renderControls() {
     const e = this.zone;
     if (!e || !this.showControls) return d;
-    const t = this.language, i = e.zoneId, o = this._zoneState, s = e.enabledSwitch, a = s?.state === "on", l = o === "paused" || o === "suspended";
+    const t = this.language, i = e.zoneId, o = this._zoneState, s = e.enabledSwitch, r = s?.state === "on", l = o === "paused" || o === "suspended";
     return u`
-      <div class="controls" @click=${(r) => r.stopPropagation()}>
+      <div class="controls" @click=${(a) => a.stopPropagation()}>
         <button @click=${() => this._dispatch({ action: "run", zoneId: i })}>
           ${c(t, "controls.run_now")}
         </button>
@@ -2008,9 +2048,9 @@ const Oe = class Oe extends k {
           <option value="" disabled selected hidden>
             ${c(t, "controls.pause_for")}
           </option>
-          ${ci.map(
-      (r) => u`<option value=${r}>
-              ${c(t, "controls.hours", { hours: r })}
+          ${ri.map(
+      (a) => u`<option value=${a}>
+              ${c(t, "controls.hours", { hours: a })}
             </option>`
     )}
         </select>
@@ -2029,10 +2069,10 @@ const Oe = class Oe extends k {
               @click=${() => this._dispatch({
       action: "set-enabled",
       zoneId: i,
-      enabled: !a
+      enabled: !r
     })}
             >
-              ${c(t, a ? "controls.disable" : "controls.enable")}
+              ${c(t, r ? "controls.disable" : "controls.enable")}
             </button>` : d}
       </div>
     `;
@@ -2040,7 +2080,7 @@ const Oe = class Oe extends k {
   _renderCycles() {
     const e = this.zone;
     if (!e) return d;
-    const t = this.language, i = Ae(e.state?.attributes.cycles).filter(
+    const t = this.language, i = de(e.state?.attributes.cycles).filter(
       (o) => !!o && typeof o == "object"
     );
     return i.length === 0 ? u`<div class="details">
@@ -2053,26 +2093,27 @@ const Oe = class Oe extends k {
     `;
   }
   _renderCycle(e) {
-    const t = this.language, i = this.zone, o = b(e.cycle_id), s = i?.cycleSwitches.find(
-      (v) => b(v.attributes.cycle_id) === o
-    ), a = s ? s.state === "on" : e.enabled !== !1, l = ti(e.trigger, t), r = e.curve, p = f(r?.min), h = f(r?.max), m = c(
+    const t = this.language, i = this.zone, o = v(e.cycle_id), s = i?.cycleSwitches.find(
+      (E) => v(E.attributes.cycle_id) === o
+    ), r = s ? s.state === "on" : e.enabled !== !1, l = Gt(e.trigger, t), a = e.curve, p = g(a?.min), h = g(a?.max), _ = c(
       t,
-      r?.kind === "volume" ? "curve.unit_volume" : "curve.unit_duration"
-    ), _ = [];
-    p !== void 0 && _.push(
-      `${c(t, "curve.clamp_min")} ${p} ${m}`
-    ), h !== void 0 && _.push(
-      `${c(t, "curve.clamp_max")} ${h} ${m}`
+      a?.kind === "volume" ? "curve.unit_volume" : "curve.unit_duration"
+    ), m = [];
+    p !== void 0 && m.push(
+      `${c(t, "curve.clamp_min")} ${p} ${_}`
+    ), h !== void 0 && m.push(
+      `${c(t, "curve.clamp_max")} ${h} ${_}`
     );
-    const g = r?.kind === "volume", x = !!o && this._editingCycle === o, I = g || !o ? d : u`<button
-            class="link-btn"
-            @click=${() => this._editingCycle = x ? void 0 : o}
-          >
-            ${c(t, "editor.edit_curve")}
-          </button>`, M = x ? u`<imc-curve-editor
+    const f = !!o && this._editingCycle === o, x = o ? u`<button
+          class="link-btn"
+          @click=${() => this._editingCycle = f ? void 0 : o}
+        >
+          ${c(t, "editor.edit_curve")}
+        </button>` : d, N = f ? u`<imc-curve-editor
           .language=${t}
           .cycle=${e}
           .weightedTemp=${this.weightedTemp}
+          .zoneHasFlowMeter=${this.zone ? Ut(this.zone) : !1}
           @imc-curve-save=${this._onCurveSave}
           @imc-curve-cancel=${() => this._editingCycle = void 0}
         ></imc-curve-editor>` : d;
@@ -2080,48 +2121,41 @@ const Oe = class Oe extends k {
       <div class="cycle">
         <div class="cycle-info">
           <div class="cycle-name">
-            ${b(e.name) ?? o ?? "?"}
-            ${a ? d : u`<span class="off">
+            ${v(e.name) ?? o ?? "?"}
+            ${r ? d : u`<span class="off">
                   ${c(t, "zone.cycle_disabled")}
                 </span>`}
           </div>
           <div class="cycle-sub">
-            ${l}${l && _.length > 0 ? " · " : ""}${_.join(" · ")}
+            ${l}${l && m.length > 0 ? " · " : ""}${m.join(" · ")}
           </div>
         </div>
-        ${r ? u`<imc-curve-sparkline .curve=${r}></imc-curve-sparkline>` : d}
-        ${I}
+        ${a ? u`<imc-curve-sparkline .curve=${a}></imc-curve-sparkline>` : d}
+        ${x}
       </div>
-      ${M}
+      ${N}
     `;
   }
   _onCurveSave(e) {
     const t = this.zone?.zoneId;
     if (!t) return;
     const i = e.detail;
-    i.mode === "simple" ? this._dispatch({
-      action: "save-simple-curve",
-      zoneId: t,
-      cycleId: i.cycleId,
-      amount: i.amount,
-      heat: i.heat,
-      min: i.min,
-      max: i.max
-    }) : this._dispatch({
+    this._dispatch({
       action: "save-curve",
       zoneId: t,
       cycleId: i.cycleId,
       points: i.points,
       min: i.min,
-      max: i.max
+      max: i.max,
+      kind: i.kind
     }), this._editingCycle = void 0;
   }
   render() {
     const e = this.zone;
     if (!e) return d;
-    const t = this.language, i = this._zoneState, o = i ? ie(t, "zone_state", i) : c(t, "card.unavailable"), s = i ? bt[i] : "mdi:help-circle-outline", a = i ?? "unknown", l = !this.compact || this._expanded;
+    const t = this.language, i = this._zoneState, o = i ? B(t, "zone_state", i) : c(t, "card.unavailable"), s = i ? ut[i] : "mdi:help-circle-outline", r = i ?? "unknown", l = !this.compact || this._expanded;
     return u`
-      <div class="zone ${a}">
+      <div class="zone ${r}">
         <div
           class="row"
           role="button"
@@ -2130,14 +2164,14 @@ const Oe = class Oe extends k {
           @click=${this._toggleExpanded}
           @keydown=${this._onHeaderKeydown}
         >
-          <ha-icon class="state-icon ${a}" icon=${s}></ha-icon>
+          <ha-icon class="state-icon ${r}" icon=${s}></ha-icon>
           <div class="main">
             <div class="name-line">
               <span class="name">${e.name}</span>
               ${this._renderBadges()}
             </div>
           </div>
-          <span class="state-chip ${a}">${o}</span>
+          <span class="state-chip ${r}">${o}</span>
           <ha-icon
             class="caret"
             icon=${this._expanded ? "mdi:chevron-up" : "mdi:chevron-down"}
@@ -2151,7 +2185,7 @@ const Oe = class Oe extends k {
     `;
   }
 };
-Oe.styles = X`
+Me.styles = Z`
     :host {
       display: block;
       color: var(--primary-text-color);
@@ -2396,38 +2430,38 @@ Oe.styles = X`
       opacity: 0.8;
     }
   `;
-let S = Oe;
-P([
+let w = Me;
+T([
   y({ attribute: !1 })
-], S.prototype, "zone");
-P([
+], w.prototype, "zone");
+T([
   y()
-], S.prototype, "language");
-P([
+], w.prototype, "language");
+T([
   y({ attribute: !1 })
-], S.prototype, "now");
-P([
+], w.prototype, "now");
+T([
   y({ type: Boolean, reflect: !0 })
-], S.prototype, "compact");
-P([
+], w.prototype, "compact");
+T([
   y({ type: Boolean })
-], S.prototype, "showControls");
-P([
+], w.prototype, "showControls");
+T([
   y({ attribute: !1 })
-], S.prototype, "weightedTemp");
-P([
-  w()
-], S.prototype, "_expanded");
-P([
-  w()
-], S.prototype, "_editingCycle");
-Y("imc-zone-row", S);
-var ui = Object.defineProperty, Pe = (n, e, t, i) => {
-  for (var o = void 0, s = n.length - 1, a; s >= 0; s--)
-    (a = n[s]) && (o = a(e, t, o) || o);
-  return o && ui(e, t, o), o;
+], w.prototype, "weightedTemp");
+T([
+  z()
+], w.prototype, "_expanded");
+T([
+  z()
+], w.prototype, "_editingCycle");
+G("imc-zone-row", w);
+var li = Object.defineProperty, Ae = (n, e, t, i) => {
+  for (var o = void 0, s = n.length - 1, r; s >= 0; s--)
+    (r = n[s]) && (o = r(e, t, o) || o);
+  return o && li(e, t, o), o;
 };
-const qe = class qe extends k {
+const Pe = class Pe extends k {
   constructor() {
     super(...arguments), this.language = "en", this.paused = !1, this.hasPauseSwitch = !1;
   }
@@ -2469,7 +2503,7 @@ const qe = class qe extends k {
     `;
   }
 };
-qe.styles = X`
+Pe.styles = Z`
     :host {
       display: block;
     }
@@ -2505,31 +2539,31 @@ qe.styles = X`
       color: var(--text-primary-color, #fff);
     }
   `;
-let K = qe;
-Pe([
+let W = Pe;
+Ae([
   y()
-], K.prototype, "language");
-Pe([
+], W.prototype, "language");
+Ae([
   y({ type: Boolean })
-], K.prototype, "paused");
-Pe([
+], W.prototype, "paused");
+Ae([
   y({ type: Boolean })
-], K.prototype, "hasPauseSwitch");
-Y("imc-global-controls", K);
-var pi = Object.defineProperty, ye = (n, e, t, i) => {
-  for (var o = void 0, s = n.length - 1, a; s >= 0; s--)
-    (a = n[s]) && (o = a(e, t, o) || o);
-  return o && pi(e, t, o), o;
+], W.prototype, "hasPauseSwitch");
+G("imc-global-controls", W);
+var ci = Object.defineProperty, me = (n, e, t, i) => {
+  for (var o = void 0, s = n.length - 1, r; s >= 0; s--)
+    (r = n[s]) && (o = r(e, t, o) || o);
+  return o && ci(e, t, o), o;
 };
-const hi = [
+const di = [
   "idle",
   "evaluating",
   "running"
 ];
-function mi(n) {
-  return !!n && hi.includes(n);
+function ui(n) {
+  return !!n && di.includes(n);
 }
-const Re = class Re extends k {
+const Te = class Te extends k {
   constructor() {
     super(...arguments), this._now = Date.now(), this._relevantIds = [], this._statesCount = 0, this._timerPeriod = 0;
   }
@@ -2545,7 +2579,7 @@ const Re = class Re extends k {
   setConfig(e) {
     if (!e || typeof e != "object")
       throw new Error("Invalid configuration");
-    this._config = { ...Bt, ...e };
+    this._config = { ...Ot, ...e };
   }
   getCardSize() {
     const e = this._model?.zones.length ?? 2, t = this._config?.show_header !== !1 ? 2 : 0;
@@ -2593,8 +2627,8 @@ const Re = class Re extends k {
       try {
         await o.callService(e, t, i);
       } catch (s) {
-        const a = s instanceof Error ? s.message : String(s);
-        this._error = a, this._errorTimer !== void 0 && window.clearTimeout(this._errorTimer), this._errorTimer = window.setTimeout(() => {
+        const r = s instanceof Error ? s.message : String(s);
+        this._error = r, this._errorTimer !== void 0 && window.clearTimeout(this._errorTimer), this._errorTimer = window.setTimeout(() => {
           this._error = void 0, this._errorTimer = void 0;
         }, 6e3);
       }
@@ -2640,23 +2674,14 @@ const Re = class Re extends k {
         );
         break;
       }
-      case "save-simple-curve":
-        this._call("irrigation_maestro", "set_simple_curve", {
-          zone_id: t.zoneId,
-          cycle_id: t.cycleId,
-          amount: t.amount,
-          heat: t.heat,
-          min_value: t.min,
-          max_value: t.max
-        });
-        break;
       case "save-curve":
         this._call("irrigation_maestro", "set_curve", {
           zone_id: t.zoneId,
           cycle_id: t.cycleId,
           points: t.points,
           min_value: t.min,
-          max_value: t.max
+          max_value: t.max,
+          kind: t.kind
         });
         break;
     }
@@ -2688,11 +2713,11 @@ const Re = class Re extends k {
   /* Render fragments                                              */
   /* ------------------------------------------------------------ */
   _renderHeader(e, t) {
-    const i = e.hub, o = R(i.waterBudget) ? void 0 : f(i.waterBudget?.state), s = R(i.skipThreshold) ? void 0 : f(i.skipThreshold?.state);
-    let a = d;
+    const i = e.hub, o = R(i.waterBudget) ? void 0 : g(i.waterBudget?.state), s = R(i.skipThreshold) ? void 0 : g(i.skipThreshold?.state);
+    let r = d;
     if (o !== void 0 || s !== void 0) {
-      const x = Math.max(o ?? 0, s ?? 0, 1e-3), I = Se((o ?? 0) / x, 0, 1), M = s !== void 0 ? Se(s / x, 0, 1) : void 0, v = o !== void 0 && s !== void 0 && o >= s;
-      a = u`
+      const x = Math.max(o ?? 0, s ?? 0, 1e-3), N = ye((o ?? 0) / x, 0, 1), E = s !== void 0 ? ye(s / x, 0, 1) : void 0, b = o !== void 0 && s !== void 0 && o >= s;
+      r = u`
         <div
           class="budget"
           title=${`${c(t, "header.water_budget")} / ${c(t, "header.skip_threshold")}`}
@@ -2700,57 +2725,57 @@ const Re = class Re extends k {
           <span class="budget-label">${c(t, "header.water_budget")}</span>
           <div class="meter">
             <div
-              class="meter-fill ${v ? "sufficient" : ""}"
-              style="width:${(I * 100).toFixed(1)}%"
+              class="meter-fill ${b ? "sufficient" : ""}"
+              style="width:${(N * 100).toFixed(1)}%"
             ></div>
-            ${M !== void 0 ? u`<div
+            ${E !== void 0 ? u`<div
                   class="meter-mark"
-                  style="left:${(M * 100).toFixed(1)}%"
+                  style="left:${(E * 100).toFixed(1)}%"
                 ></div>` : d}
           </div>
           <span class="budget-numbers">
-            ${de(o, 2) ?? "—"} /
-            ${de(s, 1) ?? "—"} mm
+            ${se(o, 2) ?? "—"} /
+            ${se(s, 1) ?? "—"} mm
           </span>
         </div>
       `;
     }
-    const l = i.weightedTemp, r = R(l) ? void 0 : f(l?.state), p = l?.attributes.stale_weather === !0, h = i.session?.state, m = mi(h) ? h : void 0, _ = i.pauseSwitch?.state === "on", g = R(i.consumptionLeft) ? void 0 : f(i.consumptionLeft?.state);
+    const l = i.weightedTemp, a = R(l) ? void 0 : g(l?.state), p = l?.attributes.stale_weather === !0, h = i.session?.state, _ = ui(h) ? h : void 0, m = i.pauseSwitch?.state === "on", f = R(i.consumptionLeft) ? void 0 : g(i.consumptionLeft?.state);
     return u`
       <div class="header">
-        ${a}
+        ${r}
         <div class="chips">
-          ${r !== void 0 ? u`<span
+          ${a !== void 0 ? u`<span
                 class="chip"
                 title=${c(t, "header.weighted_temp")}
               >
                 <ha-icon icon="mdi:thermometer" style="--mdc-icon-size:14px"></ha-icon>
-                ${de(r, 1)} °C
+                ${se(a, 1)} °C
               </span>` : d}
           ${p ? u`<span class="chip warning">
                 <ha-icon icon="mdi:alert" style="--mdc-icon-size:14px"></ha-icon>
                 ${c(t, "header.stale_weather")}
               </span>` : d}
-          ${m ? u`<span
-                class="chip ${m !== "idle" ? "accent" : ""}"
+          ${_ ? u`<span
+                class="chip ${_ !== "idle" ? "accent" : ""}"
                 title=${c(t, "header.session")}
               >
                 <ha-icon
-                  icon=${m === "running" ? "mdi:play-circle-outline" : m === "evaluating" ? "mdi:magnify" : "mdi:sleep"}
+                  icon=${_ === "running" ? "mdi:play-circle-outline" : _ === "evaluating" ? "mdi:magnify" : "mdi:sleep"}
                   style="--mdc-icon-size:14px"
                 ></ha-icon>
-                ${ie(t, "session", m)}
+                ${B(t, "session", _)}
               </span>` : d}
-          ${_ ? u`<span class="chip warning">
+          ${m ? u`<span class="chip warning">
                 <ha-icon icon="mdi:pause" style="--mdc-icon-size:14px"></ha-icon>
                 ${c(t, "header.global_pause")}
               </span>` : d}
-          ${g !== void 0 ? u`<span
+          ${f !== void 0 ? u`<span
                 class="chip"
                 title=${c(t, "header.consumption_left")}
               >
                 <ha-icon icon="mdi:counter" style="--mdc-icon-size:14px"></ha-icon>
-                ${de(g, 0)} L
+                ${se(f, 0)} L
               </span>` : d}
         </div>
       </div>
@@ -2759,27 +2784,27 @@ const Re = class Re extends k {
   _renderQueue(e, t) {
     const i = e.hub.session;
     if (i?.state !== "running") return d;
-    const o = Ae(i.attributes.queue).filter(
-      (a) => !!a && typeof a == "object"
+    const o = de(i.attributes.queue).filter(
+      (r) => !!r && typeof r == "object"
     );
     if (o.length === 0) return d;
-    const s = b(i.attributes.active_zone_id);
+    const s = v(i.attributes.active_zone_id);
     return u`
       <div class="queue">
         <div class="queue-title">${c(t, "queue.title")}</div>
-        ${o.map((a, l) => {
-      const r = b(a.state), p = s !== void 0 && a.zone_id === s || r === "watering" || r === "running", h = f(a.duration_min);
+        ${o.map((r, l) => {
+      const a = v(r.state), p = s !== void 0 && r.zone_id === s || a === "watering" || a === "running", h = g(r.duration_min);
       return u`
             <div class="queue-item ${p ? "active" : ""}">
               <span class="queue-index">${l + 1}.</span>
               <span class="queue-name">
-                ${b(a.zone_name) ?? b(a.zone_id) ?? "?"}
+                ${v(r.zone_name) ?? v(r.zone_id) ?? "?"}
               </span>
               ${h !== void 0 ? u`<span class="queue-duration">
                     ${c(t, "queue.duration", { minutes: h })}
                   </span>` : d}
-              ${r ? u`<span class="queue-state">
-                    ${Qt(t, r)}
+              ${a ? u`<span class="queue-state">
+                    ${Lt(t, a)}
                   </span>` : d}
             </div>
           `;
@@ -2793,7 +2818,7 @@ const Re = class Re extends k {
   render() {
     const e = this._config, t = this.hass;
     if (!e || !t) return d;
-    const i = ht(t), o = pt(t);
+    const i = lt(t), o = at(t);
     this._model = o, this._relevantIds = o.entityIds, this._statesCount = Object.keys(t.states).length;
     const s = e.title ? u`<h1 class="card-title">${e.title}</h1>` : d;
     if (!o.found)
@@ -2803,7 +2828,7 @@ const Re = class Re extends k {
           <div class="message">${c(i, "card.not_installed")}</div>
         </ha-card>
       `;
-    const a = e.zones, l = a && a.length > 0 ? o.zones.filter((r) => a.includes(r.zoneId)) : o.zones;
+    const r = e.zones, l = r && r.length > 0 ? o.zones.filter((a) => r.includes(a.zoneId)) : o.zones;
     return u`
       <ha-card @imc-zone-action=${this._onZoneAction} @imc-global-action=${this._onGlobalAction}>
         ${s}
@@ -2811,14 +2836,14 @@ const Re = class Re extends k {
         ${this._error ? u`<div class="error">${this._error}</div>` : d}
         ${e.show_queue !== !1 ? this._renderQueue(o, i) : d}
         ${l.length === 0 ? u`<div class="message">${c(i, "card.no_zones")}</div>` : l.map(
-      (r) => u`
+      (a) => u`
                 <imc-zone-row
-                  .zone=${r}
+                  .zone=${a}
                   .language=${i}
                   .now=${this._now}
                   .compact=${e.compact === !0}
                   .showControls=${e.show_controls !== !1}
-                  .weightedTemp=${f(o.hub.weightedTemp?.state)}
+                  .weightedTemp=${g(o.hub.weightedTemp?.state)}
                 ></imc-zone-row>
               `
     )}
@@ -2831,7 +2856,7 @@ const Re = class Re extends k {
     `;
   }
 };
-Re.styles = X`
+Te.styles = Z`
     :host {
       display: block;
     }
@@ -2985,31 +3010,31 @@ Re.styles = X`
       color: var(--primary-color, #03a9f4);
     }
   `;
-let L = Re;
-ye([
+let U = Te;
+me([
   y({ attribute: !1 })
-], L.prototype, "hass");
-ye([
-  w()
-], L.prototype, "_config");
-ye([
-  w()
-], L.prototype, "_now");
-ye([
-  w()
-], L.prototype, "_error");
-Y("irrigation-maestro-card", L);
-var _i = Object.defineProperty, yt = (n, e, t, i) => {
-  for (var o = void 0, s = n.length - 1, a; s >= 0; s--)
-    (a = n[s]) && (o = a(e, t, o) || o);
-  return o && _i(e, t, o), o;
+], U.prototype, "hass");
+me([
+  z()
+], U.prototype, "_config");
+me([
+  z()
+], U.prototype, "_now");
+me([
+  z()
+], U.prototype, "_error");
+G("irrigation-maestro-card", U);
+var pi = Object.defineProperty, pt = (n, e, t, i) => {
+  for (var o = void 0, s = n.length - 1, r; s >= 0; s--)
+    (r = n[s]) && (o = r(e, t, o) || o);
+  return o && pi(e, t, o), o;
 };
-const gi = [
+const hi = [
   { key: "show_header", label: "editor.show_header", fallback: !0 },
   { key: "show_queue", label: "editor.show_queue", fallback: !0 },
   { key: "show_controls", label: "editor.show_controls", fallback: !0 },
   { key: "compact", label: "editor.compact", fallback: !1 }
-], Ue = class Ue extends k {
+], Ne = class Ne extends k {
   setConfig(e) {
     this._config = { ...e };
   }
@@ -3042,7 +3067,7 @@ const gi = [
   render() {
     const e = this._config, t = this.hass;
     if (!e || !t) return d;
-    const i = ht(t), o = pt(t).zones, s = new Set(e.zones ?? []);
+    const i = lt(t), o = at(t).zones, s = new Set(e.zones ?? []);
     return u`
       <div class="form">
         <label class="field">
@@ -3055,13 +3080,13 @@ const gi = [
           />
         </label>
 
-        ${gi.map(
-      ({ key: a, label: l, fallback: r }) => u`
+        ${hi.map(
+      ({ key: r, label: l, fallback: a }) => u`
             <label class="toggle">
               <input
                 type="checkbox"
-                .checked=${e[a] ?? r}
-                @change=${(p) => this._onToggle(a, p)}
+                .checked=${e[r] ?? a}
+                @change=${(p) => this._onToggle(r, p)}
               />
               ${c(i, l)}
             </label>
@@ -3072,14 +3097,14 @@ const gi = [
           <span class="zones-title">${c(i, "editor.zones")}</span>
           ${o.length === 0 ? u`<span class="hint">${c(i, "editor.no_zones")}</span>` : u`
                 ${o.map(
-      (a) => u`
+      (r) => u`
                     <label class="toggle">
                       <input
                         type="checkbox"
-                        .checked=${s.has(a.zoneId)}
-                        @change=${(l) => this._onZoneToggle(a.zoneId, l)}
+                        .checked=${s.has(r.zoneId)}
+                        @change=${(l) => this._onZoneToggle(r.zoneId, l)}
                       />
-                      ${a.name}
+                      ${r.name}
                     </label>
                   `
     )}
@@ -3090,7 +3115,7 @@ const gi = [
     `;
   }
 };
-Ue.styles = X`
+Ne.styles = Z`
     :host {
       display: block;
       color: var(--primary-text-color);
@@ -3150,19 +3175,19 @@ Ue.styles = X`
       opacity: 0.9;
     }
   `;
-let re = Ue;
-yt([
+let ie = Ne;
+pt([
   y({ attribute: !1 })
-], re.prototype, "hass");
-yt([
-  w()
-], re.prototype, "_config");
-Y("irrigation-maestro-card-editor", re);
+], ie.prototype, "hass");
+pt([
+  z()
+], ie.prototype, "_config");
+G("irrigation-maestro-card-editor", ie);
 window.customCards = window.customCards ?? [];
 window.customCards.some((n) => n.type === "irrigation-maestro-card") || window.customCards.push({
   type: "irrigation-maestro-card",
-  name: E["card.name"],
-  description: E["card.description"],
+  name: A["card.name"],
+  description: A["card.description"],
   preview: !0,
   documentationURL: "https://github.com/jmbriccola/ha-irrigation-configurable"
 });

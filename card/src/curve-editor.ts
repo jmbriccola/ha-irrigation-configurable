@@ -2,40 +2,32 @@ import { css, html, LitElement, nothing, svg } from "lit";
 import type { TemplateResult } from "lit";
 import { property, state } from "lit/decorators.js";
 import {
-  AMOUNT_MAX,
-  AMOUNT_MIN,
-  COOL,
-  HEAT_MAX,
-  HEAT_MIN,
-  HOT,
-  MILD,
-  curveValue,
   parseCurvePoints,
-  pointsFromSemantic,
+  PREVIEW_TEMPS,
+  REFERENCE_TEMP,
   roundHalfEven,
-  semanticFromPoints,
+  scaledValue,
+  validatePoints,
 } from "./curve-math";
 import type { CurvePoint } from "./curve-math";
-import { localize } from "./localize/localize";
+import { addPoint, removePoint, sortPoints, updatePoint } from "./curve-editor-state";
+import { localize, localizeDynamic } from "./localize/localize";
 import { asNumber, defineElement } from "./types";
 import type { CycleInfo } from "./types";
 
-export type CurveSavePayload =
-  | {
-      cycleId: string;
-      mode: "simple";
-      amount: number;
-      heat: number;
-      min: number;
-      max: number;
-    }
-  | {
-      cycleId: string;
-      mode: "advanced";
-      points: [number, number][];
-      min: number;
-      max: number;
-    };
+/**
+ * A single curve save: the full set of authored points plus the clamps and
+ * the target kind. There is no longer a "simple" variant — every save
+ * carries exact points, because the editor now authors them directly
+ * instead of deriving them from a semantic amount/heat pair.
+ */
+export type CurveSavePayload = {
+  cycleId: string;
+  points: [number, number][];
+  min: number;
+  max: number;
+  kind: "duration" | "volume";
+};
 
 const GRAPH_W = 320;
 const GRAPH_H = 170;
@@ -43,22 +35,26 @@ const PAD_L = 34;
 const PAD_R = 12;
 const PAD_T = 16;
 const PAD_B = 24;
-const T_MIN = 5;
-const T_MAX = 40;
+// The graph's x-axis range always covers at least 5–40 °C (the old fixed
+// window) but stretches to fit the authored points when they reach outside
+// it — a floor below 5° or a knee above 40° must stay visible.
+const AXIS_MIN = 5;
+const AXIS_MAX = 40;
+const AXIS_PAD = 2;
 
 export class ImcCurveEditor extends LitElement {
   @property() language = "en";
   @property({ attribute: false }) cycle?: CycleInfo;
   @property({ attribute: false }) weightedTemp?: number;
+  /** Whether the zone has a usable flow meter — gates the volume option in
+   *  the kind selector, mirroring the backend's `volume_requires_flow` guard. */
+  @property({ type: Boolean }) zoneHasFlowMeter = false;
 
-  @state() private _amount = 15;
-  @state() private _heat = 15;
+  @state() private _points: CurvePoint[] = [[REFERENCE_TEMP, 15]];
   @state() private _min = 1;
   @state() private _max = 120;
-  @state() private _advanced = false;
-  /** When a point has been dragged, we save exact points, not the semantic pair. */
-  @state() private _dragged = false;
-  @state() private _points: CurvePoint[] = pointsFromSemantic(15, 15);
+  @state() private _kind: "duration" | "volume" = "duration";
+  @state() private _error: string | null = null;
   private _seededCycleId?: string;
 
   static override styles = css`
@@ -73,37 +69,6 @@ export class ImcCurveEditor extends LitElement {
       font-weight: 700;
       font-size: 1.05rem;
       margin-bottom: 12px;
-    }
-    .field {
-      margin-bottom: 16px;
-    }
-    .row {
-      display: flex;
-      justify-content: space-between;
-      align-items: baseline;
-      gap: 8px;
-    }
-    label {
-      font-weight: 600;
-    }
-    .value {
-      font-variant-numeric: tabular-nums;
-      font-weight: 700;
-      white-space: nowrap;
-    }
-    .help {
-      font-size: 0.8rem;
-      opacity: 0.7;
-      margin: 2px 0 6px;
-    }
-    input[type="range"] {
-      width: 100%;
-    }
-    .ends {
-      display: flex;
-      justify-content: space-between;
-      font-size: 0.7rem;
-      opacity: 0.5;
     }
     .graph-box {
       border: 1px solid var(--divider-color, rgba(127, 127, 127, 0.25));
@@ -125,10 +90,6 @@ export class ImcCurveEditor extends LitElement {
     .axis {
       stroke: var(--secondary-text-color, #888);
       opacity: 0.4;
-    }
-    .tick {
-      fill: var(--secondary-text-color, #888);
-      font-size: 9px;
     }
     .curve {
       fill: none;
@@ -155,9 +116,10 @@ export class ImcCurveEditor extends LitElement {
       display: flex;
       gap: 8px;
       margin-bottom: 10px;
+      flex-wrap: wrap;
     }
     .example {
-      flex: 1;
+      flex: 1 1 60px;
       text-align: center;
       border: 1px solid var(--divider-color, rgba(127, 127, 127, 0.25));
       border-radius: 10px;
@@ -168,7 +130,7 @@ export class ImcCurveEditor extends LitElement {
       opacity: 0.6;
     }
     .example .num {
-      font-size: 1.1rem;
+      font-size: 1.05rem;
       font-weight: 700;
     }
     .today-banner {
@@ -179,13 +141,41 @@ export class ImcCurveEditor extends LitElement {
       margin-bottom: 14px;
       font-size: 0.9rem;
     }
-    .advanced-toggle {
-      cursor: pointer;
-      user-select: none;
+    .intensity-notice {
+      background: color-mix(in srgb, var(--warning-color, #ffa600) 14%, transparent);
+      border: 1px solid var(--warning-color, #ffa600);
+      border-radius: 10px;
+      padding: 10px 12px;
+      margin-bottom: 14px;
       font-size: 0.85rem;
-      margin-bottom: 12px;
-      text-decoration: underline;
-      opacity: 0.85;
+    }
+    .points-title {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: var(--secondary-text-color, #727272);
+      margin: 4px 0 6px;
+    }
+    .point-row {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin-bottom: 6px;
+    }
+    .point-row input[type="number"] {
+      width: 64px;
+      text-align: center;
+    }
+    .point-row button {
+      flex: none;
+      padding: 4px 8px;
+      width: auto;
+    }
+    .kind {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 14px;
     }
     .limits {
       display: flex;
@@ -199,9 +189,17 @@ export class ImcCurveEditor extends LitElement {
       width: 70px;
       text-align: center;
     }
-    .note {
-      font-size: 0.75rem;
-      opacity: 0.6;
+    label {
+      font-weight: 600;
+    }
+    .help {
+      font-size: 0.8rem;
+      opacity: 0.7;
+      margin: 2px 0 6px;
+    }
+    .error {
+      font-size: 0.85rem;
+      color: var(--error-color, #db4437);
       margin-bottom: 12px;
     }
     .buttons {
@@ -223,9 +221,17 @@ export class ImcCurveEditor extends LitElement {
       color: var(--text-primary-color, #fff);
       border-color: transparent;
     }
-    .volume-note {
-      font-size: 0.9rem;
-      opacity: 0.8;
+    button:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+    }
+    select {
+      font: inherit;
+      padding: 4px 8px;
+      border-radius: 6px;
+      border: 1px solid var(--divider-color, rgba(127, 127, 127, 0.3));
+      background: var(--card-background-color, #fff);
+      color: inherit;
     }
   `;
 
@@ -243,44 +249,41 @@ export class ImcCurveEditor extends LitElement {
     const curve = this.cycle?.curve;
     const pts = parseCurvePoints(curve?.points);
     if (pts.length === 0) return;
-    const min = asNumber(curve?.min) ?? 1;
-    const max = asNumber(curve?.max) ?? 120;
-    const { amount, heat } = semanticFromPoints(pts, min, max);
-    this._amount = amount;
-    this._heat = heat;
-    this._min = min;
-    this._max = max;
-    this._dragged = false;
-    // Seed the editor points from the real curve at the three anchors so the
-    // graph faithfully shows the existing curve on open.
-    this._points = [
-      [COOL, roundHalfEven(curveValue(pts, COOL))],
-      [MILD, roundHalfEven(curveValue(pts, MILD))],
-      [HOT, roundHalfEven(curveValue(pts, HOT))],
-    ];
+    // The full, exact set of authored points — no reduction to fixed
+    // anchors, which is the entire point of this editor.
+    this._points = pts;
+    this._min = asNumber(curve?.min) ?? 1;
+    this._max = asNumber(curve?.max) ?? 120;
+    // A zone that can no longer measure litres must never have "volume"
+    // silently re-offered to it — the kind selector stays hidden and this
+    // falls back to "duration", matching the backend's own guard.
+    this._kind = this.zoneHasFlowMeter && curve?.kind === "volume" ? "volume" : "duration";
+    this._error = null;
   }
 
-  private _regen(): void {
-    this._points = pointsFromSemantic(this._amount, this._heat);
-    this._dragged = false;
+  /** The curve as the user is drawing it: unscaled (intensity 100%), since
+   *  saving always resets the program's intensity to 100% anyway. */
+  private _previewValue(temp: number): number {
+    return roundHalfEven(scaledValue(this._points, temp, 100, this._min, this._max));
   }
 
-  private _onAmount(e: Event): void {
-    this._amount = Number((e.target as HTMLInputElement).value);
-    this._regen();
+  private _unit(): string {
+    return localize(this.language, this._kind === "volume" ? "curve.unit_volume" : "curve.unit_duration");
   }
 
-  private _onHeat(e: Event): void {
-    this._heat = Number((e.target as HTMLInputElement).value);
-    this._regen();
+  private _axisMin(): number {
+    return Math.min(this._points[0]?.[0] ?? AXIS_MIN, AXIS_MIN) - AXIS_PAD;
   }
 
-  private _clampedValue(temp: number): number {
-    return roundHalfEven(curveValue(this._points, temp, this._min, this._max));
+  private _axisMax(): number {
+    const last = this._points[this._points.length - 1];
+    return Math.max(last?.[0] ?? AXIS_MAX, AXIS_MAX) + AXIS_PAD;
   }
 
   private _sx(t: number): number {
-    return PAD_L + ((t - T_MIN) / (T_MAX - T_MIN)) * (GRAPH_W - PAD_L - PAD_R);
+    const axisMin = this._axisMin();
+    const axisMax = this._axisMax();
+    return PAD_L + ((t - axisMin) / (axisMax - axisMin)) * (GRAPH_W - PAD_L - PAD_R);
   }
 
   private _graphTop(): number {
@@ -299,7 +302,6 @@ export class ImcCurveEditor extends LitElement {
   }
 
   private _startDrag(index: number, ev: PointerEvent): void {
-    if (!this._advanced) return;
     ev.preventDefault();
     const svgEl = (ev.currentTarget as SVGElement).ownerSVGElement;
     if (!svgEl) return;
@@ -310,15 +312,10 @@ export class ImcCurveEditor extends LitElement {
       pt.x = e.clientX;
       pt.y = e.clientY;
       const viewY = pt.matrixTransform(ctm.inverse()).y; // already in viewBox units (0..GRAPH_H)
-      const next = [...this._points];
-      const current = next[index];
+      const current = this._points[index];
       if (!current) return;
-      next[index] = [current[0], this._valueFromY(viewY)];
-      this._points = next;
-      this._dragged = true;
-      const { amount, heat } = semanticFromPoints(this._points);
-      this._amount = amount;
-      this._heat = heat;
+      this._points = updatePoint(this._points, index, current[0], this._valueFromY(viewY));
+      this._error = null;
     };
     const up = (): void => {
       window.removeEventListener("pointermove", move);
@@ -329,26 +326,26 @@ export class ImcCurveEditor extends LitElement {
   }
 
   private _save(): void {
-    const cycleId = this.cycle?.cycle_id ?? "";
-    const detail: CurveSavePayload = this._dragged
-      ? {
-          cycleId,
-          mode: "advanced",
+    const error =
+      validatePoints(this._points) ??
+      (this._min > this._max ? "min_above_max" : null) ??
+      (this._min < 0 ? "negative_clamp" : null);
+    if (error) {
+      // Nothing is dispatched on a bad curve: the services validate again and
+      // would reject it, and a half-applied curve edit is worse than a refused one.
+      this._error = error;
+      return;
+    }
+    this._error = null;
+    this.dispatchEvent(
+      new CustomEvent<CurveSavePayload>("imc-curve-save", {
+        detail: {
+          cycleId: this.cycle?.cycle_id ?? "",
           points: this._points.map((p) => [p[0], p[1]] as [number, number]),
           min: this._min,
           max: this._max,
-        }
-      : {
-          cycleId,
-          mode: "simple",
-          amount: this._amount,
-          heat: this._heat,
-          min: this._min,
-          max: this._max,
-        };
-    this.dispatchEvent(
-      new CustomEvent<CurveSavePayload>("imc-curve-save", {
-        detail,
+          kind: this._kind,
+        },
         bubbles: true,
         composed: true,
       }),
@@ -363,51 +360,58 @@ export class ImcCurveEditor extends LitElement {
 
   protected override render(): TemplateResult {
     const lang = this.language;
-    if (this.cycle?.curve?.kind === "volume") {
-      return html`<div class="volume-note">${localize(lang, "editor.volume_note")}</div>`;
-    }
     return html`
       <div class="title">${localize(lang, "editor.title")}</div>
 
-      <div class="field">
-        <div class="row">
-          <label>${localize(lang, "editor.amount.label")}</label>
-          <span class="value">${localize(lang, "editor.amount.value", { min: this._amount })}</span>
-        </div>
-        <div class="help">${localize(lang, "editor.amount.help")}</div>
-        <input type="range" min=${AMOUNT_MIN} max=${AMOUNT_MAX} .value=${String(this._amount)}
-          @input=${this._onAmount} />
-        <div class="ends"><span>${localize(lang, "editor.amount.low")}</span><span>${localize(lang, "editor.amount.high")}</span></div>
-      </div>
-
-      <div class="field">
-        <div class="row">
-          <label>${localize(lang, "editor.heat.label")}</label>
-          <span class="value">${localize(lang, "editor.heat.value", { min: this._heat })}</span>
-        </div>
-        <div class="help">${localize(lang, "editor.heat.help")}</div>
-        <input type="range" min=${HEAT_MIN} max=${HEAT_MAX} .value=${String(this._heat)}
-          @input=${this._onHeat} />
-        <div class="ends"><span>${localize(lang, "editor.heat.low")}</span><span>${localize(lang, "editor.heat.high")}</span></div>
-      </div>
+      ${this._renderIntensityNotice(lang)}
 
       <div class="graph-box">
         <div class="caption">${localize(lang, "editor.graph.caption")}</div>
         ${this._renderGraph(lang)}
       </div>
 
+      <div class="caption">${localize(lang, "editor.preview_title")}</div>
       <div class="examples">
-        ${this._exampleTile(localize(lang, "editor.example.cool"), this._clampedValue(COOL))}
-        ${this._exampleTile(localize(lang, "editor.example.mild"), this._clampedValue(MILD))}
-        ${this._exampleTile(localize(lang, "editor.example.hot"), this._clampedValue(HOT))}
+        ${PREVIEW_TEMPS.map((t) => this._exampleTile(`${t}°`, this._previewValue(t)))}
       </div>
 
       ${this._renderToday(lang)}
 
-      <div class="advanced-toggle" @click=${() => (this._advanced = !this._advanced)}>
-        ${this._advanced ? "▾" : "▸"} ${localize(lang, "editor.advanced.toggle")}
+      <div class="points-title">${localize(lang, "editor.points_title")}</div>
+      ${this._points.map((p, i) => this._renderPointRow(p, i, lang))}
+
+      ${this.zoneHasFlowMeter ? this._renderKind(lang) : nothing}
+
+      <div class="limits">
+        <div class="limit">
+          <label>${localize(lang, "editor.min.label")}</label>
+          <div class="help">${localize(lang, "editor.min.help")}</div>
+          <input type="number" min="0" .value=${String(this._min)}
+            @input=${(e: Event) => {
+              const value = Number((e.target as HTMLInputElement).value);
+              if (!Number.isNaN(value)) {
+                this._min = value;
+                this._error = null;
+              }
+            }} /> ${this._unit()}
+        </div>
+        <div class="limit">
+          <label>${localize(lang, "editor.max.label")}</label>
+          <div class="help">${localize(lang, "editor.max.help")}</div>
+          <input type="number" min="0" .value=${String(this._max)}
+            @input=${(e: Event) => {
+              const value = Number((e.target as HTMLInputElement).value);
+              if (!Number.isNaN(value)) {
+                this._max = value;
+                this._error = null;
+              }
+            }} /> ${this._unit()}
+        </div>
       </div>
-      ${this._advanced ? this._renderAdvanced(lang) : nothing}
+
+      ${this._error
+        ? html`<div class="error">${localizeDynamic(lang, "editor", this._error)}</div>`
+        : nothing}
 
       <div class="buttons">
         <button class="primary" @click=${this._save}>${localize(lang, "editor.save")}</button>
@@ -416,73 +420,120 @@ export class ImcCurveEditor extends LitElement {
     `;
   }
 
-  private _exampleTile(label: string, minutes: number): TemplateResult {
-    return html`<div class="example"><div class="lbl">${label}</div><div class="num">${minutes} min</div></div>`;
+  private _renderIntensityNotice(lang: string): TemplateResult | typeof nothing {
+    const pct = this.cycle?.intensity_pct;
+    if (pct === undefined || pct === 100) return nothing;
+    return html`<div class="intensity-notice">
+      ${localize(lang, "editor.intensity_reset", { pct: Math.round(pct) })}
+    </div>`;
+  }
+
+  private _renderKind(lang: string): TemplateResult {
+    return html`<div class="kind">
+      <label for="imc-curve-kind">${localize(lang, "editor.kind_label")}</label>
+      <select
+        id="imc-curve-kind"
+        .value=${this._kind}
+        @change=${(e: Event) => {
+          const value = (e.target as HTMLSelectElement).value;
+          this._kind = value === "volume" ? "volume" : "duration";
+        }}
+      >
+        <option value="duration">${localize(lang, "editor.kind_duration")}</option>
+        <option value="volume">${localize(lang, "editor.kind_volume")}</option>
+      </select>
+    </div>`;
+  }
+
+  private _exampleTile(label: string, value: number): TemplateResult {
+    return html`<div class="example"><div class="lbl">${label}</div><div class="num">${value} ${this._unit()}</div></div>`;
   }
 
   private _renderToday(lang: string): TemplateResult | typeof nothing {
     const t = this.weightedTemp;
     if (t === undefined || Number.isNaN(t)) return nothing;
-    const minutes = this._clampedValue(t);
+    const value = this._previewValue(t);
     return html`<div class="today-banner">${localize(lang, "editor.today", {
       temp: Math.round(t),
-      min: minutes,
+      value,
+      unit: this._unit(),
     })}</div>`;
   }
 
-  private _renderAdvanced(lang: string): TemplateResult {
-    return html`
-      <div class="help">${localize(lang, "editor.advanced.help")}</div>
-      <div class="limits">
-        <div class="limit">
-          <label>${localize(lang, "editor.min.label")}</label>
-          <div class="help">${localize(lang, "editor.min.help")}</div>
-          <input type="number" min="0" .value=${String(this._min)}
-            @input=${(e: Event) => {
-              const value = Number((e.target as HTMLInputElement).value);
-              if (!Number.isNaN(value)) this._min = Math.min(value, this._max);
-            }} /> min
-        </div>
-        <div class="limit">
-          <label>${localize(lang, "editor.max.label")}</label>
-          <div class="help">${localize(lang, "editor.max.help")}</div>
-          <input type="number" min="0" .value=${String(this._max)}
-            @input=${(e: Event) => {
-              const value = Number((e.target as HTMLInputElement).value);
-              if (!Number.isNaN(value)) this._max = Math.max(value, this._min);
-            }} /> min
-        </div>
-      </div>
-      <div class="note">${localize(lang, "editor.drag_hint")}</div>
-      <div class="note">${localize(lang, "editor.more_points")}</div>
-    `;
+  private _renderPointRow(point: CurvePoint, index: number, lang: string): TemplateResult {
+    return html`<div class="point-row">
+      <input
+        type="number"
+        step="0.5"
+        .value=${String(point[0])}
+        aria-label=${localize(lang, "editor.point_temp")}
+        @change=${(e: Event) => this._editPoint(index, e, "temp")}
+      /> °C
+      <input
+        type="number"
+        min="0"
+        step="1"
+        .value=${String(point[1])}
+        aria-label=${localize(lang, "editor.point_value")}
+        @change=${(e: Event) => this._editPoint(index, e, "value")}
+      /> ${this._unit()}
+      <button
+        type="button"
+        ?disabled=${this._points.length <= 1}
+        title=${localize(lang, "editor.point_remove")}
+        @click=${() => (this._points = removePoint(this._points, index))}
+      >
+        ✕
+      </button>
+      <button
+        type="button"
+        title=${localize(lang, "editor.point_add")}
+        @click=${() => (this._points = addPoint(this._points, index))}
+      >
+        ＋
+      </button>
+    </div>`;
+  }
+
+  private _editPoint(index: number, event: Event, field: "temp" | "value"): void {
+    const raw = Number((event.target as HTMLInputElement).value);
+    if (Number.isNaN(raw)) return;
+    const current = this._points[index];
+    if (!current) return;
+    const next =
+      field === "temp"
+        ? updatePoint(this._points, index, raw, current[1])
+        : updatePoint(this._points, index, current[0], raw);
+    // Re-sorting on every edit keeps the curve renderable while the user is
+    // still typing; validatePoints then only ever has to reject duplicates.
+    this._points = sortPoints(next);
+    this._error = null;
   }
 
   private _renderGraph(lang: string): TemplateResult {
+    const axisMin = this._axisMin();
+    const axisMax = this._axisMax();
     const dense: Array<[number, number]> = [];
-    for (let t = T_MIN; t <= T_MAX; t += 1) {
-      dense.push([this._sx(t), this._sy(this._clampedValue(t))]);
+    for (let t = axisMin; t <= axisMax; t += 1) {
+      dense.push([this._sx(t), this._sy(this._previewValue(t))]);
     }
     const path = dense
       .map((p, i) => `${i === 0 ? "M" : "L"}${p[0].toFixed(1)},${p[1].toFixed(1)}`)
       .join(" ");
     const t = this.weightedTemp;
-    const showToday = t !== undefined && !Number.isNaN(t) && t >= T_MIN && t <= T_MAX;
+    const showToday = t !== undefined && !Number.isNaN(t) && t >= axisMin && t <= axisMax;
     return svg`
       <svg viewBox="0 0 ${GRAPH_W} ${GRAPH_H}">
         <line class="axis" x1=${PAD_L} y1=${PAD_T} x2=${PAD_L} y2=${GRAPH_H - PAD_B}></line>
         <line class="axis" x1=${PAD_L} y1=${GRAPH_H - PAD_B} x2=${GRAPH_W - PAD_R} y2=${GRAPH_H - PAD_B}></line>
-        <text class="tick" x=${this._sx(COOL)} y=${GRAPH_H - PAD_B + 12} text-anchor="middle">12°</text>
-        <text class="tick" x=${this._sx(MILD)} y=${GRAPH_H - PAD_B + 12} text-anchor="middle">25°</text>
-        <text class="tick" x=${this._sx(HOT)} y=${GRAPH_H - PAD_B + 12} text-anchor="middle">35°</text>
         ${showToday
           ? svg`<line class="today" x1=${this._sx(t as number)} y1=${PAD_T} x2=${this._sx(t as number)} y2=${GRAPH_H - PAD_B}></line>
               <text class="today-text" x=${this._sx(t as number)} y=${PAD_T - 4} text-anchor="middle">${localize(lang, "editor.graph.today", { temp: Math.round(t as number) })}</text>`
           : nothing}
         <path class="curve" d=${path}></path>
         ${this._points.map(
-          (p, i) => svg`<circle class="handle" r=${this._advanced ? 7 : 3.5}
-            cx=${this._sx(p[0]).toFixed(1)} cy=${this._sy(this._clampedValue(p[0])).toFixed(1)}
+          (p, i) => svg`<circle class="handle" r="7"
+            cx=${this._sx(p[0]).toFixed(1)} cy=${this._sy(this._previewValue(p[0])).toFixed(1)}
             @pointerdown=${(e: PointerEvent) => this._startDrag(i, e)}></circle>`,
         )}
       </svg>

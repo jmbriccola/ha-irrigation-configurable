@@ -5,7 +5,6 @@ import { WEEKDAYS, previewMinutes, toggleWeekday, weekdayLabels } from "../sched
 import "./calendar-editor";
 import { type CalendarConfig } from "./calendar-editor";
 import { localize, pickLanguage } from "../localize/localize";
-import { pointsFromSemantic } from "../curve-math";
 import { clamp, defineElement } from "../types";
 import type { CycleInfo, HomeAssistant } from "../types";
 
@@ -54,10 +53,18 @@ const DEFAULT_CURVE_MAX = 60;
 
 // The draft's curve shape — `add_program` always writes exactly this curve
 // for a fresh program, so the wizard's live preview evaluates the same
-// points the backend will actually save.
+// points the backend will actually save. Inlined rather than derived (the
+// card no longer has a semantic-to-points conversion): mirrors
+// `points_from_semantic(15, 8)` in engine/semantic.py — 15' at the mild
+// anchor (25°), +8' at the hot one (35°), and the cold anchor (12°) is
+// `round(15 - 1.3 * 8) = 5`.
 const DRAFT_CYCLE: Partial<CycleInfo> = {
   curve: {
-    points: pointsFromSemantic(DEFAULT_MINUTES, DEFAULT_HEAT),
+    points: [
+      [12, 5],
+      [25, DEFAULT_MINUTES],
+      [35, DEFAULT_MINUTES + DEFAULT_HEAT],
+    ],
     min: DEFAULT_CURVE_MIN,
     max: DEFAULT_CURVE_MAX,
   },
