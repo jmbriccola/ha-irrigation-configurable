@@ -243,6 +243,17 @@ class IrrigationRuntime:
     def zone_has_flow_meter(self, zone: ZoneConfig) -> bool:
         return bool(zone.flow_sensor or self.hub.line_flow_sensor)
 
+    def zone_flow_meter_usable(self, zone: ZoneRuntime) -> bool:
+        """Is there a meter AND can its unit be determined right now?
+
+        Deliberately separate from zone_has_flow_meter, which is configuration
+        only: this one reads live state, so it belongs at plan time and in the
+        zone's declared status, not in the services that create a volume curve
+        (a momentarily unavailable sensor must not make an edit fail).
+        """
+        reader = self.flow_reader_for(zone)
+        return reader is not None and reader.read().unit_known
+
     def expected_flow_range(self) -> tuple[float, float] | None:
         """Expected line flow = Σ nominal flows of the open zones ± tolerance."""
         nominals: list[tuple[float, float]] = []
@@ -501,21 +512,22 @@ class IrrigationRuntime:
             name="irrigation_maestro_budget_notice",
         )
 
-    def _zone_spec(self, zone: ZoneConfig, cycles: list[CycleConfig]) -> Any:
+    def _zone_spec(self, zone: ZoneRuntime, cycles: list[CycleConfig]) -> Any:
         dt_util.utcnow()
-        return zone.to_spec(
-            enabled=self.state.zone_enabled(zone.zone_id),
+        config = zone.config
+        return config.to_spec(
+            enabled=self.state.zone_enabled(config.zone_id),
             cycles=tuple(
                 cycle.to_spec(
-                    enabled=self.state.cycle_enabled(zone.zone_id, cycle.cycle_id),
-                    last_completed=self.state.last_completed(zone.zone_id, cycle.cycle_id),
+                    enabled=self.state.cycle_enabled(config.zone_id, cycle.cycle_id),
+                    last_completed=self.state.last_completed(config.zone_id, cycle.cycle_id),
                 )
                 for cycle in cycles
             ),
-            suspended_until=self.state.suspended_until(zone.zone_id),
-            paused_until=self.state.paused_until(zone.zone_id) or self.state.paused_until(None),
-            skip_today=self.state.skip_today_date(zone.zone_id) == dt_util.now().date(),
-            has_flow_meter=self.zone_has_flow_meter(zone),
+            suspended_until=self.state.suspended_until(config.zone_id),
+            paused_until=self.state.paused_until(config.zone_id) or self.state.paused_until(None),
+            skip_today=self.state.skip_today_date(config.zone_id) == dt_util.now().date(),
+            has_flow_meter=self.zone_flow_meter_usable(zone),
         )
 
     # Session entry points ----------------------------------------------------------
@@ -533,7 +545,7 @@ class IrrigationRuntime:
             plan = build_session_plan(
                 self.hub.engine_params,
                 evaluation,
-                [self._zone_spec(zone.config, [cycle])],
+                [self._zone_spec(zone, [cycle])],
                 now=dt_util.now(),
                 duration_factor=factor,
             )
@@ -684,9 +696,7 @@ class IrrigationRuntime:
         factor, suspend_all = self._consumption_factor()
         if suspend_all:
             evaluation = replace(evaluation, skip_reason=SkipReason.CONSUMPTION_BUDGET)
-        specs = [
-            self._zone_spec(zone.config, list(zone.config.cycles)) for zone in self.zones.values()
-        ]
+        specs = [self._zone_spec(zone, list(zone.config.cycles)) for zone in self.zones.values()]
         plan = build_session_plan(
             self.hub.engine_params,
             evaluation,

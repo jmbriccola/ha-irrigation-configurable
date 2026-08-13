@@ -133,6 +133,7 @@ export const it: Record<keyof typeof en, string> = {
   // Funzionalità degradate
   "degraded.switch_valve": "Valvola senza conferma di posizione",
   "degraded.no_flow_meter": "Nessun contatore di flusso",
+  "degraded.flow_unit_unknown": "Unità del contatore di flusso sconosciuta",
   "degraded.line_meter_shared": "Contatore di linea condiviso",
   "degraded.no_hourly_forecast": "Nessuna previsione oraria",
   "degraded.volume_mode_unavailable": "Modalità a volume non disponibile",

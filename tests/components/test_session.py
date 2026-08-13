@@ -567,3 +567,42 @@ async def test_config_update_midcycle_does_not_interrupt(
     assert hass.states.get("valve.a").state == "closed"
     runtime = entry.runtime_data
     assert runtime.state.last_outcome(runtime.zone_ids[0])["result"] == "completed"
+
+
+async def test_a_volume_cycle_on_an_unresolvable_meter_runs_as_a_duration(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    """Same degradation as a meter that disappeared: run the safety timeout."""
+    freezer.move_to(START)
+    park = MockValvePark(hass)
+    park.add("valve.a")
+    hass.states.async_set("sensor.flow", "7.5")  # no unit
+    mock_weather(hass)
+    zone = zone_data(
+        "Alpha",
+        "valve.a",
+        flow_sensor="sensor.flow",
+        cycles=[
+            {
+                "id": "cy_vol",
+                "name": "Volume",
+                "enabled": True,
+                "trigger": {"kind": "time", "at": "05:30"},
+                "curve": {
+                    "points": [[20.0, 20.0]],
+                    "min_value": 5.0,
+                    "max_value": 100.0,
+                    "kind": "volume",
+                },
+                "volume_safety_timeout_min": 5,
+            }
+        ],
+    )
+    entry = await setup_hub(hass, [zone])
+    await advance(hass, freezer, 31 * 60)
+    assert hass.states.get("valve.a").state == "open"
+    await advance(hass, freezer, 6 * 60)
+    assert hass.states.get("valve.a").state == "closed"
+    runtime = entry.runtime_data
+    outcome = runtime.state.last_outcome(runtime.zone_ids[0])
+    assert outcome["result"] == "completed"

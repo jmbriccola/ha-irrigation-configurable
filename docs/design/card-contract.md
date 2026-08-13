@@ -117,6 +117,7 @@ call the same value `program_id` in their fields, for the user-facing name):
   `adjustment_pct` folded in) everywhere noted above.
 
 `degraded` keys: `switch_valve` (no position feedback), `no_flow_meter`,
+`flow_unit_unknown` (a meter is configured but its unit cannot be resolved),
 `line_meter_shared`, `no_hourly_forecast`, `volume_mode_unavailable`.
 
 ## Services (domain `irrigation_maestro`)

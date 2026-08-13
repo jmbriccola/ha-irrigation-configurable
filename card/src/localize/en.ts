@@ -131,6 +131,7 @@ export const en = {
   // Degraded-feature keys
   "degraded.switch_valve": "Valve without position feedback",
   "degraded.no_flow_meter": "No flow meter",
+  "degraded.flow_unit_unknown": "Flow meter unit unknown",
   "degraded.line_meter_shared": "Shared line meter",
   "degraded.no_hourly_forecast": "No hourly forecast",
   "degraded.volume_mode_unavailable": "Volume mode unavailable",
