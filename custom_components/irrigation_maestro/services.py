@@ -1055,6 +1055,17 @@ async def _async_add_zone(call: ServiceCall) -> ServiceResponse:
     if ATTR_ICON in call.data:
         data[const.CONF_ZONE_ICON] = call.data[ATTR_ICON]
 
+    # One convention, on the service side: the service is the only path that
+    # creates a zone now, so it writes the defaults rather than leaving them
+    # implicit in half the installations.
+    existing_orders = [
+        int(subentry.data.get(const.CONF_ORDER, const.DEFAULT_ORDER))
+        for subentry in entry.subentries.values()
+        if subentry.subentry_type == SUBENTRY_TYPE_ZONE
+    ]
+    data[const.CONF_ORDER] = max(existing_orders, default=const.DEFAULT_ORDER - 1) + 1
+    data[const.CONF_ADJUSTMENT_PCT] = const.DEFAULT_ADJUSTMENT_PCT
+
     _validate_zone(data, runtime.hub.curve_templates)
 
     subentry = ConfigSubentry(

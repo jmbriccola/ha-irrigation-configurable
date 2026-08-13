@@ -1116,6 +1116,30 @@ async def test_add_zone_rejects_invalid(hass, freezer):
         )
 
 
+async def test_add_zone_writes_the_defaults_explicitly(hass, freezer):
+    freezer.move_to(START)
+    park = MockValvePark(hass)
+    park.add("valve.pots")
+    park.add("valve.lawn")
+    mock_weather(hass)
+    entry = await setup_hub(hass, [zone_data("Pots", "valve.pots", order=100)])
+
+    response = await hass.services.async_call(
+        DOMAIN,
+        "add_zone",
+        {"name": "Lawn", "valve_entity": "valve.lawn"},
+        blocking=True,
+        return_response=True,
+    )
+    await hass.async_block_till_done()
+
+    data = entry.subentries[response["zone_id"]].data
+    # A new zone lands at the end of the sequence instead of tying with the
+    # zones already there.
+    assert data["order"] == 101
+    assert data["adjustment_pct"] == const.DEFAULT_ADJUSTMENT_PCT
+
+
 async def test_update_zone_patches_in_place(hass, freezer):
     freezer.move_to(START)
     park = MockValvePark(hass)
