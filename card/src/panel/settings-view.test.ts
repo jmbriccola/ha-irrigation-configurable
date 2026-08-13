@@ -1,12 +1,18 @@
 import { describe, expect, it } from "vitest";
 import {
+  ImcSettingsView,
   buildConcurrencyPatch,
   buildSessionLimitsPatch,
   buildValveSafetyPatch,
   effectiveNotifyPriority,
+  sameEventSet,
+  unreachableEssentials,
 } from "./settings-view";
-import { buildSaveCalls } from "./notification-wizard-state";
-import type { NotificationStatusResponse } from "./notification-wizard-state";
+import type {
+  NotificationStatusResponse,
+  SetNotificationsCall,
+  WizardSelection,
+} from "./notification-wizard-state";
 
 describe("settings patches", () => {
   it("omits fields the user left empty, so absent means unchanged", () => {
@@ -102,16 +108,126 @@ function statusWith(priorities: Record<string, string>): NotificationStatusRespo
   };
 }
 
+const ESSENTIALS = ["watchdog", "anomaly", "sentinel", "interrupted"];
+
+/** A status whose essential events are reachable or not, as named. */
+function essentialsStatus(reachable: string[]): NotificationStatusResponse {
+  return {
+    verdict: "silent",
+    groups: {},
+    recommended: [...ESSENTIALS],
+    enabled_without_target: [],
+    unreachable: {},
+    available_services: [],
+    events: [...ESSENTIALS, "completed"].map((event) => ({
+      event,
+      group: "critical",
+      enabled: reachable.includes(event),
+      services: [],
+      missing: [],
+      priority: "high",
+      essential: ESSENTIALS.includes(event),
+      reachable: reachable.includes(event),
+    })),
+  };
+}
+
+/** The wizard's own state: private, and there is no public setter for it. */
+interface WizardInternals {
+  _selection: WizardSelection;
+  _saveError?: string;
+  _saveNotifications(lang: string): void;
+}
+
+/**
+ * A settings view holding one selection. Lit 3 resolves its `node` export
+ * condition to @lit-labs/ssr-dom-shim, so the element constructs and
+ * dispatches events under the plain node test environment — no jsdom and no
+ * extra dependency needed to exercise what the view hands the panel.
+ */
+function viewWith(selection: WizardSelection): {
+  element: ImcSettingsView;
+  inner: WizardInternals;
+} {
+  const element = new ImcSettingsView();
+  const inner = element as unknown as WizardInternals;
+  inner._selection = selection;
+  return { element, inner };
+}
+
 describe("the notifications section", () => {
-  it("emits grouped set_notifications calls rather than one per event", () => {
-    const calls = buildSaveCalls({
-      recipients: ["mobile_app_pixel"],
-      events: ["watchdog", "anomaly", "sentinel", "interrupted"],
+  it("hands the panel the grouped calls, not one per event", () => {
+    const { element, inner } = viewWith({
+      recipients: ["phone"],
+      events: ["watchdog"],
       priorities: {},
     });
-    // Two calls for nine events: the enabled group and the disabled remainder.
-    expect(calls).toHaveLength(2);
-    expect(calls.flatMap((call) => call.events)).toHaveLength(9);
+    const dispatched: SetNotificationsCall[][] = [];
+    element.addEventListener("imc-settings-save-notifications", (event) =>
+      dispatched.push((event as CustomEvent<SetNotificationsCall[]>).detail),
+    );
+
+    inner._saveNotifications("en");
+
+    expect(dispatched).toEqual([
+      [
+        { events: ["watchdog"], enabled: true, services: ["phone"] },
+        {
+          events: [
+            "anomaly",
+            "skipped",
+            "interrupted",
+            "cancelled",
+            "completed",
+            "sentinel",
+            "session_overrun",
+            "consumption_budget",
+          ],
+          enabled: false,
+        },
+      ],
+    ]);
+    expect(inner._saveError).toBeUndefined();
+  });
+
+  it("keeps the user in the wizard when an enabled event has no recipient", () => {
+    const { element, inner } = viewWith({
+      recipients: [],
+      events: ["watchdog"],
+      priorities: {},
+    });
+    let fired = false;
+    element.addEventListener("imc-settings-save-notifications", () => (fired = true));
+
+    inner._saveNotifications("en");
+
+    // Nothing is sent, and the refusal is explained where the user is
+    // standing rather than through a service-error toast over a form they
+    // can no longer see.
+    expect(fired).toBe(false);
+    expect(inner._saveError).toBe("Choose at least one recipient before enabling an event.");
+  });
+
+  it("recognises a preset the selection already matches, whatever the order", () => {
+    // `presetSelection` returns the backend's order and `selectionFromStatus`
+    // the configured one, so the two agree as sets long before they agree as
+    // lists. Comparing them as lists would leave every preset chip inert.
+    expect(sameEventSet(["watchdog", "anomaly"], ["anomaly", "watchdog"])).toBe(true);
+    expect(sameEventSet(["watchdog"], ["watchdog", "anomaly"])).toBe(false);
+  });
+
+  it("names the essential events that will not arrive, for every verdict", () => {
+    // silent: nothing reaches anyone.
+    expect(unreachableEssentials(essentialsStatus([]))).toEqual(ESSENTIALS);
+    // partial: "completed" is unreachable here too, but it is not essential —
+    // the banner warns about silence that matters, not every event left off.
+    expect(unreachableEssentials(essentialsStatus(["watchdog"]))).toEqual([
+      "anomaly",
+      "sentinel",
+      "interrupted",
+    ]);
+    // ok: nothing to say, which is exactly when the banner is not drawn.
+    expect(unreachableEssentials(essentialsStatus(ESSENTIALS))).toEqual([]);
   });
 
   it("shows the backend's default for an event the user never chose a priority for", () => {

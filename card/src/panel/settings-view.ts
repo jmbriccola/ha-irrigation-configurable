@@ -181,6 +181,27 @@ export function effectiveNotifyPriority(
   return reported === "high" ? "high" : "normal";
 }
 
+/**
+ * The essential events that will not arrive — what the mute banner names.
+ *
+ * Empty exactly when the verdict is `ok`: notify.py calls it `ok` only when
+ * every essential event is reachable, so "the banner has nothing to say" and
+ * "the banner is not drawn" are the same condition rather than two rules that
+ * could drift apart.
+ */
+export function unreachableEssentials(status: NotificationStatusResponse): string[] {
+  return status.events
+    .filter((event) => event.essential && !event.reachable)
+    .map((event) => event.event);
+}
+
+/** Set equality: a preset is "the current choice" however the lists are ordered. */
+export function sameEventSet(left: readonly string[], right: readonly string[]): boolean {
+  const chosen = new Set(left);
+  const other = new Set(right);
+  return chosen.size === other.size && [...chosen].every((event) => other.has(event));
+}
+
 export interface WeatherSaveDetail {
   weather_entity: string;
   rain_sensor?: string;
@@ -987,9 +1008,8 @@ export class ImcSettingsView extends LitElement {
    * `partial` means some of them do and the banner names the rest.
    */
   private _renderMuteBanner(lang: string, status: NotificationStatusResponse): TemplateResult {
-    const unreached = status.events
-      .filter((event) => event.essential && !event.reachable)
-      .map((event) => eventLabel(lang, event.event))
+    const unreached = unreachableEssentials(status)
+      .map((event) => eventLabel(lang, event))
       .join(", ");
     return html`
       <div class="notify-banner">
@@ -1056,11 +1076,18 @@ export class ImcSettingsView extends LitElement {
     return html`
       <div class="section-label">${localize(lang, "notify.step_events")}</div>
       <span class="seg">
-        ${PRESET_ORDER.map(
-          (preset) => html`<span @click=${() => this._applyPreset(preset, status)}
+        ${PRESET_ORDER.map((preset) => {
+          // `.seg` means "here is the current choice" everywhere else in this
+          // view, so a preset the selection already matches must read as
+          // chosen — otherwise the recommendation the wizard opens on looks
+          // like something nobody has accepted yet.
+          const current = sameEventSet(this._selection.events, presetSelection(preset, status));
+          return html`<span
+            class="${current ? "sel" : ""}"
+            @click=${() => this._applyPreset(preset, status)}
             >${localize(lang, PRESET_LABEL_KEYS[preset])}</span
-          >`,
-        )}
+          >`;
+        })}
       </span>
       ${NOTIFY_GROUP_ORDER.map((group) => this._renderEventGroup(lang, group, status))}
     `;

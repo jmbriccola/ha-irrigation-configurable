@@ -284,7 +284,7 @@ export const it: Record<keyof typeof en, string> = {
   "notify.no_recipients":
     "Questa istanza non ha ancora nessun servizio notify. Configurane uno — l'app companion, Telegram, l'e-mail — e comparirà qui.",
   "notify.send_test": "Invia prova",
-  "notify.test_ok": "Consegnata",
+  "notify.test_ok": "Inviata",
   "notify.test_failed": "Non consegnata: {error}",
   "notify.preset_recommended": "Consigliato",
   "notify.preset_critical": "Solo critici",
