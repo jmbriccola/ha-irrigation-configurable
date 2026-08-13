@@ -223,12 +223,18 @@ class IrrigationRuntime:
         The override that applies belongs to the sensor being read: a zone
         falling back to the shared line meter takes the hub's override, not its
         own — its own describes a sensor it does not have.
+
+        Truthiness, not ``is not None``: update_zone writes flow_sensor
+        unconditionally, so an empty string is a reachable way of saying "no
+        meter". Reading it as one would bind a monitor to a nonexistent entity
+        and suppress the fallback to the line meter. This has to agree with
+        zone_has_flow_meter, which is truthiness too.
         """
-        if zone.config.flow_sensor is not None:
+        if zone.config.flow_sensor:
             return FlowSensorReader(
                 self.hass, zone.config.flow_sensor, zone.config.flow_sensor_unit
             )
-        if self.hub.line_flow_sensor is not None:
+        if self.hub.line_flow_sensor:
             return FlowSensorReader(
                 self.hass, self.hub.line_flow_sensor, self.hub.line_flow_sensor_unit
             )
@@ -981,6 +987,24 @@ class IrrigationRuntime:
 
     def clear_flow_unit_unknown(self, entity_id: str) -> None:
         ir.async_delete_issue(self.hass, DOMAIN, f"flow_unit_unknown_{entity_id}")
+
+    def report_flow_unit_lost(self, entity_id: str) -> None:
+        """A meter that was readable stopped being so during a cycle.
+
+        The repair states the standing condition; this pushes the change,
+        because a run silently losing volume mode and flow anomaly detection
+        halfway through is something the user has to be told about now.
+        """
+        self.entry.async_create_background_task(
+            self.hass,
+            self.notify_anomaly(
+                f"The flow sensor {entity_id} stopped reporting a usable unit "
+                "of measurement mid-cycle; its readings are no longer being "
+                "used. Volume mode and flow anomaly detection are off for it "
+                "until its unit is set."
+            ),
+            name="irrigation_maestro_flow_unit_lost",
+        )
 
     # Consumption -------------------------------------------------------------------
 
