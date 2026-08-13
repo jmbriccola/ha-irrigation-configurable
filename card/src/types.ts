@@ -164,6 +164,8 @@ export interface HomeAssistant {
   states: Record<string, HassEntity>;
   language?: string;
   locale?: { language?: string };
+  /** Mirrors the HA frontend's service registry; the wizard's recipient-discovery source. */
+  services?: Record<string, Record<string, { name?: string; description?: string }>>;
   callService(
     domain: string,
     service: string,
