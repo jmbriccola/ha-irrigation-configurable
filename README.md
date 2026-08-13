@@ -63,7 +63,14 @@ Irrigation Maestro is built around two ideas:
   detection (leak, no-flow, out-of-range) and a monthly consumption budget.
 - **Per-event notifications** to any `notify.*` targets, aggregated (one
   message per shared reason, never one per zone), rich bus events
-  (`irrigation_maestro_*`) and per-zone outcome sensors.
+  (`irrigation_maestro_*`) and per-zone outcome sensors. Set up from a
+  three-step guided wizard in the panel: recipients picked from the
+  `notify.*` services this instance actually has — never typed, each with a
+  test-send button — then events chosen by preset (*Recommended*, *Critical
+  only*, *Everything*) across three severity groups with a priority chip per
+  event, then a summary to save. `notification_status` reports what is live
+  and where, and Repairs opens an issue if a configuration would leave you
+  uninformed.
 - **Custom Lovelace card** (installed automatically in storage mode) with
   live progress, queue, controls, degraded-feature badges, the same
   point-based curve editor as the panel, and full EN/IT localization.
@@ -207,8 +214,9 @@ datetime).
 
 Services: `run_zone`, `run_all`, `skip_today`, `pause`, `suspend_until`,
 `resume`, `stop_all`, `evaluate` (returns the full computed plan),
-`set_zone_order`, `set_curve`, `export_config`, `import_config` — all
-documented in the UI (Developer tools → Actions) in English and Italian.
+`set_zone_order`, `set_curve`, `set_notifications`, `test_notification`,
+`notification_status`, `export_config`, `import_config` — all documented in
+the UI (Developer tools → Actions) in English and Italian.
 
 Events: `irrigation_maestro_session_started/finished`,
 `irrigation_maestro_cycle_started/finished/skipped/cancelled/interrupted`,

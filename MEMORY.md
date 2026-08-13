@@ -215,6 +215,23 @@ details harvested from it (kept as engine behaviour):
   after the fact. The warning is a notice, not a new confirmation gate — do
   not add a blocking dialog here; the backend rule is unconditional and
   correct, the card's job is only to make it visible.
+- **The notification wizard lives in the panel (3.1.0).** Notifications were
+  already edited there, and the 2.1.0 rule is one editor per setting — putting
+  a guided path in the options flow would have been the duplicated surface
+  that rule exists to prevent. Findability, which is what the request was
+  really about, is solved with Repairs issues that fire exactly when the user
+  has the problem, plus `notification_status` and the diagnostics payload.
+  Do not add a config-flow notifications step.
+- **ESSENTIAL_EVENTS is not one of the display groups (3.1.0).** The severity
+  grouping is presentation; the four events that must arrive (watchdog,
+  anomaly, sentinel, interrupted) span all three groups. One set drives the
+  proposed defaults, the default priority, the missing-recipient repair and
+  the definition of "mute" — do not re-derive any of those from a group.
+- **Recipients are stored bare, and normalised on read too (3.1.0).** The old
+  panel placeholder taught users to type `notify.mobile_app_phone`, which
+  `Notifier` then invoked as `notify.notify.mobile_app_phone` — a third silent
+  exit next to the two in the brief. Normalising on read repairs existing
+  configurations without a migration; do not remove either half.
 
 ## Progress log
 
