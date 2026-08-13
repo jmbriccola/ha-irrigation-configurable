@@ -5,6 +5,10 @@ the Repairs issues, the diagnostics payload, the notification_status service
 and the panel banner. A second copy is how they drift apart.
 """
 
+from typing import Any
+
+import pytest
+from custom_components.irrigation_maestro.const import DOMAIN
 from custom_components.irrigation_maestro.notify import (
     ALL_EVENTS,
     ESSENTIAL_EVENTS,
@@ -16,10 +20,13 @@ from custom_components.irrigation_maestro.notify import (
     EVENT_WATCHDOG,
     PRIORITY_HIGH,
     PRIORITY_NORMAL,
+    Notifier,
     default_priority,
     evaluate_notifications,
     normalize_service,
 )
+from homeassistant.core import HomeAssistant, ServiceCall
+from homeassistant.helpers import issue_registry as ir
 
 
 def test_the_groups_partition_every_event() -> None:
@@ -94,3 +101,91 @@ def test_stored_recipients_keep_working_when_they_carry_the_notify_prefix() -> N
     status = evaluate_notifications(config, known_services={"phone"})
     assert status.per_event[EVENT_WATCHDOG].services == ("phone",)
     assert status.unreachable == {}
+
+
+def _notifier(hass: HomeAssistant, config: dict[str, Any]) -> Notifier:
+    return Notifier(hass, lambda: config)
+
+
+def _record_notify(hass: HomeAssistant, service: str) -> list[ServiceCall]:
+    calls: list[ServiceCall] = []
+
+    async def handler(call: ServiceCall) -> None:
+        calls.append(call)
+
+    hass.services.async_register("notify", service, handler)
+    return calls
+
+
+async def test_a_stored_notify_prefix_still_reaches_the_target(hass: HomeAssistant) -> None:
+    calls = _record_notify(hass, "phone")
+    notifier = _notifier(hass, {EVENT_WATCHDOG: {"enabled": True, "services": ["notify.phone"]}})
+    await notifier.async_notify(EVENT_WATCHDOG, title="t", message="m")
+    await hass.async_block_till_done()
+    assert len(calls) == 1
+
+
+async def test_essential_events_carry_the_high_priority_payload_by_default(
+    hass: HomeAssistant,
+) -> None:
+    calls = _record_notify(hass, "phone")
+    notifier = _notifier(hass, {EVENT_WATCHDOG: {"enabled": True, "services": ["phone"]}})
+    await notifier.async_notify(EVENT_WATCHDOG, title="t", message="m")
+    await hass.async_block_till_done()
+    assert calls[0].data["data"]["importance"] == "high"
+
+
+async def test_a_non_essential_event_stays_normal_by_default(hass: HomeAssistant) -> None:
+    calls = _record_notify(hass, "phone")
+    notifier = _notifier(hass, {EVENT_COMPLETED: {"enabled": True, "services": ["phone"]}})
+    await notifier.async_notify(EVENT_COMPLETED, title="t", message="m")
+    await hass.async_block_till_done()
+    assert "data" not in calls[0].data
+
+
+async def test_a_vanished_recipient_on_an_essential_event_raises_a_repair(
+    hass: HomeAssistant,
+) -> None:
+    notifier = _notifier(hass, {EVENT_WATCHDOG: {"enabled": True, "services": ["gone"]}})
+    await notifier.async_notify(EVENT_WATCHDOG, title="t", message="m")
+    registry = ir.async_get(hass)
+    assert registry.async_get_issue(DOMAIN, "notify_target_missing_gone") is not None
+
+
+async def test_a_vanished_recipient_on_an_informational_event_only_warns(
+    hass: HomeAssistant,
+) -> None:
+    notifier = _notifier(hass, {EVENT_COMPLETED: {"enabled": True, "services": ["gone"]}})
+    await notifier.async_notify(EVENT_COMPLETED, title="t", message="m")
+    registry = ir.async_get(hass)
+    assert registry.async_get_issue(DOMAIN, "notify_target_missing_gone") is None
+
+
+async def test_the_repair_is_withdrawn_once_the_target_is_back(hass: HomeAssistant) -> None:
+    config = {EVENT_WATCHDOG: {"enabled": True, "services": ["phone"]}}
+    notifier = _notifier(hass, config)
+    await notifier.async_notify(EVENT_WATCHDOG, title="t", message="m")
+    registry = ir.async_get(hass)
+    assert registry.async_get_issue(DOMAIN, "notify_target_missing_phone") is not None
+
+    _record_notify(hass, "phone")
+    await notifier.async_notify(EVENT_WATCHDOG, title="t", message="m")
+    await hass.async_block_till_done()
+    assert registry.async_get_issue(DOMAIN, "notify_target_missing_phone") is None
+
+
+async def test_an_event_with_no_configuration_sends_nothing_and_raises_nothing(
+    hass: HomeAssistant,
+) -> None:
+    notifier = _notifier(hass, {})
+    await notifier.async_notify(EVENT_WATCHDOG, title="t", message="m")
+    await hass.async_block_till_done()
+
+
+@pytest.mark.parametrize("services", [[], ["phone"]])
+async def test_a_disabled_event_never_sends(hass: HomeAssistant, services: list[str]) -> None:
+    calls = _record_notify(hass, "phone")
+    notifier = _notifier(hass, {EVENT_WATCHDOG: {"enabled": False, "services": services}})
+    await notifier.async_notify(EVENT_WATCHDOG, title="t", message="m")
+    await hass.async_block_till_done()
+    assert calls == []
