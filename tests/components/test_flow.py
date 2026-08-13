@@ -142,7 +142,9 @@ async def test_an_install_with_a_non_canonical_meter_gets_a_scale_notice(
     issue = registry.async_get_issue(DOMAIN, "flow_unit_corrected")
     assert issue is not None
     assert issue.translation_placeholders is not None
-    assert "sensor.flow" in issue.translation_placeholders["sensors"]
+    # Names the sensor AND its old scale, so the user can sanity-check the
+    # new numbers -- not just which sensors were affected.
+    assert "sensor.flow (m³/h)" in issue.translation_placeholders["sensors"]
 
 
 async def test_an_install_already_in_litres_per_minute_gets_no_notice(
