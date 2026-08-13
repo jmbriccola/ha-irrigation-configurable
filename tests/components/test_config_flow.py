@@ -1,62 +1,17 @@
-"""Tests for the Irrigation Maestro config, options and zone subentry flows."""
+"""Tests for the Irrigation Maestro config and options flows."""
 
-from collections.abc import Generator
 from typing import Any
-from unittest.mock import patch
 
 import pytest
 from custom_components.irrigation_maestro import const
-from custom_components.irrigation_maestro.models import (
-    HubConfig,
-    ZoneConfig,
-    engine_params_from_config,
-)
+from custom_components.irrigation_maestro.models import HubConfig, engine_params_from_config
 from homeassistant import config_entries
+from homeassistant.config_entries import ConfigEntryState
 from homeassistant.core import HomeAssistant
 from homeassistant.data_entry_flow import FlowResultType
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
-ZONE = const.SUBENTRY_TYPE_ZONE
-
-LAWN_CYCLE_ID = "c1a2b3c4"
-LAWN_ZONE_DATA: dict[str, Any] = {
-    const.CONF_ZONE_NAME: "Lawn",
-    const.CONF_VALVE_ENTITY: "valve.lawn",
-    const.CONF_CYCLES: [
-        {
-            const.CONF_CYCLE_ID: LAWN_CYCLE_ID,
-            const.CONF_CYCLE_NAME: "Morning",
-            const.CONF_TRIGGER: {
-                const.CONF_TRIGGER_KIND: const.TRIGGER_KIND_SUN,
-                const.CONF_TRIGGER_EVENT: "sunrise",
-                const.CONF_TRIGGER_OFFSET_S: -600,
-            },
-            const.CONF_CURVE: {
-                const.CONF_CURVE_POINTS: [[10, 5], [25, 15]],
-                const.CONF_CURVE_MIN: 5,
-                const.CONF_CURVE_MAX: 30,
-            },
-        }
-    ],
-}
-
-
-@pytest.fixture(autouse=True)
-def mock_setup_entry() -> Generator[None]:
-    """The real setup/unload are not implemented yet; pretend they succeed."""
-    with (
-        patch(
-            "custom_components.irrigation_maestro.async_setup_entry",
-            return_value=True,
-            create=True,
-        ),
-        patch(
-            "custom_components.irrigation_maestro.async_unload_entry",
-            return_value=True,
-            create=True,
-        ),
-    ):
-        yield
+from .test_session import mock_weather, setup_hub, zone_data
 
 
 @pytest.fixture
@@ -70,32 +25,6 @@ def hub_entry(hass: HomeAssistant) -> MockConfigEntry:
     )
     entry.add_to_hass(hass)
     return entry
-
-
-@pytest.fixture
-def hub_entry_with_zone(hass: HomeAssistant) -> MockConfigEntry:
-    """A hub entry that already has one zone subentry."""
-    entry = MockConfigEntry(
-        domain=const.DOMAIN,
-        title="Irrigation Maestro",
-        data={},
-        options={const.CONF_WEATHER_ENTITY: "weather.home"},
-        subentries_data=[
-            config_entries.ConfigSubentryData(
-                data=LAWN_ZONE_DATA,
-                subentry_type=ZONE,
-                title="Lawn",
-                unique_id=None,
-            )
-        ],
-    )
-    entry.add_to_hass(hass)
-    return entry
-
-
-def _schema_selector(result: dict[str, Any], field: str) -> Any:
-    """Return the selector of a form field from a flow result."""
-    return next(value for key, value in result["data_schema"].schema.items() if key == field)
 
 
 async def _options_section(
@@ -159,6 +88,25 @@ async def test_hub_single_instance(hass: HomeAssistant, hub_entry: MockConfigEnt
     assert result["reason"] == "single_instance_allowed"
 
 
+async def test_no_zone_subentry_flow_is_offered(hass: HomeAssistant) -> None:
+    """Zones are created from the panel. A second surface that writes zone
+    data differently is what silently replaced curves in 2.x."""
+    from custom_components.irrigation_maestro.config_flow import (
+        IrrigationMaestroConfigFlow,
+    )
+
+    assert IrrigationMaestroConfigFlow.async_get_supported_subentry_types({}) == {}
+
+
+async def test_existing_zone_subentries_still_load(hass: HomeAssistant) -> None:
+    """The risk this task carries: an entry whose subentry type is no longer
+    registered must still set up, with its zones intact."""
+    mock_weather(hass)
+    entry = await setup_hub(hass, [zone_data("Pots", "valve.pots")])
+    assert entry.state is ConfigEntryState.LOADED
+    assert len(entry.runtime_data.zone_ids) == 1
+
+
 # ---------------------------------------------------------------------------
 # Options flow
 
@@ -215,371 +163,6 @@ async def test_options_engine_invalid_weights(
     assert result["type"] is FlowResultType.FORM
     assert result["errors"] == {const.CONF_TEMP_WEIGHTS: "invalid_temp_weights"}
     assert const.CONF_ENGINE not in hub_entry.options
-
-
-# ---------------------------------------------------------------------------
-# Zone subentry flow: creation
-
-
-async def _start_zone_flow(
-    hass: HomeAssistant, entry: MockConfigEntry, basics: dict[str, Any]
-) -> dict[str, Any]:
-    """Start the zone flow and submit the basics form; returns the cycle menu."""
-    result = await hass.config_entries.subentries.async_init(
-        (entry.entry_id, ZONE), context={"source": config_entries.SOURCE_USER}
-    )
-    assert result["type"] is FlowResultType.FORM
-    assert result["step_id"] == "user"
-    result = await hass.config_entries.subentries.async_configure(result["flow_id"], basics)
-    assert result["type"] is FlowResultType.MENU
-    assert result["step_id"] == "cycle_menu"
-    return dict(result)
-
-
-async def test_zone_creation_two_cycles(hass: HomeAssistant, hub_entry: MockConfigEntry) -> None:
-    """One sun-triggered preset cycle plus one time-triggered custom cycle."""
-    result = await _start_zone_flow(
-        hass,
-        hub_entry,
-        {
-            const.CONF_ZONE_NAME: "Front lawn",
-            const.CONF_VALVE_ENTITY: "valve.front",
-        },
-    )
-    # No cycles yet: finishing must not be offered.
-    assert result["menu_options"] == ["add_cycle"]
-
-    configure = hass.config_entries.subentries.async_configure
-    result = await configure(result["flow_id"], {"next_step_id": "add_cycle"})
-    assert result["step_id"] == "cycle"
-    result = await configure(
-        result["flow_id"],
-        {
-            const.CONF_CYCLE_NAME: "Morning",
-            const.CONF_TRIGGER_KIND: const.TRIGGER_KIND_SUN,
-        },
-    )
-    assert result["step_id"] == "cycle_sun"
-    result = await configure(
-        result["flow_id"],
-        {const.CONF_TRIGGER_EVENT: "sunrise", "offset_min": -55},
-    )
-    assert result["step_id"] == "cycle_curve"
-    result = await configure(result["flow_id"], {"source": const.PRESET_POTS_ID})
-    assert result["type"] is FlowResultType.MENU
-    assert result["menu_options"] == ["add_cycle", "finish"]
-
-    result = await configure(result["flow_id"], {"next_step_id": "add_cycle"})
-    result = await configure(
-        result["flow_id"],
-        {
-            const.CONF_CYCLE_NAME: "Evening",
-            const.CONF_TRIGGER_KIND: const.TRIGGER_KIND_TIME,
-        },
-    )
-    assert result["step_id"] == "cycle_time"
-    result = await configure(result["flow_id"], {const.CONF_TRIGGER_AT: "19:30:00"})
-    assert result["step_id"] == "cycle_curve"
-    result = await configure(
-        result["flow_id"],
-        {
-            "source": "custom",
-            const.CONF_SOAK_MAX_RUN_MIN: 10,
-            const.CONF_SOAK_PAUSE_MIN: 15,
-        },
-    )
-    assert result["step_id"] == "cycle_curve_custom"
-    result = await configure(
-        result["flow_id"],
-        {
-            const.CONF_CURVE_POINTS: "10:5, 25:15, 35:30",
-            const.CONF_CURVE_MIN: 5,
-            const.CONF_CURVE_MAX: 30,
-            const.CONF_CURVE_KIND: "duration",
-        },
-    )
-    assert result["type"] is FlowResultType.MENU
-
-    result = await configure(result["flow_id"], {"next_step_id": "finish"})
-    assert result["type"] is FlowResultType.CREATE_ENTRY
-    assert result["title"] == "Front lawn"
-    assert result["unique_id"] is None
-
-    subentry = next(iter(hub_entry.subentries.values()))
-    assert subentry.subentry_type == ZONE
-    assert subentry.title == "Front lawn"
-    data = dict(subentry.data)
-    cycles = data[const.CONF_CYCLES]
-    assert len(cycles) == 2
-    ids = {cycle[const.CONF_CYCLE_ID] for cycle in cycles}
-    assert len(ids) == 2
-    assert all(len(cycle_id) == 8 for cycle_id in ids)
-    morning, evening = cycles
-    assert morning[const.CONF_TRIGGER] == {
-        const.CONF_TRIGGER_KIND: const.TRIGGER_KIND_SUN,
-        const.CONF_TRIGGER_EVENT: "sunrise",
-        const.CONF_TRIGGER_OFFSET_S: -3300,
-    }
-    assert morning[const.CONF_CURVE] == {const.CONF_CURVE_TEMPLATE: const.PRESET_POTS_ID}
-    assert evening[const.CONF_TRIGGER] == {
-        const.CONF_TRIGGER_KIND: const.TRIGGER_KIND_TIME,
-        const.CONF_TRIGGER_AT: "19:30",
-    }
-    assert evening[const.CONF_SOAK_MAX_RUN_MIN] == 10
-    assert evening[const.CONF_SOAK_PAUSE_MIN] == 15
-
-    # The stored data must parse into the typed zone model.
-    zone = ZoneConfig.from_subentry(subentry.subentry_id, data, templates={})
-    assert zone.name == "Front lawn"
-    assert zone.cycles[0].trigger.offset_s == -3300
-    assert zone.cycles[1].curve.points == ((10.0, 5.0), (25.0, 15.0), (35.0, 30.0))
-    assert zone.cycles[1].soak_max_run_min == 10
-
-
-async def test_zone_curve_text_errors(hass: HomeAssistant, hub_entry: MockConfigEntry) -> None:
-    """Curve text problems surface as form errors until fixed."""
-    result = await _start_zone_flow(
-        hass,
-        hub_entry,
-        {const.CONF_ZONE_NAME: "Beds", const.CONF_VALVE_ENTITY: "switch.beds"},
-    )
-    configure = hass.config_entries.subentries.async_configure
-    result = await configure(result["flow_id"], {"next_step_id": "add_cycle"})
-    result = await configure(
-        result["flow_id"],
-        {
-            const.CONF_CYCLE_NAME: "Noon",
-            const.CONF_TRIGGER_KIND: const.TRIGGER_KIND_TIME,
-        },
-    )
-    result = await configure(result["flow_id"], {const.CONF_TRIGGER_AT: "12:00:00"})
-    result = await configure(result["flow_id"], {"source": "custom"})
-    assert result["step_id"] == "cycle_curve_custom"
-
-    submit = {
-        const.CONF_CURVE_MIN: 5,
-        const.CONF_CURVE_MAX: 30,
-        const.CONF_CURVE_KIND: "duration",
-    }
-    result = await configure(result["flow_id"], {**submit, const.CONF_CURVE_POINTS: "25:15, 10:5"})
-    assert result["type"] is FlowResultType.FORM
-    assert result["errors"] == {const.CONF_CURVE_POINTS: "curve_temps_not_increasing"}
-
-    result = await configure(result["flow_id"], {**submit, const.CONF_CURVE_POINTS: "banana"})
-    assert result["errors"] == {const.CONF_CURVE_POINTS: "invalid_points_format"}
-
-    result = await configure(
-        result["flow_id"],
-        {
-            const.CONF_CURVE_POINTS: "10:5, 25:15",
-            const.CONF_CURVE_MIN: 50,
-            const.CONF_CURVE_MAX: 30,
-            const.CONF_CURVE_KIND: "duration",
-        },
-    )
-    assert result["errors"] == {const.CONF_CURVE_MIN: "min_above_max"}
-
-    result = await configure(
-        result["flow_id"], {**submit, const.CONF_CURVE_POINTS: "10:5, 25:2000"}
-    )
-    assert result["errors"] == {const.CONF_CURVE_POINTS: "duration_out_of_range"}
-
-    result = await configure(result["flow_id"], {**submit, const.CONF_CURVE_POINTS: "10:5, 25:15"})
-    assert result["type"] is FlowResultType.MENU
-
-
-async def test_zone_volume_only_with_flow_sensor(
-    hass: HomeAssistant, hub_entry: MockConfigEntry
-) -> None:
-    """Volume curves are offered only when a usable flow meter exists."""
-
-    async def to_custom_step(basics: dict[str, Any]) -> dict[str, Any]:
-        result = await _start_zone_flow(hass, hub_entry, basics)
-        configure = hass.config_entries.subentries.async_configure
-        result = await configure(result["flow_id"], {"next_step_id": "add_cycle"})
-        result = await configure(
-            result["flow_id"],
-            {
-                const.CONF_CYCLE_NAME: "Cycle",
-                const.CONF_TRIGGER_KIND: const.TRIGGER_KIND_TIME,
-            },
-        )
-        result = await configure(result["flow_id"], {const.CONF_TRIGGER_AT: "06:00:00"})
-        result = await configure(
-            result["flow_id"],
-            {"source": "custom", const.CONF_VOLUME_SAFETY_TIMEOUT_MIN: 45},
-        )
-        assert result["step_id"] == "cycle_curve_custom"
-        return dict(result)
-
-    # Without any flow meter only duration is offered.
-    result = await to_custom_step(
-        {const.CONF_ZONE_NAME: "Dry", const.CONF_VALVE_ENTITY: "valve.dry"}
-    )
-    assert _schema_selector(result, const.CONF_CURVE_KIND).config["options"] == ["duration"]
-    hass.config_entries.subentries.async_abort(result["flow_id"])
-
-    # With a zone flow sensor, volume becomes available and round-trips.
-    result = await to_custom_step(
-        {
-            const.CONF_ZONE_NAME: "Wet",
-            const.CONF_VALVE_ENTITY: "valve.wet",
-            const.CONF_FLOW_SENSOR: "sensor.wet_flow",
-        }
-    )
-    assert _schema_selector(result, const.CONF_CURVE_KIND).config["options"] == [
-        "duration",
-        "volume",
-    ]
-    configure = hass.config_entries.subentries.async_configure
-    result = await configure(
-        result["flow_id"],
-        {
-            const.CONF_CURVE_POINTS: "10:20, 30:60",
-            const.CONF_CURVE_MIN: 10,
-            const.CONF_CURVE_MAX: 90,
-            const.CONF_CURVE_KIND: "volume",
-        },
-    )
-    assert result["type"] is FlowResultType.MENU
-    result = await configure(result["flow_id"], {"next_step_id": "finish"})
-    assert result["type"] is FlowResultType.CREATE_ENTRY
-
-    subentry = next(iter(hub_entry.subentries.values()))
-    cycle = subentry.data[const.CONF_CYCLES][0]
-    assert cycle[const.CONF_CURVE][const.CONF_CURVE_KIND] == "volume"
-    assert cycle[const.CONF_VOLUME_SAFETY_TIMEOUT_MIN] == 45
-
-
-async def test_zone_copy_curve(hass: HomeAssistant, hub_entry_with_zone: MockConfigEntry) -> None:
-    """A new zone can copy the curve of an existing zone's cycle."""
-    entry = hub_entry_with_zone
-    source_subentry_id = next(iter(entry.subentries))
-
-    result = await _start_zone_flow(
-        hass,
-        entry,
-        {const.CONF_ZONE_NAME: "Hedge", const.CONF_VALVE_ENTITY: "valve.hedge"},
-    )
-    configure = hass.config_entries.subentries.async_configure
-    result = await configure(result["flow_id"], {"next_step_id": "add_cycle"})
-    result = await configure(
-        result["flow_id"],
-        {
-            const.CONF_CYCLE_NAME: "Copied",
-            const.CONF_TRIGGER_KIND: const.TRIGGER_KIND_TIME,
-        },
-    )
-    result = await configure(result["flow_id"], {const.CONF_TRIGGER_AT: "07:00:00"})
-    assert result["step_id"] == "cycle_curve"
-    source_values = [
-        option["value"] for option in _schema_selector(result, "source").config["options"]
-    ]
-    assert "copy" in source_values
-
-    result = await configure(result["flow_id"], {"source": "copy"})
-    assert result["step_id"] == "cycle_curve_copy"
-    options = _schema_selector(result, "source").config["options"]
-    assert options == [
-        {"value": f"{source_subentry_id}:{LAWN_CYCLE_ID}", "label": "Lawn / Morning"}
-    ]
-
-    result = await configure(result["flow_id"], {"source": f"{source_subentry_id}:{LAWN_CYCLE_ID}"})
-    assert result["type"] is FlowResultType.MENU
-    result = await configure(result["flow_id"], {"next_step_id": "finish"})
-    assert result["type"] is FlowResultType.CREATE_ENTRY
-
-    new_subentry = next(
-        subentry for subentry in entry.subentries.values() if subentry.title == "Hedge"
-    )
-    copied = new_subentry.data[const.CONF_CYCLES][0][const.CONF_CURVE]
-    assert copied == LAWN_ZONE_DATA[const.CONF_CYCLES][0][const.CONF_CURVE]
-
-
-# ---------------------------------------------------------------------------
-# Zone subentry flow: reconfigure
-
-
-async def test_zone_reconfigure_rename_and_cycle_edit(
-    hass: HomeAssistant, hub_entry_with_zone: MockConfigEntry
-) -> None:
-    """Renaming the zone and editing a cycle preserves the cycle id."""
-    entry = hub_entry_with_zone
-    subentry_id = next(iter(entry.subentries))
-
-    result = await entry.start_subentry_reconfigure_flow(hass, subentry_id)
-    assert result["type"] is FlowResultType.MENU
-    assert result["step_id"] == "reconfigure"
-
-    configure = hass.config_entries.subentries.async_configure
-    result = await configure(result["flow_id"], {"next_step_id": "edit_zone"})
-    assert result["step_id"] == "edit_zone"
-    result = await configure(
-        result["flow_id"],
-        {
-            const.CONF_ZONE_NAME: "Lawn North",
-            const.CONF_VALVE_ENTITY: "valve.lawn",
-        },
-    )
-    assert result["type"] is FlowResultType.MENU
-    assert result["step_id"] == "reconfigure"
-
-    result = await configure(result["flow_id"], {"next_step_id": "manage_cycles"})
-    assert result["type"] is FlowResultType.MENU
-    # A single cycle must not be removable.
-    assert result["menu_options"] == ["add_cycle", "edit_cycle", "back"]
-
-    result = await configure(result["flow_id"], {"next_step_id": "edit_cycle"})
-    result = await configure(result["flow_id"], {"cycle": LAWN_CYCLE_ID})
-    assert result["step_id"] == "cycle"
-    result = await configure(
-        result["flow_id"],
-        {
-            const.CONF_CYCLE_NAME: "Dawn",
-            const.CONF_TRIGGER_KIND: const.TRIGGER_KIND_SUN,
-        },
-    )
-    assert result["step_id"] == "cycle_sun"
-    result = await configure(
-        result["flow_id"], {const.CONF_TRIGGER_EVENT: "sunset", "offset_min": 20}
-    )
-    assert result["step_id"] == "cycle_curve"
-    result = await configure(result["flow_id"], {"source": "custom"})
-    assert result["step_id"] == "cycle_curve_custom"
-    result = await configure(
-        result["flow_id"],
-        {
-            const.CONF_CURVE_POINTS: "10:5, 25:15",
-            const.CONF_CURVE_MIN: 5,
-            const.CONF_CURVE_MAX: 30,
-            const.CONF_CURVE_KIND: "duration",
-        },
-    )
-    assert result["type"] is FlowResultType.MENU
-    assert result["step_id"] == "manage_cycles"
-
-    result = await configure(result["flow_id"], {"next_step_id": "back"})
-    assert result["step_id"] == "reconfigure"
-    result = await configure(result["flow_id"], {"next_step_id": "done"})
-    assert result["type"] is FlowResultType.ABORT
-    assert result["reason"] == "reconfigure_successful"
-
-    subentry = entry.subentries[subentry_id]
-    assert subentry.title == "Lawn North"
-    data = dict(subentry.data)
-    assert data[const.CONF_ZONE_NAME] == "Lawn North"
-    cycles = data[const.CONF_CYCLES]
-    assert len(cycles) == 1
-    # The id survived the edit untouched.
-    assert cycles[0][const.CONF_CYCLE_ID] == LAWN_CYCLE_ID
-    assert cycles[0][const.CONF_CYCLE_NAME] == "Dawn"
-    assert cycles[0][const.CONF_TRIGGER] == {
-        const.CONF_TRIGGER_KIND: const.TRIGGER_KIND_SUN,
-        const.CONF_TRIGGER_EVENT: "sunset",
-        const.CONF_TRIGGER_OFFSET_S: 1200,
-    }
-    zone = ZoneConfig.from_subentry(subentry_id, data, templates={})
-    assert zone.cycles[0].cycle_id == LAWN_CYCLE_ID
 
 
 async def test_options_menu_only_offers_the_weather_engine(
