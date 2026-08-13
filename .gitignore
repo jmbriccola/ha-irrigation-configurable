@@ -11,3 +11,4 @@ card/dist/
 *.log
 .DS_Store
 .superpowers/
+.worktrees/
