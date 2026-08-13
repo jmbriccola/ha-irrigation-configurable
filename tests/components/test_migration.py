@@ -4,10 +4,15 @@ The contract is behavioural, not structural: a migrated configuration must
 water on the same calendar days as before, or raise a note saying it could not.
 """
 
+from copy import deepcopy
 from datetime import date, timedelta
+from typing import Any
 
 import pytest
-from custom_components.irrigation_maestro.migration import migrate_zone_v1_to_v2
+from custom_components.irrigation_maestro.migration import (
+    migrate_zone_v1_to_v2,
+    migrate_zone_v2_to_v3,
+)
 
 TODAY = date(2026, 7, 13)  # Monday
 
@@ -310,3 +315,44 @@ class TestEndToEnd:
         twice, notes = migrate_zone_v1_to_v2(once, None)
         assert twice == once
         assert notes == []
+
+
+class TestCurveMaterialisation:
+    def _zone(self, curve: dict[str, Any]) -> dict[str, Any]:
+        return {
+            "name": "Pots",
+            "valve_entity": "valve.pots",
+            "cycles": [{"id": "c1", "name": "Morning", "curve": curve}],
+        }
+
+    def test_preset_reference_becomes_its_exact_points(self) -> None:
+        data, notes = migrate_zone_v2_to_v3(self._zone({"template": "preset_pots"}), {})
+        curve = data["cycles"][0]["curve"]
+        assert "template" not in curve
+        assert curve["points"] == [[10.0, 10.0], [30.0, 30.0], [42.5, 55.0]]
+        assert curve["min_value"] == 10.0
+        assert curve["max_value"] == 55.0
+        assert curve["kind"] == "duration"
+        assert notes == []
+
+    def test_running_twice_changes_nothing(self) -> None:
+        once, _ = migrate_zone_v2_to_v3(self._zone({"template": "preset_pots"}), {})
+        twice, notes = migrate_zone_v2_to_v3(deepcopy(once), {})
+        assert twice == once
+        assert notes == []
+
+    def test_explicit_points_are_left_alone(self) -> None:
+        original = {"points": [[12.0, 5.0], [25.0, 15.0]], "min_value": 1.0, "max_value": 60.0}
+        data, notes = migrate_zone_v2_to_v3(self._zone(dict(original)), {})
+        assert data["cycles"][0]["curve"] == original
+        assert notes == []
+
+    def test_hub_template_is_resolved(self) -> None:
+        templates = {"custom": {"points": [[15.0, 7.0]], "min_value": 1.0, "max_value": 30.0}}
+        data, _ = migrate_zone_v2_to_v3(self._zone({"template": "custom"}), templates)
+        assert data["cycles"][0]["curve"]["points"] == [[15.0, 7.0]]
+
+    def test_unresolvable_template_is_reported_not_guessed(self) -> None:
+        data, notes = migrate_zone_v2_to_v3(self._zone({"template": "gone"}), {})
+        assert data["cycles"][0]["curve"] == {"template": "gone"}
+        assert [note.kind for note in notes] == ["curve_template_missing"]

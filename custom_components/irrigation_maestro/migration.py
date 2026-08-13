@@ -18,6 +18,8 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from . import const
+from .engine.curves import CurveError
+from .models import resolve_curve
 
 _ALL_WEEKDAYS = frozenset(range(7))
 
@@ -139,3 +141,48 @@ def migrate_last_completed(
         for program_id in zone_programs.get(zone_id, []):
             migrated[f"{zone_id}:{program_id}"] = day
     return migrated
+
+
+def migrate_zone_v2_to_v3(
+    zone_data: dict[str, Any], templates: dict[str, Any]
+) -> tuple[dict[str, Any], list[MigrationNote]]:
+    """Rewrite one zone subentry for v3: curves become explicit points.
+
+    Presets left the user interface in 3.0.0, so a stored reference is a form
+    nobody can create or inspect any more. Materialising it is lossless — the
+    points written are exactly the preset's — and leaves one convention in
+    user data, which is what stops a reference being silently replaced.
+    """
+    zone = dict(zone_data)
+    notes: list[MigrationNote] = []
+    zone_name = str(zone.get(const.CONF_ZONE_NAME, ""))
+    cycles: list[dict[str, Any]] = []
+    for raw_cycle in zone.get(const.CONF_CYCLES, []):
+        cycle = dict(raw_cycle)
+        name = str(cycle.get(const.CONF_CYCLE_NAME, ""))
+        curve = dict(cycle.get(const.CONF_CURVE, {}))
+        if const.CONF_CURVE_TEMPLATE in curve:
+            try:
+                resolved = resolve_curve(curve, templates)
+            except CurveError:
+                # Never guess a duration: keep the reference and report it.
+                notes.append(
+                    MigrationNote(
+                        "curve_template_missing",
+                        zone_name,
+                        name,
+                        {"template": curve[const.CONF_CURVE_TEMPLATE]},
+                    )
+                )
+                cycles.append(cycle)
+                continue
+            cycle[const.CONF_CURVE] = {
+                const.CONF_CURVE_POINTS: [[temp, value] for temp, value in resolved.points],
+                const.CONF_CURVE_MIN: resolved.min_value,
+                const.CONF_CURVE_MAX: resolved.max_value,
+                const.CONF_CURVE_KIND: str(resolved.kind),
+            }
+        cycles.append(cycle)
+
+    zone[const.CONF_CYCLES] = cycles
+    return zone, notes
