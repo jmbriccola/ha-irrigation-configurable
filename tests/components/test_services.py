@@ -263,6 +263,41 @@ async def test_set_curve_updates_cycle_curve(
     assert curve.max_value == 45.0
 
 
+async def test_set_curve_keeps_existing_clamps_when_omitted(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    """Omitting both min_value and max_value on set_curve must keep the
+    program's existing clamps, not reset them -- _async_set_curve falls back
+    to `cycle.curve.min_value` / `cycle.curve.max_value` when the call omits
+    either field. This was previously covered (for the now-removed
+    set_simple_curve service, which shares the same fallback via
+    _write_cycle_curve) by test_set_simple_curve_keeps_existing_clamps_when_omitted;
+    that test is gone with the service, but the fallback itself is still live
+    code for set_curve, so it needs its own coverage here."""
+    freezer.move_to(START)
+    park = MockValvePark(hass)
+    park.add("valve.pots")
+    mock_weather(hass)
+    entry = await setup_hub(hass, [zone_data("Pots", "valve.pots")])
+    zone_id = entry.runtime_data.zone_ids[0]
+    before = entry.runtime_data.zones[zone_id].config.cycle("cy_pots").curve
+    assert before.min_value == 1.0
+    assert before.max_value == 60.0
+
+    await hass.services.async_call(
+        DOMAIN,
+        "set_curve",
+        {"zone_id": zone_id, "cycle_id": "cy_pots", "points": [[10, 5], [25, 15], [35, 30]]},
+        blocking=True,
+    )
+    await hass.async_block_till_done()
+
+    after = entry.runtime_data.zones[zone_id].config.cycle("cy_pots").curve
+    assert after.points == ((10.0, 5.0), (25.0, 15.0), (35.0, 30.0))
+    assert after.min_value == before.min_value
+    assert after.max_value == before.max_value
+
+
 async def test_set_curve_rejects_bad_input(
     hass: HomeAssistant, freezer: FrozenDateTimeFactory
 ) -> None:
@@ -752,6 +787,47 @@ async def test_add_program_creates_enabled_program(
     assert added.name == "Sera"
     assert added.curve.kind is CurveKind.DURATION
     assert runtime.state.cycle_enabled(zone_id, new_id) is True  # defaults enabled
+
+
+async def test_add_program_default_curve_matches_the_retired_semantic_mapping(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    """These are exactly the points the retired semantic mapping produced for
+    amount=15 / heat=8 (points_from_semantic(15, 8) == ((12.0, 5.0),
+    (25.0, 15.0), (35.0, 23.0)) before that module was deleted), so a program
+    created before and after 3.0.0 starts identically. DEFAULT_CURVE_POINTS
+    in services.py is now a bare literal with no other check on its value --
+    this test is what stops it drifting (e.g. a typo silently changing how
+    every newly created program waters)."""
+    freezer.move_to(START)
+    mock_weather(hass)
+    entry = await setup_hub(hass, [zone_data("Pots", "valve.pots")])
+    runtime = entry.runtime_data
+    zone_id = runtime.zone_ids[0]
+
+    resp = await hass.services.async_call(
+        DOMAIN,
+        "add_program",
+        {"zone_id": zone_id, "name": "Sera"},
+        blocking=True,
+        return_response=True,
+    )
+    new_id = resp["program_id"]
+
+    curve_data = next(
+        c["curve"] for c in entry.subentries[zone_id].data["cycles"] if c["id"] == new_id
+    )
+    assert curve_data["points"] == [[12.0, 5.0], [25.0, 15.0], [35.0, 23.0]]
+    assert curve_data["min_value"] == 1.0
+    assert curve_data["max_value"] == 60.0
+    assert curve_data["kind"] == "duration"
+
+    added = runtime.zones[zone_id].config.cycle(new_id)
+    assert added is not None
+    assert added.curve.points == ((12.0, 5.0), (25.0, 15.0), (35.0, 23.0))
+    assert added.curve.min_value == 1.0
+    assert added.curve.max_value == 60.0
+    assert added.curve.kind is CurveKind.DURATION
 
 
 async def test_add_program_validates_through_typed_model_before_persist(
