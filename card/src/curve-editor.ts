@@ -4,6 +4,7 @@ import { property, state } from "lit/decorators.js";
 import {
   parseCurvePoints,
   PREVIEW_TEMPS,
+  rawValue,
   REFERENCE_TEMP,
   roundHalfEven,
   scaledValue,
@@ -14,11 +15,13 @@ import {
   addPoint,
   curveKindForSave,
   dragValue,
+  graphAxis,
   needsIntensityResetNotice,
   removePoint,
   sortPoints,
   updatePoint,
 } from "./curve-editor-state";
+import type { GraphAxis } from "./curve-editor-state";
 import { localize, localizeDynamic } from "./localize/localize";
 import { asNumber, defineElement } from "./types";
 import type { CycleInfo } from "./types";
@@ -66,8 +69,9 @@ export class ImcCurveEditor extends LitElement {
   @property({ type: Boolean }) zoneHasFlowMeter = false;
   /** The zone's `adjustment_pct` (docs/design/card-contract.md), folded into
    *  the DELIVERY figures this editor shows (the preview tiles and the
-   *  "today" banner) but not into the graph itself, which draws the curve's
-   *  raw shape — see `_deliveryValue` vs `_previewValue`. */
+   *  "today" banner) but not into the graph itself, which always draws the
+   *  curve's raw shape (`rawValue`) — see `_deliveryValue`. When this isn't
+   *  100, `_renderAdjustmentNote` explains the split; see its doc comment. */
   @property({ type: Number }) zoneAdjustmentPct = 100;
 
   @state() private _points: CurvePoint[] = [[REFERENCE_TEMP, 15]];
@@ -110,6 +114,20 @@ export class ImcCurveEditor extends LitElement {
     .axis {
       stroke: var(--secondary-text-color, #888);
       opacity: 0.4;
+    }
+    .clamp-band {
+      fill: var(--success-color, #43a047);
+      opacity: 0.08;
+    }
+    .clamp-line {
+      stroke: var(--secondary-text-color, #727272);
+      stroke-width: 1;
+      stroke-dasharray: 3 3;
+      opacity: 0.75;
+    }
+    .clamp-text {
+      fill: var(--secondary-text-color, #727272);
+      font-size: 9px;
     }
     .curve {
       fill: none;
@@ -168,6 +186,11 @@ export class ImcCurveEditor extends LitElement {
       padding: 10px 12px;
       margin-bottom: 14px;
       font-size: 0.85rem;
+    }
+    .graph-note {
+      font-size: 0.8rem;
+      opacity: 0.75;
+      margin: -2px 0 12px;
     }
     .points-title {
       font-size: 11px;
@@ -284,15 +307,6 @@ export class ImcCurveEditor extends LitElement {
     this._error = null;
   }
 
-  /** The curve's raw shape, as the user is drawing it: unscaled (intensity
-   *  100%, no zone adjustment), since saving always resets the program's
-   *  intensity to 100% anyway. Drives the graph line and handle positions —
-   *  those must track the points being authored, not what any particular
-   *  zone will deliver. For that, see `_deliveryValue`. */
-  private _previewValue(temp: number): number {
-    return roundHalfEven(scaledValue(this._points, temp, 100, this._min, this._max));
-  }
-
   /** What this curve actually delivers IN THIS ZONE: the raw shape times
    *  `zoneAdjustmentPct`, then the clamps — same order as `curve_value`
    *  (`engine/curves.py`) and `previewMinutes`/`dayDelivery`
@@ -323,13 +337,14 @@ export class ImcCurveEditor extends LitElement {
     return PAD_L + ((t - axisMin) / (axisMax - axisMin)) * (GRAPH_W - PAD_L - PAD_R);
   }
 
-  private _graphTop(): number {
-    return Math.max(12, ...this._points.map((p) => p[1])) + 4;
+  /** The graph's vertical axis, scaled to contain every raw point AND both
+   *  clamp lines — see `graphAxis`'s doc comment for why both matter. */
+  private _axis(): GraphAxis {
+    return graphAxis(this._points, this._min, this._max, GRAPH_H, PAD_T, PAD_B);
   }
 
   private _sy(v: number): number {
-    const top = this._graphTop();
-    return GRAPH_H - PAD_B - (v / top) * (GRAPH_H - PAD_T - PAD_B);
+    return this._axis().y(v);
   }
 
   /** Client coordinates of a pointer event, converted into the SVG's
@@ -346,11 +361,10 @@ export class ImcCurveEditor extends LitElement {
    * pointer's own y at pointerdown, are both captured once and never
    * re-derived from the current pointer position. Every subsequent move
    * only ever applies `dragValue`'s delta to that frozen starting point, so
-   * a drag of zero pixels leaves the point byte-identical — even when a
-   * min/max clamp has pulled the handle's DRAWN position away from the
-   * point's real value (e.g. a floor of 5 drawing a point of 2 at y(5)):
-   * grabbing that handle no longer snaps the stored value to wherever it
-   * happens to be drawn.
+   * a drag of zero pixels leaves the point byte-identical. The handle is
+   * always drawn at the point's own raw value (see `_renderGraph`), so
+   * grabbing it and moving the pointer always moves it visibly — a min/max
+   * clamp shades the permitted band but never repositions the handle.
    */
   private _startDrag(index: number, ev: PointerEvent): void {
     ev.preventDefault();
@@ -366,7 +380,7 @@ export class ImcCurveEditor extends LitElement {
     // scale from the point's own (mutating) value mid-drag would make the
     // pointer's sensitivity shift under the user's finger as the curve's
     // plotted height changes.
-    const unitsPerPixel = this._graphTop() / (GRAPH_H - PAD_T - PAD_B);
+    const unitsPerPixel = this._axis().top / (GRAPH_H - PAD_T - PAD_B);
     const move = (e: PointerEvent): void => {
       const ctm = svgEl.getScreenCTM();
       if (!ctm) return;
@@ -433,6 +447,8 @@ export class ImcCurveEditor extends LitElement {
         ${this._renderGraph(lang)}
       </div>
 
+      ${this._renderAdjustmentNote(lang)}
+
       <div class="caption">${localize(lang, "editor.preview_title")}</div>
       <div class="examples">
         ${PREVIEW_TEMPS.map((t) => this._exampleTile(`${t}°`, this._deliveryValue(t)))}
@@ -487,6 +503,25 @@ export class ImcCurveEditor extends LitElement {
     if (!needsIntensityResetNotice(this.cycle ?? {})) return nothing;
     return html`<div class="intensity-notice">
       ${localize(lang, "editor.intensity_reset")}
+    </div>`;
+  }
+
+  /**
+   * Explains the split this editor otherwise leaves implicit: the graph
+   * above is always the curve's raw shape (100% intensity, no zone
+   * adjustment); the preview tiles and "today" banner below fold in
+   * `zoneAdjustmentPct`, so a 70% zone shows a graph reading 20 at 25°C
+   * directly above a tile reading 14. In the panel (program-editor.ts) a
+   * separate note explains the SETTING/DELIVERY split for the minutes
+   * stepper; opened from the dashboard card (zone-row.ts) there is no such
+   * context, so this editor carries its own explanation rather than
+   * relying on the panel's. Silent at exactly 100 — a no-op adjustment has
+   * nothing to explain.
+   */
+  private _renderAdjustmentNote(lang: string): TemplateResult | typeof nothing {
+    if (this.zoneAdjustmentPct === 100) return nothing;
+    return html`<div class="graph-note">
+      ${localize(lang, "editor.graph.adjustment_note", { pct: this.zoneAdjustmentPct })}
     </div>`;
   }
 
@@ -572,20 +607,41 @@ export class ImcCurveEditor extends LitElement {
     this._error = null;
   }
 
+  /**
+   * The graph draws the curve's RAW shape — `rawValue`, no intensity, no
+   * clamps — because that is exactly what the handles edit; a clamped line
+   * would put a handle wherever the clamp cut, not where its point's value
+   * actually is, and dragging it would visibly do nothing until the raw
+   * value crossed back over the clamp. `min`/`max` are drawn instead as a
+   * shaded band with dashed guide lines, so where a clamp bites is shown
+   * rather than implied, and the axis (`_axis`/`graphAxis`) is scaled to
+   * keep both the points and the clamp lines on-screen at once.
+   */
   private _renderGraph(lang: string): TemplateResult {
     const axisMin = this._axisMin();
     const axisMax = this._axisMax();
     const dense: Array<[number, number]> = [];
     for (let t = axisMin; t <= axisMax; t += 1) {
-      dense.push([this._sx(t), this._sy(this._previewValue(t))]);
+      dense.push([this._sx(t), this._sy(rawValue(this._points, t))]);
     }
     const path = dense
       .map((p, i) => `${i === 0 ? "M" : "L"}${p[0].toFixed(1)},${p[1].toFixed(1)}`)
       .join(" ");
     const t = this.weightedTemp;
     const showToday = t !== undefined && !Number.isNaN(t) && t >= axisMin && t <= axisMax;
+    const minY = this._sy(this._min);
+    const maxY = this._sy(this._max);
+    const bandTop = Math.min(minY, maxY);
+    const bandHeight = Math.abs(maxY - minY);
+    const unit = this._unit();
     return svg`
       <svg viewBox="0 0 ${GRAPH_W} ${GRAPH_H}">
+        <rect class="clamp-band" x=${PAD_L} y=${bandTop.toFixed(1)}
+          width=${(GRAPH_W - PAD_L - PAD_R).toFixed(1)} height=${bandHeight.toFixed(1)}></rect>
+        <line class="clamp-line" x1=${PAD_L} y1=${minY.toFixed(1)} x2=${GRAPH_W - PAD_R} y2=${minY.toFixed(1)}></line>
+        <line class="clamp-line" x1=${PAD_L} y1=${maxY.toFixed(1)} x2=${GRAPH_W - PAD_R} y2=${maxY.toFixed(1)}></line>
+        <text class="clamp-text" x=${GRAPH_W - PAD_R} y=${(minY - 3).toFixed(1)} text-anchor="end">${localize(lang, "curve.clamp_min")} ${this._min} ${unit}</text>
+        <text class="clamp-text" x=${GRAPH_W - PAD_R} y=${(maxY - 3).toFixed(1)} text-anchor="end">${localize(lang, "curve.clamp_max")} ${this._max} ${unit}</text>
         <line class="axis" x1=${PAD_L} y1=${PAD_T} x2=${PAD_L} y2=${GRAPH_H - PAD_B}></line>
         <line class="axis" x1=${PAD_L} y1=${GRAPH_H - PAD_B} x2=${GRAPH_W - PAD_R} y2=${GRAPH_H - PAD_B}></line>
         ${showToday
@@ -595,7 +651,7 @@ export class ImcCurveEditor extends LitElement {
         <path class="curve" d=${path}></path>
         ${this._points.map(
           (p, i) => svg`<circle class="handle" r="7"
-            cx=${this._sx(p[0]).toFixed(1)} cy=${this._sy(this._previewValue(p[0])).toFixed(1)}
+            cx=${this._sx(p[0]).toFixed(1)} cy=${this._sy(p[1]).toFixed(1)}
             @pointerdown=${(e: PointerEvent) => this._startDrag(i, e)}></circle>`,
         )}
       </svg>

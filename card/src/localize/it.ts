@@ -200,8 +200,9 @@ export const it: Record<keyof typeof en, string> = {
   // Editor curva
   "editor.edit_curve": "Modifica curva",
   "editor.title": "Quanto irrigare in base al caldo",
-  "editor.graph.caption": "Anteprima dal vivo — valore della curva secondo la temperatura",
+  "editor.graph.caption": "La curva che stai disegnando — la fascia evidenziata è l'intervallo minimo/massimo che la limita",
   "editor.graph.today": "oggi {temp}°",
+  "editor.graph.adjustment_note": "Questo grafico mostra la curva in sé, non modificata. I valori qui sotto mostrano quanto innaffierà davvero questa zona, al {pct}% di essa.",
   "editor.preview_title": "Anteprima alle temperature di riferimento",
   "editor.today": "🌡️ Con il meteo di oggi (temperatura pesata {temp}°) darebbe ≈ {value} {unit}.",
   "editor.points_title": "Punti",

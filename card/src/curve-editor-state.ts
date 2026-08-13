@@ -87,5 +87,52 @@ export function needsIntensityResetNotice(cycle: {
  * frozen at drag start alongside `startValue`.
  */
 export function dragValue(startValue: number, deltaY: number, unitsPerPixel: number): number {
+  // A net-zero drag must not touch startValue at all -- not even to round
+  // it. Points legitimately carry fractional values (one shipped preset
+  // has 64/3), and routing a zero displacement through roundHalfEven would
+  // silently truncate one every time its handle was merely grabbed and
+  // released back where it started.
+  if (deltaY === 0) return startValue;
   return Math.max(0, roundHalfEven(startValue - deltaY * unitsPerPixel));
+}
+
+/**
+ * The curve graph's vertical axis: how high (in raw curve units) the plot
+ * must reach to keep every authored point AND both clamp lines on-screen,
+ * plus the SVG-space y for any raw value at that scale. Pure and DOM-free
+ * on purpose -- curve-editor.ts's rendering is a thin wrapper around this,
+ * and extracting it is what makes "the clamp lines never fall outside the
+ * plot" testable without mounting a component.
+ *
+ * `top` always covers the tallest of: every point's raw value, `min`, and
+ * `max`. Before this existed, the axis scaled from the raw points alone
+ * while the line drew CLAMPED values -- so a point far above `max` set a
+ * towering, never-drawn scale that squashed the actually-visible curve
+ * into a sliver near the bottom, and a floor drawn above every point was
+ * invisible entirely. Including the clamps in the scale, and drawing the
+ * raw (unclamped) curve against it, fixes both: the clamps are always
+ * on-screen, and a handle always sits exactly on the line it edits.
+ */
+export interface GraphAxis {
+  /** The raw-unit value mapped to the plot's top edge (`padTop`). */
+  top: number;
+  /** SVG viewBox y for a given raw value, at this axis's scale. */
+  y(value: number): number;
+}
+
+export function graphAxis(
+  points: CurvePoint[],
+  min: number,
+  max: number,
+  height: number,
+  padTop: number,
+  padBottom: number,
+): GraphAxis {
+  const candidates = [...points.map((p) => p[1]), min, max];
+  const top = Math.max(12, ...candidates) + 4;
+  const plotHeight = height - padTop - padBottom;
+  return {
+    top,
+    y: (value: number) => height - padBottom - (value / top) * plotHeight,
+  };
 }

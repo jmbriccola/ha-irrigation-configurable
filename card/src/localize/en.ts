@@ -197,8 +197,9 @@ export const en = {
   // Curve editor
   "editor.edit_curve": "Edit curve",
   "editor.title": "How much to water by temperature",
-  "editor.graph.caption": "Live preview — curve value by temperature",
+  "editor.graph.caption": "The curve you're drawing — the shaded band is the min/max range that clamps it",
   "editor.graph.today": "today {temp}°",
+  "editor.graph.adjustment_note": "This graph shows the curve itself, unscaled. The figures below show what this zone will actually water, at {pct}% of it.",
   "editor.preview_title": "Preview at reference temperatures",
   "editor.today": "🌡️ With today's weather (weighted temperature {temp}°) it would give ≈ {value} {unit}.",
   "editor.points_title": "Points",
