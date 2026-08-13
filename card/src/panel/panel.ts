@@ -26,10 +26,15 @@ import type { WizardFinishDetail } from "./program-wizard";
 import type { ZoneRemoveDetail, ZoneSaveDetail } from "./zone-editor";
 import type {
   BudgetSaveDetail,
-  NotificationSaveDetail,
+  NotificationTestDetail,
+  NotifyTestResult,
   RestrictionsSaveDetail,
   WeatherSaveDetail,
 } from "./settings-view";
+import type {
+  NotificationStatusResponse,
+  SetNotificationsCall,
+} from "./notification-wizard-state";
 import {
   parseExportedConfig,
   type ExportedConfig,
@@ -73,6 +78,12 @@ export class IrrigationMaestroPanel extends LitElement {
   // button — see `_onOpenSettings`/`_options` below.
   @state() private _view: "zones" | "settings" = "zones";
   @state() private _options?: HubOptions;
+  // The notification wizard's two inputs, both owned here because both come
+  // from a service call: `notification_status` describes what is configured
+  // and whether it reaches anyone, `test_notification` reports per recipient
+  // whether a message actually left.
+  @state() private _notifyStatus?: NotificationStatusResponse;
+  @state() private _testResults: Record<string, NotifyTestResult> = {};
 
   private _relevantIds: string[] = [];
   private _statesCount = 0;
@@ -183,13 +194,74 @@ export class IrrigationMaestroPanel extends LitElement {
    * path when the read fails or the payload is unusable.
    */
   private async _onOpenSettings(): Promise<void> {
-    const cfg = await this._readConfig();
+    // A test result belongs to one visit: showing last time's ✓ next to a
+    // recipient nobody has proved since would be a lie about the present.
+    this._testResults = {};
+    const [cfg] = await Promise.all([this._readConfig(), this._loadNotificationStatus()]);
     if (cfg) {
       this._options = cfg.options;
       this._view = "settings";
     } else {
       this._showError(localize(pickLanguage(this.hass), "panel.config_read_failed"));
     }
+  }
+
+  /**
+   * The notification wizard's whole state: what is configured, where it
+   * goes, and whether it goes anywhere. Deliberately a service read rather
+   * than a slice of `export_config` — the verdict, the recommendation and
+   * per-event reachability are derived state, and notify.py is the single
+   * place that derives them.
+   */
+  private async _loadNotificationStatus(): Promise<void> {
+    const res = await this._call("irrigation_maestro", "notification_status", {}, true);
+    const response = res?.response;
+    // A payload with no `events` is not a status, and a failed call has
+    // already raised the error toast. Either way the last known status is
+    // KEPT rather than cleared: a transient failure on the post-save re-read
+    // would otherwise replace the whole wizard with its loading line.
+    if (Array.isArray(response?.["events"])) {
+      this._notifyStatus = response as unknown as NotificationStatusResponse;
+    }
+  }
+
+  /**
+   * `set_notifications` grouped by priority, issued in sequence: each call
+   * rewrites the hub options and wakes the update listener, so one call per
+   * event would be nine config reloads for one Save. The status is re-read
+   * afterwards so the banner and the wizard reflect what is now stored.
+   */
+  private async _onSaveNotifications(ev: CustomEvent<SetNotificationsCall[]>): Promise<void> {
+    for (const call of ev.detail) {
+      await this._saveSettings("set_notifications", { ...call });
+    }
+    await this._loadNotificationStatus();
+  }
+
+  /**
+   * A test send in the user's own language — the service's own defaults are
+   * English. Results are MERGED, not replaced: the wizard tests one
+   * recipient at a time, and replacing would erase the previous
+   * recipient's verdict the moment the next one is proved.
+   */
+  private async _onTestNotification(ev: CustomEvent<NotificationTestDetail>): Promise<void> {
+    const lang = pickLanguage(this.hass);
+    const res = await this._call(
+      "irrigation_maestro",
+      "test_notification",
+      {
+        services: ev.detail.services,
+        title: localize(lang, "notify.test_title"),
+        message: localize(lang, "notify.test_message"),
+      },
+      true,
+    );
+    const results = res?.response?.["results"];
+    if (results === undefined) return;
+    this._testResults = {
+      ...this._testResults,
+      ...(results as Record<string, NotifyTestResult>),
+    };
   }
 
   /**
@@ -634,13 +706,18 @@ export class IrrigationMaestroPanel extends LitElement {
           this._saveSettings("set_valve_safety", e.detail)}
         @imc-settings-save-concurrency=${(e: CustomEvent<Record<string, unknown>>) =>
           this._saveSettings("set_concurrency", e.detail)}
-        @imc-settings-save-notifications=${(e: CustomEvent<NotificationSaveDetail>) =>
-          this._saveSettings("set_notifications", { ...e.detail })}
+        @imc-settings-save-notifications=${this._onSaveNotifications}
+        @imc-settings-test-notification=${this._onTestNotification}
         @imc-settings-back=${this._onSettingsBack}
         >
           <header><h1>${localize(lang, "panel.title")}</h1></header>
           ${this._renderToasts()}
-          <imc-settings-view .hass=${hass} .options=${this._options ?? {}}></imc-settings-view>
+          <imc-settings-view
+            .hass=${hass}
+            .options=${this._options ?? {}}
+            .notifyStatus=${this._notifyStatus}
+            .testResults=${this._testResults}
+          ></imc-settings-view>
         </div>
       `;
     }

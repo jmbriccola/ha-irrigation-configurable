@@ -7,6 +7,22 @@ import type { TranslationKey } from "../localize/localize";
 import { asNumber, defineElement } from "../types";
 import type { HomeAssistant } from "../types";
 import type { HubOptions } from "./config-read";
+import {
+  ALL_EVENT_ORDER,
+  NOTIFY_GROUP_ORDER,
+  buildSaveCalls,
+  discoverRecipients,
+  presetSelection,
+  selectionFromStatus,
+} from "./notification-wizard-state";
+import type {
+  NotificationStatusResponse,
+  NotifyGroup,
+  NotifyPriority,
+  SetNotificationsCall,
+  WizardPreset,
+  WizardSelection,
+} from "./notification-wizard-state";
 // Side-effect import registers <imc-entity-picker>; the type is used by the
 // optional-picker helper below. Both come from the same module.
 import "./ha-selector";
@@ -93,23 +109,77 @@ export function buildConcurrencyPatch(input: ConcurrencyInput): Record<string, u
   return patch;
 }
 
-export interface NotificationSaveDetail {
-  event: string;
-  enabled: boolean;
+/** One recipient's outcome from `test_notification`, as the panel hands it back. */
+export interface NotifyTestResult {
+  sent: boolean;
+  error: string | null;
+}
+
+/** `imc-settings-test-notification`: the recipients to prove, right now. */
+export interface NotificationTestDetail {
   services: string[];
 }
 
-export const NOTIFY_EVENTS = [
-  "completed",
-  "skipped",
-  "interrupted",
-  "cancelled",
-  "anomaly",
-  "watchdog",
-  "sentinel",
-  "session_overrun",
-  "consumption_budget",
-] as const;
+const EVENT_LABEL_KEYS: Record<string, TranslationKey> = {
+  watchdog: "notify.event_watchdog",
+  anomaly: "notify.event_anomaly",
+  skipped: "notify.event_skipped",
+  interrupted: "notify.event_interrupted",
+  cancelled: "notify.event_cancelled",
+  completed: "notify.event_completed",
+  sentinel: "notify.event_sentinel",
+  session_overrun: "notify.event_session_overrun",
+  consumption_budget: "notify.event_consumption_budget",
+};
+
+const GROUP_LABEL_KEYS: Record<NotifyGroup, TranslationKey> = {
+  critical: "notify.group_critical",
+  operational: "notify.group_operational",
+  informational: "notify.group_informational",
+};
+
+const PRESET_LABEL_KEYS: Record<WizardPreset, TranslationKey> = {
+  recommended: "notify.preset_recommended",
+  critical: "notify.preset_critical",
+  all: "notify.preset_all",
+};
+
+const PRESET_ORDER: readonly WizardPreset[] = ["recommended", "critical", "all"];
+
+const STEP_LABEL_KEYS: readonly TranslationKey[] = [
+  "notify.step_recipients",
+  "notify.step_events",
+  "notify.step_summary",
+];
+
+/** An event's label, degrading to the raw key for an event this card doesn't know. */
+function eventLabel(lang: string, event: string): string {
+  const key = EVENT_LABEL_KEYS[event];
+  return key === undefined ? event : localize(lang, key);
+}
+
+/**
+ * The priority a chip must show.
+ *
+ * `selection.priorities` is sparse on purpose: an entry exists only for an
+ * event whose priority the user actually chose, or that was already
+ * configured — and `buildSaveCalls` sends the field only for those. Every
+ * other event falls back to what the backend reports, which for an
+ * unconfigured event IS `default_priority(event)`: high for watchdog,
+ * anomaly, sentinel and interrupted. Pre-filling the map to make rendering
+ * simpler would turn those defaults into explicit stored values and shadow
+ * them permanently.
+ */
+export function effectiveNotifyPriority(
+  selection: WizardSelection,
+  status: NotificationStatusResponse,
+  event: string,
+): NotifyPriority {
+  const chosen = selection.priorities[event];
+  if (chosen !== undefined) return chosen;
+  const reported = status.events.find((entry) => entry.event === event)?.priority;
+  return reported === "high" ? "high" : "normal";
+}
 
 export interface WeatherSaveDetail {
   weather_entity: string;
@@ -169,7 +239,19 @@ export class ImcSettingsView extends LitElement {
   @state() private _session: SessionLimitsInput = {};
   @state() private _valves: ValveSafetyInput = {};
   @state() private _concurrency: ConcurrencyInput = {};
-  @state() private _notifications: Record<string, { enabled: boolean; services: string }> = {};
+
+  // Notifications: a three-step guided path, not nine flat rows.
+  //
+  // Its state comes from the backend's `notification_status` (read by
+  // panel.ts and passed down here), NOT from the exported config: the
+  // verdict, the recommendation and per-event reachability are derived
+  // state with exactly one implementation, in notify.py.
+  @property({ attribute: false }) notifyStatus?: NotificationStatusResponse;
+  @property({ attribute: false }) testResults: Record<string, NotifyTestResult> = {};
+  @state() private _wizardStep = 0;
+  @state() private _selection: WizardSelection = { recipients: [], events: [], priorities: {} };
+  @state() private _collapsedGroups: string[] = [];
+  @state() private _saveError?: string;
 
   static override styles = css`
     :host {
@@ -349,6 +431,104 @@ export class ImcSettingsView extends LitElement {
       font-size: 12.5px;
       color: var(--secondary-text-color, #8b93a7);
     }
+    .notify-hint {
+      margin-top: 8px;
+      font-size: 12.5px;
+      color: var(--secondary-text-color, #8b93a7);
+    }
+    .notify-error {
+      margin-top: 10px;
+      font-size: 12.5px;
+      color: var(--error-color, #db4437);
+    }
+    .notify-banner {
+      margin-top: 10px;
+      padding: 10px 12px;
+      border-radius: 10px;
+      font-size: 12.5px;
+      background: color-mix(in srgb, var(--error-color, #db4437) 12%, transparent);
+      border: 1px solid var(--error-color, #db4437);
+    }
+    .notify-banner-title {
+      font-weight: 600;
+      margin-bottom: 4px;
+    }
+    .steps {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      margin: 14px 0 4px;
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--secondary-text-color, #8b93a7);
+    }
+    .step.on {
+      color: var(--imc-accent, #3a6df0);
+      font-weight: 600;
+    }
+    .notify-row {
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin: 7px 0;
+    }
+    .check-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex: 1;
+      min-width: 150px;
+      font-size: 13px;
+      cursor: pointer;
+      user-select: none;
+      overflow-wrap: anywhere;
+    }
+    input[type="checkbox"] {
+      width: 16px;
+      height: 16px;
+      flex: none;
+      accent-color: var(--imc-accent, #3a6df0);
+      cursor: pointer;
+    }
+    .link-btn {
+      border: none;
+      background: transparent;
+      color: var(--imc-accent, #3a6df0);
+      font: inherit;
+      font-size: 12px;
+      padding: 0;
+      cursor: pointer;
+    }
+    .notify-banner .link-btn {
+      margin-top: 6px;
+    }
+    .test-result {
+      font-size: 12px;
+      overflow-wrap: anywhere;
+    }
+    .test-result.ok {
+      color: var(--success-color, #1f9d55);
+    }
+    .test-result.fail {
+      color: var(--error-color, #db4437);
+    }
+    .group-header {
+      margin-top: 12px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      user-select: none;
+    }
+    .seg.small span {
+      font-size: 11px;
+      padding: 4px 9px;
+    }
+    .summary {
+      font-size: 13px;
+      overflow-wrap: anywhere;
+    }
   `;
 
   protected override willUpdate(changed: Map<string, unknown>): void {
@@ -358,6 +538,14 @@ export class ImcSettingsView extends LitElement {
     // sufficient; no extra "seeded once" tracking needed.
     if (changed.has("options")) {
       this._seedFromOptions();
+    }
+    // The wizard opens on what `notification_status` reports, so a save
+    // followed by a reload leaves the user looking at what is now stored.
+    // The step is deliberately NOT reset: being thrown back to step 1 the
+    // instant a save lands reads as the save having failed.
+    if (changed.has("notifyStatus") && this.notifyStatus) {
+      this._selection = selectionFromStatus(this.notifyStatus);
+      this._saveError = undefined;
     }
   }
 
@@ -397,18 +585,8 @@ export class ImcSettingsView extends LitElement {
       masterPreOpenS: opts.master_pre_open_s,
       masterPostCloseS: opts.master_post_close_s,
     };
-    this._notifications = Object.fromEntries(
-      NOTIFY_EVENTS.map((event) => {
-        const stored = opts.notifications?.[event];
-        return [
-          event,
-          {
-            enabled: stored?.enabled ?? false,
-            services: (stored?.services ?? []).join(", "),
-          },
-        ];
-      }),
-    );
+    // `opts.notifications` is deliberately NOT read here: the wizard's state
+    // is seeded from `notification_status` in `willUpdate` above.
     this._forbiddenWindows = restrictions?.forbidden_windows
       ? restrictions.forbidden_windows.map((w) => ({ ...w }))
       : [];
@@ -766,30 +944,296 @@ export class ImcSettingsView extends LitElement {
     `;
   }
 
+  /**
+   * The guided path: who receives them, what to send, confirm. A recipient
+   * is PICKED from the notify services the instance actually has, never
+   * typed — the field this replaces carried a `notify.mobile_app_phone`
+   * placeholder, which the integration then invoked as
+   * `notify.notify.mobile_app_phone` and which therefore never arrived.
+   */
   private _renderNotificationsSection(lang: string): TemplateResult {
+    const status = this.notifyStatus;
+    if (!status) {
+      return html`
+        <div class="sec">
+          <div class="header">🔔 ${localize(lang, "settings.notifications")}</div>
+          <div class="notify-hint">${localize(lang, "notify.loading")}</div>
+        </div>
+      `;
+    }
     return html`
       <div class="sec">
         <div class="header">🔔 ${localize(lang, "settings.notifications")}</div>
-        ${NOTIFY_EVENTS.map((event) => {
-          const current = this._notifications[event] ?? { enabled: false, services: "" };
-          return html`
-            <div class="section-label">${localize(lang, `settings.notify_${event}`)}</div>
-            <div class="toggle-row" @click=${() => this._toggleNotification(event)}>
-              <span class="switch ${current.enabled ? "on" : ""}"></span>
-              <span>${localize(lang, current.enabled ? "settings.on" : "settings.off")}</span>
-            </div>
-            <input
-              class="field"
-              type="text"
-              placeholder="notify.mobile_app_phone"
-              .value=${current.services}
-              @input=${(e: Event) =>
-                this._setNotificationServices(event, (e.target as HTMLInputElement).value)}
-            />
-          `;
-        })}
+        ${status.verdict === "ok" ? nothing : this._renderMuteBanner(lang, status)}
+        <div class="steps">
+          ${STEP_LABEL_KEYS.map(
+            (key, index) =>
+              html`<span class="step ${index === this._wizardStep ? "on" : ""}"
+                >${index + 1}. ${localize(lang, key)}</span
+              >`,
+          )}
+        </div>
+        ${this._wizardStep === 0 ? this._renderRecipients(lang) : nothing}
+        ${this._wizardStep === 1 ? this._renderEvents(lang, status) : nothing}
+        ${this._wizardStep === 2 ? this._renderSummary(lang) : nothing}
+        ${this._renderWizardNav(lang)}
       </div>
     `;
+  }
+
+  /**
+   * What will not arrive. The verdict is the backend's, never recomputed
+   * here: `silent` means no essential event has a working recipient at all,
+   * `partial` means some of them do and the banner names the rest.
+   */
+  private _renderMuteBanner(lang: string, status: NotificationStatusResponse): TemplateResult {
+    const unreached = status.events
+      .filter((event) => event.essential && !event.reachable)
+      .map((event) => eventLabel(lang, event.event))
+      .join(", ");
+    return html`
+      <div class="notify-banner">
+        ${status.verdict === "silent"
+          ? html`
+              <div class="notify-banner-title">${localize(lang, "notify.mute_title")}</div>
+              <div>${localize(lang, "notify.mute_body")}</div>
+            `
+          : html`<div>${localize(lang, "notify.partial_body", { events: unreached })}</div>`}
+        <button class="link-btn" type="button" @click=${() => this._goToStep(0)}>
+          ${localize(lang, "notify.configure")}
+        </button>
+      </div>
+    `;
+  }
+
+  /**
+   * Step 1. The list is the instance's own notify services, so a recipient
+   * that cannot exist cannot be chosen. Each one can be proved before it
+   * matters: `test_notification` reports per recipient whether the message
+   * actually left.
+   */
+  private _renderRecipients(lang: string): TemplateResult {
+    const recipients = this.hass ? discoverRecipients(this.hass) : [];
+    if (recipients.length === 0) {
+      return html`<div class="notify-hint">${localize(lang, "notify.no_recipients")}</div>`;
+    }
+    return html`
+      <div class="section-label">${localize(lang, "notify.step_recipients")}</div>
+      ${recipients.map((recipient) => {
+        const result = this.testResults[recipient.service];
+        return html`
+          <div class="notify-row">
+            <label class="check-row">
+              <input
+                type="checkbox"
+                .checked=${this._selection.recipients.includes(recipient.service)}
+                @change=${() => this._toggleRecipient(recipient.service)}
+              />
+              <span>${recipient.label}</span>
+            </label>
+            <button
+              class="link-btn"
+              type="button"
+              @click=${() => this._sendTest(recipient.service)}
+            >
+              ${localize(lang, "notify.send_test")}
+            </button>
+            ${result === undefined
+              ? nothing
+              : html`<span class="test-result ${result.sent ? "ok" : "fail"}"
+                  >${result.sent
+                    ? `✓ ${localize(lang, "notify.test_ok")}`
+                    : `✗ ${localize(lang, "notify.test_failed", { error: result.error ?? "" })}`}</span
+                >`}
+          </div>
+        `;
+      })}
+    `;
+  }
+
+  /** Step 2: a preset in one click, or the three groups browsed by hand. */
+  private _renderEvents(lang: string, status: NotificationStatusResponse): TemplateResult {
+    return html`
+      <div class="section-label">${localize(lang, "notify.step_events")}</div>
+      <span class="seg">
+        ${PRESET_ORDER.map(
+          (preset) => html`<span @click=${() => this._applyPreset(preset, status)}
+            >${localize(lang, PRESET_LABEL_KEYS[preset])}</span
+          >`,
+        )}
+      </span>
+      ${NOTIFY_GROUP_ORDER.map((group) => this._renderEventGroup(lang, group, status))}
+    `;
+  }
+
+  private _renderEventGroup(
+    lang: string,
+    group: NotifyGroup,
+    status: NotificationStatusResponse,
+  ): TemplateResult {
+    const open = !this._collapsedGroups.includes(group);
+    const events = status.groups[group] ?? [];
+    return html`
+      <div class="group-header" @click=${() => this._toggleGroup(group)}>
+        ${open ? "▾" : "▸"} ${localize(lang, GROUP_LABEL_KEYS[group])}
+      </div>
+      ${open ? events.map((event) => this._renderEventRow(lang, event, status)) : nothing}
+    `;
+  }
+
+  private _renderEventRow(
+    lang: string,
+    event: string,
+    status: NotificationStatusResponse,
+  ): TemplateResult {
+    const priority = effectiveNotifyPriority(this._selection, status, event);
+    return html`
+      <div class="notify-row">
+        <label class="check-row">
+          <input
+            type="checkbox"
+            .checked=${this._selection.events.includes(event)}
+            @change=${() => this._toggleEvent(event)}
+          />
+          <span>${eventLabel(lang, event)}</span>
+        </label>
+        <span class="seg small">
+          <span
+            class="${priority === "high" ? "sel" : ""}"
+            @click=${() => this._setPriority(event, "high")}
+            >${localize(lang, "notify.priority_high")}</span
+          >
+          <span
+            class="${priority === "normal" ? "sel" : ""}"
+            @click=${() => this._setPriority(event, "normal")}
+            >${localize(lang, "notify.priority_normal")}</span
+          >
+        </span>
+      </div>
+    `;
+  }
+
+  /** Step 3: exactly what Save will write, in the backend's own event order. */
+  private _renderSummary(lang: string): TemplateResult {
+    const labels = new Map(
+      (this.hass ? discoverRecipients(this.hass) : []).map((r) => [r.service, r.label]),
+    );
+    const chosen = ALL_EVENT_ORDER.filter((event) => this._selection.events.includes(event));
+    return html`
+      <div class="section-label">${localize(lang, "notify.step_recipients")}</div>
+      <div class="summary">
+        ${this._selection.recipients.map((service) => labels.get(service) ?? service).join(", ") ||
+        "—"}
+      </div>
+      <div class="section-label">${localize(lang, "notify.step_events")}</div>
+      <div class="summary">
+        ${chosen.length === 0 ? "—" : chosen.map((event) => eventLabel(lang, event)).join(", ")}
+      </div>
+      ${this._saveError ? html`<div class="notify-error">${this._saveError}</div>` : nothing}
+    `;
+  }
+
+  private _renderWizardNav(lang: string): TemplateResult {
+    return html`
+      <div class="buttons">
+        ${this._wizardStep > 0
+          ? html`<button type="button" @click=${() => this._goToStep(this._wizardStep - 1)}>
+              ${localize(lang, "notify.back")}
+            </button>`
+          : nothing}
+        ${this._wizardStep < STEP_LABEL_KEYS.length - 1
+          ? html`<button
+              class="primary"
+              type="button"
+              @click=${() => this._goToStep(this._wizardStep + 1)}
+            >
+              ${localize(lang, "notify.next")}
+            </button>`
+          : html`<button class="primary" type="button" @click=${() => this._saveNotifications(lang)}>
+              ${localize(lang, "notify.save")}
+            </button>`}
+      </div>
+    `;
+  }
+
+  private _goToStep(step: number): void {
+    this._wizardStep = Math.min(STEP_LABEL_KEYS.length - 1, Math.max(0, step));
+    this._saveError = undefined;
+  }
+
+  private _toggleRecipient(service: string): void {
+    const chosen = this._selection.recipients;
+    this._selection = {
+      ...this._selection,
+      recipients: chosen.includes(service)
+        ? chosen.filter((name) => name !== service)
+        : [...chosen, service],
+    };
+  }
+
+  private _toggleEvent(event: string): void {
+    const chosen = this._selection.events;
+    this._selection = {
+      ...this._selection,
+      events: chosen.includes(event)
+        ? chosen.filter((name) => name !== event)
+        : [...chosen, event],
+    };
+  }
+
+  private _toggleGroup(group: NotifyGroup): void {
+    this._collapsedGroups = this._collapsedGroups.includes(group)
+      ? this._collapsedGroups.filter((name) => name !== group)
+      : [...this._collapsedGroups, group];
+  }
+
+  private _applyPreset(preset: WizardPreset, status: NotificationStatusResponse): void {
+    this._selection = { ...this._selection, events: presetSelection(preset, status) };
+  }
+
+  /**
+   * The ONLY writer of `priorities` — see `effectiveNotifyPriority` above
+   * for why nothing else may add an entry.
+   */
+  private _setPriority(event: string, priority: NotifyPriority): void {
+    this._selection = {
+      ...this._selection,
+      priorities: { ...this._selection.priorities, [event]: priority },
+    };
+  }
+
+  private _sendTest(service: string): void {
+    this.dispatchEvent(
+      new CustomEvent<NotificationTestDetail>("imc-settings-test-notification", {
+        detail: { services: [service] },
+        bubbles: true,
+        composed: true,
+      }),
+    );
+  }
+
+  /**
+   * `buildSaveCalls` refuses a selection that enables an event with nowhere
+   * to send it — the same refusal `set_notifications` makes server-side.
+   * Catching it here keeps the user in the wizard with an explanation,
+   * instead of a service-error toast over a form they can no longer see.
+   */
+  private _saveNotifications(lang: string): void {
+    let calls: SetNotificationsCall[];
+    try {
+      calls = buildSaveCalls(this._selection);
+    } catch {
+      this._saveError = localize(lang, "notify.needs_recipient");
+      return;
+    }
+    this._saveError = undefined;
+    this.dispatchEvent(
+      new CustomEvent<SetNotificationsCall[]>("imc-settings-save-notifications", {
+        detail: calls,
+        bubbles: true,
+        composed: true,
+      }),
+    );
   }
 
   private _renderSessionDrawer(lang: string): TemplateResult {
@@ -933,40 +1377,6 @@ export class ImcSettingsView extends LitElement {
           : nothing}
       </div>
     `;
-  }
-
-  private _toggleNotification(event: string): void {
-    const current = this._notifications[event] ?? { enabled: false, services: "" };
-    const next = { ...current, enabled: !current.enabled };
-    this._notifications = { ...this._notifications, [event]: next };
-    this._emitNotification(event, next);
-  }
-
-  private _setNotificationServices(event: string, raw: string): void {
-    const current = this._notifications[event] ?? { enabled: false, services: "" };
-    const next = { ...current, services: raw };
-    this._notifications = { ...this._notifications, [event]: next };
-    this._emitNotification(event, next);
-  }
-
-  private _emitNotification(
-    event: string,
-    value: { enabled: boolean; services: string },
-  ): void {
-    this.dispatchEvent(
-      new CustomEvent<NotificationSaveDetail>("imc-settings-save-notifications", {
-        detail: {
-          event,
-          enabled: value.enabled,
-          services: value.services
-            .split(",")
-            .map((item) => item.trim())
-            .filter(Boolean),
-        },
-        bubbles: true,
-        composed: true,
-      }),
-    );
   }
 
   private _saveSessionLimits(): void {

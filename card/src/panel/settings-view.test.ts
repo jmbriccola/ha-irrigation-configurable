@@ -3,7 +3,10 @@ import {
   buildConcurrencyPatch,
   buildSessionLimitsPatch,
   buildValveSafetyPatch,
+  effectiveNotifyPriority,
 } from "./settings-view";
+import { buildSaveCalls } from "./notification-wizard-state";
+import type { NotificationStatusResponse } from "./notification-wizard-state";
 
 describe("settings patches", () => {
   it("omits fields the user left empty, so absent means unchanged", () => {
@@ -74,5 +77,61 @@ describe("settings patches", () => {
 
   it("drops an empty compatibility-groups string", () => {
     expect(buildConcurrencyPatch({ compatibilityGroups: "  " })).toEqual({});
+  });
+});
+
+/** Just enough of a status to answer "what priority does this event have?". */
+function statusWith(priorities: Record<string, string>): NotificationStatusResponse {
+  return {
+    verdict: "silent",
+    groups: {},
+    recommended: [],
+    enabled_without_target: [],
+    unreachable: {},
+    available_services: [],
+    events: Object.entries(priorities).map(([event, priority]) => ({
+      event,
+      group: "critical",
+      enabled: false,
+      services: [],
+      missing: [],
+      priority,
+      essential: priority === "high",
+      reachable: false,
+    })),
+  };
+}
+
+describe("the notifications section", () => {
+  it("emits grouped set_notifications calls rather than one per event", () => {
+    const calls = buildSaveCalls({
+      recipients: ["mobile_app_pixel"],
+      events: ["watchdog", "anomaly", "sentinel", "interrupted"],
+      priorities: {},
+    });
+    // Two calls for nine events: the enabled group and the disabled remainder.
+    expect(calls).toHaveLength(2);
+    expect(calls.flatMap((call) => call.events)).toHaveLength(9);
+  });
+
+  it("shows the backend's default for an event the user never chose a priority for", () => {
+    // The map stays sparse: reading through it to the status is what keeps
+    // watchdog reading "high" without an entry being written for it, which
+    // would make buildSaveCalls send the value and pin it forever.
+    const status = statusWith({ watchdog: "high", completed: "normal" });
+    const selection = { recipients: [], events: ["watchdog"], priorities: {} };
+    expect(effectiveNotifyPriority(selection, status, "watchdog")).toBe("high");
+    expect(effectiveNotifyPriority(selection, status, "completed")).toBe("normal");
+  });
+
+  it("shows the user's own choice over the backend's default", () => {
+    const status = statusWith({ watchdog: "high" });
+    expect(
+      effectiveNotifyPriority(
+        { recipients: [], events: ["watchdog"], priorities: { watchdog: "normal" } },
+        status,
+        "watchdog",
+      ),
+    ).toBe("normal");
   });
 });
