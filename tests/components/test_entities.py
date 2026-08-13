@@ -643,3 +643,28 @@ async def test_a_meter_with_a_convertible_unit_is_not_degraded(
     state = role_state(hass, "zone_state", zone_id)
     assert state is not None
     assert "flow_unit_unknown" not in state.attributes["degraded"]
+
+
+async def test_a_zone_with_an_empty_flow_sensor_falls_through_to_the_line_meter(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    """Regression: zone_has_flow_meter and zone_flow_meter_usable disagreeing
+    on an empty-string sensor id once produced a zone reporting no_flow_meter
+    and flow_unit_unknown at the same time. Both must treat "" the same as
+    never configured -- falling through to the line meter -- not as a literal
+    entity id to bind a reader to."""
+    freezer.move_to(START)
+    park = MockValvePark(hass)
+    park.add("valve.a")
+    hass.states.async_set("sensor.line", "7.5", {"unit_of_measurement": "L/min"})
+    mock_weather(hass)
+    entry = await setup_hub(
+        hass,
+        [zone_data("Alpha", "valve.a", flow_sensor="")],
+        options={"line_flow_sensor": "sensor.line"},
+    )
+    zone_id = entry.runtime_data.zone_ids[0]
+
+    state = role_state(hass, "zone_state", zone_id)
+    assert state is not None
+    assert "no_flow_meter" not in state.attributes["degraded"]

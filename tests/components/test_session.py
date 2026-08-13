@@ -569,10 +569,16 @@ async def test_config_update_midcycle_does_not_interrupt(
     assert runtime.state.last_outcome(runtime.zone_ids[0])["result"] == "completed"
 
 
-async def test_a_volume_cycle_on_an_unresolvable_meter_runs_as_a_duration(
+async def test_a_volume_cycle_on_an_unresolvable_meter_still_completes(
     hass: HomeAssistant, freezer: FrozenDateTimeFactory
 ) -> None:
-    """Same degradation as a meter that disappeared: run the safety timeout."""
+    """End-to-end behavioural guard, not a plan-content test -- see
+    test_services.py's test_evaluate_omits_the_volume_target_when_the_meters_
+    unit_is_unresolvable for the assertion that actually distinguishes a
+    usable meter from an unresolvable one. Here, duration_min is the safety
+    timeout either way (engine/planner.py's _cycle_target) and the FlowMonitor
+    guard is frozen rather than tripped (Task 3), so this only confirms the
+    run closes and completes cleanly instead of hanging."""
     freezer.move_to(START)
     park = MockValvePark(hass)
     park.add("valve.a")
