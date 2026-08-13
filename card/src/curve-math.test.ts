@@ -64,6 +64,16 @@ describe("previewFromMinutes", () => {
   it("returns 0 rather than dividing by a curve worth nothing", () => {
     expect(previewFromMinutes([[25, 0]], 20, 30)).toBe(0);
   });
+
+  it("folds an adjustmentPct in before the clamps, engine-order", () => {
+    // reference value at 25 C is 20, so minutesAtReference=20 is a no-op
+    // derived intensity (100%). At 35 C the raw curve reads 32. Combined
+    // with a 70% adjustment: 100 * 70 / 100 = 70; 32 * 70 / 100 = 22.4,
+    // rounded (banker's rounding) to 22 -- this is the same formula
+    // schedule-math.ts's previewMinutes now calls, rather than
+    // re-implementing (see curve-math.ts's docblock).
+    expect(previewFromMinutes(points, 20, 35, 1, 60, 70)).toBe(22);
+  });
 });
 
 describe("validatePoints", () => {

@@ -88,6 +88,13 @@ export function scaledValue(
  * The curve read at `temp` when the user has asked for `minutesAtReference`
  * minutes at 25 C. Algebraically identical to the intensity the backend will
  * store (100 * minutes / raw(25)), so the live preview matches what is saved.
+ *
+ * `adjustmentPct` (default 100, a no-op) folds in a zone's `adjustment_pct`
+ * on top of the derived intensity, engine-order — multiplied in BEFORE the
+ * clamps, mirroring `engine/planner.py`'s `zone.adjustment_pct * factor /
+ * 100.0` then `engine/curves.py::curve_value`. This is the single
+ * implementation `schedule-math.ts`'s `previewMinutes` calls, rather than
+ * re-deriving the same formula a second time — see this module's docblock.
  */
 export function previewFromMinutes(
   points: CurvePoint[],
@@ -95,10 +102,13 @@ export function previewFromMinutes(
   temp: number,
   min?: number,
   max?: number,
+  adjustmentPct = 100,
 ): number {
   const reference = rawValue(points, REFERENCE_TEMP);
   if (reference <= 0) return 0; // a curve worth nothing cannot be scaled
-  return roundHalfEven(scaledValue(points, temp, (100 * minutesAtReference) / reference, min, max));
+  const intensityPct = (100 * minutesAtReference) / reference;
+  const combinedPct = (intensityPct * adjustmentPct) / 100;
+  return roundHalfEven(scaledValue(points, temp, combinedPct, min, max));
 }
 
 /**

@@ -2,7 +2,7 @@
  * Pure scheduling logic for the Irrigazione panel. Weather math mirrors
  * engine/planner.resolve_day_curve + engine/curves.py via curve-math.ts.
  */
-import { parseCurvePoints, rawValue, REFERENCE_TEMP, roundHalfEven, scaledValue } from "./curve-math";
+import { parseCurvePoints, previewFromMinutes, REFERENCE_TEMP, roundHalfEven, scaledValue } from "./curve-math";
 import type { CycleInfo } from "./types";
 
 export const WEEKDAYS = [0, 1, 2, 3, 4, 5, 6] as const;
@@ -73,6 +73,12 @@ export function dayDelivery(cycle: Partial<CycleInfo>, wd: number, adjustmentPct
  * BEFORE the curve's clamps are applied, mirroring the engine's ordering
  * exactly. `minutesAtReference` itself stays the pre-adjustment SETTING —
  * only the delivered figure this function returns accounts for the zone.
+ *
+ * A thin wrapper around `previewFromMinutes` (curve-math.ts) rather than a
+ * second implementation of the same formula — that module's docblock
+ * promises it mirrors `engine/curves.py` exactly and is guarded by
+ * curve-math.test.ts, a guarantee a parallel copy here would silently stop
+ * covering.
  */
 export function previewMinutes(
   cycle: Partial<CycleInfo>,
@@ -81,11 +87,14 @@ export function previewMinutes(
   adjustmentPct = 100,
 ): number {
   const points = parseCurvePoints(cycle.curve?.points);
-  const reference = rawValue(points, REFERENCE_TEMP);
-  if (reference <= 0) return 0; // a curve worth nothing cannot be scaled
-  const intensityPct = (100 * minutesAtReference) / reference;
-  const combinedPct = (intensityPct * adjustmentPct) / 100;
-  return roundHalfEven(scaledValue(points, weightedTemp, combinedPct, cycle.curve?.min, cycle.curve?.max));
+  return previewFromMinutes(
+    points,
+    minutesAtReference,
+    weightedTemp,
+    cycle.curve?.min,
+    cycle.curve?.max,
+    adjustmentPct,
+  );
 }
 
 /**
