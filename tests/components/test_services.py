@@ -1,6 +1,7 @@
 """Domain service tests: every service against the running component."""
 
 import json
+from copy import deepcopy
 from datetime import timedelta
 
 import pytest
@@ -1465,3 +1466,97 @@ async def test_set_program_day_minutes_writes_per_day_intensity(hass: HomeAssist
     stored = entry.subentries[zone_id].data["cycles"][0]
     assert stored["day_intensity_pct"] == {"0": 150.0, "3": 50.0}
     assert "day_minutes" not in stored
+
+
+async def test_no_non_curve_operation_rewrites_the_curve(hass: HomeAssistant) -> None:
+    """Rename, reschedule, recalendar and rescale a program: the control
+    points must come out byte-identical. This is the guarantee 3.0.0 exists
+    to provide."""
+    mock_weather(hass)
+    curve = {
+        "points": [[5.0, 4.0], [12.0, 10.0], [25.0, 24.0], [33.0, 40.0], [40.0, 52.0]],
+        "min_value": 1.0,
+        "max_value": 60.0,
+    }
+    entry = await setup_hub(
+        hass,
+        [
+            zone_data(
+                "Pots",
+                "valve.pots",
+                cycles=[
+                    {
+                        "id": "c1",
+                        "name": "Morning",
+                        "trigger": {"kind": "time", "at": "05:30"},
+                        "curve": dict(curve),
+                    }
+                ],
+            )
+        ],
+    )
+    zone_id = entry.runtime_data.zone_ids[0]
+    program = {"zone_id": zone_id, "program_id": "c1"}
+
+    for service, payload in (
+        ("rename_program", {"name": "Evening"}),
+        (
+            "set_program_schedule",
+            {
+                "calendar_mode": "weekdays",
+                "days": [0, 2, 4],
+                "start_kind": "time",
+                "start_time": "06:15",
+            },
+        ),
+        (
+            "set_program_schedule",
+            {
+                "calendar_mode": "interval",
+                "interval_days": 3,
+                "start_kind": "sun",
+                "start_event": "sunrise",
+                "start_offset_min": 0,
+            },
+        ),
+        ("set_program_minutes", {"minutes": 30}),
+        ("set_program_minutes", {"day_minutes": {"0": 12}}),
+    ):
+        await hass.services.async_call(DOMAIN, service, {**program, **payload}, blocking=True)
+        await hass.async_block_till_done()
+        stored = entry.subentries[zone_id].data["cycles"][0]
+        assert stored["curve"] == curve, f"{service} rewrote the curve"
+
+
+async def test_export_import_round_trip_preserves_both_curve_forms(
+    hass: HomeAssistant,
+) -> None:
+    """A v3 payload carries explicit points; a payload exported by a 2.x
+    install still carries a template reference, and import must accept it."""
+    mock_weather(hass)
+    entry = await setup_hub(hass, [zone_data("Pots", "valve.pots")])
+    zone_id = entry.runtime_data.zone_ids[0]
+
+    response = await hass.services.async_call(
+        DOMAIN, "export_config", {}, blocking=True, return_response=True
+    )
+    exported = json.loads(response["payload"])
+    assert "points" in exported["zones"][zone_id]["cycles"][0]["curve"]
+
+    await hass.services.async_call(
+        DOMAIN, "import_config", {"payload": response["payload"]}, blocking=True
+    )
+    await hass.async_block_till_done()
+    assert (
+        entry.subentries[zone_id].data["cycles"][0]["curve"]
+        == (exported["zones"][zone_id]["cycles"][0]["curve"])
+    )
+
+    legacy = deepcopy(exported)
+    legacy["zones"][zone_id]["cycles"][0]["curve"] = {"template": "preset_pots"}
+    await hass.services.async_call(
+        DOMAIN, "import_config", {"payload": json.dumps(legacy)}, blocking=True
+    )
+    await hass.async_block_till_done()
+    cycle = entry.runtime_data.zones[zone_id].config.cycle("cy_pots")
+    assert cycle.curve.points == ((10.0, 10.0), (30.0, 30.0), (42.5, 55.0))
