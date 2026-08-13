@@ -11,11 +11,13 @@ import "./zone-editor";
 import "./settings-view";
 import { type CalendarConfig } from "./calendar-editor";
 import type {
+  CurveCopyDetail,
   ProgramCurveSaveDetail,
   ProgramMinutesSaveDetail,
   ProgramScheduleSaveDetail,
 } from "./program-editor";
 import type {
+  ProgramDuplicateDetail,
   ProgramRemoveDetail,
   ProgramRenameDetail,
   ProgramToggleDetail,
@@ -407,6 +409,43 @@ export class IrrigationMaestroPanel extends LitElement {
     });
   }
 
+  /**
+   * `duplicate_program` names the copy itself and avoids collisions in the
+   * target zone, so the panel passes no `name` and no `target_zone_id`
+   * (defaulting to the same zone) — duplicating is always "another program
+   * right here", cross-zone copies aren't offered by this control.
+   */
+  private async _onProgramDuplicate(ev: CustomEvent<ProgramDuplicateDetail>): Promise<void> {
+    const d = ev.detail;
+    const res = await this._call("irrigation_maestro", "duplicate_program", {
+      zone_id: d.zoneId,
+      program_id: d.programId,
+    });
+    if (res) {
+      this._showNotice(localize(pickLanguage(this.hass), "program.duplicate_done"));
+    }
+  }
+
+  /**
+   * `copy_curve` replaces only `zoneId`/`programId`'s curve shape with
+   * `sourceZoneId`/`sourceProgramId`'s — schedule, calendar, soak, name and
+   * intensity all stay the destination's own. Reuses `editor.saved`
+   * ("Curve updated.") for the success toast: that is exactly what
+   * happened, and it was already sitting there unused by any other path.
+   */
+  private async _onCurveCopy(ev: CustomEvent<CurveCopyDetail>): Promise<void> {
+    const d = ev.detail;
+    const res = await this._call("irrigation_maestro", "copy_curve", {
+      source_zone_id: d.sourceZoneId,
+      source_program_id: d.sourceProgramId,
+      zone_id: d.zoneId,
+      program_id: d.programId,
+    });
+    if (res) {
+      this._showNotice(localize(pickLanguage(this.hass), "editor.saved"));
+    }
+  }
+
   /* ------------------------------------------------------------ */
   /* Update gating: only re-render when a maestro entity changed   */
   /* (same change-detection approach as card.ts).                  */
@@ -650,10 +689,12 @@ export class IrrigationMaestroPanel extends LitElement {
           })}
         @imc-program-save-minutes=${this._onSaveMinutes}
         @imc-curve-save=${this._onCurveSave}
+        @imc-curve-copy=${this._onCurveCopy}
         @imc-program-cancel=${() => undefined}
         @imc-program-toggle=${this._onProgramToggle}
         @imc-program-rename=${this._onProgramRename}
         @imc-program-remove=${this._onProgramRemove}
+        @imc-program-duplicate=${this._onProgramDuplicate}
         @imc-wizard-finish=${this._onWizardFinish}
         @imc-wizard-cancel=${() => undefined}
       >
@@ -695,6 +736,7 @@ export class IrrigationMaestroPanel extends LitElement {
           .hass=${hass}
           .zone=${selected}
           .weightedTemp=${weightedTemp}
+          .allZones=${model.zones}
         ></imc-program-list>
       </div>
     `;

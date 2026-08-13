@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { readCycles } from "./discovery";
+import { buildCopyCandidates, readCycles } from "./discovery";
 import type { ZoneBundle } from "./discovery";
 
 function zoneWithCycles(cycles: unknown): ZoneBundle {
@@ -92,5 +92,56 @@ describe("readCycles: the panel's read-back path", () => {
   it("leaves the calendar undefined when the attribute is absent", () => {
     const info = readCycles(zoneWith({ cycle_id: "c1" }))[0];
     expect(info?.calendar).toBeUndefined();
+  });
+});
+
+describe("buildCopyCandidates", () => {
+  function zone(zoneId: string, name: string, cycles: unknown[]): ZoneBundle {
+    return {
+      zoneId,
+      name,
+      order: 1,
+      cycleSwitches: [],
+      state: { entity_id: `sensor.${zoneId}`, state: "idle", attributes: { cycles } },
+    };
+  }
+
+  const lawn = zone("z1", "Lawn", [
+    { cycle_id: "a1", name: "Morning", curve: { kind: "duration" } },
+    { cycle_id: "a2", name: "Evening", curve: { kind: "volume" } },
+  ]);
+  const pots = zone("z2", "Pots", [{ cycle_id: "b1", name: "Drip", curve: { kind: "duration" } }]);
+
+  it("labels every program as '<zone name> / <program name>'", () => {
+    const candidates = buildCopyCandidates([lawn, pots], "none", "none", true);
+    expect(candidates).toEqual([
+      { value: "z1:a1", zoneId: "z1", programId: "a1", label: "Lawn / Morning" },
+      { value: "z1:a2", zoneId: "z1", programId: "a2", label: "Lawn / Evening" },
+      { value: "z2:b1", zoneId: "z2", programId: "b1", label: "Pots / Drip" },
+    ]);
+  });
+
+  it("excludes only the program being edited, not the rest of its zone", () => {
+    const candidates = buildCopyCandidates([lawn, pots], "z1", "a1", true);
+    expect(candidates.map((c) => c.value)).toEqual(["z1:a2", "z2:b1"]);
+  });
+
+  it("drops volume-kind sources when the destination has no flow meter", () => {
+    const candidates = buildCopyCandidates([lawn, pots], "none", "none", false);
+    expect(candidates.map((c) => c.value)).toEqual(["z1:a1", "z2:b1"]);
+  });
+
+  it("keeps volume-kind sources when the destination has a flow meter", () => {
+    const candidates = buildCopyCandidates([lawn, pots], "none", "none", true);
+    expect(candidates.some((c) => c.value === "z1:a2")).toBe(true);
+  });
+
+  it("skips cycles without an id", () => {
+    const noId = zone("z3", "Herbs", [{ name: "No id" }]);
+    expect(buildCopyCandidates([noId], "none", "none", true)).toEqual([]);
+  });
+
+  it("returns [] with no zones", () => {
+    expect(buildCopyCandidates([], "none", "none", true)).toEqual([]);
   });
 });

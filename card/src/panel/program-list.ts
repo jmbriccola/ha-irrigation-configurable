@@ -33,6 +33,13 @@ export interface ProgramRemoveDetail {
   programId: string;
 }
 
+/** `imc-program-duplicate`: clone a program within its own zone, under a
+ *  name `duplicate_program` picks and de-duplicates itself. */
+export interface ProgramDuplicateDetail {
+  zoneId: string;
+  programId: string;
+}
+
 /**
  * List of a zone's programs (cycles): name, weekday chips, start-time
  * trigger description, and a minutes summary — plus an inline editor
@@ -45,6 +52,10 @@ export class ImcProgramList extends LitElement {
   @property({ attribute: false }) hass?: HomeAssistant;
   @property({ attribute: false }) zone?: ZoneBundle;
   @property({ attribute: false }) weightedTemp?: number;
+  /** Every zone the panel has loaded, passed straight through to the
+   *  embedded editor — it needs the full set (not just this zone) to build
+   *  the "copy curve from…" candidate list. */
+  @property({ attribute: false }) allZones: ZoneBundle[] = [];
 
   @state() private _editingId?: string;
   @state() private _wizardOpen = false;
@@ -249,6 +260,9 @@ export class ImcProgramList extends LitElement {
                 <button class="link-btn" @click=${() => this._onRename(lang, zone.zoneId, c)}>
                   ${localize(lang, "panel.rename_program")}
                 </button>
+                <button class="link-btn" @click=${() => this._onDuplicate(zone.zoneId, c)}>
+                  ${localize(lang, "program.duplicate")}
+                </button>
                 <button
                   class="link-btn danger"
                   @click=${() => this._onDelete(lang, zone.zoneId, c)}
@@ -265,6 +279,7 @@ export class ImcProgramList extends LitElement {
                 .cycleSwitch=${cycleSwitch}
                 .weightedTemp=${this.weightedTemp}
                 .zoneHasFlowMeter=${zoneHasFlowMeter(zone)}
+                .allZones=${this.allZones}
                 @imc-program-save-schedule=${() => (this._editingId = undefined)}
                 @imc-program-save-minutes=${() => (this._editingId = undefined)}
                 @imc-program-cancel=${() => (this._editingId = undefined)}
@@ -307,6 +322,14 @@ export class ImcProgramList extends LitElement {
       zoneId,
       programId: c.cycle_id,
       name: trimmed,
+    });
+  }
+
+  private _onDuplicate(zoneId: string, c: CycleInfo): void {
+    if (!c.cycle_id) return;
+    this._dispatch<ProgramDuplicateDetail>("imc-program-duplicate", {
+      zoneId,
+      programId: c.cycle_id,
     });
   }
 

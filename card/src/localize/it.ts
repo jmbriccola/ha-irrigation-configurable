@@ -38,6 +38,8 @@ export const it: Record<keyof typeof en, string> = {
   "panel.saved_settings": "Impostazioni salvate",
   "panel.saved_zone": "Zona salvata",
   "panel.removed_zone": "Zona eliminata",
+  "program.duplicate": "Duplica",
+  "program.duplicate_done": "Programma duplicato",
 
   // Editor programma (pannello)
   "program_editor.days": "Giorni",
@@ -154,6 +156,9 @@ export const it: Record<keyof typeof en, string> = {
   "curve.clamp_max": "max",
   "curve.unit_duration": "min",
   "curve.unit_volume": "L",
+  "curve.copy_from": "Copia curva da…",
+  "curve.copy_placeholder": "Scegli un programma…",
+  "curve.copy_error": "Nessun altro programma da cui copiare una curva, per ora.",
 
   // Coda
   "queue.title": "Coda",

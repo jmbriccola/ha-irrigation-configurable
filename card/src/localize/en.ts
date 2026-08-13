@@ -36,6 +36,8 @@ export const en = {
   "panel.saved_settings": "Settings saved",
   "panel.saved_zone": "Zone saved",
   "panel.removed_zone": "Zone deleted",
+  "program.duplicate": "Duplicate",
+  "program.duplicate_done": "Program duplicated",
 
   // Program editor (panel)
   "program_editor.days": "Days",
@@ -152,6 +154,9 @@ export const en = {
   "curve.clamp_max": "max",
   "curve.unit_duration": "min",
   "curve.unit_volume": "L",
+  "curve.copy_from": "Copy curve from…",
+  "curve.copy_placeholder": "Choose a program…",
+  "curve.copy_error": "No other program to copy a curve from yet.",
 
   // Queue
   "queue.title": "Queue",

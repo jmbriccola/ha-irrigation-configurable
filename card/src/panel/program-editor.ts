@@ -19,6 +19,7 @@ import "./calendar-editor";
 import { type CalendarConfig, normaliseCalendar } from "./calendar-editor";
 import { programToggleStyles, renderProgramToggle } from "./program-toggle";
 import type { CurveSavePayload } from "../curve-editor";
+import { buildCopyCandidates, type ZoneBundle } from "../discovery";
 
 /**
  * The program editor: the heart of the editing UX (spec §1.2). Loads a
@@ -95,6 +96,16 @@ export interface ProgramCurveSaveDetail {
   curve: CurveSavePayload;
 }
 
+/** `imc-curve-copy`: replace this program's curve with another program's
+ *  curve shape — `zoneId`/`programId` are the destination (this editor's own
+ *  program), `sourceZoneId`/`sourceProgramId` the picked candidate. */
+export interface CurveCopyDetail {
+  zoneId: string;
+  programId: string;
+  sourceZoneId: string;
+  sourceProgramId: string;
+}
+
 interface StepperOptions {
   min: number;
   max: number;
@@ -122,6 +133,9 @@ export class ImcProgramEditor extends LitElement {
   /** Passed down to the embedded `imc-curve-editor` — whether the zone has a
    *  usable flow meter, gating that editor's volume option. */
   @property({ type: Boolean }) zoneHasFlowMeter = false;
+  /** Every zone the panel has loaded — the source pool for "copy curve
+   *  from…" (see `buildCopyCandidates`). */
+  @property({ attribute: false }) allZones: ZoneBundle[] = [];
 
   @state() private _calendar: CalendarConfig = { mode: "weekdays", days: [...WEEKDAYS] };
   @state() private _seasonMonths: number[] = [];
@@ -321,6 +335,17 @@ export class ImcProgramEditor extends LitElement {
       margin-top: 10px;
       font-size: 12px;
       color: var(--error-color, #db4437);
+    }
+    .copy-label {
+      display: block;
+      font-size: 12px;
+      color: var(--secondary-text-color, #aab);
+      margin-bottom: 4px;
+    }
+    .copy-select {
+      width: 100%;
+      box-sizing: border-box;
+      margin-bottom: 4px;
     }
     .advanced-toggle {
       cursor: pointer;
@@ -552,6 +577,7 @@ export class ImcProgramEditor extends LitElement {
         : nothing}
 
       <div class="section-label">${localize(lang, "panel.heat_response")}</div>
+      ${this._renderCopyCurve(lang)}
       <imc-curve-editor
         .cycle=${this.cycle}
         .weightedTemp=${this.weightedTemp}
@@ -561,6 +587,62 @@ export class ImcProgramEditor extends LitElement {
         @imc-curve-cancel=${() => (this._advancedOpen = false)}
       ></imc-curve-editor>
     `;
+  }
+
+  /**
+   * "Copy curve from…": every other program, across every zone, offered by
+   * `buildCopyCandidates` (see its doc comment for the two things it
+   * already leaves out). Picking one dispatches `imc-curve-copy`
+   * immediately — there is no separate confirm step, mirroring how
+   * `imc-curve-save` itself is a one-shot action — and the `<select>` is
+   * reset back to its placeholder right after so the same source can be
+   * picked again (e.g. after tweaking something and wanting a fresh copy).
+   */
+  private _renderCopyCurve(lang: string): TemplateResult {
+    const programId = this.cycle?.cycle_id ?? "";
+    const candidates = buildCopyCandidates(
+      this.allZones,
+      this.zoneId,
+      programId,
+      this.zoneHasFlowMeter,
+    );
+    if (candidates.length === 0) {
+      return html`
+        <label class="copy-label">${localize(lang, "curve.copy_from")}</label>
+        <div class="hint">${localize(lang, "curve.copy_error")}</div>
+      `;
+    }
+    return html`
+      <label class="copy-label">${localize(lang, "curve.copy_from")}</label>
+      <select class="timebox copy-select" @change=${this._onCopyCurve}>
+        <option value="" selected>${localize(lang, "curve.copy_placeholder")}</option>
+        ${candidates.map(
+          (c) => html`<option value=${c.value}>${c.label}</option>`,
+        )}
+      </select>
+    `;
+  }
+
+  private _onCopyCurve(ev: Event): void {
+    const select = ev.target as HTMLSelectElement;
+    const value = select.value;
+    const programId = this.cycle?.cycle_id;
+    if (!value || !programId) return;
+    const separator = value.indexOf(":");
+    if (separator < 0) return;
+    this.dispatchEvent(
+      new CustomEvent<CurveCopyDetail>("imc-curve-copy", {
+        detail: {
+          zoneId: this.zoneId,
+          programId,
+          sourceZoneId: value.slice(0, separator),
+          sourceProgramId: value.slice(separator + 1),
+        },
+        bubbles: true,
+        composed: true,
+      }),
+    );
+    select.value = "";
   }
 
   /**

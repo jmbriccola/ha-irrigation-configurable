@@ -646,6 +646,8 @@ const S = {
   "panel.saved_settings": "Settings saved",
   "panel.saved_zone": "Zone saved",
   "panel.removed_zone": "Zone deleted",
+  "program.duplicate": "Duplicate",
+  "program.duplicate_done": "Program duplicated",
   // Program editor (panel)
   "program_editor.days": "Days",
   "program_editor.start": "When does it start?",
@@ -751,6 +753,9 @@ const S = {
   "curve.clamp_max": "max",
   "curve.unit_duration": "min",
   "curve.unit_volume": "L",
+  "curve.copy_from": "Copy curve from…",
+  "curve.copy_placeholder": "Choose a program…",
+  "curve.copy_error": "No other program to copy a curve from yet.",
   // Queue
   "queue.title": "Queue",
   "queue.duration": "{minutes} min",
@@ -931,6 +936,8 @@ const S = {
   "panel.saved_settings": "Impostazioni salvate",
   "panel.saved_zone": "Zona salvata",
   "panel.removed_zone": "Zona eliminata",
+  "program.duplicate": "Duplica",
+  "program.duplicate_done": "Programma duplicato",
   // Editor programma (pannello)
   "program_editor.days": "Giorni",
   "program_editor.start": "Orario di partenza",
@@ -1036,6 +1043,9 @@ const S = {
   "curve.clamp_max": "max",
   "curve.unit_duration": "min",
   "curve.unit_volume": "L",
+  "curve.copy_from": "Copia curva da…",
+  "curve.copy_placeholder": "Scegli un programma…",
+  "curve.copy_error": "Nessun altro programma da cui copiare una curva, per ora.",
   // Coda
   "queue.title": "Coda",
   "queue.duration": "{minutes} min",

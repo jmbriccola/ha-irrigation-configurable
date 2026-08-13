@@ -128,6 +128,52 @@ export function zoneHasFlowMeter(zone: ZoneBundle): boolean {
   return !degraded.some((item) => asString(item) === "no_flow_meter");
 }
 
+/** A `copy_curve` source option: `value` is what a `<select>` carries,
+ *  `zoneId`/`programId` are the same pair split back out for the event
+ *  detail, and `label` is "<zone name> / <program name>". */
+export interface CopyCandidate {
+  value: string;
+  zoneId: string;
+  programId: string;
+  label: string;
+}
+
+/**
+ * Every program across every zone, offered as a `copy_curve` source for the
+ * program currently open in the editor — the same "<zone name> / <program
+ * name>" shape `_copy_candidates()` built in the config flow before that
+ * flow was removed (docs/design/architecture.md). Two things are left out:
+ *
+ * - the program being edited itself (`excludeZoneId`/`excludeProgramId`) —
+ *   copying a curve onto itself is a no-op, not a real choice;
+ * - a volume-kind curve when `destinationHasFlowMeter` is false — offering
+ *   it would just walk the user into `copy_curve`'s own `volume_requires_flow`
+ *   refusal, and every candidate's curve kind is already sitting in the
+ *   `zones` bundles the panel loaded, so there is no reason not to filter.
+ */
+export function buildCopyCandidates(
+  zones: ZoneBundle[],
+  excludeZoneId: string,
+  excludeProgramId: string,
+  destinationHasFlowMeter: boolean,
+): CopyCandidate[] {
+  const candidates: CopyCandidate[] = [];
+  for (const zone of zones) {
+    for (const cycle of readCycles(zone)) {
+      if (!cycle.cycle_id) continue;
+      if (zone.zoneId === excludeZoneId && cycle.cycle_id === excludeProgramId) continue;
+      if (!destinationHasFlowMeter && cycle.curve?.kind === "volume") continue;
+      candidates.push({
+        value: `${zone.zoneId}:${cycle.cycle_id}`,
+        zoneId: zone.zoneId,
+        programId: cycle.cycle_id,
+        label: `${zone.name} / ${cycle.name ?? cycle.cycle_id}`,
+      });
+    }
+  }
+  return candidates;
+}
+
 /** Read a zone's programs (cycles) from its state entity attribute, typed. */
 export function readCycles(zone: ZoneBundle): CycleInfo[] {
   const raw = asArray(zone.state?.attributes?.["cycles"]);
