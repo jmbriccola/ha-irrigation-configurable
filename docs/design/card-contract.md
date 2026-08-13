@@ -49,6 +49,7 @@ call the same value `program_id` in their fields, for the user-facing name):
 [{"cycle_id": "a1b2c3d4", "name": "Morning", "enabled": true,
   "trigger": {"kind": "sun", "event": "sunrise", "offset_s": -3600},
   "days": [0, 2, 4], "day_minutes": {"0": 15, "2": 20},
+  "intensity_pct": 100.0, "day_intensity_pct": {"0": 150.0},
   "amount": 15, "heat": 8,
   "curve": {"points": [[10, 5], [25, 15], [35, 30]], "min": 10, "max": 55,
              "kind": "duration"}}]
@@ -57,12 +58,29 @@ call the same value `program_id` in their fields, for the user-facing name):
 - `days`: sorted list of weekdays (0=Monday..6=Sunday) the program is
   scheduled on, or `null` when unset (every day). Set via
   `set_program_schedule`.
-- `day_minutes`: `{"<weekday>": <minutes>}` map for per-day watering
-  minutes, or `null` when not used (uniform minutes apply instead). Set via
-  `set_program_minutes`.
-- `amount` / `heat`: the semantic (mild-day minutes / hot-day boost minutes)
-  reading of a duration-kind curve, or `null` for a volume-kind curve. Mirror
-  of `set_simple_curve`'s fields, kept in sync with `curve.points`.
+- `intensity_pct` / `day_intensity_pct`: the program's watering **strength**,
+  stored separately from `curve.points`' **shape**. `intensity_pct` is a
+  uniform percentage applied to every point of the curve (`curve_value`'s
+  adjustment argument); `day_intensity_pct` is an optional
+  `{"<weekday>": <percent>}` override — a weekday missing from the map falls
+  back to `intensity_pct`. Both are written only by `set_program_minutes`
+  (below), which is the sole writer of either field: nudging minutes never
+  rewrites `curve.points`. An explicit curve write (`set_curve` /
+  `set_simple_curve`) always resets `intensity_pct` to `100.0` and clears
+  `day_intensity_pct` — see "the intensity reset rule" under the curve
+  services below.
+- `day_minutes` / `amount` / `heat`: **derived** display values, not stored
+  fields, and no longer kept in sync with `curve.points` alone. `day_minutes`
+  is `curve_value` evaluated at the reference temperature for each entry of
+  `day_intensity_pct`; `amount` / `heat` are the mild-day / hot-day-boost
+  reading of `curve_value` at the curve's own anchor temperatures — both with
+  `intensity_pct` (or the day's override) folded in, or `null` for a
+  volume-kind curve. A program with a non-default intensity therefore shows
+  an `amount` / `heat` / `day_minutes` figure that is larger or smaller than
+  what `curve.points` alone would suggest, and — since neither `intensity_pct`
+  nor the minutes it is derived from are clamped to a fixed range — `amount`
+  and `heat` are no longer clamped to the card's old UI ranges (3–45 / 0–30)
+  the way they were when they came straight from `curve.points`.
 
 `degraded` keys: `switch_valve` (no position feedback), `no_flow_meter`,
 `line_meter_shared`, `no_hourly_forecast`, `volume_mode_unavailable`.
@@ -80,13 +98,15 @@ call the same value `program_id` in their fields, for the user-facing name):
 | `stop_all` | — |
 | `evaluate` | supports response (full plan) |
 | `set_zone_order` | `zone_id`, `order` (int) |
-| `set_curve` | `zone_id`, `cycle_id`, `points` (list of [temp, value]), `min_value`, `max_value` (optional) |
+| `set_curve` | `zone_id`, `cycle_id`, `points` (list of [temp, value]), `min_value`, `max_value` (optional), `kind` (`duration` \| `volume`, optional; switches the curve's target kind — `volume` is rejected unless the zone has a usable flow meter) |
 | `set_simple_curve` | `zone_id`, `cycle_id`, `amount`, `heat`, `min_value?`, `max_value?` |
 | `export_config` | supports response |
 | `import_config` | `payload` (JSON string) |
 | `set_program_schedule` | `zone_id`, `program_id`, `days` (list of 0–6, empty/omitted = every day), `start_kind` (`time` \| `sun`, required), `start_time` (required if `start_kind: time`), `start_event` (`sunrise` \| `sunset`, required if `start_kind: sun`), `start_offset_min` (int, −360..360, sun starts only, default 0) |
 | `set_program_minutes` | `zone_id`, `program_id`, `minutes` (int, 1..1440) **or** `day_minutes` (`{"<weekday>": <minutes>}`) — mutually exclusive, exactly one required |
 | `add_program` | `zone_id`, `name` (optional), `copy_from` (optional program_id to clone); supports response `{"program_id": ...}` |
+| `duplicate_program` | `zone_id`, `program_id`, `target_zone_id` (optional, default = `zone_id`), `name` (optional, default = "<source name> (copy)"); supports response `{"program_id": ...}` |
+| `copy_curve` | `source_zone_id`, `source_program_id`, `zone_id`, `program_id` — copies only the curve's shape onto an already-existing destination program |
 | `remove_program` | `zone_id`, `program_id` |
 | `rename_program` | `zone_id`, `program_id`, `name` |
 
@@ -99,6 +119,20 @@ The card now also **writes** curves: the simple sliders call
 `set_curve`. The live editor's "with today's weather" line reads
 `hub_weighted_temp`.
 
+**The intensity reset rule**: `set_curve` and `set_simple_curve` both carry
+absolute values (minutes, or litres for a volume curve) — the number the
+user authors in the editor must be the number delivered. Both services
+therefore always reset `intensity_pct` to `100.0` and clear
+`day_intensity_pct` when they replace a program's curve; a surviving
+intensity would otherwise compose with the freshly authored points and
+silently multiply (or shrink) what gets delivered. `set_program_minutes`
+remains the only service that writes the intensity, and it never touches
+`curve.points`. `copy_curve` is the deliberate exception: it copies only the
+source program's curve **shape** onto an existing destination program, and
+leaves the destination's own `intensity_pct` / `day_intensity_pct`
+untouched — the two programs' strengths are independent even after a shape
+copy.
+
 ### Program scheduling services (`set_program_*` / `*_program`)
 
 - `set_program_schedule` replaces a program's weekday selection and trigger
@@ -106,18 +140,33 @@ The card now also **writes** curves: the simple sliders call
   selects between a fixed clock time (`start_time` required) and a sun event
   (`start_event` required, `start_offset_min` optional, minutes before a
   sunrise/sunset offset are negative).
-- `set_program_minutes` sets watering minutes either uniformly (`minutes`)
-  or per weekday (`day_minutes`); the two fields are **exclusive** — passing
-  both, or neither, is a validation error. It only applies to duration-kind
-  curves: calling it on a program whose curve is volume-target raises
-  `simple_curve_on_volume` (edit volume curves via the zone settings
-  instead). Passing `minutes` rebuilds the curve from the semantic
-  amount/heat and clears any existing `day_minutes`; passing `day_minutes`
-  sets the per-day map without touching the curve.
+- `set_program_minutes` sets watering **strength** either uniformly
+  (`minutes`) or per weekday (`day_minutes`); the two fields are
+  **exclusive** — passing both, or neither, is a validation error. It only
+  applies to duration-kind curves: calling it on a program whose curve is
+  volume-target raises `simple_curve_on_volume` (edit volume curves via the
+  zone settings instead). Neither call ever touches `curve.points`: passing
+  `minutes` writes a uniform `intensity_pct` (computed against the curve's
+  value at the reference temperature) and clears any existing
+  `day_intensity_pct`; passing `day_minutes` writes `day_intensity_pct`
+  without touching `intensity_pct`. This reverses the pre-3.x behavior,
+  where minutes rebuilt the curve from a semantic amount/heat pair.
 - `add_program` creates a new program on a zone, either a sensible default
   (every day, sunrise start, 15′ mild + 8′ hot boost) or a copy of an
   existing program (`copy_from`) with a fresh `cycle_id`. Returns
   `{"program_id": "<new id>"}` as its service response.
+- `duplicate_program` copies a whole program (curve, schedule, intensity,
+  soak, everything) to a fresh `cycle_id`, either within the same zone or
+  into `target_zone_id`; the copy's name is de-duplicated against the
+  target zone's existing program names when `name` is omitted. Rejects a
+  volume-kind source curve when the target zone has no usable flow meter
+  (`volume_requires_flow`). Returns `{"program_id": "<new id>"}`.
+- `copy_curve` copies only a program's curve shape onto an *existing*
+  destination program (`zone_id` / `program_id`), leaving that program's
+  schedule, calendar, soak settings, name and intensity untouched — see "the
+  intensity reset rule" above for why this differs from `set_curve`. Also
+  rejects a volume-kind source without a usable flow meter on the
+  destination zone.
 - `remove_program` deletes a program by id; a zone must keep at least one
   program (`cannot_remove_last_program` if it's the last one).
 - `rename_program` changes only a program's display name.
