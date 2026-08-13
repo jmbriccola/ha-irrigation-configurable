@@ -390,7 +390,7 @@ async def test_zone_state_exposes_per_day_schedule_fields(
                     "max_value": 60.0,
                 },
                 "calendar": {"mode": "weekdays", "days": [0, 2, 4]},
-                "day_minutes": {"0": 10, "4": 20},
+                "day_intensity_pct": {"0": 200.0, "4": 400.0},
             }
         ],
     )
@@ -401,7 +401,9 @@ async def test_zone_state_exposes_per_day_schedule_fields(
     assert state is not None
     cycle = _first_cycle_attr(hass, state.entity_id)
     assert cycle["calendar"] == {"mode": "weekdays", "days": [0, 2, 4]}
-    assert cycle["day_minutes"] == {"0": 10, "4": 20}
+    # day_minutes is derived from the curve (3 min at the reference
+    # temperature) scaled by each day's intensity: 3*2.0=6, 3*4.0=12.
+    assert cycle["day_minutes"] == {"0": 6, "4": 12}
     assert isinstance(cycle["amount"], int)
     assert isinstance(cycle["heat"], int)
 
@@ -548,3 +550,38 @@ async def test_zone_state_publishes_everything_the_panel_reads_back(
     assert cycle["season_months"] == [6, 7, 8]
     assert cycle["soak_max_run_min"] == 10
     assert cycle["soak_pause_min"] == 15
+
+
+async def test_zone_sensor_publishes_the_intensity(hass: HomeAssistant) -> None:
+    mock_weather(hass)
+    entry = await setup_hub(
+        hass,
+        [
+            zone_data(
+                "Pots",
+                "valve.pots",
+                cycles=[
+                    {
+                        "id": "c1",
+                        "name": "Morning",
+                        "trigger": {"kind": "time", "at": "05:30"},
+                        "curve": {
+                            "points": [[25.0, 20.0], [35.0, 30.0]],
+                            "min_value": 1.0,
+                            "max_value": 60.0,
+                        },
+                        "intensity_pct": 150.0,
+                    }
+                ],
+            )
+        ],
+    )
+    zone_id = entry.runtime_data.zone_ids[0]
+    cycle = role_state(hass, "zone_state", zone_id).attributes["cycles"][0]
+
+    assert cycle["intensity_pct"] == 150.0
+    assert cycle["day_intensity_pct"] is None
+    # Compatibility values the shipped card still reads must include the scale,
+    # otherwise a scaled program would display its unscaled minutes.
+    assert cycle["amount"] == 30  # 20 * 1.5
+    assert cycle["heat"] == 15  # 45 - 30
