@@ -13,8 +13,9 @@ from dataclasses import dataclass
 from typing import Any, Final
 
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import issue_registry as ir
 
-from .const import CONF_NOTIFY_ENABLED, CONF_NOTIFY_PRIORITY, CONF_NOTIFY_SERVICES
+from .const import CONF_NOTIFY_ENABLED, CONF_NOTIFY_PRIORITY, CONF_NOTIFY_SERVICES, DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -201,7 +202,7 @@ class Notifier:
         config = self._config_getter().get(event_key, {})
         if not config.get(CONF_NOTIFY_ENABLED, False):
             return
-        priority = force_priority or config.get(CONF_NOTIFY_PRIORITY, "normal")
+        priority = force_priority or config.get(CONF_NOTIFY_PRIORITY) or default_priority(event_key)
         data: dict[str, Any] = {"title": title, "message": message}
         if priority == PRIORITY_HIGH:
             # Best-effort urgency hints (understood by mobile_app targets).
@@ -211,13 +212,32 @@ class Notifier:
                 "priority": "high",
                 "ttl": 0,
             }
-        for service in config.get(CONF_NOTIFY_SERVICES, []):
+        essential = event_key in ESSENTIAL_EVENTS
+        for raw in config.get(CONF_NOTIFY_SERVICES, []):
+            # Normalised on read as well as on write: a configuration stored
+            # before the wizard may carry the "notify." prefix the old field's
+            # placeholder taught, which would be invoked as notify.notify.x.
+            service = normalize_service(str(raw))
             # Services are validated at send time: the target may have been
             # removed since it was configured (§4).
             if not self._hass.services.has_service("notify", service):
                 _LOGGER.warning("Notify service notify.%s no longer exists; skipping", service)
+                if essential:
+                    # A log line is not enough for the events that exist to
+                    # report that something went wrong.
+                    ir.async_create_issue(
+                        self._hass,
+                        DOMAIN,
+                        f"notify_target_missing_{service}",
+                        is_fixable=False,
+                        severity=ir.IssueSeverity.ERROR,
+                        translation_key="notify_target_missing",
+                        translation_placeholders={"service": service, "event": event_key},
+                    )
                 continue
             try:
                 await self._hass.services.async_call("notify", service, data, blocking=False)
             except Exception:
                 _LOGGER.exception("Failed to send notification via notify.%s", service)
+            else:
+                ir.async_delete_issue(self._hass, DOMAIN, f"notify_target_missing_{service}")
