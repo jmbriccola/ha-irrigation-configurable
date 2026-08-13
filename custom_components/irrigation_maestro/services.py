@@ -36,8 +36,10 @@ from .migration import MigrationNote, migrate_zone_v2_to_v3
 from .models import CycleConfig, HubConfig, ZoneConfig, resolve_curve
 from .notify import (
     ALL_EVENTS,
+    EVENT_ANOMALY,
     PRIORITY_HIGH,
     PRIORITY_NORMAL,
+    default_priority,
     normalize_service,
 )
 from .runtime import IrrigationRuntime
@@ -72,6 +74,7 @@ SERVICE_SET_VALVE_SAFETY: Final = "set_valve_safety"
 SERVICE_SET_CONCURRENCY: Final = "set_concurrency"
 SERVICE_SET_NOTIFICATIONS: Final = "set_notifications"
 SERVICE_SET_PROGRAM_ADVANCED: Final = "set_program_advanced"
+SERVICE_TEST_NOTIFICATION: Final = "test_notification"
 
 ATTR_ZONE_ID: Final = "zone_id"
 ATTR_CYCLE_ID: Final = "cycle_id"
@@ -392,6 +395,14 @@ _SET_NOTIFICATIONS_SCHEMA = vol.All(
     ),
     cv.has_at_least_one_key(ATTR_EVENT, ATTR_EVENTS),
     cv.has_at_most_one_key(ATTR_EVENT, ATTR_EVENTS),
+)
+_TEST_NOTIFICATION_SCHEMA = vol.Schema(
+    {
+        vol.Required(ATTR_SERVICES): vol.All(cv.ensure_list, [cv.string], vol.Length(min=1)),
+        vol.Optional(ATTR_EVENT): vol.In(ALL_EVENTS),
+        vol.Optional(ATTR_TITLE): cv.string,
+        vol.Optional(ATTR_MESSAGE): cv.string,
+    }
 )
 _SET_SESSION_LIMITS_SCHEMA = vol.Schema(
     {
@@ -1214,6 +1225,44 @@ async def _async_set_notifications(call: ServiceCall) -> None:
     _write_hub_options(hass, entry, options)
 
 
+async def _async_test_notification(call: ServiceCall) -> ServiceResponse:
+    """Send a test message and report, per recipient, whether it arrived.
+
+    blocking=True here, unlike the normal send path: the point of a test is to
+    learn about the failure, and a fire-and-forget call would report success
+    for a recipient that then refuses.
+    """
+    hass = call.hass
+    _loaded_entry(hass)
+    event = call.data.get(ATTR_EVENT, EVENT_ANOMALY)
+    data: dict[str, Any] = {
+        "title": call.data.get(ATTR_TITLE, "Irrigation Maestro"),
+        "message": call.data.get(
+            ATTR_MESSAGE, "Test notification. If you can read this, this recipient works."
+        ),
+    }
+    if default_priority(event) == PRIORITY_HIGH:
+        data["data"] = {
+            "tag": f"irrigation_maestro_{event}",
+            "importance": "high",
+            "priority": "high",
+            "ttl": 0,
+        }
+    results: dict[str, Any] = {}
+    for raw in call.data[ATTR_SERVICES]:
+        name = normalize_service(str(raw))
+        if not hass.services.has_service("notify", name):
+            results[name] = {"sent": False, "error": "unknown_service"}
+            continue
+        try:
+            await hass.services.async_call("notify", name, dict(data), blocking=True)
+        except Exception as err:  # reported to the caller, not swallowed
+            results[name] = {"sent": False, "error": str(err)}
+        else:
+            results[name] = {"sent": True, "error": None}
+    return {"results": results}
+
+
 async def _async_set_session_limits(call: ServiceCall) -> None:
     _patch_hub_options(call, _SESSION_LIMIT_KEYS)
 
@@ -1379,6 +1428,13 @@ def async_setup_services(hass: HomeAssistant) -> None:
     )
     hass.services.async_register(
         DOMAIN, SERVICE_IMPORT_CONFIG, _async_import_config, _IMPORT_CONFIG_SCHEMA
+    )
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_TEST_NOTIFICATION,
+        _async_test_notification,
+        _TEST_NOTIFICATION_SCHEMA,
+        supports_response=SupportsResponse.ONLY,
     )
     hass.services.async_register(
         DOMAIN,
