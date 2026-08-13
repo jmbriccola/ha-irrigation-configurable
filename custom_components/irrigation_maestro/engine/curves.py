@@ -56,24 +56,30 @@ class Curve:
             raise CurveError(f"curve_clamps_inverted:{self.min_value}:{self.max_value}")
 
 
+def interpolate(points: Sequence[CurvePoint], temp_c: float) -> float:
+    """The curve's raw value: linear between points, flat beyond the extremes.
+
+    No adjustment factor and no clamps — callers that need the configured
+    value use curve_value. Scaling a curve to a target duration needs the
+    unclamped value, otherwise an active clamp makes the target unreachable.
+    """
+    if temp_c <= points[0][0]:
+        return points[0][1]
+    if temp_c >= points[-1][0]:
+        return points[-1][1]
+    for (t0, v0), (t1, v1) in pairwise(points):
+        if t0 <= temp_c <= t1:
+            return v0 + (v1 - v0) * (temp_c - t0) / (t1 - t0)
+    return points[-1][1]
+
+
 def curve_value(curve: Curve, temp_c: float, adjustment_pct: float = 100.0) -> float:
     """Evaluate the curve at a temperature.
 
     Linear interpolation between points, flat beyond the extremes, then the
     adjustment factor, then the min/max clamps.
     """
-    points = curve.points
-    if temp_c <= points[0][0]:
-        raw = points[0][1]
-    elif temp_c >= points[-1][0]:
-        raw = points[-1][1]
-    else:
-        raw = points[-1][1]
-        for (t0, v0), (t1, v1) in pairwise(points):
-            if t0 <= temp_c <= t1:
-                raw = v0 + (v1 - v0) * (temp_c - t0) / (t1 - t0)
-                break
-    adjusted = raw * adjustment_pct / 100.0
+    adjusted = interpolate(curve.points, temp_c) * adjustment_pct / 100.0
     return min(max(adjusted, curve.min_value), curve.max_value)
 
 

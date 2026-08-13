@@ -7,6 +7,7 @@ from custom_components.irrigation_maestro.engine.curves import (
     Curve,
     CurveError,
     curve_value,
+    interpolate,
     validate_points,
 )
 
@@ -113,3 +114,23 @@ class TestPresets:
     def test_lawn_preset_duration_clamps(self):
         assert PRESET_LAWN.min_value == 8.0
         assert PRESET_LAWN.max_value == 25.0
+
+
+class TestInterpolate:
+    """Raw interpolation: no adjustment, no clamps."""
+
+    def test_ignores_the_clamps(self) -> None:
+        # PRESET_POTS floors at 10 min, but the raw line through (10,10) and
+        # (30,30) is 5 at 5 degrees. curve_value clamps it; interpolate does not.
+        assert interpolate(PRESET_POTS.points, 5.0) == pytest.approx(10.0)
+        curve = Curve(points=((10.0, 5.0), (30.0, 30.0)), min_value=10.0, max_value=55.0)
+        assert interpolate(curve.points, 10.0) == pytest.approx(5.0)
+        assert curve_value(curve, 10.0) == pytest.approx(10.0)
+
+    def test_interpolates_between_points(self) -> None:
+        assert interpolate(PRESET_POTS.points, 20.0) == pytest.approx(20.0)
+        assert interpolate(PRESET_POTS.points, 36.0) == pytest.approx(42.0)
+
+    def test_flat_beyond_the_extremes(self) -> None:
+        assert interpolate(PRESET_POTS.points, -5.0) == pytest.approx(10.0)
+        assert interpolate(PRESET_POTS.points, 99.0) == pytest.approx(55.0)
