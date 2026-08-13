@@ -11,8 +11,22 @@ import type { HomeAssistant } from "../types";
  * says something wrong. Conversion happens server-side, in flow.py.
  */
 
-/** Mirrors SUPPORTED_FLOW_UNITS in flow.py, canonical first. A Python test
- *  pins that set against VolumeFlowRateConverter.VALID_UNITS. */
+/**
+ * Mirrors SUPPORTED_FLOW_UNITS in flow.py, canonical first. A Python test pins
+ * that set against VolumeFlowRateConverter.VALID_UNITS; this list is a hand
+ * copy, and flow-units.test.ts pins it whole so a typo cannot pass.
+ *
+ * Drifting from the backend breaks the UI in two directions, both of which end
+ * as the control contradicting itself:
+ *  - a unit missing here that the backend converts fine makes
+ *    `detectedFlowUnit` return undefined, so the note claims "no usable unit"
+ *    about a working meter;
+ *  - a stored unit missing here (a new HA unit, or one written by
+ *    import_config or Developer Tools) matches no <option>, so the select
+ *    falls back to "detected automatically" while the note right below reads
+ *    "Using X — you set this". That one is display-only: `_save` sends the
+ *    component's state, not the DOM's, so an untouched save round-trips it.
+ */
 export const FLOW_UNITS: readonly string[] = [
   "L/min",
   "L/h",
@@ -54,8 +68,8 @@ const NOTE_KEYS: Record<FlowUnitSource, TranslationKey> = {
 /**
  * The sentence under the picker: which unit will actually be used, and who
  * decided it. Both the zone editor and the hub's sensors section render it,
- * so the source -> key mapping lives here rather than in each of them (the
- * `zone.` prefix is historical: the strings are not zone-specific).
+ * so the source -> key mapping lives here rather than in each of them. The
+ * spec named these keys under `zone.`; the strings are not zone-specific.
  */
 export function flowUnitNote(
   lang: string,

@@ -180,6 +180,31 @@ describe("the line meter's unit", () => {
     expect(detail?.line_flow_sensor_unit).toBe("");
   });
 
+  it("round-trips a stored override through seeding, untouched", () => {
+    // The counterpart of the zone editor's seeding test: the section sends
+    // this field on every weather save, which is only safe because
+    // `_seedFromOptions` puts the stored override back into the form first.
+    // Drop that line -- or `line_flow_sensor_unit` from `HubOptions` -- and
+    // saving anything in this section silently clears the user's override.
+    const element = new ImcSettingsView();
+    element.options = {
+      weather_entity: "weather.home",
+      line_flow_sensor: "sensor.line",
+      line_flow_sensor_unit: "m³/h",
+    };
+    (element as unknown as { willUpdate(changed: Map<string, unknown>): void }).willUpdate(
+      new Map([["options", undefined]]),
+    );
+
+    let detail: WeatherSaveDetail | undefined;
+    element.addEventListener("imc-settings-save-weather", (event) => {
+      detail = (event as CustomEvent<WeatherSaveDetail>).detail;
+    });
+    (element as unknown as WeatherInternals)._saveWeather();
+
+    expect(detail?.line_flow_sensor_unit).toBe("m³/h");
+  });
+
   it("is dropped when the meter it describes is cleared", () => {
     // An override that outlived its sensor would silently apply to whatever
     // sensor is configured next; the backend drops it, and so does the form.
