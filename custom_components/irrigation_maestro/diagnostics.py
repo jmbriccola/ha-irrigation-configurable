@@ -8,8 +8,9 @@ from homeassistant.components.diagnostics import async_redact_data
 from homeassistant.core import HomeAssistant
 
 from . import IrrigationConfigEntry
-from .const import SUBENTRY_TYPE_ZONE
+from .const import CONF_NOTIFICATIONS, SUBENTRY_TYPE_ZONE
 from .entity import INTEGRATION_VERSION
+from .notify import evaluate_notifications
 
 # Nothing stored today is location-sensitive; the set future-proofs against
 # coordinates ever landing in options or state.
@@ -29,6 +30,12 @@ async def async_get_config_entry_diagnostics(
             if subentry.subentry_type == SUBENTRY_TYPE_ZONE
         },
         "runtime_state": runtime.state.as_dict(),
+        # Which events are live and where they go, so "mute" is inspectable
+        # without opening .storage.
+        "notifications": evaluate_notifications(
+            entry.options.get(CONF_NOTIFICATIONS, {}),
+            known_services=set(hass.services.async_services_for_domain("notify")),
+        ).as_dict(),
         "hub_version": INTEGRATION_VERSION,
     }
     return async_redact_data(payload, TO_REDACT)

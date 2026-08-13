@@ -694,6 +694,8 @@ test_notification:
       selector:
         text:
 
+notification_status:
+
 set_program_advanced:
   fields:
     zone_id:

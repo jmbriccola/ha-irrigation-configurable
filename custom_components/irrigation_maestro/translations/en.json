@@ -766,6 +766,10 @@
           "description": "Body of the test message."
         }
       }
+    },
+    "notification_status": {
+      "name": "Notification status",
+      "description": "Reports which events notify, which recipients they reach, which recipients no longer exist, and whether the system is mute."
     }
   },
   "issues": {

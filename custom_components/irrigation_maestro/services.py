@@ -40,6 +40,7 @@ from .notify import (
     PRIORITY_HIGH,
     PRIORITY_NORMAL,
     default_priority,
+    evaluate_notifications,
     normalize_service,
 )
 from .runtime import IrrigationRuntime
@@ -75,6 +76,7 @@ SERVICE_SET_CONCURRENCY: Final = "set_concurrency"
 SERVICE_SET_NOTIFICATIONS: Final = "set_notifications"
 SERVICE_SET_PROGRAM_ADVANCED: Final = "set_program_advanced"
 SERVICE_TEST_NOTIFICATION: Final = "test_notification"
+SERVICE_NOTIFICATION_STATUS: Final = "notification_status"
 
 ATTR_ZONE_ID: Final = "zone_id"
 ATTR_CYCLE_ID: Final = "cycle_id"
@@ -1263,6 +1265,21 @@ async def _async_test_notification(call: ServiceCall) -> ServiceResponse:
     return {"results": results}
 
 
+async def _async_notification_status(call: ServiceCall) -> ServiceResponse:
+    """What is configured, where it goes, and whether it goes anywhere.
+
+    Deliberately not folded into export_config: that payload is import_config's
+    input, and derived state has no business round-tripping through it.
+    """
+    hass = call.hass
+    entry = _loaded_entry(hass)
+    available = sorted(hass.services.async_services_for_domain("notify"))
+    status = evaluate_notifications(
+        entry.options.get(const.CONF_NOTIFICATIONS, {}), known_services=set(available)
+    )
+    return {**status.as_dict(), "available_services": available}
+
+
 async def _async_set_session_limits(call: ServiceCall) -> None:
     _patch_hub_options(call, _SESSION_LIMIT_KEYS)
 
@@ -1434,6 +1451,13 @@ def async_setup_services(hass: HomeAssistant) -> None:
         SERVICE_TEST_NOTIFICATION,
         _async_test_notification,
         _TEST_NOTIFICATION_SCHEMA,
+        supports_response=SupportsResponse.ONLY,
+    )
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_NOTIFICATION_STATUS,
+        _async_notification_status,
+        _EMPTY_SCHEMA,
         supports_response=SupportsResponse.ONLY,
     )
     hass.services.async_register(
