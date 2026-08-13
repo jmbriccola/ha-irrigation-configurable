@@ -84,7 +84,14 @@ class EventStatus:
     enabled: bool
     services: tuple[str, ...]
     missing: tuple[str, ...]
+    #: The resolved priority, for display: what is stored, or the default.
     priority: str
+    #: Exactly what is stored, with no default applied -- None when nothing is.
+    #: The wizard needs to tell "the user never chose a priority" apart from
+    #: "the user chose the value that happens to be the default": re-saving the
+    #: second pins it, and ``Notifier`` treats a stored priority as taking
+    #: precedence over ``default_priority`` forever after.
+    stored_priority: str | None
     essential: bool
 
     @property
@@ -100,6 +107,7 @@ class EventStatus:
             "services": list(self.services),
             "missing": list(self.missing),
             "priority": self.priority,
+            "stored_priority": self.stored_priority,
             "essential": self.essential,
             "reachable": self.reachable,
         }
@@ -152,13 +160,18 @@ def evaluate_notifications(
         else:
             missing = tuple(name for name in services if name not in known_services)
         essential = event in ESSENTIAL_EVENTS
+        raw_priority = raw.get(CONF_NOTIFY_PRIORITY)
+        # Reported separately, never collapsed: the stored value drives what a
+        # re-save writes back, the resolved one drives what is displayed.
+        stored_priority = str(raw_priority) if raw_priority else None
         per_event[event] = EventStatus(
             event=event,
             group=_GROUP_OF[event],
             enabled=enabled,
             services=services,
             missing=missing,
-            priority=str(raw.get(CONF_NOTIFY_PRIORITY, default_priority(event))),
+            priority=stored_priority or default_priority(event),
+            stored_priority=stored_priority,
             essential=essential,
         )
         if enabled and not services:

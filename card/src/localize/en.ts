@@ -280,6 +280,9 @@ export const en = {
   "notify.step_summary": "Confirm",
   "notify.no_recipients":
     "This instance has no notify service yet. Set one up first — the companion app, Telegram, e-mail — and it will appear here.",
+  "notify.recipient_gone": "no longer exists",
+  "notify.recipient_gone_hint":
+    "A recipient marked as no longer existing is still stored and is still written back on every save. Uncheck it to remove it.",
   "notify.send_test": "Send a test",
   // "Sent", not "Delivered": the service learns only that notify.<service>
   // accepted the call without raising — a push can still die downstream.

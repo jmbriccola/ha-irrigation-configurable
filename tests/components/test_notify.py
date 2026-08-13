@@ -98,6 +98,25 @@ def test_without_a_service_registry_nothing_is_asserted_to_be_missing() -> None:
     assert status.unreachable == {}
 
 
+def test_an_unconfigured_event_reports_a_default_priority_but_no_stored_one() -> None:
+    # The wizard re-saves what it reads. If the resolved default were the only
+    # priority reported, the first Save would write it back as an explicit
+    # choice -- and Notifier treats a stored priority as beating
+    # default_priority from then on, freezing today's default forever.
+    status = evaluate_notifications({EVENT_WATCHDOG: {"enabled": True, "services": ["phone"]}})
+    watchdog = status.per_event[EVENT_WATCHDOG]
+    assert watchdog.priority == PRIORITY_HIGH
+    assert watchdog.stored_priority is None
+    assert watchdog.as_dict()["stored_priority"] is None
+
+
+def test_a_stored_priority_is_reported_as_both_stored_and_resolved() -> None:
+    config = {EVENT_WATCHDOG: {"enabled": True, "services": ["phone"], "priority": "normal"}}
+    watchdog = evaluate_notifications(config).per_event[EVENT_WATCHDOG]
+    assert watchdog.priority == PRIORITY_NORMAL
+    assert watchdog.stored_priority == PRIORITY_NORMAL
+
+
 def test_stored_recipients_keep_working_when_they_carry_the_notify_prefix() -> None:
     config = {EVENT_WATCHDOG: {"enabled": True, "services": ["notify.phone"]}}
     status = evaluate_notifications(config, known_services={"phone"})

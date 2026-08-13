@@ -34,7 +34,10 @@ export interface EventStatusResponse {
   enabled: boolean;
   services: string[];
   missing: string[];
+  /** The resolved priority, for display: what is stored, or the default. */
   priority: string;
+  /** Exactly what is stored, with no default applied — null when nothing is. */
+  stored_priority: string | null;
   essential: boolean;
   reachable: boolean;
 }
@@ -65,15 +68,49 @@ export interface SetNotificationsCall {
 export interface Recipient {
   service: string;
   label: string;
+  /** Stored as a recipient but no longer registered on this instance. */
+  missing?: boolean;
 }
+
+/**
+ * Never offered as a recipient. The notify integration registers
+ * `send_message` as an ENTITY service, so `hass.services.notify` always
+ * carries it, but it needs an `entity_id`: called with only a title and a
+ * message it resolves to zero entities and reports success while delivering
+ * nothing — the configured-looking-but-mute state this wizard exists to
+ * prevent. `persistent_notification` is a plain service and a real target,
+ * so it is deliberately not in here.
+ */
+const NEVER_A_RECIPIENT: ReadonlySet<string> = new Set(["send_message"]);
 
 /** The notify services this instance actually has, sorted by name. */
 export function discoverRecipients(hass: HomeAssistant): Recipient[] {
   const notify = (hass.services as Record<string, Record<string, { name?: string }>>)?.notify;
   if (!notify) return [];
   return Object.keys(notify)
+    .filter((service) => !NEVER_A_RECIPIENT.has(service))
     .sort()
     .map((service) => ({ service, label: notify[service]?.name || service }));
+}
+
+/**
+ * The rows step 1 has to draw: every discovered recipient, then every
+ * recipient still selected that this instance no longer has.
+ *
+ * The second half is what makes a vanished recipient removable. Its
+ * `notify_target_missing` repair is an ERROR telling the user to open the
+ * wizard and pick a recipient that exists; without a row of its own the dead
+ * one has no checkbox to clear, so `buildSaveCalls` writes it straight back
+ * on every Save and the issue re-raises forever.
+ */
+export function recipientRows(hass: HomeAssistant, selected: readonly string[]): Recipient[] {
+  const discovered = discoverRecipients(hass);
+  const known = new Set(discovered.map((recipient) => recipient.service));
+  const gone = [...new Set(selected)]
+    .filter((service) => !known.has(service))
+    .sort()
+    .map((service) => ({ service, label: service, missing: true }));
+  return [...discovered, ...gone];
 }
 
 export function presetSelection(preset: WizardPreset, status: NotificationStatusResponse): string[] {
@@ -90,12 +127,15 @@ export function selectionFromStatus(status: NotificationStatusResponse): WizardS
   const configured = status.events.filter((event) => event.enabled);
   const recipients = [...new Set(configured.flatMap((event) => event.services))];
   const priorities: Record<string, NotifyPriority> = {};
-  // Only a configured event has a stored priority worth preserving across a
-  // re-save. An unconfigured event has none — seeding one for it here would
-  // pin it explicitly, and buildSaveCalls would then send it, permanently
-  // shadowing the backend's own default for that event (see there).
+  // Seeded from `stored_priority`, never from `priority`. `priority` is the
+  // RESOLVED value, so an enabled event that has never had a priority stored
+  // still reports the backend's default there — seeding from it would pin
+  // that default explicitly on the very first Save, and notify.py treats a
+  // stored priority as taking precedence over its own default from then on.
+  // `stored_priority` is null exactly when nothing is stored.
   for (const event of configured) {
-    priorities[event.event] = event.priority === "high" ? "high" : "normal";
+    if (!event.stored_priority) continue;
+    priorities[event.event] = event.stored_priority === "high" ? "high" : "normal";
   }
   return {
     recipients,

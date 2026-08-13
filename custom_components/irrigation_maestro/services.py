@@ -383,6 +383,16 @@ _SET_PROGRAM_ADVANCED_SCHEMA = vol.Schema(
 )
 _NOTIFY_SERVICE_NAME = re.compile(r"[a-z0-9_]+")
 
+#: ``notify.send_message`` is never a usable recipient for us. The notify
+#: integration registers it as an ENTITY service, so it is always in the
+#: registry, but it needs an ``entity_id``: called with only a title and a
+#: message it resolves to zero entities and returns successfully having
+#: delivered nothing. Reporting it would offer the panel a recipient that
+#: produces the exact configured-looking-but-mute state this status exists to
+#: catch, and counting it as known would make the verdict bless it.
+#: ``notify.persistent_notification`` is a plain service and a real target.
+_NOTIFY_ENTITY_SERVICE: Final = "send_message"
+
 _SET_NOTIFICATIONS_SCHEMA = vol.All(
     vol.Schema(
         {
@@ -1273,7 +1283,14 @@ async def _async_notification_status(call: ServiceCall) -> ServiceResponse:
     """
     hass = call.hass
     entry = _loaded_entry(hass)
-    available = sorted(hass.services.async_services_for_domain("notify"))
+    # See _NOTIFY_ENTITY_SERVICE: send_message is always registered and never
+    # deliverable without an entity_id, so it is neither offered as a recipient
+    # nor counted as a known service when the verdict is computed.
+    available = sorted(
+        name
+        for name in hass.services.async_services_for_domain("notify")
+        if name != _NOTIFY_ENTITY_SERVICE
+    )
     status = evaluate_notifications(
         entry.options.get(const.CONF_NOTIFICATIONS, {}), known_services=set(available)
     )

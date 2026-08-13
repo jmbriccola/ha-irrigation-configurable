@@ -13,6 +13,7 @@ import {
   buildSaveCalls,
   discoverRecipients,
   presetSelection,
+  recipientRows,
   selectionFromStatus,
 } from "./notification-wizard-state";
 import type {
@@ -525,6 +526,10 @@ export class ImcSettingsView extends LitElement {
     .notify-banner .link-btn {
       margin-top: 6px;
     }
+    .recipient-gone {
+      font-size: 12px;
+      color: var(--error-color, #db4437);
+    }
     .test-result {
       font-size: 12px;
       overflow-wrap: anywhere;
@@ -1031,9 +1036,14 @@ export class ImcSettingsView extends LitElement {
    * that cannot exist cannot be chosen. Each one can be proved before it
    * matters: `test_notification` reports per recipient whether the message
    * actually left.
+   *
+   * A recipient that is still stored but has vanished from the instance is
+   * listed too, marked as gone: it has no service to test, but it needs the
+   * checkbox, because unchecking it is the only way to stop Save from writing
+   * it back and its ERROR repair from re-raising.
    */
   private _renderRecipients(lang: string): TemplateResult {
-    const recipients = this.hass ? discoverRecipients(this.hass) : [];
+    const recipients = this.hass ? recipientRows(this.hass, this._selection.recipients) : [];
     if (recipients.length === 0) {
       return html`<div class="notify-hint">${localize(lang, "notify.no_recipients")}</div>`;
     }
@@ -1051,13 +1061,17 @@ export class ImcSettingsView extends LitElement {
               />
               <span>${recipient.label}</span>
             </label>
-            <button
-              class="link-btn"
-              type="button"
-              @click=${() => this._sendTest(recipient.service)}
-            >
-              ${localize(lang, "notify.send_test")}
-            </button>
+            ${recipient.missing
+              ? html`<span class="recipient-gone">${localize(lang, "notify.recipient_gone")}</span>`
+              : html`
+                  <button
+                    class="link-btn"
+                    type="button"
+                    @click=${() => this._sendTest(recipient.service)}
+                  >
+                    ${localize(lang, "notify.send_test")}
+                  </button>
+                `}
             ${result === undefined
               ? nothing
               : html`<span class="test-result ${result.sent ? "ok" : "fail"}"
@@ -1068,6 +1082,9 @@ export class ImcSettingsView extends LitElement {
           </div>
         `;
       })}
+      ${recipients.some((recipient) => recipient.missing)
+        ? html`<div class="notify-hint">${localize(lang, "notify.recipient_gone_hint")}</div>`
+        : nothing}
     `;
   }
 
