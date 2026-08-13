@@ -17,8 +17,13 @@ card) day to day. For concepts and formulas see the [README](README.md).
      rain in mm**. Without it, rain is estimated from the hourly forecast.
    - **Outdoor temperature sensor** (optional) — overrides the weather
      entity's temperature for daily-maximum tracking.
-   - **Line flow sensor** (optional) — a shared flow meter (L/min) on the
-     manifold, used by every zone without its own meter.
+   - **Line flow sensor** (optional) — a shared flow meter on the manifold,
+     used by every zone without its own meter. Whatever unit it declares
+     (m³/h, L/h, gal/min, …) is detected and converted to L/min
+     automatically; a sensor that declares nothing usable can be given an
+     explicit unit in the panel's **Weather & sensors** settings (§6) —
+     clearing it resumes detection. Until the unit is known the meter counts
+     as absent (see the README's degradation matrix).
    - **Master valve / pump** (optional) — a `valve` or `switch` opened before
      the first zone of each session and closed after the last.
 
@@ -35,11 +40,11 @@ for the full walkthrough (the zone form, the program wizard, the day grid
 and the curve editor). In short: open the panel, press **＋ Aggiungi zona**,
 give it a name and a `valve` or `switch` entity, and it's created with one
 sensible default program (every day, sunrise, a default heat-response curve)
-ready to refine. The extra zone fields — flow meter, nominal flow/tolerance,
-adjustment % (default 100% — e.g. 70% for a shaded bed), order, cadence in
-days, season months, compatibility group — live behind **✎ Modifica zona →
-Avanzate**. Cycle (program) IDs are stable, so history and per-cycle
-switches survive edits.
+ready to refine. The extra zone fields — flow meter with its unit override,
+nominal flow/tolerance, adjustment % (default 100% — e.g. 70% for a shaded
+bed), order, cadence in days, season months, compatibility group — live
+behind **✎ Modifica zona → Avanzate**. Cycle (program) IDs are stable, so
+history and per-cycle switches survive edits.
 
 A program's curve — the temperature→duration mapping, with explicit min/max
 clamps ("Never less than" / "Never more than") and an explicit duration or
@@ -143,13 +148,16 @@ hub settings, all in one place.
    valve (or switch) entity, area — and creates the zone with one sensible
    default program, ready to refine. **✎ Modifica zona** (above the program
    list, for the selected zone) opens the same form pre-filled, plus an
-   **Avanzate** drawer for flow sensor, nominal flow/tolerance, adjustment
-   %, order, watering interval, season-month override and compatibility
-   group — only the fields you change are updated. A **🗑 Elimina zona**
-   button (with a confirmation prompt) removes the zone.
+   **Avanzate** drawer for flow sensor (with its unit — detected
+   automatically, or overridden for a sensor that declares nothing usable;
+   clearing the override resumes detection), nominal flow/tolerance,
+   adjustment %, order, watering interval, season-month override and
+   compatibility group — only the fields you change are updated. A **🗑
+   Elimina zona** button (with a confirmation prompt) removes the zone.
 6. **⚙️ Impostazioni**, in the header, holds the everyday hub settings, each
    saved independently: **Weather & sensors** (weather entity, rain/
-   outdoor-temperature/line-flow sensors, master valve), **Consumption
+   outdoor-temperature/line-flow sensors and the line meter's unit
+   override, master valve), **Consumption
    budget** (liters per month and the action on exceeding it — notify,
    reduce, suspend), **Calendar restrictions** (allowed weekdays, odd/even
    parity, forbidden time windows) and **Notifications** (a three-step

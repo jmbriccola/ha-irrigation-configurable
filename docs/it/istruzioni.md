@@ -19,8 +19,14 @@ e la [guida rapida](guida-rapida.md).
      di oggi in mm**. Senza, la pioggia viene stimata dal forecast orario.
    - **Sensore temperatura esterna** (opzionale) — sostituisce la temperatura
      dell'entità meteo per il tracciamento delle massime giornaliere.
-   - **Flussometro di linea** (opzionale) — un contatore condiviso (L/min)
-     sul collettore, usato da ogni zona senza contatore proprio.
+   - **Flussometro di linea** (opzionale) — un contatore condiviso sul
+     collettore, usato da ogni zona senza contatore proprio. L'unità che
+     dichiara (m³/h, L/h, gal/min, …) viene rilevata e convertita
+     automaticamente in L/min; a un sensore che non dichiara nulla di
+     utilizzabile si può assegnare un'unità esplicita nelle impostazioni
+     **Meteo e sensori** del pannello (§6) — svuotarla riprende il
+     rilevamento. Finché l'unità non è nota, il contatore conta come
+     assente (vedi la matrice di degradazione nel README).
    - **Valvola master / pompa** (opzionale) — `valve` o `switch` aperta prima
      della prima zona di ogni sessione e chiusa dopo l'ultima.
 
@@ -39,11 +45,12 @@ l'editor della curva). In breve: apri il pannello, premi **＋ Aggiungi
 zona**, dai un nome e un'entità `valve` o `switch` alla zona, e questa nasce
 già con un programma predefinito sensato (tutti i giorni, all'alba, con una
 curva di risposta al caldo di default) pronto da rifinire. I campi
-aggiuntivi della zona — flussometro, portata nominale/tolleranza, fattore di
-aggiustamento (default 100% — es. 70% per un'aiuola in ombra), ordine,
-cadenza in giorni, mesi di stagione, gruppo di compatibilità — si trovano
-dietro **✎ Modifica zona → Avanzate**. Gli ID dei programmi (cicli) sono
-stabili: storico e interruttori per ciclo sopravvivono alle modifiche.
+aggiuntivi della zona — flussometro con la sua unità sovrascrivibile, portata
+nominale/tolleranza, fattore di aggiustamento (default 100% — es. 70% per
+un'aiuola in ombra), ordine, cadenza in giorni, mesi di stagione, gruppo di
+compatibilità — si trovano dietro **✎ Modifica zona → Avanzate**. Gli ID dei
+programmi (cicli) sono stabili: storico e interruttori per ciclo
+sopravvivono alle modifiche.
 
 La curva di un programma — la relazione temperatura→durata, con i limiti
 min/max espliciti ("Mai meno di" / "Mai più di") e un tipo esplicito, durata
@@ -153,15 +160,18 @@ e le impostazioni quotidiane dell'hub, tutto in un unico posto.
    nome, entità valvola (o switch), area — e crea la zona con un programma
    predefinito sensato, pronto da rifinire. **✎ Modifica zona** (sopra
    l'elenco programmi, per la zona selezionata) apre lo stesso modulo
-   precompilato, più un cassetto **Avanzate** per sensore di portata,
-   portata nominale/tolleranza, correzione %, ordine, intervallo di
-   irrigazione, deroga ai mesi di stagione e gruppo di compatibilità — si
-   aggiornano solo i campi che modifichi. Il pulsante **🗑 Elimina zona**
-   (con richiesta di conferma) rimuove la zona.
+   precompilato, più un cassetto **Avanzate** per sensore di portata (con la
+   sua unità — rilevata automaticamente, o sovrascritta per un sensore che
+   non dichiara nulla di utilizzabile; svuotare la sovrascrittura riprende
+   il rilevamento), portata nominale/tolleranza, correzione %, ordine,
+   intervallo di irrigazione, deroga ai mesi di stagione e gruppo di
+   compatibilità — si aggiornano solo i campi che modifichi. Il pulsante
+   **🗑 Elimina zona** (con richiesta di conferma) rimuove la zona.
 6. **⚙️ Impostazioni**, nell'intestazione, contiene le impostazioni
    quotidiane dell'hub, ciascuna salvata per conto proprio: **Meteo e
    sensori** (entità meteo, sensori pioggia/temperatura esterna/portata di
-   linea, valvola principale), **Budget di consumo** (litri al mese e
+   linea e la sovrascrittura dell'unità del contatore di linea, valvola
+   principale), **Budget di consumo** (litri al mese e
    azione al superamento — notifica, riduci, sospendi), **Restrizioni
    calendario** (giorni consentiti, parità pari/dispari, finestre orarie
    vietate) e **Notifiche** (una procedura guidata in tre passi: i
