@@ -1,5 +1,13 @@
 import { describe, it, expect } from "vitest";
-import { everyDay, toggleWeekday, isUniform, dayIntensity, dayBase, WEEKDAYS } from "./schedule-math";
+import {
+  everyDay,
+  toggleWeekday,
+  isUniform,
+  dayIntensity,
+  dayBase,
+  minutesChanged,
+  WEEKDAYS,
+} from "./schedule-math";
 
 describe("weekday helpers", () => {
   it("everyDay is true for empty/undefined/all-seven", () => {
@@ -44,5 +52,38 @@ describe("dayBase", () => {
   it("is the scaled minutes at the reference temperature", () => {
     expect(dayBase(CYCLE, 3)).toBe(30); // 20 * 1.5
     expect(dayBase(CYCLE, 0)).toBe(10); // 20 * 0.5
+  });
+});
+
+describe("minutesChanged", () => {
+  it("is false for an untouched uniform stepper", () => {
+    expect(minutesChanged(true, 15, 15, {}, {})).toBe(false);
+  });
+
+  it("is true once the uniform stepper is nudged", () => {
+    expect(minutesChanged(true, 15, 16, {}, {})).toBe(true);
+  });
+
+  it("ignores the per-day map while sameForAll is in force", () => {
+    // The per-day map may be stale (its mode isn't in use) -- only the
+    // uniform value the user is actually looking at should gate the save.
+    expect(minutesChanged(true, 15, 15, { "0": 10 }, { "0": 99 })).toBe(false);
+  });
+
+  it("is false for an untouched per-day map", () => {
+    expect(minutesChanged(false, 15, 15, { "0": 10, "3": 20 }, { "0": 10, "3": 20 })).toBe(false);
+  });
+
+  it("is true when one weekday's value diverges from its seed", () => {
+    expect(minutesChanged(false, 15, 15, { "0": 10, "3": 20 }, { "0": 10, "3": 21 })).toBe(true);
+  });
+
+  it("ignores the uniform value while a per-day map is in force", () => {
+    expect(minutesChanged(false, 15, 99, { "0": 10 }, { "0": 10 })).toBe(false);
+  });
+
+  it("is true when a weekday is added or removed from the map", () => {
+    expect(minutesChanged(false, 15, 15, { "0": 10 }, { "0": 10, "3": 20 })).toBe(true);
+    expect(minutesChanged(false, 15, 15, { "0": 10, "3": 20 }, { "0": 10 })).toBe(true);
   });
 });

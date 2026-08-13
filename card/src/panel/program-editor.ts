@@ -5,6 +5,7 @@ import {
   WEEKDAYS,
   dayBase,
   isUniform,
+  minutesChanged,
   previewMinutes,
   toggleWeekday,
   weekdayLabels,
@@ -150,6 +151,13 @@ export class ImcProgramEditor extends LitElement {
   @state() private _advanced: AdvancedInput = {};
 
   private _seededCycleId?: string;
+  /** Signature of the curve/intensity fields as of the last minutes seed —
+   *  see `_curveSignature` and the re-seed branch in `willUpdate`. */
+  private _seededCurveSignature?: string;
+  /** The minutes state as seeded, so `_save` can tell whether the user
+   *  actually touched a stepper (see `minutesChanged` in schedule-math.ts). */
+  private _seededUniformMinutes = DEFAULT_MINUTES;
+  private _seededDayMinutes: Record<string, number> = {};
 
   /**
    * Volume-mode programs (liters, edited via the curve editor's
@@ -383,8 +391,30 @@ export class ImcProgramEditor extends LitElement {
       if (id !== this._seededCycleId) {
         this._seededCycleId = id;
         this._seedFromCycle();
+      } else if (this._curveSignature(this.cycle) !== this._seededCurveSignature) {
+        // Same program, but its curve or intensity moved under us — a
+        // curve save or a curve copy while this editor stayed open. The
+        // schedule/season/start fields the user may be mid-editing are
+        // untouched; only the minutes seed (stale otherwise) is refreshed,
+        // so the stepper shows what the program now actually waters.
+        this._seedMinutesFromCycle();
       }
     }
+  }
+
+  /** Fields of `cycle` that affect what a minutes stepper should show —
+   *  used to detect a curve save/copy landing while this editor is open
+   *  (see `willUpdate`). Not a general equality check: only what
+   *  `_seedMinutesFromCycle` reads. */
+  private _curveSignature(cycle?: CycleInfo): string {
+    return JSON.stringify([
+      cycle?.curve?.points,
+      cycle?.curve?.min,
+      cycle?.curve?.max,
+      cycle?.curve?.kind,
+      cycle?.intensity_pct,
+      cycle?.day_intensity_pct,
+    ]);
   }
 
   private _seedFromCycle(): void {
@@ -410,6 +440,21 @@ export class ImcProgramEditor extends LitElement {
     }
     this._startAt = trigger?.at ?? trigger?.time ?? "06:00";
 
+    this._seedMinutesFromCycle();
+  }
+
+  /**
+   * Seeds the minutes-editing state (uniform value, per-day map, and which
+   * mode is in force) from the current `cycle`, and records that state as
+   * the seed for `minutesChanged` to compare against in `_save`. Split out
+   * from `_seedFromCycle` so a curve save/copy can refresh just this part
+   * without disturbing calendar/season/start edits in progress.
+   */
+  private _seedMinutesFromCycle(): void {
+    const cycle = this.cycle;
+    if (!cycle) return;
+    this._seededCurveSignature = this._curveSignature(cycle);
+
     // The reference-temperature minutes, computed from the real curve and
     // the uniform intensity (day overrides ignored — this seeds the "same
     // for all" control, not any particular day).
@@ -422,6 +467,9 @@ export class ImcProgramEditor extends LitElement {
         )
       : {};
     this._sameForAll = isUniform(cycle.day_intensity_pct);
+
+    this._seededUniformMinutes = this._uniformMinutes;
+    this._seededDayMinutes = this._buildDayMinutes();
   }
 
   protected override render(): TemplateResult {
@@ -811,9 +859,29 @@ export class ImcProgramEditor extends LitElement {
     // Liters are edited via the curve editor in the Advanced drawer instead.
     if (this._isVolume) return;
 
+    const dayMinutes = this._buildDayMinutes();
+    // Dispatch only when the minutes actually changed from what was
+    // seeded. set_program_minutes computes its intensity by dividing the
+    // given value by the curve's CURRENT reference value — sending the
+    // unchanged seeded minutes back unconditionally would rescale the
+    // curve whenever that reference moved underneath it (a curve save/copy
+    // earlier in this same session, or a clamp binding at the reference
+    // temperature), silently undoing the edit that moved it.
+    if (
+      !minutesChanged(
+        this._sameForAll,
+        this._seededUniformMinutes,
+        this._uniformMinutes,
+        this._seededDayMinutes,
+        dayMinutes,
+      )
+    ) {
+      return;
+    }
+
     const minutesDetail: ProgramMinutesSaveDetail = this._sameForAll
       ? { zoneId, programId, minutes: this._uniformMinutes }
-      : { zoneId, programId, dayMinutes: this._buildDayMinutes() };
+      : { zoneId, programId, dayMinutes };
     this.dispatchEvent(
       new CustomEvent<ProgramMinutesSaveDetail>("imc-program-save-minutes", {
         detail: minutesDetail,

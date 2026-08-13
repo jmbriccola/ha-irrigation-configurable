@@ -50,3 +50,32 @@ export function previewMinutes(cycle: Partial<CycleInfo>, minutesAtReference: nu
   const points = parseCurvePoints(cycle.curve?.points);
   return previewFromMinutes(points, minutesAtReference, weightedTemp, cycle.curve?.min, cycle.curve?.max);
 }
+
+/**
+ * Whether the program editor's working minutes have actually diverged from
+ * what was seeded from the program, so Save should write
+ * `set_program_minutes`. An untouched control must dispatch nothing: the
+ * service derives its intensity by dividing the given minutes by the
+ * curve's *current* reference value, so re-sending an unchanged seeded
+ * value after the curve itself changed underneath it (a curve save, a
+ * curve copy) would silently rescale the curve back toward the old
+ * number instead of leaving the fresh one in place.
+ *
+ * Only the mode actually in use is compared — the uniform value when
+ * `sameForAll`, else the per-day map — since the other mode's seed may be
+ * stale (it is not what the user is looking at or editing).
+ */
+export function minutesChanged(
+  sameForAll: boolean,
+  seededUniform: number,
+  uniform: number,
+  seededDayMinutes: Record<string, number>,
+  dayMinutes: Record<string, number>,
+): boolean {
+  if (sameForAll) return uniform !== seededUniform;
+  const keys = new Set([...Object.keys(seededDayMinutes), ...Object.keys(dayMinutes)]);
+  for (const key of keys) {
+    if (seededDayMinutes[key] !== dayMinutes[key]) return true;
+  }
+  return false;
+}
