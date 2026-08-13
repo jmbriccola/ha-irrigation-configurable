@@ -1345,11 +1345,12 @@ function $t(n, e, t) {
   const i = Ne(n.curve?.points);
   return di(i, e, t, n.curve?.min, n.curve?.max);
 }
-function ui(n, e, t, i, s) {
-  if (n) return t !== e;
-  const o = /* @__PURE__ */ new Set([...Object.keys(i), ...Object.keys(s)]);
-  for (const r of o)
-    if (i[r] !== s[r]) return !0;
+function ui(n, e, t, i, s, o) {
+  if (n !== e) return !0;
+  if (n) return i !== t;
+  const r = /* @__PURE__ */ new Set([...Object.keys(s), ...Object.keys(o)]);
+  for (const l of r)
+    if (s[l] !== o[l]) return !0;
   return !1;
 }
 var _i = Object.defineProperty, hi = (n, e, t, i) => {
@@ -2141,7 +2142,7 @@ function Ai(n) {
 }
 const $e = 15, dt = 1, lt = 1440, Ei = -360, Ci = 360, Ti = 5, Le = class Le extends S {
   constructor() {
-    super(...arguments), this.zoneId = "", this.zoneHasFlowMeter = !1, this.allZones = [], this._calendar = { mode: "weekdays", days: [...we] }, this._seasonMonths = [], this._startKind = "time", this._startAt = "06:00", this._startEvent = "sunrise", this._startOffsetMin = 0, this._uniformMinutes = $e, this._dayMinutes = {}, this._sameForAll = !0, this._advancedOpen = !1, this._advanced = {}, this._seededUniformMinutes = $e, this._seededDayMinutes = {};
+    super(...arguments), this.zoneId = "", this.zoneHasFlowMeter = !1, this.allZones = [], this._calendar = { mode: "weekdays", days: [...we] }, this._seasonMonths = [], this._startKind = "time", this._startAt = "06:00", this._startEvent = "sunrise", this._startOffsetMin = 0, this._uniformMinutes = $e, this._dayMinutes = {}, this._sameForAll = !0, this._advancedOpen = !1, this._advanced = {}, this._seededUniformMinutes = $e, this._seededDayMinutes = {}, this._seededSameForAll = !0;
   }
   /**
    * Volume-mode programs (liters, edited via the curve editor's
@@ -2202,7 +2203,7 @@ const $e = 15, dt = 1, lt = 1440, Ei = -360, Ci = 360, Ti = 5, Le = class Le ext
     const e = this.cycle;
     e && (this._seededCurveSignature = this._curveSignature(e), this._uniformMinutes = e.curve ? J({ curve: e.curve, intensity_pct: e.intensity_pct }, 0) : $e, this._dayMinutes = e.day_intensity_pct ? Object.fromEntries(
       Object.keys(e.day_intensity_pct).map((t) => [t, J(e, Number(t))])
-    ) : {}, this._sameForAll = xt(e.day_intensity_pct), this._seededUniformMinutes = this._uniformMinutes, this._seededDayMinutes = this._buildDayMinutes());
+    ) : {}, this._sameForAll = xt(e.day_intensity_pct), this._seededUniformMinutes = this._uniformMinutes, this._seededDayMinutes = this._buildDayMinutes(), this._seededSameForAll = this._sameForAll);
   }
   render() {
     const e = this.cycle;
@@ -2516,6 +2517,7 @@ const $e = 15, dt = 1, lt = 1440, Ei = -360, Ci = 360, Ti = 5, Le = class Le ext
     const o = this._buildDayMinutes();
     if (!ui(
       this._sameForAll,
+      this._seededSameForAll,
       this._seededUniformMinutes,
       this._uniformMinutes,
       this._seededDayMinutes,

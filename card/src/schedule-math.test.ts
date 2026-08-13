@@ -57,33 +57,52 @@ describe("dayBase", () => {
 
 describe("minutesChanged", () => {
   it("is false for an untouched uniform stepper", () => {
-    expect(minutesChanged(true, 15, 15, {}, {})).toBe(false);
+    expect(minutesChanged(true, true, 15, 15, {}, {})).toBe(false);
   });
 
   it("is true once the uniform stepper is nudged", () => {
-    expect(minutesChanged(true, 15, 16, {}, {})).toBe(true);
+    expect(minutesChanged(true, true, 15, 16, {}, {})).toBe(true);
   });
 
   it("ignores the per-day map while sameForAll is in force", () => {
     // The per-day map may be stale (its mode isn't in use) -- only the
     // uniform value the user is actually looking at should gate the save.
-    expect(minutesChanged(true, 15, 15, { "0": 10 }, { "0": 99 })).toBe(false);
+    expect(minutesChanged(true, true, 15, 15, { "0": 10 }, { "0": 99 })).toBe(false);
   });
 
   it("is false for an untouched per-day map", () => {
-    expect(minutesChanged(false, 15, 15, { "0": 10, "3": 20 }, { "0": 10, "3": 20 })).toBe(false);
+    expect(minutesChanged(false, false, 15, 15, { "0": 10, "3": 20 }, { "0": 10, "3": 20 })).toBe(
+      false,
+    );
   });
 
   it("is true when one weekday's value diverges from its seed", () => {
-    expect(minutesChanged(false, 15, 15, { "0": 10, "3": 20 }, { "0": 10, "3": 21 })).toBe(true);
+    expect(minutesChanged(false, false, 15, 15, { "0": 10, "3": 20 }, { "0": 10, "3": 21 })).toBe(
+      true,
+    );
   });
 
   it("ignores the uniform value while a per-day map is in force", () => {
-    expect(minutesChanged(false, 15, 99, { "0": 10 }, { "0": 10 })).toBe(false);
+    expect(minutesChanged(false, false, 15, 99, { "0": 10 }, { "0": 10 })).toBe(false);
   });
 
   it("is true when a weekday is added or removed from the map", () => {
-    expect(minutesChanged(false, 15, 15, { "0": 10 }, { "0": 10, "3": 20 })).toBe(true);
-    expect(minutesChanged(false, 15, 15, { "0": 10, "3": 20 }, { "0": 10 })).toBe(true);
+    expect(minutesChanged(false, false, 15, 15, { "0": 10 }, { "0": 10, "3": 20 })).toBe(true);
+    expect(minutesChanged(false, false, 15, 15, { "0": 10, "3": 20 }, { "0": 10 })).toBe(true);
+  });
+
+  it("is true when sameForAll collapses to uniform, even with untouched values", () => {
+    // The seeded state was per-day (e.g. Monday at half); the user toggles
+    // "same duration every day" and presses Save without touching a
+    // stepper. That toggle must still count as an edit -- it collapses
+    // day_intensity_pct server-side -- even though every number involved
+    // is unchanged.
+    expect(
+      minutesChanged(true, false, 20, 20, { "0": 10, "3": 20 }, { "0": 10, "3": 20 }),
+    ).toBe(true);
+  });
+
+  it("is true when sameForAll expands to per-day, even with untouched values", () => {
+    expect(minutesChanged(false, true, 15, 15, {}, {})).toBe(true);
   });
 });

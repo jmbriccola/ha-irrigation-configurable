@@ -158,6 +158,10 @@ export class ImcProgramEditor extends LitElement {
    *  actually touched a stepper (see `minutesChanged` in schedule-math.ts). */
   private _seededUniformMinutes = DEFAULT_MINUTES;
   private _seededDayMinutes: Record<string, number> = {};
+  /** Seeded value of `_sameForAll` — a flip of the mode itself, in either
+   *  direction, must count as a change even if no stepper moved (see
+   *  `minutesChanged`). */
+  private _seededSameForAll = true;
 
   /**
    * Volume-mode programs (liters, edited via the curve editor's
@@ -470,6 +474,7 @@ export class ImcProgramEditor extends LitElement {
 
     this._seededUniformMinutes = this._uniformMinutes;
     this._seededDayMinutes = this._buildDayMinutes();
+    this._seededSameForAll = this._sameForAll;
   }
 
   protected override render(): TemplateResult {
@@ -873,6 +878,7 @@ export class ImcProgramEditor extends LitElement {
     if (
       !minutesChanged(
         this._sameForAll,
+        this._seededSameForAll,
         this._seededUniformMinutes,
         this._uniformMinutes,
         this._seededDayMinutes,

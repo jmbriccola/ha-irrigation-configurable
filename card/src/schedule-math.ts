@@ -61,17 +61,26 @@ export function previewMinutes(cycle: Partial<CycleInfo>, minutesAtReference: nu
  * curve copy) would silently rescale the curve back toward the old
  * number instead of leaving the fresh one in place.
  *
- * Only the mode actually in use is compared — the uniform value when
- * `sameForAll`, else the per-day map — since the other mode's seed may be
- * stale (it is not what the user is looking at or editing).
+ * A flip of `sameForAll` itself always counts as a change, in both
+ * directions — collapsing to uniform clears `day_intensity_pct` server-side
+ * and expanding to per-day starts writing it, so the flag reaching Save
+ * differently from how it was seeded is itself the edit, even if every
+ * stepper still reads what it was seeded with.
+ *
+ * Short of that flip, only the mode actually in use is compared — the
+ * uniform value when `sameForAll`, else the per-day map — since the other
+ * mode's seed may be stale (it is not what the user is looking at or
+ * editing).
  */
 export function minutesChanged(
   sameForAll: boolean,
+  seededSameForAll: boolean,
   seededUniform: number,
   uniform: number,
   seededDayMinutes: Record<string, number>,
   dayMinutes: Record<string, number>,
 ): boolean {
+  if (sameForAll !== seededSameForAll) return true;
   if (sameForAll) return uniform !== seededUniform;
   const keys = new Set([...Object.keys(seededDayMinutes), ...Object.keys(dayMinutes)]);
   for (const key of keys) {
