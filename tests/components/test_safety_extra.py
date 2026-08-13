@@ -551,6 +551,75 @@ async def test_a_unit_that_returns_just_before_a_check_does_not_trip_the_guard(
     assert registry.async_get_issue(DOMAIN, "flow_unit_unknown_sensor.flow") is None
 
 
+async def test_a_blind_gap_does_not_count_towards_a_sustained_range_anomaly(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    """The range clock cannot run through an interval nothing was checked in.
+
+    RANGE_SUSTAIN_S is wall-clock, but _check_range is only reached while the
+    unit is known. An out-of-range reading before the loss and one after the
+    recovery are 125 s apart here, yet only the 45 s after the recovery were
+    ever observed -- reporting that as a sustained anomaly would be inventing
+    evidence from a gap.
+
+    The recovery arrives on a state-change event, which is how it normally
+    arrives, and the whole blind gap is placed strictly between two periodic
+    ticks -- so no tick ever observes it. Only a reset on the recovery itself
+    covers this; resetting in the tick's blind branch does not run at all here.
+    """
+    freezer.move_to(START)
+    park = MockValvePark(hass)
+    park.add("valve.a")
+    hass.states.async_set("sensor.flow", "10.0", {"unit_of_measurement": "L/min"})
+    mock_weather(hass)
+    entry = await setup_hub(
+        hass,
+        [
+            zone_data(
+                "Alpha", "valve.a", minutes=10, flow_sensor="sensor.flow", nominal_flow_lpm=10.0
+            )
+        ],
+    )
+    runtime = entry.runtime_data
+    anomalies: list[Any] = []
+    hass.bus.async_listen(f"{DOMAIN}_anomaly", anomalies.append)
+
+    await advance(hass, freezer, 31 * 60)
+    assert hass.states.get("valve.a").state == "open"
+
+    # Periodic ticks fall on started_at + 120 s * k, so the gap below (150 s to
+    # 210 s) sits wholly between the ticks at 120 s and 240 s.
+    started_at = runtime.session.active_runs[runtime.zone_ids[0]].started_at
+    assert started_at is not None
+
+    async def advance_to(elapsed_s: float) -> None:
+        remaining = elapsed_s - (dt_util.utcnow() - started_at).total_seconds()
+        assert remaining > 0, "the checkpoint is already behind us"
+        await advance(hass, freezer, remaining, step=1.0)
+
+    # Well outside the +/-25% band around 10 L/min, with the unit known: the
+    # range clock starts here.
+    await advance_to(130)
+    hass.states.async_set("sensor.flow", "30.0", {"unit_of_measurement": "L/min"})
+    await hass.async_block_till_done()
+
+    await advance_to(150)
+    hass.states.async_set("sensor.flow", "30.0")  # unit lost
+    await hass.async_block_till_done()
+
+    await advance_to(210)
+    hass.states.async_set("sensor.flow", "30.0", {"unit_of_measurement": "L/min"})
+    await hass.async_block_till_done()
+
+    # 125 s after the first out-of-range reading, but only 45 s after the
+    # recovery -- short of RANGE_SUSTAIN_S once the blind gap is discounted.
+    await advance_to(255)
+    hass.states.async_set("sensor.flow", "31.0", {"unit_of_measurement": "L/min"})
+    await hass.async_block_till_done()
+
+    assert not [event for event in anomalies if "out of expected range" in event.data["message"]]
+
+
 async def test_a_repair_is_withdrawn_by_the_next_run_once_the_unit_resolves(
     hass: HomeAssistant, freezer: FrozenDateTimeFactory
 ) -> None:
