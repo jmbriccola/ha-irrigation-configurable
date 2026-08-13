@@ -45,14 +45,6 @@ export function dayBase(cycle: Partial<CycleInfo>, wd: number): number {
   );
 }
 
-/** Minutes this program will water at the given weighted temperature. */
-export function effectiveMinutes(cycle: Partial<CycleInfo>, wd: number, weightedTemp: number): number {
-  const points = parseCurvePoints(cycle.curve?.points);
-  return roundHalfEven(
-    scaledValue(points, weightedTemp, dayIntensity(cycle, wd), cycle.curve?.min, cycle.curve?.max),
-  );
-}
-
 /** Live preview while the user is dragging a minutes stepper (unsaved state). */
 export function previewMinutes(cycle: Partial<CycleInfo>, minutesAtReference: number, weightedTemp: number): number {
   const points = parseCurvePoints(cycle.curve?.points);
