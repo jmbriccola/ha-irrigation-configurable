@@ -71,15 +71,23 @@ call the same value `program_id` in their fields, for the user-facing name):
   argument.** The engine multiplies it by the zone's `adjustment_pct` before
   calling `curve_value` (`zone.adjustment_pct * factor / 100.0` in
   `engine/planner.py`), and `adjustment_pct` is a *zone* setting, not a
-  program one. It is deliberately not published on `zone_state` or any
-  other entity, so the card cannot fold it into a preview: a zone adjusted
+  program one. It is not published in `zone_state`'s attributes alongside
+  `cycles` — the only place the program editor's preview path reads from —
+  so that preview cannot fold it in without extra plumbing: a zone adjusted
   to 70% waters 30% less than every figure the card shows (program editor,
-  wizard, curve editor) for that zone's programs, everywhere, with no way
-  for the card to know or say so. Folding it in naively would make things
-  worse, not better — the minutes stepper feeds `set_program_minutes`, which
-  computes its intensity from the curve's *pre-adjustment* value, so a
-  preview that already included the zone factor would not match what that
-  service derives from the number the user is looking at.
+  wizard, curve editor) for that zone's programs, everywhere, and the
+  preview has no way to know or say so from the data it currently reads.
+  The value itself is not hidden, though — it is the `zone_adjustment`
+  NUMBER entity's state (`maestro_role: zone_adjustment`, see the table
+  above), which the card already discovers (`discovery.ts`) and already
+  reads through `export_config` for the zone editor (`config-read.ts`,
+  `zone-editor.ts`); it is simply not consumed by any preview today. Folding
+  it into the preview is a deliberate deferral, not a hard blocker: doing it
+  naively would make things worse, not better — the minutes stepper feeds
+  `set_program_minutes`, which computes its intensity from the curve's
+  *pre-adjustment* value, so a preview that already included the zone
+  factor would not match what that service derives from the number the
+  user is looking at. Reconciling the two is left to a future phase.
 - The sensor publishes only the stored shape: `curve.points`, `intensity_pct`
   and `day_intensity_pct`. As of 3.0.0 it no longer also publishes
   `day_minutes` / `amount` / `heat` — those were derived display values kept
