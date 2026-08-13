@@ -35,7 +35,7 @@ from .engine.evaluate import evaluate_session
 from .engine.model import SessionEvaluation, SkipReason
 from .engine.planner import PlannedRun, build_session_plan
 from .engine.scheduling import split_soak
-from .flow import FlowSensorReader
+from .flow import CANONICAL_UNIT, FlowSensorReader
 from .models import CycleConfig, HubConfig, ZoneConfig
 from .notify import (
     EVENT_ANOMALY,
@@ -128,6 +128,7 @@ class IrrigationRuntime:
         self.watchdog.start()
         self.sentinel.start()
         self._refresh_notification_issues()
+        self._report_rescaled_flow_meters()
 
     async def async_shutdown(self) -> None:
         """Entry unload: stop everything and leave the valves closed."""
@@ -187,6 +188,7 @@ class IrrigationRuntime:
             for zone_id, zone in self.zones.items()
         )
         self._refresh_notification_issues()
+        self._report_rescaled_flow_meters()
         if removed or (set(self.zones) - old_zone_ids) or cycles_changed:
             async_dispatcher_send(self.hass, SIGNAL_ZONES_CHANGED, self.entry.entry_id)
         self.dispatch_update()
@@ -902,6 +904,41 @@ class IrrigationRuntime:
             )
         else:
             ir.async_delete_issue(self.hass, DOMAIN, "notifications_silent")
+
+    def _report_rescaled_flow_meters(self) -> None:
+        """Tell an upgrading install that its counter changed scale.
+
+        The stored consumption counter is deliberately NOT rewritten. It is
+        monthly and resets at period start, so the distortion self-heals within
+        31 days; and the accumulated total mixes litres measured through the
+        meter with litres estimated as nominal x minutes, which were never
+        affected. Multiplying the whole total by a single factor would be
+        exactly the plausible-but-false number this feature removes.
+        """
+        rescaled: list[str] = []
+        for zone in self.zones.values():
+            reader = self.flow_reader_for(zone)
+            if reader is None:
+                continue
+            reading = reader.read()
+            if (
+                reading.unit is not None
+                and reading.unit != CANONICAL_UNIT
+                and reader.entity_id not in rescaled
+            ):
+                rescaled.append(reader.entity_id)
+        if not rescaled:
+            ir.async_delete_issue(self.hass, DOMAIN, "flow_unit_corrected")
+            return
+        ir.async_create_issue(
+            self.hass,
+            DOMAIN,
+            "flow_unit_corrected",
+            is_fixable=False,
+            severity=ir.IssueSeverity.WARNING,
+            translation_key="flow_unit_corrected",
+            translation_placeholders={"sensors": ", ".join(rescaled)},
+        )
 
     def _report_weather_unavailable(self) -> None:
         ir.async_create_issue(

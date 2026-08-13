@@ -612,3 +612,44 @@ async def test_a_volume_cycle_on_an_unresolvable_meter_still_completes(
     runtime = entry.runtime_data
     outcome = runtime.state.last_outcome(runtime.zone_ids[0])
     assert outcome["result"] == "completed"
+
+
+async def test_consumption_counts_real_litres_from_a_cubic_metre_meter(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    """0.45 m³/h for ten minutes is 75 L, not 4.5 L."""
+    freezer.move_to(START)
+    park = MockValvePark(hass)
+    park.add("valve.a")
+    hass.states.async_set("sensor.flow", "0.45", {"unit_of_measurement": "m³/h"})
+    mock_weather(hass)
+    entry = await setup_hub(
+        hass,
+        [zone_data("Alpha", "valve.a", minutes=10, flow_sensor="sensor.flow")],
+        {"consumption_budget": {"liters_per_month": 1000, "action": "notify"}},
+    )
+    await advance(hass, freezer, 31 * 60)
+    await advance(hass, freezer, 11 * 60)
+
+    runtime = entry.runtime_data
+    # ~7.5 L/min for ~10 min. Generous bounds: the exact figure depends on when
+    # the integrator samples, but 4.5 L (the un-converted answer) is far below.
+    assert 60 <= runtime.state.consumption_liters <= 90
+
+
+async def test_a_zone_without_a_meter_still_estimates_from_the_nominal_rate(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    """The fallback path is canonical L/min too, so both roads agree."""
+    freezer.move_to(START)
+    park = MockValvePark(hass)
+    park.add("valve.a")
+    mock_weather(hass)
+    entry = await setup_hub(
+        hass,
+        [zone_data("Alpha", "valve.a", minutes=10, nominal_flow_lpm=7.5)],
+    )
+    await advance(hass, freezer, 31 * 60)
+    await advance(hass, freezer, 11 * 60)
+    runtime = entry.runtime_data
+    assert 70 <= runtime.state.consumption_liters <= 80

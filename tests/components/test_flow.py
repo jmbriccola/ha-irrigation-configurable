@@ -6,6 +6,7 @@ every litre 16.7x too small.
 """
 
 import pytest
+from custom_components.irrigation_maestro.const import DOMAIN
 from custom_components.irrigation_maestro.flow import (
     CANONICAL_UNIT,
     SUPPORTED_FLOW_UNITS,
@@ -13,7 +14,10 @@ from custom_components.irrigation_maestro.flow import (
 )
 from homeassistant.const import UnitOfVolumeFlowRate
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import issue_registry as ir
 from homeassistant.util.unit_conversion import VolumeFlowRateConverter
+
+from .test_session import setup_hub, zone_data
 
 
 def test_the_canonical_unit_is_litres_per_minute() -> None:
@@ -127,3 +131,24 @@ async def test_the_unit_is_re_read_every_time(hass: HomeAssistant) -> None:
     assert reader.read().lpm == pytest.approx(0.45)
     hass.states.async_set("sensor.flow", "0.45")
     assert reader.read().lpm is None
+
+
+async def test_an_install_with_a_non_canonical_meter_gets_a_scale_notice(
+    hass: HomeAssistant,
+) -> None:
+    hass.states.async_set("sensor.flow", "0.45", {"unit_of_measurement": "m³/h"})
+    await setup_hub(hass, [zone_data("Alpha", "valve.a", flow_sensor="sensor.flow")])
+    registry = ir.async_get(hass)
+    issue = registry.async_get_issue(DOMAIN, "flow_unit_corrected")
+    assert issue is not None
+    assert issue.translation_placeholders is not None
+    assert "sensor.flow" in issue.translation_placeholders["sensors"]
+
+
+async def test_an_install_already_in_litres_per_minute_gets_no_notice(
+    hass: HomeAssistant,
+) -> None:
+    hass.states.async_set("sensor.flow", "7.5", {"unit_of_measurement": "L/min"})
+    await setup_hub(hass, [zone_data("Alpha", "valve.a", flow_sensor="sensor.flow")])
+    registry = ir.async_get(hass)
+    assert registry.async_get_issue(DOMAIN, "flow_unit_corrected") is None
