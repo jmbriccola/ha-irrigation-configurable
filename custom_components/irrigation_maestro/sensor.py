@@ -17,10 +17,10 @@ from homeassistant.helpers.entity import Entity
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from homeassistant.util import dt as dt_util
 
-from . import IrrigationConfigEntry, const
+from . import IrrigationConfigEntry
 from .const import TRIGGER_KIND_SUN, TRIGGER_KIND_TIME
 from .engine.calendar import calendar_allows
-from .engine.curves import CurveKind, curve_value
+from .engine.curves import CurveKind
 from .entity import (
     MaestroHubEntity,
     MaestroZoneEntity,
@@ -250,22 +250,6 @@ class ZoneStateSensor(MaestroZoneEntity, SensorEntity):
         return attributes
 
     def _cycle_dict(self, cycle: CycleConfig) -> dict[str, Any]:
-        is_duration = cycle.curve.kind is CurveKind.DURATION
-        # Derived for the card that is already installed: the effective value
-        # at the reference temperature, including the intensity. Removed once
-        # the card reads the curve and the intensity directly (Phase B).
-        if is_duration:
-            mild = curve_value(cycle.curve, const.CURVE_REFERENCE_TEMP_C, cycle.intensity_pct)
-            hot = curve_value(cycle.curve, 35.0, cycle.intensity_pct)
-            amount: int | None = round(mild)
-            heat: int | None = round(hot - mild)
-            day_minutes = {
-                str(day): round(curve_value(cycle.curve, const.CURVE_REFERENCE_TEMP_C, pct))
-                for day, pct in cycle.day_intensity_pct.items()
-            } or None
-        else:
-            amount = heat = None
-            day_minutes = None
         return {
             "cycle_id": cycle.cycle_id,
             "name": cycle.name,
@@ -278,9 +262,6 @@ class ZoneStateSensor(MaestroZoneEntity, SensorEntity):
             "volume_safety_timeout_min": cycle.volume_safety_timeout_min,
             "intensity_pct": cycle.intensity_pct,
             "day_intensity_pct": ({str(k): v for k, v in cycle.day_intensity_pct.items()} or None),
-            "day_minutes": day_minutes,
-            "amount": amount,
-            "heat": heat,
             "curve": {
                 "points": [[temp, value] for temp, value in cycle.curve.points],
                 "min": cycle.curve.min_value,

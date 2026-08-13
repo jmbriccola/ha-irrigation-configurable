@@ -68,7 +68,7 @@ async def test_manual_run_applies_per_day_intensity(
     # weather-only computation).
     mock_weather(hass)
     zone = zone_data("Pots", "valve.pots")
-    # amount=20/heat=10 semantic curve: mild (25C) -> 20', hot (35C) -> 30'.
+    # Curve authored directly: mild (25C) -> 20', hot (35C) -> 30'.
     zone[const.CONF_CYCLES][0][const.CONF_CURVE] = {
         const.CONF_CURVE_POINTS: [[12, 7], [25, 20], [35, 30]],
         const.CONF_CURVE_MIN: 0,
@@ -350,160 +350,6 @@ async def test_set_curve_refuses_volume_without_a_meter(hass: HomeAssistant) -> 
             },
             blocking=True,
         )
-
-
-async def test_set_simple_curve_stores_generated_points(
-    hass: HomeAssistant, freezer: FrozenDateTimeFactory
-) -> None:
-    freezer.move_to(START)
-    park = MockValvePark(hass)
-    park.add("valve.pots")
-    mock_weather(hass)
-    entry = await setup_hub(hass, [zone_data("Pots", "valve.pots")])
-    zone_id = entry.runtime_data.zone_ids[0]
-    cycle_id = entry.runtime_data.zones[zone_id].config.cycles[0].cycle_id
-
-    await hass.services.async_call(
-        DOMAIN,
-        "set_simple_curve",
-        {"zone_id": zone_id, "cycle_id": cycle_id, "amount": 15, "heat": 15},
-        blocking=True,
-    )
-    await hass.async_block_till_done()
-
-    cycle = entry.runtime_data.zones[zone_id].config.cycle(cycle_id)
-    # Reference values from points_from_semantic(15, 15); see
-    # tests/engine/test_semantic.py::test_points_endpoints_match_amount_and_heat.
-    assert cycle.curve.points == ((12.0, 0.0), (25.0, 15.0), (35.0, 30.0))
-
-
-async def test_set_simple_curve_keeps_existing_clamps_when_omitted(
-    hass: HomeAssistant, freezer: FrozenDateTimeFactory
-) -> None:
-    freezer.move_to(START)
-    park = MockValvePark(hass)
-    park.add("valve.pots")
-    mock_weather(hass)
-    entry = await setup_hub(hass, [zone_data("Pots", "valve.pots")])
-    zone_id = entry.runtime_data.zone_ids[0]
-    cycle_id = entry.runtime_data.zones[zone_id].config.cycles[0].cycle_id
-    before = entry.runtime_data.zones[zone_id].config.cycle(cycle_id).curve
-
-    await hass.services.async_call(
-        DOMAIN,
-        "set_simple_curve",
-        {"zone_id": zone_id, "cycle_id": cycle_id, "amount": 20, "heat": 10},
-        blocking=True,
-    )
-    await hass.async_block_till_done()
-    after = entry.runtime_data.zones[zone_id].config.cycle(cycle_id).curve
-    assert after.min_value == before.min_value
-    assert after.max_value == before.max_value
-
-
-async def test_set_simple_curve_rejects_out_of_range(
-    hass: HomeAssistant, freezer: FrozenDateTimeFactory
-) -> None:
-    freezer.move_to(START)
-    park = MockValvePark(hass)
-    park.add("valve.pots")
-    mock_weather(hass)
-    entry = await setup_hub(hass, [zone_data("Pots", "valve.pots")])
-    zone_id = entry.runtime_data.zone_ids[0]
-    cycle_id = entry.runtime_data.zones[zone_id].config.cycles[0].cycle_id
-
-    with pytest.raises(vol.Invalid):  # MultipleInvalid before the handler ever runs
-        await hass.services.async_call(
-            DOMAIN,
-            "set_simple_curve",
-            {"zone_id": zone_id, "cycle_id": cycle_id, "amount": 999, "heat": 5},
-            blocking=True,
-        )
-
-
-async def test_set_simple_curve_rejects_volume_cycle(
-    hass: HomeAssistant, freezer: FrozenDateTimeFactory
-) -> None:
-    freezer.move_to(START)
-    park = MockValvePark(hass)
-    park.add("valve.pots")
-    mock_weather(hass)
-    zone = zone_data(
-        "Pots",
-        "valve.pots",
-        cycles=[
-            {
-                "id": "cy_vol",
-                "name": "Volume",
-                "enabled": True,
-                "trigger": {"kind": "time", "at": "05:30"},
-                "curve": {
-                    "points": [[20.0, 20.0]],
-                    "min_value": 5.0,
-                    "max_value": 90.0,
-                    "kind": "volume",
-                },
-                "volume_safety_timeout_min": 20,
-            }
-        ],
-    )
-    entry = await setup_hub(hass, [zone])
-    zone_id = entry.runtime_data.zone_ids[0]
-    cycle_id = entry.runtime_data.zones[zone_id].config.cycles[0].cycle_id
-
-    with pytest.raises(ServiceValidationError):
-        await hass.services.async_call(
-            DOMAIN,
-            "set_simple_curve",
-            {"zone_id": zone_id, "cycle_id": cycle_id, "amount": 15, "heat": 15},
-            blocking=True,
-        )
-    # Nothing was written: the volume-shaped curve is untouched.
-    curve_data = entry.subentries[zone_id].data["cycles"][0]["curve"]
-    assert curve_data["points"] == [[20.0, 20.0]]
-    assert curve_data["kind"] == "volume"
-
-
-async def test_set_simple_curve_resets_intensity_so_effective_value_matches_request(
-    hass: HomeAssistant, freezer: FrozenDateTimeFactory
-) -> None:
-    """C1 regression: set_program_minutes stores a hidden intensity_pct; an
-    explicit curve write must reset it, or the intensity and the freshly
-    authored points compose and silently multiply the delivered amount.
-
-    Reproduces the shipped-panel scenario: set minutes (200 % intensity),
-    then author a curve for a known amount -- the EFFECTIVE delivered value
-    (curve_value with the surviving intensity) must equal what was asked."""
-    freezer.move_to(START)
-    park = MockValvePark(hass)
-    park.add("valve.pots")
-    mock_weather(hass)
-    entry = await setup_hub(hass, [zone_data("Pots", "valve.pots")])
-    zone_id = entry.runtime_data.zone_ids[0]
-    cycle_id = entry.runtime_data.zones[zone_id].config.cycles[0].cycle_id
-
-    # The fixture's curve is flat at 3 minutes, so 6 minutes stores 200 %.
-    await hass.services.async_call(
-        DOMAIN,
-        "set_program_minutes",
-        {"zone_id": zone_id, "program_id": cycle_id, "minutes": 6},
-        blocking=True,
-    )
-    await hass.async_block_till_done()
-    assert entry.runtime_data.zones[zone_id].config.cycle(cycle_id).intensity_pct == 200.0
-
-    await hass.services.async_call(
-        DOMAIN,
-        "set_simple_curve",
-        {"zone_id": zone_id, "cycle_id": cycle_id, "amount": 20, "heat": 10},
-        blocking=True,
-    )
-    await hass.async_block_till_done()
-
-    cycle = entry.runtime_data.zones[zone_id].config.cycle(cycle_id)
-    assert cycle.intensity_pct == 100.0  # reset, not merely unread
-    # The 25C anchor of points_from_semantic(20, 10) is exactly 20.
-    assert curve_value(cycle.curve, 25.0, cycle.intensity_pct) == 20.0
 
 
 async def test_set_curve_resets_intensity_so_effective_value_matches_request(
@@ -1226,10 +1072,8 @@ async def test_add_zone_rejects_invalid(hass, freezer):
     await setup_hub(hass, [zone_data("Pots", "valve.pots")])
     with pytest.raises(vol.Invalid):
         # missing required valve_entity -> schema validation rejects before
-        # the handler ever runs (same pattern as
-        # test_set_simple_curve_rejects_out_of_range: MultipleInvalid is
-        # raised by HA's service registry, not wrapped as
-        # ServiceValidationError).
+        # the handler ever runs (MultipleInvalid is raised by HA's service
+        # registry, not wrapped as ServiceValidationError).
         await hass.services.async_call(
             DOMAIN, "add_zone", {"name": "X"}, blocking=True, return_response=True
         )

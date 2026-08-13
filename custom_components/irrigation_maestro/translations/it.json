@@ -299,36 +299,6 @@
         }
       }
     },
-    "set_simple_curve": {
-      "name": "Imposta curva semplice",
-      "description": "Costruisce una curva a durata da una quantità base e un incremento per i giorni caldi, poi la salva su un programma.",
-      "fields": {
-        "zone_id": {
-          "name": "Zona",
-          "description": "La zona a cui appartiene il programma."
-        },
-        "cycle_id": {
-          "name": "Programma",
-          "description": "Il programma di cui impostare la curva."
-        },
-        "amount": {
-          "name": "Quanta acqua (min a 25°)",
-          "description": "Minuti di irrigazione in una giornata mite."
-        },
-        "heat": {
-          "name": "Di più quando caldo (min extra a 35°)",
-          "description": "Minuti extra in una giornata calda rispetto a una mite."
-        },
-        "min_value": {
-          "name": "Mai meno di (min)",
-          "description": "Limite inferiore facoltativo."
-        },
-        "max_value": {
-          "name": "Mai più di (min)",
-          "description": "Limite superiore facoltativo."
-        }
-      }
-    },
     "export_config": {
       "name": "Esporta configurazione",
       "description": "Restituisce le opzioni dell'hub e la configurazione di ogni zona come stringa JSON."

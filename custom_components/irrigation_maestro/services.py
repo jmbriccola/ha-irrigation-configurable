@@ -31,7 +31,6 @@ from . import const
 from .const import DOMAIN, SUBENTRY_TYPE_ZONE
 from .engine.calendar import ProgramCalendar
 from .engine.curves import CurveError, CurveKind, interpolate, validate_points
-from .engine.semantic import points_from_semantic
 from .migration import MigrationNote, migrate_zone_v2_to_v3
 from .models import CycleConfig, HubConfig, ZoneConfig, resolve_curve
 from .notify import (
@@ -57,7 +56,6 @@ SERVICE_STOP_ALL: Final = "stop_all"
 SERVICE_EVALUATE: Final = "evaluate"
 SERVICE_SET_ZONE_ORDER: Final = "set_zone_order"
 SERVICE_SET_CURVE: Final = "set_curve"
-SERVICE_SET_SIMPLE_CURVE: Final = "set_simple_curve"
 SERVICE_EXPORT_CONFIG: Final = "export_config"
 SERVICE_IMPORT_CONFIG: Final = "import_config"
 SERVICE_SET_PROGRAM_SCHEDULE: Final = "set_program_schedule"
@@ -86,8 +84,6 @@ ATTR_HOURS: Final = "hours"
 ATTR_UNTIL: Final = "until"
 ATTR_ORDER: Final = "order"
 ATTR_POINTS: Final = "points"
-ATTR_AMOUNT: Final = "amount"
-ATTR_HEAT: Final = "heat"
 ATTR_MIN_VALUE: Final = "min_value"
 ATTR_MAX_VALUE: Final = "max_value"
 ATTR_KIND: Final = "kind"
@@ -198,16 +194,6 @@ _SET_CURVE_SCHEMA = vol.Schema(
         vol.Optional(ATTR_MIN_VALUE): vol.Coerce(float),
         vol.Optional(ATTR_MAX_VALUE): vol.Coerce(float),
         vol.Optional(ATTR_KIND): vol.In([str(CurveKind.DURATION), str(CurveKind.VOLUME)]),
-    }
-)
-_SET_SIMPLE_CURVE_SCHEMA = vol.Schema(
-    {
-        vol.Required(ATTR_ZONE_ID): cv.string,
-        vol.Required(ATTR_CYCLE_ID): cv.string,
-        vol.Required(ATTR_AMOUNT): vol.All(vol.Coerce(int), vol.Range(min=3, max=45)),
-        vol.Required(ATTR_HEAT): vol.All(vol.Coerce(int), vol.Range(min=0, max=30)),
-        vol.Optional(ATTR_MIN_VALUE): vol.Coerce(float),
-        vol.Optional(ATTR_MAX_VALUE): vol.Coerce(float),
     }
 )
 _IMPORT_CONFIG_SCHEMA = vol.Schema({vol.Required(ATTR_PAYLOAD): cv.string})
@@ -443,9 +429,15 @@ _ZONE_PATCH_KEYS: Final = {
 }
 
 
+#: The default curve for a new program: 5 minutes on a cold day, 15 on a mild
+#: one, 23 on a hot one. These are exactly the points the retired semantic
+#: mapping produced for amount=15, heat=8, so a program created before and
+#: after 3.0.0 starts identically.
+DEFAULT_CURVE_POINTS: Final = ((12.0, 5.0), (25.0, 15.0), (35.0, 23.0))
+
+
 def _default_program(name: str) -> dict[str, Any]:
     """A valid, sensible new program: every day, sunrise, 15' mild + 8' hot."""
-    points = list(points_from_semantic(15, 8))
     return {
         const.CONF_CYCLE_ID: uuid4().hex[:8],
         const.CONF_CYCLE_NAME: name,
@@ -455,7 +447,7 @@ def _default_program(name: str) -> dict[str, Any]:
             const.CONF_TRIGGER_OFFSET_S: 0,
         },
         const.CONF_CURVE: {
-            const.CONF_CURVE_POINTS: [[t, v] for t, v in points],
+            const.CONF_CURVE_POINTS: [[temp, value] for temp, value in DEFAULT_CURVE_POINTS],
             const.CONF_CURVE_MIN: 1.0,
             const.CONF_CURVE_MAX: 60.0,
             const.CONF_CURVE_KIND: str(CurveKind.DURATION),
@@ -655,11 +647,11 @@ def _write_cycle_curve(
                 const.CONF_CURVE_MAX: max_value,
                 const.CONF_CURVE_KIND: kind,
             }
-            # set_curve / set_simple_curve carry absolute minutes (or litres),
-            # so the number the user authored must be the number delivered --
-            # a surviving hidden intensity multiplier would make the result
-            # differ from what they drew. The quick minutes control
-            # (set_program_minutes) stays the only writer of the intensity.
+            # set_curve carries absolute minutes (or litres), so the number
+            # the user authored must be the number delivered -- a surviving
+            # hidden intensity multiplier would make the result differ from
+            # what they drew. The quick minutes control (set_program_minutes)
+            # stays the only writer of the intensity.
             item.pop(const.CONF_CYCLE_INTENSITY_PCT, None)
             item.pop(const.CONF_CYCLE_DAY_INTENSITY_PCT, None)
     hass.config_entries.async_update_subentry(
@@ -707,44 +699,6 @@ async def _async_set_curve(call: ServiceCall) -> None:
         )
 
     _write_cycle_curve(hass, entry, zone_id, cycle_id, points, min_value, max_value, kind)
-
-
-async def _async_set_simple_curve(call: ServiceCall) -> None:
-    hass = call.hass
-    entry = _loaded_entry(hass)
-    runtime = cast(IrrigationRuntime, entry.runtime_data)
-    zone_id: str = call.data[ATTR_ZONE_ID]
-    cycle_id: str = call.data[ATTR_CYCLE_ID]
-    _require_zone(runtime, zone_id)
-    cycle = runtime.zones[zone_id].config.cycle(cycle_id)
-    if cycle is None:
-        raise ServiceValidationError(
-            translation_domain=DOMAIN,
-            translation_key="unknown_cycle",
-            translation_placeholders={"cycle_id": cycle_id},
-        )
-    if cycle.curve.kind is CurveKind.VOLUME:
-        raise ServiceValidationError(
-            translation_domain=DOMAIN,
-            translation_key="simple_curve_on_volume",
-            translation_placeholders={"cycle_id": cycle_id},
-        )
-    points = list(points_from_semantic(call.data[ATTR_AMOUNT], call.data[ATTR_HEAT]))
-    try:
-        validate_points(points)
-    except CurveError as err:  # defensive; the formula is always valid
-        raise ServiceValidationError(
-            translation_domain=DOMAIN,
-            translation_key="invalid_points",
-            translation_placeholders={"error": str(err)},
-        ) from err
-    min_value = float(call.data.get(ATTR_MIN_VALUE, cycle.curve.min_value))
-    max_value = float(call.data.get(ATTR_MAX_VALUE, cycle.curve.max_value))
-    if min_value > max_value:
-        raise ServiceValidationError(translation_domain=DOMAIN, translation_key="min_above_max")
-    _write_cycle_curve(
-        hass, entry, zone_id, cycle_id, points, min_value, max_value, str(cycle.curve.kind)
-    )
 
 
 def _program_context(call: ServiceCall) -> tuple[HomeAssistant, ConfigEntry, str, str]:
@@ -1354,9 +1308,6 @@ def async_setup_services(hass: HomeAssistant) -> None:
         DOMAIN, SERVICE_SET_ZONE_ORDER, _async_set_zone_order, _SET_ZONE_ORDER_SCHEMA
     )
     hass.services.async_register(DOMAIN, SERVICE_SET_CURVE, _async_set_curve, _SET_CURVE_SCHEMA)
-    hass.services.async_register(
-        DOMAIN, SERVICE_SET_SIMPLE_CURVE, _async_set_simple_curve, _SET_SIMPLE_CURVE_SCHEMA
-    )
     hass.services.async_register(
         DOMAIN,
         SERVICE_EXPORT_CONFIG,

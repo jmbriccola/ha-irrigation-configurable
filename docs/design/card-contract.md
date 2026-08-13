@@ -48,9 +48,8 @@ call the same value `program_id` in their fields, for the user-facing name):
 ```json
 [{"cycle_id": "a1b2c3d4", "name": "Morning", "enabled": true,
   "trigger": {"kind": "sun", "event": "sunrise", "offset_s": -3600},
-  "days": [0, 2, 4], "day_minutes": {"0": 15, "2": 20},
+  "days": [0, 2, 4],
   "intensity_pct": 100.0, "day_intensity_pct": {"0": 150.0},
-  "amount": 15, "heat": 8,
   "curve": {"points": [[10, 5], [25, 15], [35, 30]], "min": 10, "max": 55,
              "kind": "duration"}}]
 ```
@@ -65,22 +64,16 @@ call the same value `program_id` in their fields, for the user-facing name):
   `{"<weekday>": <percent>}` override — a weekday missing from the map falls
   back to `intensity_pct`. Both are written only by `set_program_minutes`
   (below), which is the sole writer of either field: nudging minutes never
-  rewrites `curve.points`. An explicit curve write (`set_curve` /
-  `set_simple_curve`) always resets `intensity_pct` to `100.0` and clears
-  `day_intensity_pct` — see "the intensity reset rule" under the curve
-  services below.
-- `day_minutes` / `amount` / `heat`: **derived** display values, not stored
-  fields, and no longer kept in sync with `curve.points` alone. `day_minutes`
-  is `curve_value` evaluated at the reference temperature for each entry of
-  `day_intensity_pct`; `amount` / `heat` are the mild-day / hot-day-boost
-  reading of `curve_value` at the curve's own anchor temperatures — both with
-  `intensity_pct` (or the day's override) folded in, or `null` for a
-  volume-kind curve. A program with a non-default intensity therefore shows
-  an `amount` / `heat` / `day_minutes` figure that is larger or smaller than
-  what `curve.points` alone would suggest, and — since neither `intensity_pct`
-  nor the minutes it is derived from are clamped to a fixed range — `amount`
-  and `heat` are no longer clamped to the card's old UI ranges (3–45 / 0–30)
-  the way they were when they came straight from `curve.points`.
+  rewrites `curve.points`. An explicit curve write (`set_curve`) always
+  resets `intensity_pct` to `100.0` and clears `day_intensity_pct` — see "the
+  intensity reset rule" under the curve services below.
+- The sensor publishes only the stored shape: `curve.points`, `intensity_pct`
+  and `day_intensity_pct`. As of 3.0.0 it no longer also publishes
+  `day_minutes` / `amount` / `heat` — those were derived display values kept
+  only as a bridge for the 2.x card's two-slider editor. The card now derives
+  the minutes it displays (uniform and per-day) from `curve.points` and
+  `intensity_pct` (plus `day_intensity_pct`) itself, client-side, the same
+  way the curve editor's "with today's weather" line already does.
 
 `degraded` keys: `switch_valve` (no position feedback), `no_flow_meter`,
 `line_meter_shared`, `no_hourly_forecast`, `volume_mode_unavailable`.
@@ -99,7 +92,6 @@ call the same value `program_id` in their fields, for the user-facing name):
 | `evaluate` | supports response (full plan) |
 | `set_zone_order` | `zone_id`, `order` (int) |
 | `set_curve` | `zone_id`, `cycle_id`, `points` (list of [temp, value]), `min_value`, `max_value` (optional), `kind` (`duration` \| `volume`, optional; switches the curve's target kind — `volume` is rejected unless the zone has a usable flow meter) |
-| `set_simple_curve` | `zone_id`, `cycle_id`, `amount`, `heat`, `min_value?`, `max_value?` |
 | `export_config` | supports response |
 | `import_config` | `payload` (JSON string) |
 | `set_program_schedule` | `zone_id`, `program_id`, `days` (list of 0–6, empty/omitted = every day), `start_kind` (`time` \| `sun`, required), `start_time` (required if `start_kind: time`), `start_event` (`sunrise` \| `sunset`, required if `start_kind: sun`), `start_offset_min` (int, −360..360, sun starts only, default 0) |
@@ -114,18 +106,19 @@ call the same value `program_id` in their fields, for the user-facing name):
 `program_id` is the same value as the `cycle_id` in the `cycles` attribute —
 the services use the user-facing name ("program") for their field.
 
-The card now also **writes** curves: the simple sliders call
-`set_simple_curve`, and dragging the three points in the Advanced view calls
-`set_curve`. The live editor's "with today's weather" line reads
+The card now also **writes** curves: dragging points directly in the curve
+editor calls `set_curve`. There is no separate "simple" slider variant —
+every save carries the full set of authored points, because the editor
+authors them directly instead of deriving them from a semantic amount/heat
+pair. The live editor's "with today's weather" line reads
 `hub_weighted_temp`.
 
-**The intensity reset rule**: `set_curve` and `set_simple_curve` both carry
-absolute values (minutes, or litres for a volume curve) — the number the
-user authors in the editor must be the number delivered. Both services
-therefore always reset `intensity_pct` to `100.0` and clear
-`day_intensity_pct` when they replace a program's curve; a surviving
-intensity would otherwise compose with the freshly authored points and
-silently multiply (or shrink) what gets delivered. `set_program_minutes`
+**The intensity reset rule**: `set_curve` carries absolute values (minutes,
+or litres for a volume curve) — the number the user authors in the editor
+must be the number delivered. It therefore always resets `intensity_pct` to
+`100.0` and clears `day_intensity_pct` when it replaces a program's curve; a
+surviving intensity would otherwise compose with the freshly authored points
+and silently multiply (or shrink) what gets delivered. `set_program_minutes`
 remains the only service that writes the intensity, and it never touches
 `curve.points`. `copy_curve` is the deliberate exception: it copies only the
 source program's curve **shape** onto an existing destination program, and
@@ -287,7 +280,7 @@ contract as the card — no separate API. It iterates `hass.states` for
 entities carrying `maestro_role`, groups by `zone_id` the same way, and
 reads/writes programs through the `cycles[]` list on each zone's
 `zone_state` attributes described above: `cycle_id`, `name`, `enabled`,
-`trigger`, `days`, `day_minutes`, `amount`, `heat`, `curve`. The weekly
+`trigger`, `days`, `intensity_pct`, `day_intensity_pct`, `curve`. The weekly
 day-grid, per-day duration fields and the "with today's weather" line are
 pure presentations of those same fields — there is no new backend surface
 for this part of the panel to consume.
@@ -317,11 +310,10 @@ above, unchanged from the card's Phase A contract:
   existing program).
 - `rename_program` / `remove_program` — program list row actions.
 
-Plus the existing curve services (`set_curve`, `set_simple_curve`) behind
-the panel's **advanced drawer**, which reuses the same beginner-friendly
-heat-response curve editor component as the card (two sliders, live graph,
-worked examples, "with today's weather" line) rather than a separate
-implementation.
+Plus the existing curve service (`set_curve`) behind the panel's **advanced
+drawer**, which reuses the same curve-points editor component as the card
+(live graph, draggable control points, worked examples, "with today's
+weather" line) rather than a separate implementation.
 
 **Plus the six configuration services** (documented in "Configuration
 services" above), driving the ＋/✎ zone editor and the ⚙️ settings view:

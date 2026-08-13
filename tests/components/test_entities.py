@@ -363,9 +363,7 @@ async def test_zone_state_exposes_schedule_fields(
     assert state is not None
     cycle = _first_cycle_attr(hass, state.entity_id)
     assert cycle["calendar"] == {"mode": "weekdays", "days": [0, 1, 2, 3, 4, 5, 6]}
-    assert cycle["day_minutes"] is None  # no per-day overrides
-    assert isinstance(cycle["amount"], int)  # derived from the duration curve
-    assert isinstance(cycle["heat"], int)
+    assert cycle["day_intensity_pct"] is None  # no per-day overrides
 
 
 async def test_zone_state_exposes_per_day_schedule_fields(
@@ -401,11 +399,7 @@ async def test_zone_state_exposes_per_day_schedule_fields(
     assert state is not None
     cycle = _first_cycle_attr(hass, state.entity_id)
     assert cycle["calendar"] == {"mode": "weekdays", "days": [0, 2, 4]}
-    # day_minutes is derived from the curve (3 min at the reference
-    # temperature) scaled by each day's intensity: 3*2.0=6, 3*4.0=12.
-    assert cycle["day_minutes"] == {"0": 6, "4": 12}
-    assert isinstance(cycle["amount"], int)
-    assert isinstance(cycle["heat"], int)
+    assert cycle["day_intensity_pct"] == {"0": 200.0, "4": 400.0}
 
 
 async def test_consumption_sensor_present_with_budget(
@@ -581,7 +575,19 @@ async def test_zone_sensor_publishes_the_intensity(hass: HomeAssistant) -> None:
 
     assert cycle["intensity_pct"] == 150.0
     assert cycle["day_intensity_pct"] is None
-    # Compatibility values the shipped card still reads must include the scale,
-    # otherwise a scaled program would display its unscaled minutes.
-    assert cycle["amount"] == 30  # 20 * 1.5
-    assert cycle["heat"] == 15  # 45 - 30
+
+
+async def test_zone_sensor_publishes_only_the_stored_shape(hass: HomeAssistant) -> None:
+    """amount/heat/day_minutes were a bridge for the 2.x card. The card now
+    reads the curve and the intensity, so publishing a second, derived
+    representation of the same quantity is a source of drift, not a service."""
+    mock_weather(hass)
+    entry = await setup_hub(hass, [zone_data("Pots", "valve.pots")])
+    zone_id = entry.runtime_data.zone_ids[0]
+    cycle = role_state(hass, "zone_state", zone_id).attributes["cycles"][0]
+
+    assert "amount" not in cycle
+    assert "heat" not in cycle
+    assert "day_minutes" not in cycle
+    assert cycle["intensity_pct"] == 100.0
+    assert cycle["curve"]["points"] == [[20.0, 3.0]]
