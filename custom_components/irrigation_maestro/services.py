@@ -32,6 +32,7 @@ from .const import DOMAIN, SUBENTRY_TYPE_ZONE
 from .engine.calendar import ProgramCalendar
 from .engine.curves import CurveError, CurveKind, interpolate, validate_points
 from .engine.semantic import points_from_semantic
+from .migration import MigrationNote, migrate_zone_v2_to_v3
 from .models import CycleConfig, HubConfig, ZoneConfig, resolve_curve
 from .notify import (
     EVENT_ANOMALY,
@@ -1264,6 +1265,28 @@ async def _async_import_config(call: ServiceCall) -> None:
     zones = payload.get("zones")
     if not isinstance(options, dict) or not isinstance(zones, dict):
         raise _invalid_payload()
+
+    # A payload exported from a pre-3.0 install still carries v2-shaped zone
+    # data: curve template references and a day_minutes map. The v2 -> v3
+    # migration only ever runs on a config-entry version bump, so an entry
+    # already at v3 never sees it -- writing the payload verbatim would
+    # silently revive both defects that migration removed. Run every zone
+    # through the same migration the entry-version upgrade uses, using the
+    # imported options' templates the same way async_migrate_entry does. A
+    # v3 payload passes through unchanged, so applying this unconditionally
+    # is correct for both a legacy export and a current one.
+    templates = options.get(const.CONF_CURVE_TEMPLATES, {})
+    migration_notes: list[MigrationNote] = []
+    migrated_zones: dict[str, Any] = {}
+    for zone_id, data in zones.items():
+        if isinstance(data, dict):
+            migrated, zone_notes = migrate_zone_v2_to_v3(data, templates)
+            migration_notes.extend(zone_notes)
+            migrated_zones[zone_id] = migrated
+        else:
+            migrated_zones[zone_id] = data
+    zones = migrated_zones
+
     # Validate everything before touching anything: import is all-or-nothing.
     # Parsing through the typed models is the same code path setup uses, so a
     # payload that passes here cannot break the entry afterwards.
@@ -1287,6 +1310,15 @@ async def _async_import_config(call: ServiceCall) -> None:
     hass.config_entries.async_update_entry(entry, options=options)
     for zone_id, data in zones.items():
         hass.config_entries.async_update_subentry(entry, entry.subentries[zone_id], data=data)
+    if migration_notes:
+        # Anything the migration could not carry over (an unresolvable
+        # template, a curve worth zero at the reference) becomes a repair
+        # issue the same way a config-entry version bump reports it -- a
+        # silent loss during import would be worse than during upgrade,
+        # since the user just watched the import "succeed".
+        from . import async_report_migration_notes  # noqa: PLC0415 -- avoids a package import cycle
+
+        async_report_migration_notes(hass, migration_notes)
 
 
 # Registration ---------------------------------------------------------------------

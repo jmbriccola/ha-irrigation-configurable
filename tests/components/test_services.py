@@ -1649,8 +1649,16 @@ async def test_no_non_curve_operation_rewrites_the_curve(hass: HomeAssistant) ->
 async def test_export_import_round_trip_preserves_both_curve_forms(
     hass: HomeAssistant,
 ) -> None:
-    """A v3 payload carries explicit points; a payload exported by a 2.x
-    install still carries a template reference, and import must accept it."""
+    """A v3 payload carries explicit points and import must accept it
+    unchanged. A payload exported by a 2.x install still carries a curve
+    template reference plus a day_minutes map (I1); import must run every
+    zone through the same v2 -> v3 migration a config-entry version bump
+    uses, MATERIALISING the reference into explicit points and converting
+    day_minutes into day_intensity_pct -- writing either verbatim would
+    silently revive the two defects that migration exists to remove. (This
+    replaces a prior version of this test that asserted the template
+    reference survived import as a reference: that expectation encoded the
+    I1 bug rather than catching it.)"""
     mock_weather(hass)
     entry = await setup_hub(hass, [zone_data("Pots", "valve.pots")])
     zone_id = entry.runtime_data.zone_ids[0]
@@ -1672,9 +1680,62 @@ async def test_export_import_round_trip_preserves_both_curve_forms(
 
     legacy = deepcopy(exported)
     legacy["zones"][zone_id]["cycles"][0]["curve"] = {"template": "preset_pots"}
+    legacy["zones"][zone_id]["cycles"][0]["day_minutes"] = {"0": 5}
     await hass.services.async_call(
         DOMAIN, "import_config", {"payload": json.dumps(legacy)}, blocking=True
     )
     await hass.async_block_till_done()
+
+    # The reference is materialised into PRESET_POTS's explicit points in
+    # STORAGE -- not merely resolvable at read time via CycleConfig, which
+    # would resolve a stored reference too and hide the defect.
+    stored = entry.subentries[zone_id].data["cycles"][0]
+    stored_curve = stored["curve"]
+    assert stored_curve["points"] == [[10.0, 10.0], [30.0, 30.0], [42.5, 55.0]]
+    assert stored_curve["min_value"] == 10.0
+    assert stored_curve["max_value"] == 55.0
+    assert "template" not in stored_curve
+
     cycle = entry.runtime_data.zones[zone_id].config.cycle("cy_pots")
     assert cycle.curve.points == ((10.0, 10.0), (30.0, 30.0), (42.5, 55.0))
+
+    # The legacy day_minutes map is not dropped: it becomes an equivalent
+    # day_intensity_pct. PRESET_POTS interpolates to 25' at the 25C
+    # reference, so 5 minutes on weekday 0 is 20 %.
+    assert "day_minutes" not in stored
+    assert stored["day_intensity_pct"] == {"0": 20.0}
+    assert cycle.day_intensity_pct == {0: 20.0}
+
+
+async def test_import_config_reports_dropped_day_minutes_as_repair_issue(
+    hass: HomeAssistant,
+) -> None:
+    """A legacy day_minutes map that the v2 -> v3 migration cannot scale (the
+    curve is worth zero at the reference temperature) must surface as a
+    repair issue on import -- the same as it would on a config-entry version
+    bump -- rather than silently vanishing."""
+    from homeassistant.helpers import issue_registry as ir
+
+    mock_weather(hass)
+    entry = await setup_hub(hass, [zone_data("Pots", "valve.pots")])
+    zone_id = entry.runtime_data.zone_ids[0]
+
+    response = await hass.services.async_call(
+        DOMAIN, "export_config", {}, blocking=True, return_response=True
+    )
+    payload = json.loads(response["payload"])
+    cycle = payload["zones"][zone_id]["cycles"][0]
+    cycle["curve"] = {"points": [[20.0, 0.0]], "min_value": 0.0, "max_value": 10.0}
+    cycle["day_minutes"] = {"0": 5}
+
+    await hass.services.async_call(
+        DOMAIN, "import_config", {"payload": json.dumps(payload)}, blocking=True
+    )
+    await hass.async_block_till_done()
+
+    stored = entry.subentries[zone_id].data["cycles"][0]
+    assert "day_minutes" not in stored
+    assert "day_intensity_pct" not in stored  # nothing to scale into, not invented
+
+    registry = ir.async_get(hass)
+    assert registry.async_get_issue(DOMAIN, "migration_day_minutes_dropped") is not None
