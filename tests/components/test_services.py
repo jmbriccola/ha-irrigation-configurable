@@ -940,6 +940,89 @@ async def test_duplicate_volume_program_into_a_meterless_zone_is_refused(
         )
 
 
+async def test_copy_curve_changes_only_the_curve(hass: HomeAssistant) -> None:
+    mock_weather(hass)
+    entry = await setup_hub(
+        hass,
+        [
+            zone_data(
+                "Pots",
+                "valve.pots",
+                cycles=[
+                    {
+                        "id": "src",
+                        "name": "Source",
+                        "trigger": {"kind": "time", "at": "04:00"},
+                        "curve": {
+                            "points": [[10.0, 10.0], [30.0, 30.0], [42.5, 55.0]],
+                            "min_value": 10.0,
+                            "max_value": 55.0,
+                        },
+                    }
+                ],
+            ),
+            zone_data("Lawn", "valve.lawn", at="06:15"),
+        ],
+    )
+    pots, lawn = entry.runtime_data.zone_ids[0], entry.runtime_data.zone_ids[1]
+    before = dict(entry.subentries[lawn].data["cycles"][0])
+
+    await hass.services.async_call(
+        DOMAIN,
+        "copy_curve",
+        {
+            "source_zone_id": pots,
+            "source_program_id": "src",
+            "zone_id": lawn,
+            "program_id": "cy_lawn",
+        },
+        blocking=True,
+    )
+    await hass.async_block_till_done()
+
+    after = entry.subentries[lawn].data["cycles"][0]
+    assert after["curve"] == entry.subentries[pots].data["cycles"][0]["curve"]
+    for key in ("id", "name", "trigger"):
+        assert after[key] == before[key]
+
+
+async def test_copy_curve_leaves_the_intensity_alone(hass: HomeAssistant) -> None:
+    """The curve is the shape; the intensity is the strength. Copying one must
+    not carry the other."""
+    mock_weather(hass)
+    entry = await setup_hub(
+        hass,
+        [
+            zone_data("Pots", "valve.pots"),
+            zone_data("Lawn", "valve.lawn"),
+        ],
+    )
+    pots, lawn = entry.runtime_data.zone_ids[0], entry.runtime_data.zone_ids[1]
+    await hass.services.async_call(
+        DOMAIN,
+        "set_program_minutes",
+        {"zone_id": lawn, "program_id": "cy_lawn", "minutes": 9},
+        blocking=True,
+    )
+    await hass.async_block_till_done()
+    intensity = entry.subentries[lawn].data["cycles"][0]["intensity_pct"]
+
+    await hass.services.async_call(
+        DOMAIN,
+        "copy_curve",
+        {
+            "source_zone_id": pots,
+            "source_program_id": "cy_pots",
+            "zone_id": lawn,
+            "program_id": "cy_lawn",
+        },
+        blocking=True,
+    )
+    await hass.async_block_till_done()
+
+    assert entry.subentries[lawn].data["cycles"][0]["intensity_pct"] == intensity
+
+
 async def test_remove_program_refuses_last(
     hass: HomeAssistant, freezer: FrozenDateTimeFactory
 ) -> None:

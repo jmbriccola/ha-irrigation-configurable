@@ -656,6 +656,28 @@
         }
       }
     },
+    "copy_curve": {
+      "name": "Copia curva",
+      "description": "Copia la curva di irrigazione di un programma in un altro programma. Si sposta solo la forma della curva: nome, programmazione, calendario, impostazioni di assorbimento, abilitazione e intensità restano quelli del programma di destinazione.",
+      "fields": {
+        "source_zone_id": {
+          "name": "Zona di origine",
+          "description": "La zona a cui appartiene il programma da cui copiare la curva."
+        },
+        "source_program_id": {
+          "name": "Programma di origine",
+          "description": "Il programma la cui curva viene copiata."
+        },
+        "zone_id": {
+          "name": "Zona",
+          "description": "La zona a cui appartiene il programma di destinazione."
+        },
+        "program_id": {
+          "name": "Programma",
+          "description": "Il programma che riceve la curva."
+        }
+      }
+    },
     "remove_program": {
       "name": "Rimuovi programma",
       "description": "Rimuove un programma da una zona. Una zona deve mantenere almeno un programma.",

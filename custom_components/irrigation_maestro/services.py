@@ -63,6 +63,7 @@ SERVICE_SET_PROGRAM_SCHEDULE: Final = "set_program_schedule"
 SERVICE_SET_PROGRAM_MINUTES: Final = "set_program_minutes"
 SERVICE_ADD_PROGRAM: Final = "add_program"
 SERVICE_DUPLICATE_PROGRAM: Final = "duplicate_program"
+SERVICE_COPY_CURVE: Final = "copy_curve"
 SERVICE_REMOVE_PROGRAM: Final = "remove_program"
 SERVICE_RENAME_PROGRAM: Final = "rename_program"
 SERVICE_ADD_ZONE: Final = "add_zone"
@@ -92,6 +93,8 @@ ATTR_KIND: Final = "kind"
 ATTR_PAYLOAD: Final = "payload"
 ATTR_PROGRAM_ID: Final = "program_id"
 ATTR_TARGET_ZONE_ID: Final = "target_zone_id"
+ATTR_SOURCE_ZONE_ID: Final = "source_zone_id"
+ATTR_SOURCE_PROGRAM_ID: Final = "source_program_id"
 ATTR_DAYS: Final = "days"
 ATTR_START_KIND: Final = "start_kind"
 ATTR_START_TIME: Final = "start_time"
@@ -254,6 +257,14 @@ _DUPLICATE_PROGRAM_SCHEMA = vol.Schema(
         vol.Required(ATTR_PROGRAM_ID): cv.string,
         vol.Optional(ATTR_TARGET_ZONE_ID): cv.string,
         vol.Optional(ATTR_NAME): cv.string,
+    }
+)
+_COPY_CURVE_SCHEMA = vol.Schema(
+    {
+        vol.Required(ATTR_SOURCE_ZONE_ID): cv.string,
+        vol.Required(ATTR_SOURCE_PROGRAM_ID): cv.string,
+        vol.Required(ATTR_ZONE_ID): cv.string,
+        vol.Required(ATTR_PROGRAM_ID): cv.string,
     }
 )
 _REMOVE_PROGRAM_SCHEMA = vol.Schema(
@@ -958,6 +969,43 @@ async def _async_duplicate_program(call: ServiceCall) -> ServiceResponse:
     return {"program_id": program[const.CONF_CYCLE_ID]}
 
 
+async def _async_copy_curve(call: ServiceCall) -> None:
+    hass = call.hass
+    entry = _loaded_entry(hass)
+    runtime = cast(IrrigationRuntime, entry.runtime_data)
+    source_zone_id: str = call.data[ATTR_SOURCE_ZONE_ID]
+    _require_zone(runtime, source_zone_id)
+    source_program_id: str = call.data[ATTR_SOURCE_PROGRAM_ID]
+    source_cycle = runtime.zones[source_zone_id].config.cycle(source_program_id)
+    if source_cycle is None:
+        raise ServiceValidationError(
+            translation_domain=DOMAIN,
+            translation_key="unknown_program",
+            translation_placeholders={"program_id": source_program_id},
+        )
+
+    zone_id: str = call.data[ATTR_ZONE_ID]
+    _require_zone(runtime, zone_id)
+    program_id: str = call.data[ATTR_PROGRAM_ID]
+    if source_cycle.curve.kind is CurveKind.VOLUME and not runtime.zone_has_flow_meter(
+        runtime.zones[zone_id].config
+    ):
+        raise ServiceValidationError(
+            translation_domain=DOMAIN,
+            translation_key="volume_requires_flow",
+            translation_placeholders={"cycle_id": program_id},
+        )
+
+    curve_config = deepcopy(source_cycle.curve_config)
+
+    def mutate(item: dict[str, Any]) -> None:
+        # Only the shape travels: schedule, calendar, soak, name and intensity
+        # belong to the destination program.
+        item[const.CONF_CURVE] = curve_config
+
+    _update_cycle(hass, entry, zone_id, program_id, mutate)
+
+
 async def _async_remove_program(call: ServiceCall) -> None:
     hass = call.hass
     entry = _loaded_entry(hass)
@@ -1295,6 +1343,7 @@ def async_setup_services(hass: HomeAssistant) -> None:
         _DUPLICATE_PROGRAM_SCHEMA,
         supports_response=SupportsResponse.OPTIONAL,
     )
+    hass.services.async_register(DOMAIN, SERVICE_COPY_CURVE, _async_copy_curve, _COPY_CURVE_SCHEMA)
     hass.services.async_register(
         DOMAIN, SERVICE_REMOVE_PROGRAM, _async_remove_program, _REMOVE_PROGRAM_SCHEMA
     )

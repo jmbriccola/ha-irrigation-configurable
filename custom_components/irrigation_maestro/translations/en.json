@@ -656,6 +656,28 @@
         }
       }
     },
+    "copy_curve": {
+      "name": "Copy curve",
+      "description": "Copies a program's watering curve into another program. Only the shape moves — name, schedule, calendar, soak settings, enablement and intensity all stay as they are on the destination.",
+      "fields": {
+        "source_zone_id": {
+          "name": "Source zone",
+          "description": "The zone owning the program to copy the curve from."
+        },
+        "source_program_id": {
+          "name": "Source program",
+          "description": "The program whose curve is copied."
+        },
+        "zone_id": {
+          "name": "Zone",
+          "description": "The zone owning the destination program."
+        },
+        "program_id": {
+          "name": "Program",
+          "description": "The program that receives the curve."
+        }
+      }
+    },
     "remove_program": {
       "name": "Remove program",
       "description": "Removes a program from a zone. A zone must keep at least one program.",

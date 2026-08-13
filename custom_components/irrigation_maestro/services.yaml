@@ -366,6 +366,29 @@ duplicate_program:
       selector:
         text:
 
+copy_curve:
+  fields:
+    source_zone_id:
+      required: true
+      example: 01J8ZQ
+      selector:
+        text:
+    source_program_id:
+      required: true
+      example: a1b2c3d4
+      selector:
+        text:
+    zone_id:
+      required: true
+      example: 01J8ZR
+      selector:
+        text:
+    program_id:
+      required: true
+      example: e5f6a7b8
+      selector:
+        text:
+
 remove_program:
   fields:
     zone_id:
