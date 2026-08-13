@@ -3,9 +3,24 @@ import { FLOW_UNITS, detectedFlowUnit, effectiveFlowUnit, flowUnitNote } from ".
 
 describe("FLOW_UNITS", () => {
   it("mirrors the converter's unit list, canonical first", () => {
-    expect(FLOW_UNITS[0]).toBe("L/min");
-    expect(FLOW_UNITS).toHaveLength(11);
-    expect(FLOW_UNITS).toContain("m³/h");
+    // Pinned whole, not sampled: a typo in any one of these -- "ft3/min" for
+    // "ft³/min", "ml/s" for "mL/s" -- type-checks, and surfaces only as
+    // `detectedFlowUnit` reporting "no usable unit" about a meter the backend
+    // reads perfectly well. These eleven are byte-for-byte
+    // VolumeFlowRateConverter.VALID_UNITS, canonical first.
+    expect(FLOW_UNITS).toEqual([
+      "L/min",
+      "L/h",
+      "L/s",
+      "mL/s",
+      "m³/h",
+      "m³/min",
+      "m³/s",
+      "ft³/min",
+      "gal/h",
+      "gal/min",
+      "gal/d",
+    ]);
   });
 });
 

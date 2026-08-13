@@ -17,6 +17,11 @@ interface EditorInternals {
   _save(): void;
 }
 
+/** `willUpdate` is protected, and seeding is the only thing it does here. */
+interface EditorSeeding {
+  willUpdate(changed: Map<string, unknown>): void;
+}
+
 /** The one patch a save produced, or undefined if it sent nothing. */
 function savedPatch(
   zone: ZoneData | undefined,
@@ -68,6 +73,33 @@ describe("the zone's flow-sensor unit", () => {
       inner._flowSensorUnit = "m³/h";
     });
     expect(detail?.patch.flow_sensor).toBeUndefined();
+    expect(detail?.patch.flow_sensor_unit).toBe("m³/h");
+  });
+
+  it("round-trips a stored override through seeding, untouched", () => {
+    // What makes sending the field on every save safe: the panel reads a
+    // fresh `export_config` before opening the editor, so an override the
+    // user set earlier is seeded back in and re-sent unchanged. Without the
+    // seeding line in `_seedFromZone` -- or without `flow_sensor_unit` on
+    // `ZoneData` -- every zone save would silently clear it, and no other
+    // test in this file would notice, because they all write the state
+    // `_seedFromZone` is responsible for producing.
+    const element = new ImcZoneEditor();
+    element.zone = {
+      name: "Lawn",
+      valve_entity: "valve.lawn",
+      flow_sensor: "sensor.f",
+      flow_sensor_unit: "m³/h",
+    };
+    element.zoneId = "z1";
+    (element as unknown as EditorSeeding).willUpdate(new Map([["zoneId", undefined]]));
+
+    let detail: ZoneSaveDetail | undefined;
+    element.addEventListener("imc-zone-save", (event) => {
+      detail = (event as CustomEvent<ZoneSaveDetail>).detail;
+    });
+    (element as unknown as EditorInternals)._save();
+
     expect(detail?.patch.flow_sensor_unit).toBe("m³/h");
   });
 
