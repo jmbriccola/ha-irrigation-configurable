@@ -4,6 +4,30 @@ All notable changes to this project are documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/).
 
+## [2.1.1] - 2026-08-13
+
+### Fixed
+
+- **A program's calendar looked like it never saved.** Switching a program
+  from "every day" to "every N days" (or to odd/even) appeared to do nothing:
+  you saved, reopened the editor, and it showed "every day" again.
+
+  The setting was being stored correctly the whole time. What was broken was
+  the panel reading it back — it still looked for the `days` attribute that
+  2.0.0 replaced with `calendar`, so it never saw your choice and always
+  redisplayed the default. Because the stored value and the displayed value
+  disagreed, the program actually watered on the schedule you had chosen even
+  though the screen denied it.
+
+  **After updating, open each program and check its calendar** — it now shows
+  what is really stored, which may differ from what you last saw.
+
+- The same gap hid the settings added in 2.1.0: the season, cycle-and-soak and
+  the volume safety timeout were never published for the panel to read, so
+  they would have behaved the same way once edited. Both sides are fixed, and
+  a test now asserts every field the panel can edit survives the full round
+  trip.
+
 ## [2.1.0] - 2026-08-12
 
 ### Added
