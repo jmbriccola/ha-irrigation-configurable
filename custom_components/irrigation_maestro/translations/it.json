@@ -498,6 +498,14 @@
         "icon": {
           "name": "Icona",
           "description": "Icona mostrata per il dispositivo di questa zona. Vuoto per quella predefinita."
+        },
+        "flow_sensor": {
+          "name": "Sensore di portata",
+          "description": "Il flussometro proprio della zona (L/min). Se vuoto, si usa il contatore di linea condiviso, quando disponibile."
+        },
+        "flow_sensor_unit": {
+          "name": "Unità del flussometro",
+          "description": "Serve solo se il sensore non dichiara un'unità, o ne dichiara una non convertibile. Lascia vuoto per usare quella dichiarata dall'entità. Se la imposti qui, vince sull'unità dell'entità."
         }
       }
     },
@@ -528,6 +536,10 @@
         "flow_sensor": {
           "name": "Sensore di portata",
           "description": "Il flussometro proprio della zona (L/min). Se vuoto, si usa il contatore di linea condiviso, quando disponibile."
+        },
+        "flow_sensor_unit": {
+          "name": "Unità del flussometro",
+          "description": "Serve solo se il sensore non dichiara un'unità, o ne dichiara una non convertibile. Lascia vuoto per usare quella dichiarata dall'entità. Se la imposti qui, vince sull'unità dell'entità."
         },
         "nominal_flow_lpm": {
           "name": "Portata nominale (L/min)",
@@ -580,6 +592,10 @@
         "line_flow_sensor": {
           "name": "Sensore di portata di linea",
           "description": "Un unico contatore di portata (L/min) sul collettore, condiviso dalle zone che non ne hanno uno proprio. Lascia vuoto per rimuoverlo; ometti per lasciarlo invariato."
+        },
+        "line_flow_sensor_unit": {
+          "name": "Unità del flussometro di linea",
+          "description": "Serve solo se il flussometro di linea non dichiara un'unità, o ne dichiara una non convertibile. Lascia vuoto per usare quella dichiarata dall'entità."
         },
         "master_valve": {
           "name": "Valvola master / pompa",

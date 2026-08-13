@@ -32,6 +32,7 @@ from . import const
 from .const import DOMAIN, SUBENTRY_TYPE_ZONE
 from .engine.calendar import ProgramCalendar
 from .engine.curves import CurveError, CurveKind, interpolate, validate_points
+from .flow import SUPPORTED_FLOW_UNITS
 from .migration import MigrationNote, migrate_zone_v2_to_v3
 from .models import CycleConfig, HubConfig, ZoneConfig, resolve_curve
 from .notify import (
@@ -106,6 +107,7 @@ ATTR_VALVE_ENTITY: Final = "valve_entity"
 ATTR_AREA_M2: Final = "area_m2"
 ATTR_ICON: Final = "icon"
 ATTR_FLOW_SENSOR: Final = "flow_sensor"
+ATTR_FLOW_SENSOR_UNIT: Final = "flow_sensor_unit"
 ATTR_NOMINAL_FLOW_LPM: Final = "nominal_flow_lpm"
 ATTR_FLOW_TOLERANCE_PCT: Final = "flow_tolerance_pct"
 ATTR_ADJUSTMENT_PCT: Final = "adjustment_pct"
@@ -116,6 +118,7 @@ ATTR_WEATHER_ENTITY: Final = "weather_entity"
 ATTR_RAIN_SENSOR: Final = "rain_sensor"
 ATTR_OUTDOOR_TEMP_SENSOR: Final = "outdoor_temp_sensor"
 ATTR_LINE_FLOW_SENSOR: Final = "line_flow_sensor"
+ATTR_LINE_FLOW_SENSOR_UNIT: Final = "line_flow_sensor_unit"
 ATTR_MASTER_VALVE: Final = "master_valve"
 ATTR_LITERS_PER_MONTH: Final = "liters_per_month"
 ATTR_ACTION: Final = "action"
@@ -150,6 +153,11 @@ ATTR_MESSAGE: Final = "message"
 ATTR_SOAK_MAX_RUN_MIN: Final = "soak_max_run_min"
 ATTR_SOAK_PAUSE_MIN: Final = "soak_pause_min"
 ATTR_VOLUME_SAFETY_TIMEOUT_MIN: Final = "volume_safety_timeout_min"
+
+# Validated against the converter itself: an override it cannot handle would
+# be stored and then silently ignored at read time, which is the class of
+# defect this feature exists to remove.
+_FLOW_UNIT: Final = vol.In(sorted(SUPPORTED_FLOW_UNITS))
 
 _DATA_SERVICES_REGISTERED: Final = "services_registered"
 
@@ -284,6 +292,8 @@ _ADD_ZONE_SCHEMA = vol.Schema(
         vol.Required(ATTR_VALVE_ENTITY): cv.string,
         vol.Optional(ATTR_AREA_M2): vol.Coerce(float),
         vol.Optional(ATTR_ICON): cv.string,
+        vol.Optional(ATTR_FLOW_SENSOR): cv.string,
+        vol.Optional(ATTR_FLOW_SENSOR_UNIT): _FLOW_UNIT,
     }
 )
 _UPDATE_ZONE_SCHEMA = vol.Schema(
@@ -294,6 +304,7 @@ _UPDATE_ZONE_SCHEMA = vol.Schema(
         vol.Optional(ATTR_AREA_M2): vol.Coerce(float),
         vol.Optional(ATTR_ICON): cv.string,
         vol.Optional(ATTR_FLOW_SENSOR): cv.string,
+        vol.Optional(ATTR_FLOW_SENSOR_UNIT): _FLOW_UNIT,
         vol.Optional(ATTR_NOMINAL_FLOW_LPM): vol.All(vol.Coerce(float), vol.Range(min=0)),
         vol.Optional(ATTR_FLOW_TOLERANCE_PCT): vol.All(
             vol.Coerce(float), vol.Range(min=1, max=100)
@@ -311,6 +322,7 @@ _SET_WEATHER_SOURCES_SCHEMA = vol.Schema(
         vol.Optional(ATTR_RAIN_SENSOR): cv.string,
         vol.Optional(ATTR_OUTDOOR_TEMP_SENSOR): cv.string,
         vol.Optional(ATTR_LINE_FLOW_SENSOR): cv.string,
+        vol.Optional(ATTR_LINE_FLOW_SENSOR_UNIT): _FLOW_UNIT,
         vol.Optional(ATTR_MASTER_VALVE): cv.string,
     }
 )
@@ -339,6 +351,7 @@ _WEATHER_OPT_KEYS: Final = {
     ATTR_RAIN_SENSOR: const.CONF_RAIN_SENSOR,
     ATTR_OUTDOOR_TEMP_SENSOR: const.CONF_OUTDOOR_TEMP_SENSOR,
     ATTR_LINE_FLOW_SENSOR: const.CONF_LINE_FLOW_SENSOR,
+    ATTR_LINE_FLOW_SENSOR_UNIT: const.CONF_LINE_FLOW_UNIT,
     ATTR_MASTER_VALVE: const.CONF_MASTER_VALVE,
 }
 
@@ -450,6 +463,7 @@ _ZONE_PATCH_KEYS: Final = {
     ATTR_AREA_M2: const.CONF_AREA_M2,
     ATTR_ICON: const.CONF_ZONE_ICON,
     ATTR_FLOW_SENSOR: const.CONF_FLOW_SENSOR,
+    ATTR_FLOW_SENSOR_UNIT: const.CONF_FLOW_SENSOR_UNIT,
     ATTR_NOMINAL_FLOW_LPM: const.CONF_NOMINAL_FLOW_LPM,
     ATTR_FLOW_TOLERANCE_PCT: const.CONF_FLOW_TOLERANCE_PCT,
     ATTR_ADJUSTMENT_PCT: const.CONF_ADJUSTMENT_PCT,
@@ -1055,6 +1069,10 @@ async def _async_add_zone(call: ServiceCall) -> ServiceResponse:
         data[const.CONF_AREA_M2] = float(call.data[ATTR_AREA_M2])
     if ATTR_ICON in call.data:
         data[const.CONF_ZONE_ICON] = call.data[ATTR_ICON]
+    if ATTR_FLOW_SENSOR in call.data:
+        data[const.CONF_FLOW_SENSOR] = call.data[ATTR_FLOW_SENSOR]
+    if ATTR_FLOW_SENSOR_UNIT in call.data:
+        data[const.CONF_FLOW_SENSOR_UNIT] = call.data[ATTR_FLOW_SENSOR_UNIT]
 
     # One convention, on the service side: the service is the only path that
     # creates a zone now, so it writes the defaults rather than leaving them
@@ -1116,6 +1134,10 @@ async def _async_set_weather_sources(call: ServiceCall) -> None:
                 merged[opt_key] = value
             else:  # explicit empty = clear
                 merged.pop(opt_key, None)
+    # An override that outlived its sensor would silently apply to whatever
+    # sensor is configured next.
+    if not merged.get(const.CONF_LINE_FLOW_SENSOR):
+        merged.pop(const.CONF_LINE_FLOW_UNIT, None)
     _write_hub_options(hass, entry, merged)
 
 

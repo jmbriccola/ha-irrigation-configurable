@@ -15,6 +15,7 @@ CONF_WEATHER_ENTITY: Final = "weather_entity"
 CONF_RAIN_SENSOR: Final = "rain_sensor"
 CONF_OUTDOOR_TEMP_SENSOR: Final = "outdoor_temp_sensor"
 CONF_LINE_FLOW_SENSOR: Final = "line_flow_sensor"
+CONF_LINE_FLOW_UNIT: Final = "line_flow_sensor_unit"
 CONF_MASTER_VALVE: Final = "master_valve"
 CONF_MASTER_PRE_OPEN_S: Final = "master_pre_open_s"
 CONF_MASTER_POST_CLOSE_S: Final = "master_post_close_s"
@@ -84,6 +85,10 @@ CONF_ZONE_NAME: Final = "name"
 CONF_ZONE_ICON: Final = "icon"
 CONF_VALVE_ENTITY: Final = "valve_entity"
 CONF_FLOW_SENSOR: Final = "flow_sensor"
+#: Explicit unit for this zone's flow sensor, used when the entity declares
+#: nothing or declares something the converter cannot handle. Absent means
+#: "read the unit from the entity".
+CONF_FLOW_SENSOR_UNIT: Final = "flow_sensor_unit"
 CONF_NOMINAL_FLOW_LPM: Final = "nominal_flow_lpm"
 CONF_FLOW_TOLERANCE_PCT: Final = "flow_tolerance_pct"
 CONF_AREA_M2: Final = "area_m2"

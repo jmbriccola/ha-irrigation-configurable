@@ -1734,3 +1734,62 @@ async def test_set_curve_accepts_a_point_value_over_a_day_for_volume(
     cycle = entry.runtime_data.zones[zone_id].config.cycle("cy_pots")
     assert cycle.curve.kind is CurveKind.VOLUME
     assert cycle.curve.points == ((20.0, 2000.0),)
+
+
+async def test_add_zone_stores_a_flow_unit_override(hass: HomeAssistant) -> None:
+    entry = await setup_hub(hass, [])
+    await hass.services.async_call(
+        DOMAIN,
+        "add_zone",
+        {
+            "name": "Vasi",
+            "valve_entity": "valve.vasi",
+            "flow_sensor": "sensor.vasi_flow",
+            "flow_sensor_unit": "m³/h",
+        },
+        blocking=True,
+    )
+    zone = next(iter(entry.subentries.values()))
+    assert zone.data["flow_sensor_unit"] == "m³/h"
+
+
+async def test_a_unit_the_converter_cannot_handle_is_refused(hass: HomeAssistant) -> None:
+    await setup_hub(hass, [])
+    with pytest.raises(vol.Invalid):
+        await hass.services.async_call(
+            DOMAIN,
+            "add_zone",
+            {"name": "Vasi", "valve_entity": "valve.vasi", "flow_sensor_unit": "widgets/s"},
+            blocking=True,
+        )
+
+
+async def test_set_weather_sources_stores_the_line_meter_unit(hass: HomeAssistant) -> None:
+    entry = await setup_hub(hass, [])
+    await hass.services.async_call(
+        DOMAIN,
+        "set_weather_sources",
+        {
+            "weather_entity": "weather.test",
+            "line_flow_sensor": "sensor.line",
+            "line_flow_sensor_unit": "m³/h",
+        },
+        blocking=True,
+    )
+    assert entry.options["line_flow_sensor_unit"] == "m³/h"
+
+
+async def test_clearing_the_line_meter_clears_its_unit_override(hass: HomeAssistant) -> None:
+    # An override that outlived its sensor would silently apply to whatever
+    # sensor is configured next.
+    entry = await setup_hub(
+        hass, [], {"line_flow_sensor": "sensor.line", "line_flow_sensor_unit": "m³/h"}
+    )
+    await hass.services.async_call(
+        DOMAIN,
+        "set_weather_sources",
+        {"weather_entity": "weather.test", "line_flow_sensor": ""},
+        blocking=True,
+    )
+    assert "line_flow_sensor" not in entry.options
+    assert "line_flow_sensor_unit" not in entry.options

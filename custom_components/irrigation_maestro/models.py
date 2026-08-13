@@ -173,6 +173,7 @@ class ZoneConfig:
     icon: str | None
     valve_entity: str
     flow_sensor: str | None
+    flow_sensor_unit: str | None
     nominal_flow_lpm: float | None
     flow_tolerance_pct: float
     area_m2: float | None
@@ -191,6 +192,7 @@ class ZoneConfig:
             icon=data.get(const.CONF_ZONE_ICON),
             valve_entity=data[const.CONF_VALVE_ENTITY],
             flow_sensor=data.get(const.CONF_FLOW_SENSOR),
+            flow_sensor_unit=data.get(const.CONF_FLOW_SENSOR_UNIT),
             nominal_flow_lpm=data.get(const.CONF_NOMINAL_FLOW_LPM),
             flow_tolerance_pct=float(
                 data.get(const.CONF_FLOW_TOLERANCE_PCT, const.DEFAULT_FLOW_TOLERANCE_PCT)
@@ -245,6 +247,7 @@ class HubConfig:
     rain_sensor: str | None = None
     outdoor_temp_sensor: str | None = None
     line_flow_sensor: str | None = None
+    line_flow_sensor_unit: str | None = None
     master_valve: str | None = None
     master_pre_open_s: int = const.DEFAULT_MASTER_PRE_OPEN_S
     master_post_close_s: int = const.DEFAULT_MASTER_POST_CLOSE_S
@@ -280,6 +283,7 @@ class HubConfig:
             rain_sensor=options.get(const.CONF_RAIN_SENSOR),
             outdoor_temp_sensor=options.get(const.CONF_OUTDOOR_TEMP_SENSOR),
             line_flow_sensor=options.get(const.CONF_LINE_FLOW_SENSOR),
+            line_flow_sensor_unit=options.get(const.CONF_LINE_FLOW_UNIT),
             master_valve=options.get(const.CONF_MASTER_VALVE),
             master_pre_open_s=int(
                 options.get(const.CONF_MASTER_PRE_OPEN_S, const.DEFAULT_MASTER_PRE_OPEN_S)

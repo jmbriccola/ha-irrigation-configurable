@@ -498,6 +498,14 @@
         "icon": {
           "name": "Icon",
           "description": "Icon shown for this zone's device. Leave empty for the default."
+        },
+        "flow_sensor": {
+          "name": "Flow sensor",
+          "description": "This zone's own flow meter (L/min). If empty, the shared line meter is used when available."
+        },
+        "flow_sensor_unit": {
+          "name": "Flow sensor unit",
+          "description": "Only needed when the sensor does not declare a unit, or declares one that cannot be converted. Leave empty to use the unit the entity declares. Set here, it wins over the entity's own unit."
         }
       }
     },
@@ -528,6 +536,10 @@
         "flow_sensor": {
           "name": "Flow sensor",
           "description": "This zone's own flow meter (L/min). If empty, the shared line meter is used when available."
+        },
+        "flow_sensor_unit": {
+          "name": "Flow sensor unit",
+          "description": "Only needed when the sensor does not declare a unit, or declares one that cannot be converted. Leave empty to use the unit the entity declares. Set here, it wins over the entity's own unit."
         },
         "nominal_flow_lpm": {
           "name": "Nominal flow (L/min)",
@@ -580,6 +592,10 @@
         "line_flow_sensor": {
           "name": "Line flow sensor",
           "description": "A single flow meter (L/min) on the manifold, shared by zones that don't have their own. Leave empty to clear it; omit to leave it unchanged."
+        },
+        "line_flow_sensor_unit": {
+          "name": "Line flow sensor unit",
+          "description": "Only needed when the line meter does not declare a unit, or declares one that cannot be converted. Leave empty to use the unit the entity declares."
         },
         "master_valve": {
           "name": "Master valve / pump",
