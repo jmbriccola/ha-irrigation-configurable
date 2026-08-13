@@ -8,6 +8,7 @@ import pytest
 import voluptuous as vol
 from custom_components.irrigation_maestro.const import DOMAIN
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import ServiceValidationError
 
 from .test_session import setup_hub, zone_data
 
@@ -120,8 +121,11 @@ async def test_notifications_updates_one_event_only(hass: HomeAssistant) -> None
         blocking=True,
     )
     stored = entry.options["notifications"]
-    assert stored["anomaly"] == {"enabled": True, "services": ["notify.b"]}
-    # The event the caller did not name must survive untouched.
+    # Stored bare: Notifier calls notify.<service>, so the domain prefix a user
+    # types (or the old placeholder taught) has to come off on the way in.
+    assert stored["anomaly"] == {"enabled": True, "services": ["b"]}
+    # A value written straight into options by a previous version is left as
+    # it is; Notifier normalises it on read.
     assert stored["completed"] == {"enabled": True, "services": ["notify.a"]}
 
 
@@ -217,3 +221,108 @@ async def test_soak_pause_is_allowed_when_a_max_run_already_exists(hass: HomeAss
         blocking=True,
     )
     assert entry.runtime_data.zones[zone_id].config.cycle("cy_pots").soak_pause_min == 20
+
+
+async def test_enabling_an_event_with_no_recipients_is_refused(hass: HomeAssistant) -> None:
+    await setup_hub(hass, [zone_data("Pots", "valve.pots")])
+    with pytest.raises(ServiceValidationError):
+        await hass.services.async_call(
+            DOMAIN,
+            "set_notifications",
+            {"event": "watchdog", "enabled": True, "services": []},
+            blocking=True,
+        )
+
+
+async def test_enabling_an_event_whose_stored_list_is_empty_is_refused(
+    hass: HomeAssistant,
+) -> None:
+    # The field install's exact shape. The call only flips `enabled`, so
+    # validating the payload alone would let it through -- the merged result
+    # is what has to be judged.
+    entry = await setup_hub(
+        hass,
+        [zone_data("Pots", "valve.pots")],
+        {"notifications": {"interrupted": {"enabled": False, "services": []}}},
+    )
+    with pytest.raises(ServiceValidationError):
+        await hass.services.async_call(
+            DOMAIN, "set_notifications", {"event": "interrupted", "enabled": True}, blocking=True
+        )
+    assert entry.options["notifications"]["interrupted"]["enabled"] is False
+
+
+async def test_a_recipient_is_stored_without_the_notify_domain(hass: HomeAssistant) -> None:
+    entry = await setup_hub(hass, [zone_data("Pots", "valve.pots")])
+    await hass.services.async_call(
+        DOMAIN,
+        "set_notifications",
+        {"event": "watchdog", "enabled": True, "services": ["notify.mobile_app_pixel"]},
+        blocking=True,
+    )
+    assert entry.options["notifications"]["watchdog"]["services"] == ["mobile_app_pixel"]
+
+
+async def test_a_recipient_that_is_not_a_service_name_is_refused(hass: HomeAssistant) -> None:
+    await setup_hub(hass, [zone_data("Pots", "valve.pots")])
+    with pytest.raises(ServiceValidationError):
+        await hass.services.async_call(
+            DOMAIN,
+            "set_notifications",
+            {"event": "watchdog", "enabled": True, "services": ["Mobile App!"]},
+            blocking=True,
+        )
+
+
+async def test_several_events_can_be_set_in_one_call(hass: HomeAssistant) -> None:
+    entry = await setup_hub(hass, [zone_data("Pots", "valve.pots")])
+    await hass.services.async_call(
+        DOMAIN,
+        "set_notifications",
+        {
+            "events": ["watchdog", "anomaly", "sentinel", "interrupted"],
+            "enabled": True,
+            "services": ["phone"],
+            "priority": "high",
+        },
+        blocking=True,
+    )
+    stored = entry.options["notifications"]
+    assert sorted(stored) == ["anomaly", "interrupted", "sentinel", "watchdog"]
+    assert stored["anomaly"] == {"enabled": True, "services": ["phone"], "priority": "high"}
+
+
+async def test_a_multi_event_call_writes_nothing_when_one_event_would_be_mute(
+    hass: HomeAssistant,
+) -> None:
+    entry = await setup_hub(hass, [zone_data("Pots", "valve.pots")])
+    with pytest.raises(ServiceValidationError):
+        await hass.services.async_call(
+            DOMAIN,
+            "set_notifications",
+            {"events": ["watchdog", "anomaly"], "enabled": True, "services": []},
+            blocking=True,
+        )
+    assert "notifications" not in entry.options
+
+
+async def test_event_and_events_together_are_refused(hass: HomeAssistant) -> None:
+    await setup_hub(hass, [zone_data("Pots", "valve.pots")])
+    with pytest.raises(vol.Invalid):
+        await hass.services.async_call(
+            DOMAIN,
+            "set_notifications",
+            {"event": "watchdog", "events": ["anomaly"], "enabled": False},
+            blocking=True,
+        )
+
+
+async def test_a_priority_can_be_set_per_event(hass: HomeAssistant) -> None:
+    entry = await setup_hub(hass, [zone_data("Pots", "valve.pots")])
+    await hass.services.async_call(
+        DOMAIN,
+        "set_notifications",
+        {"event": "completed", "enabled": True, "services": ["phone"], "priority": "high"},
+        blocking=True,
+    )
+    assert entry.options["notifications"]["completed"]["priority"] == "high"

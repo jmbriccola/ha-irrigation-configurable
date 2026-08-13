@@ -695,19 +695,27 @@
     },
     "set_notifications": {
       "name": "Set notifications",
-      "description": "Enable one event and choose the notify services it calls.",
+      "description": "Enable one event (or several at once) and choose the notify services it calls.",
       "fields": {
         "event": {
           "name": "Event",
-          "description": "Which event to configure."
+          "description": "Which event to configure. Use either this or Events, not both."
+        },
+        "events": {
+          "name": "Events",
+          "description": "Several events to configure with the same settings. Use either this or Event, not both."
         },
         "enabled": {
           "name": "Enabled",
-          "description": "Whether this event notifies at all."
+          "description": "Whether these events notify at all."
         },
         "services": {
           "name": "Notify services",
-          "description": "List of notify services, e.g. notify.mobile_app_phone."
+          "description": "Notify service names, with or without the notify. prefix, e.g. mobile_app_phone. Enabling an event with an empty list is refused: it would look configured and send nothing."
+        },
+        "priority": {
+          "name": "Priority",
+          "description": "High adds urgency hints understood by mobile app targets. Defaults to high for watchdog, anomaly, sentinel and interrupted."
         }
       }
     },
@@ -862,6 +870,12 @@
     },
     "soak_pause_without_max_run": {
       "message": "A soak pause needs a maximum run length: without one the run is never split, so the pause would do nothing."
+    },
+    "notify_enabled_without_target": {
+      "message": "The event \"{event}\" cannot be enabled with no notify recipients: it would look configured and send nothing. Choose at least one recipient."
+    },
+    "invalid_notify_service": {
+      "message": "\"{service}\" is not a valid notify service name. Use the service name, for example mobile_app_phone."
     }
   },
   "selector": {
