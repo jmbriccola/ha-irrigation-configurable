@@ -839,7 +839,7 @@
     },
     "flow_unit_unknown": {
       "title": "Unità del flussometro sconosciuta",
-      "description": "Il sensore {entity_id} non dichiara un'unità di misura, o ne dichiara una non convertibile in litri al minuto. Le sue letture non vengono usate: per lui la modalità volume e il rilevamento delle anomalie di portata sono spenti, e il consumo ricade sulla portata nominale. Imposta l'unità esplicitamente sulla zona (o sul flussometro di linea) per riattivarli."
+      "description": "Il sensore {entity_id} non dichiara un'unità di misura, o ne dichiara una non convertibile in litri al minuto. Le sue letture non vengono usate: per questo sensore la modalità volume e il rilevamento delle anomalie di portata sono spenti, e il consumo ricade sulla portata nominale. Imposta l'unità esplicitamente sulla zona (o sul flussometro di linea) per riattivarli."
     }
   },
   "exceptions": {

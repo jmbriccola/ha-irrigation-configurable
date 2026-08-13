@@ -2,6 +2,7 @@
 
 from typing import Any
 
+import pytest
 from custom_components.irrigation_maestro.const import DOMAIN
 from freezegun.api import FrozenDateTimeFactory
 from homeassistant.core import HomeAssistant, ServiceCall
@@ -419,6 +420,8 @@ async def test_a_meter_with_no_unit_does_not_interrupt_the_cycle(
         hass,
         [zone_data("Alpha", "valve.a", minutes=10, flow_sensor="sensor.flow")],
     )
+    anomalies: list[Any] = []
+    hass.bus.async_listen(f"{DOMAIN}_anomaly", anomalies.append)
 
     await advance(hass, freezer, 31 * 60)
     assert hass.states.get("valve.a").state == "open"
@@ -433,6 +436,9 @@ async def test_a_meter_with_no_unit_does_not_interrupt_the_cycle(
 
     registry = ir.async_get(hass)
     assert registry.async_get_issue(DOMAIN, "flow_unit_unknown_sensor.flow") is not None
+    # A meter that never had a usable unit is a standing configuration fault,
+    # which the repair states. Pushing it on every run would be alarm fatigue.
+    assert not [event for event in anomalies if "sensor.flow" in event.data["message"]]
 
 
 async def test_a_unit_lost_mid_cycle_freezes_litres_without_crashing(
@@ -451,6 +457,8 @@ async def test_a_unit_lost_mid_cycle_freezes_litres_without_crashing(
             )
         ],
     )
+    anomalies: list[Any] = []
+    hass.bus.async_listen(f"{DOMAIN}_anomaly", anomalies.append)
 
     await advance(hass, freezer, 31 * 60)
     await advance(hass, freezer, 120)
@@ -458,9 +466,21 @@ async def test_a_unit_lost_mid_cycle_freezes_litres_without_crashing(
     hass.states.async_set("sensor.flow", "10.0")
     await advance(hass, freezer, 10 * 60)
 
+    # A meter that was working and stopped is pushed, once for the transition
+    # and not once per read -- the repair alone would not reach the user
+    # mid-cycle.
+    notices = [event for event in anomalies if "sensor.flow" in event.data["message"]]
+    assert len(notices) == 1
+    assert "no longer being used" in notices[0].data["message"]
+
     runtime = entry.runtime_data
     outcome = runtime.state.last_outcome(runtime.zone_ids[0])
     assert outcome["result"] == "completed"  # no crash, no interrupt
+    # The freeze itself, not merely the absence of a crash: the meter read
+    # 10 L/min and the unit survived ~2.8 minutes of the 10-minute run, so a
+    # frozen count lands near 28 L. Accruing the blind interval at the last
+    # known rate would have reported ~100 L instead.
+    assert 25 < outcome["volume_l"] < 40
     registry = ir.async_get(hass)
     assert registry.async_get_issue(DOMAIN, "flow_unit_unknown_sensor.flow") is not None
 
@@ -474,7 +494,7 @@ async def test_a_unit_that_returns_just_before_a_check_does_not_trip_the_guard(
     readable, but litres only accrue once it is. A unit that returns two
     seconds before a periodic check leaves 1 L/min x 2 s = 0.03 L behind, which
     the guard would weigh against ZERO_FLOW_EPSILON_L = 0.1 L and interrupt a
-    perfectly healthy run for -- the entry edge's bug, on the recovery edge.
+    perfectly healthy run over. It is the entry edge's bug on the recovery edge.
     """
     freezer.move_to(START)
     park = MockValvePark(hass)
@@ -526,4 +546,114 @@ async def test_a_unit_that_returns_just_before_a_check_does_not_trip_the_guard(
     await advance(hass, freezer, 5 * 60)
     outcome = runtime.state.last_outcome(zone_id)
     assert outcome["result"] == "completed"
-    assert outcome["reason_key"] != "no_flow"
+    # The repair raised by the loss is withdrawn again by the recovery.
+    registry = ir.async_get(hass)
+    assert registry.async_get_issue(DOMAIN, "flow_unit_unknown_sensor.flow") is None
+
+
+async def test_a_repair_is_withdrawn_by_the_next_run_once_the_unit_resolves(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    """A fresh monitor cannot present a recovery edge, so it clears on sight.
+
+    The repair tells the user to set the unit. They set it between runs, so the
+    monitor that finally reads it is a new one whose unit_known started True --
+    there is no False->True transition to hang the withdrawal on. Clearing only
+    on that edge would leave the warning up for the life of the process, long
+    after the user did what it asked.
+    """
+    freezer.move_to(START)
+    park = MockValvePark(hass)
+    park.add("valve.a")
+    hass.states.async_set("sensor.flow", "7.5")  # no unit declared
+    mock_weather(hass)
+    entry = await setup_hub(
+        hass,
+        [zone_data("Alpha", "valve.a", minutes=3, flow_sensor="sensor.flow")],
+    )
+    runtime = entry.runtime_data
+    zone_id = runtime.zone_ids[0]
+    registry = ir.async_get(hass)
+
+    await advance(hass, freezer, 31 * 60)
+    await advance(hass, freezer, 5 * 60)
+    assert registry.async_get_issue(DOMAIN, "flow_unit_unknown_sensor.flow") is not None
+
+    # The user does what the repair asked and the meter now declares its unit.
+    hass.states.async_set("sensor.flow", "7.5", {"unit_of_measurement": "L/min"})
+    await hass.async_block_till_done()
+    # Still up: nothing reads a flow sensor outside a run, so the repair can
+    # only be withdrawn by the next one.
+    assert registry.async_get_issue(DOMAIN, "flow_unit_unknown_sensor.flow") is not None
+
+    await runtime.async_run_zone(zone_id)
+    await advance(hass, freezer, 2 * 60)
+    assert registry.async_get_issue(DOMAIN, "flow_unit_unknown_sensor.flow") is None
+
+
+@pytest.mark.parametrize(
+    "zone_meter",
+    [{}, {"flow_sensor": ""}],
+    ids=["never_configured", "cleared_to_empty"],
+)
+async def test_a_zone_on_the_line_meter_takes_the_hubs_unit_override(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory, zone_meter: dict[str, str]
+) -> None:
+    """A zone with no meter of its own reads the line meter, hub override and all.
+
+    The line meter claims L/min and really reports m³/h; the correction lives
+    on the hub because that is where the sensor lives. The zone's own override
+    would describe a sensor it does not have, so it must not be consulted.
+
+    Parametrized over the two ways a zone can have no meter: never configured,
+    and cleared to an empty string (which update_zone writes unconditionally).
+    Both must fall through to the line meter rather than bind to "".
+    """
+    freezer.move_to(START)
+    park = MockValvePark(hass)
+    park.add("valve.a")
+    hass.states.async_set("sensor.line", "0.0", {"unit_of_measurement": "L/min"})
+    mock_weather(hass)
+    zone = zone_data(
+        "Alpha",
+        "valve.a",
+        nominal_flow_lpm=7.5,
+        cycles=[
+            {
+                "id": "cy_vol",
+                "name": "Volume",
+                "enabled": True,
+                "trigger": {"kind": "time", "at": "05:30"},
+                "curve": {
+                    "points": [[20.0, 20.0]],
+                    "min_value": 5.0,
+                    "max_value": 100.0,
+                    "kind": "volume",
+                },
+                "volume_safety_timeout_min": 30,
+            }
+        ],
+        **zone_meter,
+    )
+    entry = await setup_hub(
+        hass,
+        [zone],
+        options={"line_flow_sensor": "sensor.line", "line_flow_sensor_unit": "m³/h"},
+    )
+
+    await advance(hass, freezer, 31 * 60)
+    assert hass.states.get("valve.a").state == "open"
+
+    # 0.45 m³/h is 7.5 L/min, so the 20 L target arrives in under 3 minutes.
+    hass.states.async_set("sensor.line", "0.45", {"unit_of_measurement": "L/min"})
+    await advance(hass, freezer, 150)
+    hass.states.async_set(
+        "sensor.line", "0.45", {"unit_of_measurement": "L/min"}, force_update=True
+    )
+    await advance(hass, freezer, 60)
+
+    assert hass.states.get("valve.a").state == "closed"
+    runtime = entry.runtime_data
+    outcome = runtime.state.last_outcome(runtime.zone_ids[0])
+    assert outcome["result"] == "completed"
+    assert outcome["volume_l"] >= 20

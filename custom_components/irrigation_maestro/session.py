@@ -147,6 +147,7 @@ class FlowMonitor:
         self._unsubs: list[CALLBACK_TYPE] = []
         self.unit_known = True
         self._unit_recovered = False
+        self._unit_ever_known = False
 
     def _read(self) -> float:
         """Current flow in L/min; 0.0 and unit_known=False when unresolvable."""
@@ -155,6 +156,12 @@ class FlowMonitor:
             if self.unit_known:
                 # Report once per transition, not once per state change.
                 self._runtime.report_flow_unit_unknown(self._sensor)
+                if self._unit_ever_known:
+                    # A meter that was working and stopped is an event, so it
+                    # is pushed. A meter that never had a usable unit is a
+                    # standing configuration fault: the repair says so without
+                    # a high-priority notification on every single run.
+                    self._runtime.report_flow_unit_lost(self._sensor)
             self.unit_known = False
             return 0.0
         if not self.unit_known:
@@ -163,12 +170,20 @@ class FlowMonitor:
             # _periodic_check must not judge it. Cleared when it consumes it.
             self._unit_recovered = True
         self.unit_known = True
+        self._unit_ever_known = True
         return reading.lpm
 
     def start(self) -> None:
         now = dt_util.utcnow()
         self._last_at = now
         self._last_lpm = self._read()
+        if self.unit_known:
+            # Unconditionally, not on a transition: every run builds a fresh
+            # monitor that starts out believing the unit is known, so a meter
+            # fixed between runs never presents a False->True edge and would
+            # keep its repair for the life of the process. Deleting an issue
+            # that is not there is a no-op.
+            self._runtime.clear_flow_unit_unknown(self._sensor)
         self._liters_at_last_check = 0.0
         self._unsubs.append(
             async_track_state_change_event(self._runtime.hass, [self._sensor], self._on_state)
@@ -201,10 +216,14 @@ class FlowMonitor:
         now = dt_util.utcnow()
         self._integrate(now)
         self._last_lpm = self._read()
-        if not self.unit_known:
-            return
+        # Above the unit_known gate deliberately: these litres are the frozen,
+        # certain ones, and this read may be the one that lost the unit after
+        # _integrate had already carried them past the target. Water certainly
+        # delivered still finishes the run.
         if self._volume_target is not None and self.liters >= self._volume_target:
             self._on_volume_reached()
+            return
+        if not self.unit_known:
             return
         self._check_range(now)
 
@@ -218,15 +237,21 @@ class FlowMonitor:
         """
         self._integrate(dt_util.utcnow())
         self._last_lpm = self._read()
+        # Above the unit_known gate for the same reason as in _on_state.
+        if self._volume_target is not None and self.liters >= self._volume_target:
+            self._on_volume_reached()
+            return
         if not self.unit_known:
             # No usable meter: this run finishes on its duration or its volume
             # safety timeout, exactly as it would with no meter at all. Keep
             # rescheduling so a unit that comes back is picked up.
             self._liters_at_last_check = self.liters
+            # The range clock is wall-clock too: without this, a reading out of
+            # range before the loss and another after recovery would satisfy
+            # RANGE_SUSTAIN_S at once, reporting as sustained an interval that
+            # was mostly unobserved.
+            self._out_of_range_since = None
             self._schedule_periodic_check()
-            return
-        if self._volume_target is not None and self.liters >= self._volume_target:
-            self._on_volume_reached()
             return
         if self._unit_recovered:
             # The unit came back part-way through this window, so only part of
