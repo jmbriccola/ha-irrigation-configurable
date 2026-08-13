@@ -464,6 +464,124 @@ async def test_set_simple_curve_rejects_volume_cycle(
     assert curve_data["kind"] == "volume"
 
 
+async def test_set_simple_curve_resets_intensity_so_effective_value_matches_request(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    """C1 regression: set_program_minutes stores a hidden intensity_pct; an
+    explicit curve write must reset it, or the intensity and the freshly
+    authored points compose and silently multiply the delivered amount.
+
+    Reproduces the shipped-panel scenario: set minutes (200 % intensity),
+    then author a curve for a known amount -- the EFFECTIVE delivered value
+    (curve_value with the surviving intensity) must equal what was asked."""
+    freezer.move_to(START)
+    park = MockValvePark(hass)
+    park.add("valve.pots")
+    mock_weather(hass)
+    entry = await setup_hub(hass, [zone_data("Pots", "valve.pots")])
+    zone_id = entry.runtime_data.zone_ids[0]
+    cycle_id = entry.runtime_data.zones[zone_id].config.cycles[0].cycle_id
+
+    # The fixture's curve is flat at 3 minutes, so 6 minutes stores 200 %.
+    await hass.services.async_call(
+        DOMAIN,
+        "set_program_minutes",
+        {"zone_id": zone_id, "program_id": cycle_id, "minutes": 6},
+        blocking=True,
+    )
+    await hass.async_block_till_done()
+    assert entry.runtime_data.zones[zone_id].config.cycle(cycle_id).intensity_pct == 200.0
+
+    await hass.services.async_call(
+        DOMAIN,
+        "set_simple_curve",
+        {"zone_id": zone_id, "cycle_id": cycle_id, "amount": 20, "heat": 10},
+        blocking=True,
+    )
+    await hass.async_block_till_done()
+
+    cycle = entry.runtime_data.zones[zone_id].config.cycle(cycle_id)
+    assert cycle.intensity_pct == 100.0  # reset, not merely unread
+    # The 25C anchor of points_from_semantic(20, 10) is exactly 20.
+    assert curve_value(cycle.curve, 25.0, cycle.intensity_pct) == 20.0
+
+
+async def test_set_curve_resets_intensity_so_effective_value_matches_request(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    """Same C1 regression as above, through set_curve's explicit points."""
+    freezer.move_to(START)
+    park = MockValvePark(hass)
+    park.add("valve.pots")
+    mock_weather(hass)
+    entry = await setup_hub(hass, [zone_data("Pots", "valve.pots")])
+    zone_id = entry.runtime_data.zone_ids[0]
+    cycle_id = entry.runtime_data.zones[zone_id].config.cycles[0].cycle_id
+
+    await hass.services.async_call(
+        DOMAIN,
+        "set_program_minutes",
+        {"zone_id": zone_id, "program_id": cycle_id, "minutes": 6},
+        blocking=True,
+    )
+    await hass.async_block_till_done()
+    assert entry.runtime_data.zones[zone_id].config.cycle(cycle_id).intensity_pct == 200.0
+
+    await hass.services.async_call(
+        DOMAIN,
+        "set_curve",
+        {
+            "zone_id": zone_id,
+            "cycle_id": cycle_id,
+            "points": [[25.0, 20.0]],
+            "min_value": 1.0,
+            "max_value": 60.0,
+        },
+        blocking=True,
+    )
+    await hass.async_block_till_done()
+
+    cycle = entry.runtime_data.zones[zone_id].config.cycle(cycle_id)
+    assert cycle.intensity_pct == 100.0
+    assert curve_value(cycle.curve, 25.0, cycle.intensity_pct) == 20.0
+
+
+async def test_set_curve_clears_per_day_intensity(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    """C1 regression, per-day variant: a non-empty day_intensity_pct must not
+    survive an explicit curve write either."""
+    freezer.move_to(START)
+    park = MockValvePark(hass)
+    park.add("valve.pots")
+    mock_weather(hass)
+    entry = await setup_hub(hass, [zone_data("Pots", "valve.pots")])
+    zone_id = entry.runtime_data.zone_ids[0]
+    cycle_id = entry.runtime_data.zones[zone_id].config.cycles[0].cycle_id
+
+    await hass.services.async_call(
+        DOMAIN,
+        "set_program_minutes",
+        {"zone_id": zone_id, "program_id": cycle_id, "day_minutes": {"0": 9}},
+        blocking=True,
+    )
+    await hass.async_block_till_done()
+    assert entry.runtime_data.zones[zone_id].config.cycle(cycle_id).day_intensity_pct
+
+    await hass.services.async_call(
+        DOMAIN,
+        "set_curve",
+        {"zone_id": zone_id, "cycle_id": cycle_id, "points": [[25.0, 12.0]]},
+        blocking=True,
+    )
+    await hass.async_block_till_done()
+
+    cycle = entry.runtime_data.zones[zone_id].config.cycle(cycle_id)
+    assert cycle.day_intensity_pct == {}
+    stored = entry.subentries[zone_id].data["cycles"][0]
+    assert const.CONF_CYCLE_DAY_INTENSITY_PCT not in stored
+
+
 async def test_export_import_roundtrip_restores_config(
     hass: HomeAssistant, freezer: FrozenDateTimeFactory
 ) -> None:

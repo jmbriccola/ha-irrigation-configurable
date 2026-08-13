@@ -654,6 +654,13 @@ def _write_cycle_curve(
                 const.CONF_CURVE_MAX: max_value,
                 const.CONF_CURVE_KIND: kind,
             }
+            # set_curve / set_simple_curve carry absolute minutes (or litres),
+            # so the number the user authored must be the number delivered --
+            # a surviving hidden intensity multiplier would make the result
+            # differ from what they drew. The quick minutes control
+            # (set_program_minutes) stays the only writer of the intensity.
+            item.pop(const.CONF_CYCLE_INTENSITY_PCT, None)
+            item.pop(const.CONF_CYCLE_DAY_INTENSITY_PCT, None)
     hass.config_entries.async_update_subentry(
         entry, subentry, data={**subentry.data, const.CONF_CYCLES: cycles}
     )
