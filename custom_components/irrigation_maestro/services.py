@@ -86,6 +86,7 @@ ATTR_AMOUNT: Final = "amount"
 ATTR_HEAT: Final = "heat"
 ATTR_MIN_VALUE: Final = "min_value"
 ATTR_MAX_VALUE: Final = "max_value"
+ATTR_KIND: Final = "kind"
 ATTR_PAYLOAD: Final = "payload"
 ATTR_PROGRAM_ID: Final = "program_id"
 ATTR_DAYS: Final = "days"
@@ -189,6 +190,7 @@ _SET_CURVE_SCHEMA = vol.Schema(
         vol.Required(ATTR_POINTS): vol.All([_curve_point], vol.Length(min=1)),
         vol.Optional(ATTR_MIN_VALUE): vol.Coerce(float),
         vol.Optional(ATTR_MAX_VALUE): vol.Coerce(float),
+        vol.Optional(ATTR_KIND): vol.In([str(CurveKind.DURATION), str(CurveKind.VOLUME)]),
     }
 )
 _SET_SIMPLE_CURVE_SCHEMA = vol.Schema(
@@ -664,9 +666,17 @@ async def _async_set_curve(call: ServiceCall) -> None:
     if min_value > max_value:
         raise ServiceValidationError(translation_domain=DOMAIN, translation_key="min_above_max")
 
-    _write_cycle_curve(
-        hass, entry, zone_id, cycle_id, points, min_value, max_value, str(cycle.curve.kind)
-    )
+    kind = str(call.data.get(ATTR_KIND, cycle.curve.kind))
+    if kind == CurveKind.VOLUME and not runtime.zone_has_flow_meter(runtime.zones[zone_id].config):
+        # A volume target without a usable meter would degrade to a timed run;
+        # refuse at configuration time rather than surprise at watering time.
+        raise ServiceValidationError(
+            translation_domain=DOMAIN,
+            translation_key="volume_requires_flow",
+            translation_placeholders={"cycle_id": cycle_id},
+        )
+
+    _write_cycle_curve(hass, entry, zone_id, cycle_id, points, min_value, max_value, kind)
 
 
 async def _async_set_simple_curve(call: ServiceCall) -> None:

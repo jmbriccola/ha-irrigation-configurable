@@ -304,6 +304,53 @@ async def test_set_curve_rejects_bad_input(
     assert entry.subentries[zone_id].data["cycles"][0]["curve"]["points"] == [[20.0, 3.0]]
 
 
+async def test_set_curve_switches_kind_to_volume_with_a_meter(hass: HomeAssistant) -> None:
+    mock_weather(hass)
+    entry = await setup_hub(
+        hass,
+        [zone_data("Pots", "valve.pots", flow_sensor="sensor.pots_flow")],
+    )
+    hass.states.async_set("sensor.pots_flow", "5.0")
+    zone_id = entry.runtime_data.zone_ids[0]
+
+    await hass.services.async_call(
+        DOMAIN,
+        "set_curve",
+        {
+            "zone_id": zone_id,
+            "cycle_id": "cy_pots",
+            "points": [[20.0, 30.0]],
+            "min_value": 1.0,
+            "max_value": 100.0,
+            "kind": "volume",
+        },
+        blocking=True,
+    )
+    await hass.async_block_till_done()
+
+    cycle = entry.runtime_data.zones[zone_id].config.cycle("cy_pots")
+    assert cycle.curve.kind is CurveKind.VOLUME
+
+
+async def test_set_curve_refuses_volume_without_a_meter(hass: HomeAssistant) -> None:
+    mock_weather(hass)
+    entry = await setup_hub(hass, [zone_data("Pots", "valve.pots")])
+    zone_id = entry.runtime_data.zone_ids[0]
+
+    with pytest.raises(ServiceValidationError):
+        await hass.services.async_call(
+            DOMAIN,
+            "set_curve",
+            {
+                "zone_id": zone_id,
+                "cycle_id": "cy_pots",
+                "points": [[20.0, 30.0]],
+                "kind": "volume",
+            },
+            blocking=True,
+        )
+
+
 async def test_set_simple_curve_stores_generated_points(
     hass: HomeAssistant, freezer: FrozenDateTimeFactory
 ) -> None:

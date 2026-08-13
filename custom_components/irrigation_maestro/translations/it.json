@@ -493,6 +493,10 @@
         "max_value": {
           "name": "Massimo",
           "description": "Limite superiore. Se omesso, viene mantenuto il massimo attuale."
+        },
+        "kind": {
+          "name": "Uscita della curva",
+          "description": "Cosa rappresentano i valori: minuti (durata) o litri (volume). Il volume richiede un flussometro utilizzabile. Se omesso, viene mantenuto il tipo attuale del programma."
         }
       }
     },

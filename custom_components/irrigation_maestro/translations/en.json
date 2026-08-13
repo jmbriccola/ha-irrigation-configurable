@@ -493,6 +493,10 @@
         "max_value": {
           "name": "Maximum",
           "description": "Upper clamp. If omitted, the current maximum is kept."
+        },
+        "kind": {
+          "name": "Curve output",
+          "description": "What the values mean: minutes (duration) or litres (volume). Volume needs a usable flow meter. If omitted, the program's current kind is kept."
         }
       }
     },
