@@ -280,13 +280,19 @@ class ZoneStateSensor(MaestroZoneEntity, SensorEntity):
         if config.is_switch:
             degraded.append("switch_valve")
         has_meter = runtime.zone_has_flow_meter(config)
+        usable = has_meter and runtime.zone_flow_meter_usable(runtime.zones[config.zone_id])
         if not has_meter:
             degraded.append("no_flow_meter")
+        elif not usable:
+            # A meter is configured but its unit cannot be resolved, so it is
+            # not usable. Distinct from no_flow_meter: the fix is different --
+            # set the unit, do not buy a meter.
+            degraded.append("flow_unit_unknown")
         elif config.flow_sensor is None and runtime.hub.line_flow_sensor is not None:
             degraded.append("line_meter_shared")
         # A volume-target cycle needs a usable meter; without one it silently
         # degrades to a timed run (see the degradation matrix).
-        if not has_meter and any(cycle.curve.kind is CurveKind.VOLUME for cycle in config.cycles):
+        if not usable and any(cycle.curve.kind is CurveKind.VOLUME for cycle in config.cycles):
             degraded.append("volume_mode_unavailable")
         snapshot = runtime.weather.last_snapshot
         if snapshot is not None and not snapshot.hourly:

@@ -66,6 +66,7 @@ export type ReasonKey = (typeof REASON_KEYS)[number];
 export const DEGRADED_KEYS = [
   "switch_valve",
   "no_flow_meter",
+  "flow_unit_unknown",
   "line_meter_shared",
   "no_hourly_forecast",
   "volume_mode_unavailable",

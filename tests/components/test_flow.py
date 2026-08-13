@@ -106,6 +106,17 @@ async def test_a_negative_reading_is_clamped_to_zero(hass: HomeAssistant) -> Non
     assert FlowSensorReader(hass, "sensor.flow").read().lpm == 0.0
 
 
+async def test_unit_known_is_true_for_a_convertible_unit(hass: HomeAssistant) -> None:
+    # The convenience property, exercised directly rather than via .read().
+    hass.states.async_set("sensor.flow", "0.45", {"unit_of_measurement": "m³/h"})
+    assert FlowSensorReader(hass, "sensor.flow").unit_known is True
+
+
+async def test_unit_known_is_false_when_the_unit_cannot_be_resolved(hass: HomeAssistant) -> None:
+    hass.states.async_set("sensor.flow", "7.5")  # no unit declared
+    assert FlowSensorReader(hass, "sensor.flow").unit_known is False
+
+
 async def test_the_unit_is_re_read_every_time(hass: HomeAssistant) -> None:
     # An upstream integration update or an entity-settings override can change
     # it while the system runs.

@@ -610,3 +610,36 @@ async def test_zone_sensor_publishes_only_the_stored_shape(hass: HomeAssistant) 
     assert "day_minutes" not in cycle
     assert cycle["intensity_pct"] == 100.0
     assert cycle["curve"]["points"] == [[20.0, 3.0]]
+
+
+async def test_a_meter_with_an_unresolvable_unit_is_declared_degraded(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    freezer.move_to(START)
+    park = MockValvePark(hass)
+    park.add("valve.a")
+    hass.states.async_set("sensor.flow", "7.5")  # no unit declared
+    mock_weather(hass)
+    entry = await setup_hub(hass, [zone_data("Alpha", "valve.a", flow_sensor="sensor.flow")])
+    zone_id = entry.runtime_data.zone_ids[0]
+
+    state = role_state(hass, "zone_state", zone_id)
+    assert state is not None
+    assert "flow_unit_unknown" in state.attributes["degraded"]
+    assert "no_flow_meter" not in state.attributes["degraded"]
+
+
+async def test_a_meter_with_a_convertible_unit_is_not_degraded(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    freezer.move_to(START)
+    park = MockValvePark(hass)
+    park.add("valve.a")
+    hass.states.async_set("sensor.flow", "0.45", {"unit_of_measurement": "m³/h"})
+    mock_weather(hass)
+    entry = await setup_hub(hass, [zone_data("Alpha", "valve.a", flow_sensor="sensor.flow")])
+    zone_id = entry.runtime_data.zone_ids[0]
+
+    state = role_state(hass, "zone_state", zone_id)
+    assert state is not None
+    assert "flow_unit_unknown" not in state.attributes["degraded"]
