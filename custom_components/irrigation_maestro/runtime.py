@@ -217,9 +217,6 @@ class IrrigationRuntime:
             controllers.append(self.master_controller)
         return controllers
 
-    def flow_sensor_for(self, zone: ZoneRuntime) -> str | None:
-        return zone.config.flow_sensor or self.hub.line_flow_sensor
-
     def flow_reader_for(self, zone: ZoneRuntime) -> FlowSensorReader | None:
         """A reader for whichever meter serves this zone, with its own override.
 
