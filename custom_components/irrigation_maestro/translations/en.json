@@ -816,6 +816,18 @@
     "migration_day_minutes_dropped": {
       "title": "Per-day watering minutes were dropped for some programs",
       "description": "These programs had per-day watering minutes, but their curve waters for zero minutes at 25 °C, so the minutes could not be expressed as a percentage of it and were dropped. Set the program's curve, then set the per-day minutes again: {items}."
+    },
+    "notifications_enabled_without_target": {
+      "title": "Notifications enabled with no recipient",
+      "description": "These events are enabled but have no notify recipient, so they look configured and send nothing: {events}. Open Irrigazione → Impostazioni → Notifiche and choose a recipient, or disable them."
+    },
+    "notifications_silent": {
+      "title": "Irrigation Maestro will not notify you",
+      "description": "None of the events an irrigation system should never miss — valve failure, flow anomaly, irrigation not executed, interrupted cycle — reaches anyone. If the watchdog force-closes a valve or a cycle never runs, nobody is told. Open Irrigazione → Impostazioni → Notifiche to set this up."
+    },
+    "notify_target_missing": {
+      "title": "Notification recipient no longer exists",
+      "description": "The notify service notify.{service} is configured for the event \"{event}\" but no longer exists, so that alert is being lost. Open Irrigazione → Impostazioni → Notifiche and choose a recipient that exists."
     }
   },
   "exceptions": {

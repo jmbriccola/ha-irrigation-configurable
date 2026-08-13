@@ -47,6 +47,7 @@ from .notify import (
     EVENT_SKIPPED,
     EVENT_WATCHDOG,
     Notifier,
+    evaluate_notifications,
 )
 from .sentinel import Sentinel
 from .session import (
@@ -125,6 +126,7 @@ class IrrigationRuntime:
         self._start_trackers()
         self.watchdog.start()
         self.sentinel.start()
+        self._refresh_notification_issues()
 
     async def async_shutdown(self) -> None:
         """Entry unload: stop everything and leave the valves closed."""
@@ -183,6 +185,7 @@ class IrrigationRuntime:
             old_cycles.get(zone_id, set()) != {cycle.cycle_id for cycle in zone.config.cycles}
             for zone_id, zone in self.zones.items()
         )
+        self._refresh_notification_issues()
         if removed or (set(self.zones) - old_zone_ids) or cycles_changed:
             async_dispatcher_send(self.hass, SIGNAL_ZONES_CHANGED, self.entry.entry_id)
         self.dispatch_update()
@@ -833,6 +836,41 @@ class IrrigationRuntime:
         )
 
     # Repairs ---------------------------------------------------------------------
+
+    def _refresh_notification_issues(self) -> None:
+        """Surface a configuration that will not reach anyone.
+
+        Judged from the configuration alone -- known_services is not passed.
+        At setup time another integration's notify services may not have
+        registered yet, and calling their recipients missing then would be a
+        false alarm. A recipient that has genuinely vanished is caught by
+        Notifier at send time, where its absence is certain.
+        """
+        status = evaluate_notifications(self.hub.notifications)
+        if status.enabled_without_target:
+            ir.async_create_issue(
+                self.hass,
+                DOMAIN,
+                "notifications_enabled_without_target",
+                is_fixable=False,
+                severity=ir.IssueSeverity.ERROR,
+                translation_key="notifications_enabled_without_target",
+                translation_placeholders={"events": ", ".join(status.enabled_without_target)},
+            )
+        else:
+            ir.async_delete_issue(self.hass, DOMAIN, "notifications_enabled_without_target")
+
+        if status.verdict == "silent":
+            ir.async_create_issue(
+                self.hass,
+                DOMAIN,
+                "notifications_silent",
+                is_fixable=False,
+                severity=ir.IssueSeverity.WARNING,
+                translation_key="notifications_silent",
+            )
+        else:
+            ir.async_delete_issue(self.hass, DOMAIN, "notifications_silent")
 
     def _report_weather_unavailable(self) -> None:
         ir.async_create_issue(
