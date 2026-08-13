@@ -7,7 +7,7 @@ forced a user out of the dashboard to change them.
 import pytest
 import voluptuous as vol
 from custom_components.irrigation_maestro.const import DOMAIN
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, ServiceCall
 from homeassistant.exceptions import ServiceValidationError
 
 from .test_session import setup_hub, zone_data
@@ -326,3 +326,46 @@ async def test_a_priority_can_be_set_per_event(hass: HomeAssistant) -> None:
         blocking=True,
     )
     assert entry.options["notifications"]["completed"]["priority"] == "high"
+
+
+async def test_a_test_notification_reaches_a_real_recipient(hass: HomeAssistant) -> None:
+    await setup_hub(hass, [zone_data("Pots", "valve.pots")])
+    calls: list[ServiceCall] = []
+
+    async def handler(call: ServiceCall) -> None:
+        calls.append(call)
+
+    hass.services.async_register("notify", "phone", handler)
+    response = await hass.services.async_call(
+        DOMAIN,
+        "test_notification",
+        {"services": ["notify.phone"], "title": "T", "message": "M"},
+        blocking=True,
+        return_response=True,
+    )
+    assert response == {"results": {"phone": {"sent": True, "error": None}}}
+    assert calls[0].data["message"] == "M"
+
+
+async def test_a_test_notification_to_a_missing_recipient_reports_the_failure(
+    hass: HomeAssistant,
+) -> None:
+    await setup_hub(hass, [zone_data("Pots", "valve.pots")])
+    response = await hass.services.async_call(
+        DOMAIN, "test_notification", {"services": ["gone"]}, blocking=True, return_response=True
+    )
+    assert response == {"results": {"gone": {"sent": False, "error": "unknown_service"}}}
+
+
+async def test_a_test_notification_reports_a_recipient_that_raises(hass: HomeAssistant) -> None:
+    await setup_hub(hass, [zone_data("Pots", "valve.pots")])
+
+    async def handler(call: ServiceCall) -> None:
+        raise RuntimeError("smtp refused")
+
+    hass.services.async_register("notify", "mail", handler)
+    response = await hass.services.async_call(
+        DOMAIN, "test_notification", {"services": ["mail"]}, blocking=True, return_response=True
+    )
+    assert response["results"]["mail"]["sent"] is False
+    assert "smtp refused" in response["results"]["mail"]["error"]

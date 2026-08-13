@@ -664,6 +664,36 @@ set_notifications:
             - high
             - normal
 
+test_notification:
+  fields:
+    services:
+      required: true
+      example: '["mobile_app_pixel_10_pro_xl"]'
+      selector:
+        object:
+    event:
+      example: watchdog
+      selector:
+        select:
+          options:
+            - completed
+            - skipped
+            - interrupted
+            - cancelled
+            - anomaly
+            - watchdog
+            - sentinel
+            - session_overrun
+            - consumption_budget
+    title:
+      example: Irrigation Maestro
+      selector:
+        text:
+    message:
+      example: Test notification.
+      selector:
+        text:
+
 set_program_advanced:
   fields:
     zone_id:

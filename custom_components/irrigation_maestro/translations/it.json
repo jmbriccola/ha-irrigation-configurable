@@ -744,6 +744,28 @@
           "description": "Minuti dopo i quali una corsa a volume si ferma comunque."
         }
       }
+    },
+    "test_notification": {
+      "name": "Invia una notifica di prova",
+      "description": "Manda un messaggio di prova ai servizi notify scelti e riferisce, per ciascuno, se è arrivato.",
+      "fields": {
+        "services": {
+          "name": "Servizi di notifica",
+          "description": "Destinatari da provare, con o senza il prefisso notify."
+        },
+        "event": {
+          "name": "Evento",
+          "description": "Dà alla prova la forma di questo evento, così un evento ad alta priorità viene provato con i suoi segnali di urgenza."
+        },
+        "title": {
+          "name": "Titolo",
+          "description": "Titolo del messaggio di prova."
+        },
+        "message": {
+          "name": "Messaggio",
+          "description": "Corpo del messaggio di prova."
+        }
+      }
     }
   },
   "issues": {

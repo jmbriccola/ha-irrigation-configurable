@@ -744,6 +744,28 @@
           "description": "Minutes after which a volume-target run stops regardless."
         }
       }
+    },
+    "test_notification": {
+      "name": "Send a test notification",
+      "description": "Sends a test message to the chosen notify services and reports, for each one, whether it went through.",
+      "fields": {
+        "services": {
+          "name": "Notify services",
+          "description": "Recipients to test, with or without the notify. prefix."
+        },
+        "event": {
+          "name": "Event",
+          "description": "Shape the test like this event, so a high-priority event is tested with its urgency hints."
+        },
+        "title": {
+          "name": "Title",
+          "description": "Title of the test message."
+        },
+        "message": {
+          "name": "Message",
+          "description": "Body of the test message."
+        }
+      }
     }
   },
   "issues": {
