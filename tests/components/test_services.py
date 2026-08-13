@@ -1736,30 +1736,78 @@ async def test_set_curve_accepts_a_point_value_over_a_day_for_volume(
     assert cycle.curve.points == ((20.0, 2000.0),)
 
 
-async def test_add_zone_stores_a_flow_unit_override(hass: HomeAssistant) -> None:
+async def test_update_zone_stores_a_flow_unit_override(hass: HomeAssistant) -> None:
+    # add_zone deliberately accepts only name/valve_entity/area_m2/icon (see
+    # panel.ts and zone-editor.ts): a sensor and its unit override are set
+    # afterwards through update_zone, same as flow_sensor itself already is.
     entry = await setup_hub(hass, [])
     await hass.services.async_call(
         DOMAIN,
         "add_zone",
+        {"name": "Vasi", "valve_entity": "valve.vasi"},
+        blocking=True,
+    )
+    zone_id = next(iter(entry.subentries))
+    await hass.services.async_call(
+        DOMAIN,
+        "update_zone",
         {
-            "name": "Vasi",
-            "valve_entity": "valve.vasi",
+            "zone_id": zone_id,
             "flow_sensor": "sensor.vasi_flow",
             "flow_sensor_unit": "m³/h",
         },
         blocking=True,
     )
-    zone = next(iter(entry.subentries.values()))
-    assert zone.data["flow_sensor_unit"] == "m³/h"
+    assert entry.subentries[zone_id].data["flow_sensor_unit"] == "m³/h"
+
+
+async def test_update_zone_can_clear_its_flow_unit_override(hass: HomeAssistant) -> None:
+    # flow_sensor_unit is the only zone field whose "unset" state is itself a
+    # user-visible, user-choosable option (detect automatically), so an empty
+    # string must clear it rather than store an empty string.
+    entry = await setup_hub(hass, [])
+    await hass.services.async_call(
+        DOMAIN,
+        "add_zone",
+        {"name": "Vasi", "valve_entity": "valve.vasi"},
+        blocking=True,
+    )
+    zone_id = next(iter(entry.subentries))
+    await hass.services.async_call(
+        DOMAIN,
+        "update_zone",
+        {
+            "zone_id": zone_id,
+            "flow_sensor": "sensor.vasi_flow",
+            "flow_sensor_unit": "m³/h",
+        },
+        blocking=True,
+    )
+    assert entry.subentries[zone_id].data["flow_sensor_unit"] == "m³/h"
+
+    await hass.services.async_call(
+        DOMAIN,
+        "update_zone",
+        {"zone_id": zone_id, "flow_sensor_unit": ""},
+        blocking=True,
+    )
+    assert "flow_sensor_unit" not in entry.subentries[zone_id].data
 
 
 async def test_a_unit_the_converter_cannot_handle_is_refused(hass: HomeAssistant) -> None:
-    await setup_hub(hass, [])
+    entry = await setup_hub(hass, [])
+    await hass.services.async_call(
+        DOMAIN,
+        "add_zone",
+        {"name": "Vasi", "valve_entity": "valve.vasi"},
+        blocking=True,
+    )
+    zone_id = next(iter(entry.subentries))
     with pytest.raises(vol.Invalid):
         await hass.services.async_call(
             DOMAIN,
-            "add_zone",
-            {"name": "Vasi", "valve_entity": "valve.vasi", "flow_sensor_unit": "widgets/s"},
+            "update_zone",
+            {"zone_id": zone_id, "flow_sensor_unit": "widgets/s"},
             blocking=True,
         )
 
@@ -1792,4 +1840,26 @@ async def test_clearing_the_line_meter_clears_its_unit_override(hass: HomeAssist
         blocking=True,
     )
     assert "line_flow_sensor" not in entry.options
+    assert "line_flow_sensor_unit" not in entry.options
+
+
+async def test_set_weather_sources_can_clear_just_the_line_meter_unit(
+    hass: HomeAssistant,
+) -> None:
+    # The sensor stays configured; only the override is cleared, so detection
+    # resumes without losing the line meter itself.
+    entry = await setup_hub(
+        hass, [], {"line_flow_sensor": "sensor.line", "line_flow_sensor_unit": "m³/h"}
+    )
+    await hass.services.async_call(
+        DOMAIN,
+        "set_weather_sources",
+        {
+            "weather_entity": "weather.test",
+            "line_flow_sensor": "sensor.line",
+            "line_flow_sensor_unit": "",
+        },
+        blocking=True,
+    )
+    assert entry.options["line_flow_sensor"] == "sensor.line"
     assert "line_flow_sensor_unit" not in entry.options
