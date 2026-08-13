@@ -275,3 +275,37 @@ class TestCycleIntensity:
         spec = cycle.to_spec(enabled=True)
         assert spec.intensity_pct == 133.0
         assert spec.day_intensity_pct == {0: 50.0, 6: 200.0}
+
+
+def test_a_zone_without_a_unit_override_reports_none() -> None:
+    config = ZoneConfig.from_subentry(
+        "z1",
+        {"name": "Pots", "valve_entity": "valve.pots", "flow_sensor": "sensor.f"},
+        templates={},
+    )
+    assert config.flow_sensor_unit is None
+
+
+def test_a_zone_carries_its_unit_override() -> None:
+    config = ZoneConfig.from_subentry(
+        "z1",
+        {
+            "name": "Pots",
+            "valve_entity": "valve.pots",
+            "flow_sensor": "sensor.f",
+            "flow_sensor_unit": "m³/h",
+        },
+        templates={},
+    )
+    assert config.flow_sensor_unit == "m³/h"
+
+
+def test_the_hub_carries_the_line_meter_unit_override() -> None:
+    hub = HubConfig.from_options(
+        {
+            "weather_entity": "weather.x",
+            "line_flow_sensor": "sensor.line",
+            "line_flow_sensor_unit": "m³/h",
+        }
+    )
+    assert hub.line_flow_sensor_unit == "m³/h"

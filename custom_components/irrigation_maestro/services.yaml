@@ -398,6 +398,27 @@ add_zone:
       example: mdi:sprinkler
       selector:
         icon:
+    flow_sensor:
+      example: sensor.garden_zone_1_flow
+      selector:
+        entity:
+          domain: sensor
+    flow_sensor_unit:
+      example: m³/h
+      selector:
+        select:
+          options:
+            - L/min
+            - L/h
+            - L/s
+            - mL/s
+            - m³/h
+            - m³/min
+            - m³/s
+            - ft³/min
+            - gal/h
+            - gal/min
+            - gal/d
 
 update_zone:
   fields:
@@ -434,6 +455,22 @@ update_zone:
       selector:
         entity:
           domain: sensor
+    flow_sensor_unit:
+      example: m³/h
+      selector:
+        select:
+          options:
+            - L/min
+            - L/h
+            - L/s
+            - mL/s
+            - m³/h
+            - m³/min
+            - m³/s
+            - ft³/min
+            - gal/h
+            - gal/min
+            - gal/d
     nominal_flow_lpm:
       example: 8
       selector:
@@ -504,6 +541,22 @@ set_weather_sources:
       selector:
         entity:
           domain: sensor
+    line_flow_sensor_unit:
+      example: m³/h
+      selector:
+        select:
+          options:
+            - L/min
+            - L/h
+            - L/s
+            - mL/s
+            - m³/h
+            - m³/min
+            - m³/s
+            - ft³/min
+            - gal/h
+            - gal/min
+            - gal/d
     master_valve:
       example: switch.pump_relay
       selector:
