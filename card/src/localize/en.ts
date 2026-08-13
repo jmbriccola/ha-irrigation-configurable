@@ -47,6 +47,8 @@ export const en = {
   "program_editor.start_sunset": "Sunset",
   "program_editor.duration_per_day": "Duration per day",
   "program_editor.same_duration": "Same duration every day",
+  "program_editor.zone_adjustment_note":
+    "This zone waters at {pct}% of each program's setting.",
 
   // Add-program wizard (panel)
   "wizard.step1_title": "Which days?",

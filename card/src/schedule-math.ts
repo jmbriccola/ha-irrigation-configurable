@@ -2,7 +2,7 @@
  * Pure scheduling logic for the Irrigazione panel. Weather math mirrors
  * engine/planner.resolve_day_curve + engine/curves.py via curve-math.ts.
  */
-import { parseCurvePoints, previewFromMinutes, REFERENCE_TEMP, roundHalfEven, scaledValue } from "./curve-math";
+import { parseCurvePoints, rawValue, REFERENCE_TEMP, roundHalfEven, scaledValue } from "./curve-math";
 import type { CycleInfo } from "./types";
 
 export const WEEKDAYS = [0, 1, 2, 3, 4, 5, 6] as const;
@@ -45,10 +45,47 @@ export function dayBase(cycle: Partial<CycleInfo>, wd: number): number {
   );
 }
 
-/** Live preview while the user is dragging a minutes stepper (unsaved state). */
-export function previewMinutes(cycle: Partial<CycleInfo>, minutesAtReference: number, weightedTemp: number): number {
+/**
+ * Minutes this program actually delivers, in this zone, at the reference
+ * temperature on a given weekday: `dayBase`'s SETTING folded with the
+ * zone's `adjustment_pct`. Mirrors the engine's own ordering — the two
+ * percentages are multiplied together and the product is applied to the
+ * raw curve BEFORE the min/max clamps (`engine/planner.py`:
+ * `zone.adjustment_pct * factor / 100.0`, then `engine/curves.py::curve_value`)
+ * — never clamp first, and the clamps themselves are never scaled.
+ *
+ * This is the DELIVERY half of the split documented on `dayBase`: the
+ * program list's per-program summary (program-list.ts) shows this, not the
+ * SETTING, because the list is describing what actually gets watered.
+ */
+export function dayDelivery(cycle: Partial<CycleInfo>, wd: number, adjustmentPct: number): number {
   const points = parseCurvePoints(cycle.curve?.points);
-  return previewFromMinutes(points, minutesAtReference, weightedTemp, cycle.curve?.min, cycle.curve?.max);
+  const combinedPct = (dayIntensity(cycle, wd) * adjustmentPct) / 100;
+  return roundHalfEven(scaledValue(points, REFERENCE_TEMP, combinedPct, cycle.curve?.min, cycle.curve?.max));
+}
+
+/**
+ * Live preview while the user is dragging a minutes stepper (unsaved
+ * state), at the given weather temperature. `adjustmentPct` folds in the
+ * zone's `adjustment_pct` (default 100, i.e. no-op) — the same DELIVERY
+ * half of the SETTING/DELIVERY split described on `dayBase` and
+ * `dayDelivery`: the derived intensity is multiplied by the zone factor
+ * BEFORE the curve's clamps are applied, mirroring the engine's ordering
+ * exactly. `minutesAtReference` itself stays the pre-adjustment SETTING —
+ * only the delivered figure this function returns accounts for the zone.
+ */
+export function previewMinutes(
+  cycle: Partial<CycleInfo>,
+  minutesAtReference: number,
+  weightedTemp: number,
+  adjustmentPct = 100,
+): number {
+  const points = parseCurvePoints(cycle.curve?.points);
+  const reference = rawValue(points, REFERENCE_TEMP);
+  if (reference <= 0) return 0; // a curve worth nothing cannot be scaled
+  const intensityPct = (100 * minutesAtReference) / reference;
+  const combinedPct = (intensityPct * adjustmentPct) / 100;
+  return roundHalfEven(scaledValue(points, weightedTemp, combinedPct, cycle.curve?.min, cycle.curve?.max));
 }
 
 /**

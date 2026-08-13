@@ -128,6 +128,20 @@ export function zoneHasFlowMeter(zone: ZoneBundle): boolean {
   return !degraded.some((item) => asString(item) === "no_flow_meter");
 }
 
+/**
+ * The zone's `adjustment_pct` (docs/design/card-contract.md) — the factor
+ * the engine multiplies into every program's curve alongside its own
+ * intensity (`engine/planner.py`: `zone.adjustment_pct * factor / 100.0`).
+ * Delivery previews (schedule-math.ts's `previewMinutes`/`dayDelivery`, the
+ * curve editor's today banner and preview tiles) fold this in; the minutes
+ * SETTING (`dayBase`) deliberately does not — see the split documented
+ * there. Absent (an older sensor, or a zone read before its first refresh)
+ * reads as 100, the engine's own default.
+ */
+export function zoneAdjustmentPct(zone: ZoneBundle): number {
+  return asNumber(zone.state?.attributes?.["adjustment_pct"]) ?? 100;
+}
+
 /** A `copy_curve` source option: `value` is what a `<select>` carries,
  *  `zoneId`/`programId` are the same pair split back out for the event
  *  detail, and `label` is "<zone name> / <program name>". */

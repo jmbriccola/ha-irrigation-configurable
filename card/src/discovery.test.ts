@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { buildCopyCandidates, readCycles } from "./discovery";
+import { buildCopyCandidates, readCycles, zoneAdjustmentPct } from "./discovery";
 import type { ZoneBundle } from "./discovery";
 
 function zoneWithCycles(cycles: unknown): ZoneBundle {
@@ -88,6 +88,25 @@ describe("readCycles: the panel's read-back path", () => {
   it("leaves the calendar undefined when the attribute is absent", () => {
     const info = readCycles(zoneWith({ cycle_id: "c1" }))[0];
     expect(info?.calendar).toBeUndefined();
+  });
+});
+
+describe("zoneAdjustmentPct", () => {
+  it("reads the sensor's published value", () => {
+    const zone: ZoneBundle = {
+      zoneId: "z1", name: "Pots", order: 1, cycleSwitches: [],
+      state: { entity_id: "sensor.z1", state: "idle", attributes: { adjustment_pct: 70 } },
+    };
+    expect(zoneAdjustmentPct(zone)).toBe(70);
+  });
+
+  it("reads an absent adjustment as 100, the engine's own default", () => {
+    const zone: ZoneBundle = {
+      zoneId: "z1", name: "Pots", order: 1, cycleSwitches: [],
+      state: { entity_id: "sensor.z1", state: "idle", attributes: {} },
+    };
+    expect(zoneAdjustmentPct(zone)).toBe(100);
+    expect(zoneAdjustmentPct({ zoneId: "z2", name: "Herbs", order: 2, cycleSwitches: [] })).toBe(100);
   });
 });
 

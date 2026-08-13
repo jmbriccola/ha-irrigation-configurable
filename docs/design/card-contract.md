@@ -29,7 +29,7 @@ config entry).
 
 | maestro_role        | platform | state | extra attributes |
 |---------------------|----------|-------|------------------|
-| `zone_state`        | sensor   | `idle` \| `queued` \| `watering` \| `soaking` \| `paused` \| `suspended` \| `disabled` | `zone_name`, `order`, `degraded` (list of keys, see below), `run_started_at` (ISO, while watering), `run_duration_min` (frozen total), `run_planned_runs` (soak split list), `active_cycle_id`, `suspended_until` (ISO or null), `cycles` (list, see below) |
+| `zone_state`        | sensor   | `idle` \| `queued` \| `watering` \| `soaking` \| `paused` \| `suspended` \| `disabled` | `zone_name`, `order`, `adjustment_pct` (float, 10–300), `degraded` (list of keys, see below), `run_started_at` (ISO, while watering), `run_duration_min` (frozen total), `run_planned_runs` (soak split list), `active_cycle_id`, `suspended_until` (ISO or null), `cycles` (list, see below) |
 | `zone_next_run`     | sensor   | ISO timestamp or unavailable | `cycle_id`, `cycle_name` |
 | `zone_last_outcome` | sensor   | `completed` \| `skipped` \| `interrupted` \| `cancelled` \| `none` | `reason_key` (see keys), `finished_at` (ISO), `cycle_id`, `duration_min`, `volume_l` |
 | `zone_enabled`      | switch   | on/off | — |
@@ -71,31 +71,50 @@ call the same value `program_id` in their fields, for the user-facing name):
   argument.** The engine multiplies it by the zone's `adjustment_pct` before
   calling `curve_value` (`zone.adjustment_pct * factor / 100.0` in
   `engine/planner.py`), and `adjustment_pct` is a *zone* setting, not a
-  program one. It is not published in `zone_state`'s attributes alongside
-  `cycles` — the only place the program editor's preview path reads from —
-  so that preview cannot fold it in without extra plumbing: a zone adjusted
-  to 70% waters 30% less than every figure the card shows (program editor,
-  wizard, curve editor) for that zone's programs, everywhere, and the
-  preview has no way to know or say so from the data it currently reads.
-  The value itself is not hidden, though — it is the `zone_adjustment`
-  NUMBER entity's state (`maestro_role: zone_adjustment`, see the table
-  above), which the card already discovers (`discovery.ts`) and already
-  reads through `export_config` for the zone editor (`config-read.ts`,
-  `zone-editor.ts`); it is simply not consumed by any preview today. Folding
-  it into the preview is a deliberate deferral, not a hard blocker: doing it
-  naively would make things worse, not better — the minutes stepper feeds
-  `set_program_minutes`, which computes its intensity from the curve's
-  *pre-adjustment* value, so a preview that already included the zone
-  factor would not match what that service derives from the number the
-  user is looking at. Reconciling the two is left to a future phase.
+  program one. `zone_state` publishes it directly (`adjustment_pct`, see the
+  table above) precisely so the card's previews can fold it in — it is also
+  still the `zone_adjustment` NUMBER entity's state (`maestro_role:
+  zone_adjustment`), which the zone editor reads/writes via `export_config`
+  (`config-read.ts`, `zone-editor.ts`) exactly as before; the `zone_state`
+  copy exists for previews to read without a round trip through that entity.
+- The card keeps two different numbers apart on purpose, both loosely called
+  "minutes":
+  - **The SETTING**: `intensity_pct` / `day_intensity_pct` and the minutes
+    derived from them at the reference temperature (`dayBase` in
+    schedule-math.ts), *before* `adjustment_pct`. This seeds the program
+    editor's minutes stepper and is the only form ever sent to
+    `set_program_minutes`, which derives its intensity as
+    `100 * minutes / rawValue(curve, 25)` — no adjustment factor. Folding
+    the zone's adjustment into that number before sending it would make the
+    engine apply the factor twice and compound the error, so the stepper
+    always shows and saves the pre-adjustment figure.
+  - **DELIVERY**: the SETTING with `adjustment_pct` folded in, mirroring the
+    engine's own ordering exactly — the two percentages are multiplied
+    together first, and only that product is applied to the curve's raw
+    value; the min/max clamps are absolute guards applied last and are
+    never themselves scaled (`curve_value`: `interpolate(temp) *
+    adjustment_pct / 100`, then clamp). `previewMinutes` / `dayDelivery`
+    (schedule-math.ts) and the curve editor's delivery helper reproduce
+    this. Delivery is what the program editor's weather line, the wizard's
+    live preview, the curve editor's preview tiles and "today" banner, and
+    the program list's per-program summary all show — the list shows
+    delivery **on purpose**, not the setting, because it is describing what
+    actually gets watered, not what is stored.
+
+  A zone with a non-default `adjustment_pct` therefore shows two different
+  numbers for the same program — e.g. 20 min on the stepper (the setting)
+  and ≈14 min everywhere else (delivery, at 70%) — and the program editor
+  renders a short note explaining the split whenever the zone's adjustment
+  isn't 100%, since that screen is the one place both figures are visible
+  together.
 - The sensor publishes only the stored shape: `curve.points`, `intensity_pct`
   and `day_intensity_pct`. As of 3.0.0 it no longer also publishes
   `day_minutes` / `amount` / `heat` — those were derived display values kept
   only as a bridge for the 2.x card's two-slider editor. The card now derives
   the minutes it displays (uniform and per-day) from `curve.points` and
-  `intensity_pct` (plus `day_intensity_pct`) itself, client-side, the same
-  way the curve editor's "with today's weather" line already does — **before**
-  the zone's `adjustment_pct`, per the note above.
+  `intensity_pct` (plus `day_intensity_pct`) itself, client-side — the
+  SETTING form everywhere `dayBase` is used, the DELIVERY form (with
+  `adjustment_pct` folded in) everywhere noted above.
 
 `degraded` keys: `switch_valve` (no position feedback), `no_flow_meter`,
 `line_meter_shared`, `no_hourly_forecast`, `volume_mode_unavailable`.

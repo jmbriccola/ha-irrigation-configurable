@@ -91,6 +91,17 @@ backend, and a card and panel rebuilt to match.
   watering intensity — uniform or per-day — because saving a curve resets
   that scale back to 100%.
 
+### Fixed
+
+- Displayed minutes now account for the zone's `adjustment_pct`. The zone
+  sensor publishes it, and the card folds it into every DELIVERY figure —
+  the program editor's weather line, the wizard's live preview, the curve
+  editor's preview tiles and "today" banner, and the program list's
+  per-program summary — while the minutes stepper keeps showing the
+  pre-adjustment SETTING it actually saves. A zone adjusted to 70% used to
+  show 20 min everywhere while actually watering 14; the program editor now
+  says so when the two figures diverge.
+
 ## [2.1.1] - 2026-08-13
 
 ### Fixed

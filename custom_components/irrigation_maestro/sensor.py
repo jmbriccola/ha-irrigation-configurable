@@ -234,6 +234,7 @@ class ZoneStateSensor(MaestroZoneEntity, SensorEntity):
         attributes: dict[str, Any] = {
             "zone_name": config.name,
             "order": config.order,
+            "adjustment_pct": float(config.adjustment_pct),
             "degraded": self._degraded(),
             "suspended_until": suspended.isoformat() if suspended else None,
             "cycles": [self._cycle_dict(cycle) for cycle in config.cycles],

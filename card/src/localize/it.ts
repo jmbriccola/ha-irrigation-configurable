@@ -49,6 +49,8 @@ export const it: Record<keyof typeof en, string> = {
   "program_editor.start_sunset": "Tramonto",
   "program_editor.duration_per_day": "Durata per giorno",
   "program_editor.same_duration": "Stessa durata per tutti i giorni",
+  "program_editor.zone_adjustment_note":
+    "Questa zona irriga al {pct}% dell'impostazione di ogni programma.",
 
   // Wizard "nuovo programma" (pannello)
   "wizard.step1_title": "In che giorni?",

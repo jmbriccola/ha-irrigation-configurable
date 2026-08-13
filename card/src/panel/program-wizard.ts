@@ -93,6 +93,10 @@ export class ImcProgramWizard extends LitElement {
   @property({ attribute: false }) hass?: HomeAssistant;
   @property() zoneId = "";
   @property({ attribute: false }) weightedTemp?: number;
+  /** The zone's `adjustment_pct` (docs/design/card-contract.md), folded
+   *  into this step's live DELIVERY preview — see `previewMinutes` in
+   *  schedule-math.ts. */
+  @property({ type: Number }) zoneAdjustmentPct = 100;
 
   @state() private _step: Step = 1;
   @state() private _calendar: CalendarConfig = { mode: "weekdays", days: [...WEEKDAYS] };
@@ -413,7 +417,7 @@ export class ImcProgramWizard extends LitElement {
     const dayName = new Date().toLocaleDateString(lang === "it" ? "it-IT" : "en-US", {
       weekday: "long",
     });
-    const min = previewMinutes(DRAFT_CYCLE, this._minutes, t);
+    const min = previewMinutes(DRAFT_CYCLE, this._minutes, t, this.zoneAdjustmentPct);
     return html`<div class="done">
       ${localize(lang, "wizard.done_prefix")}
       ${localize(lang, "panel.weather_line", { day: dayName, min })}

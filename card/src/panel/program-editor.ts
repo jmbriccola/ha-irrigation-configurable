@@ -134,6 +134,12 @@ export class ImcProgramEditor extends LitElement {
   /** Passed down to the embedded `imc-curve-editor` — whether the zone has a
    *  usable flow meter, gating that editor's volume option. */
   @property({ type: Boolean }) zoneHasFlowMeter = false;
+  /** The zone's `adjustment_pct` (docs/design/card-contract.md): folded into
+   *  the weather-line DELIVERY preview below and passed straight through to
+   *  the embedded `imc-curve-editor`. Never applied to the minutes
+   *  stepper/seed — that stays the pre-adjustment SETTING (see `dayBase`
+   *  in schedule-math.ts). */
+  @property({ type: Number }) zoneAdjustmentPct = 100;
   /** Every zone the panel has loaded — the source pool for "copy curve
    *  from…" (see `buildCopyCandidates`). */
   @property({ attribute: false }) allZones: ZoneBundle[] = [];
@@ -342,6 +348,12 @@ export class ImcProgramEditor extends LitElement {
       margin-top: 14px;
       font-size: 12.5px;
       opacity: 0.8;
+    }
+    .adjustment-note {
+      margin-top: 10px;
+      font-size: 12.5px;
+      opacity: 0.8;
+      font-style: italic;
     }
     .hint {
       margin-top: 10px;
@@ -552,6 +564,7 @@ export class ImcProgramEditor extends LitElement {
               ${localize(lang, "program_editor.same_duration")}
             </div>
 
+            ${this._renderAdjustmentNote(lang)}
             ${this._renderWeatherLine(lang, cycle)}
           `}
 
@@ -636,6 +649,7 @@ export class ImcProgramEditor extends LitElement {
         .weightedTemp=${this.weightedTemp}
         .language=${pickLanguage(this.hass)}
         .zoneHasFlowMeter=${this.zoneHasFlowMeter}
+        .zoneAdjustmentPct=${this.zoneAdjustmentPct}
         @imc-curve-save=${this._onCurveSave}
         @imc-curve-cancel=${() => (this._advancedOpen = false)}
       ></imc-curve-editor>
@@ -781,20 +795,35 @@ export class ImcProgramEditor extends LitElement {
     // Base comes from the WORKING (unsaved) state, not the saved `cycle`
     // prop, so the preview moves live as the user drags a stepper —
     // matching the wizard's live preview (program-wizard.ts). This is the
-    // program's OWN curve and intensity, BEFORE the zone's adjustment
-    // factor: the engine multiplies by zone.adjustment_pct on top
-    // (engine/planner.py), and that factor is not published on the zone
-    // sensor, so this preview cannot account for it. A zone adjusted to
-    // 70% shows this same figure everywhere in the card and waters less.
+    // program's OWN curve and intensity, SETTING-side; `previewMinutes`
+    // folds in the zone's `adjustment_pct` on top (mirroring the engine's
+    // `zone.adjustment_pct * factor / 100.0` in engine/planner.py), so what
+    // renders here is the DELIVERY figure — what today actually waters,
+    // not the pre-adjustment number the stepper above shows.
     const base = this._sameForAll
       ? this._uniformMinutes
       : (this._dayMinutes[String(today)] ?? this._uniformMinutes);
-    const min = previewMinutes(cycle, base, t);
+    const min = previewMinutes(cycle, base, t, this.zoneAdjustmentPct);
     const dayName = new Date().toLocaleDateString(lang === "it" ? "it-IT" : "en-US", {
       weekday: "long",
     });
     return html`<div class="weather">
       ${localize(lang, "panel.weather_line", { day: dayName, min })}
+    </div>`;
+  }
+
+  /**
+   * When the zone's adjustment isn't a no-op, the stepper above shows the
+   * SETTING (pre-adjustment) while the weather line and the program list
+   * (program-list.ts) show DELIVERY — a zone at 70% displays 20 min on the
+   * stepper and ≈14 min everywhere delivery is shown. Without this line
+   * that split looks like a bug; this is the one place both figures are
+   * visible together, so it is where the split gets explained.
+   */
+  private _renderAdjustmentNote(lang: string): TemplateResult | typeof nothing {
+    if (this.zoneAdjustmentPct === 100) return nothing;
+    return html`<div class="adjustment-note">
+      ${localize(lang, "program_editor.zone_adjustment_note", { pct: this.zoneAdjustmentPct })}
     </div>`;
   }
 

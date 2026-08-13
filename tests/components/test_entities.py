@@ -92,6 +92,7 @@ async def test_zone_state_idle_watering_and_session_running(
     assert state.state == "idle"
     assert state.attributes["zone_name"] == "Pots"
     assert state.attributes["order"] == 100
+    assert state.attributes["adjustment_pct"] == pytest.approx(100.0)
     assert state.attributes["suspended_until"] is None
     assert state.attributes["degraded"] == ["no_flow_meter"]
     cycles = state.attributes["cycles"]
@@ -133,6 +134,24 @@ async def test_zone_state_idle_watering_and_session_running(
     assert outcome.attributes["reason_key"] is None
     assert outcome.attributes["duration_min"] == 3
     assert outcome.attributes["finished_at"] is not None
+
+
+async def test_zone_state_publishes_configured_adjustment_pct(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    """The zone sensor exposes the adjustment the engine multiplies into
+    every cycle's delivered minutes, so the card can fold it into previews.
+    """
+    freezer.move_to(START)
+    park = MockValvePark(hass)
+    park.add("valve.pots")
+    mock_weather(hass)
+    entry = await setup_hub(hass, [zone_data("Pots", "valve.pots", adjustment_pct=70)])
+    zone_id = entry.runtime_data.zone_ids[0]
+
+    state = role_state(hass, "zone_state", zone_id)
+    assert state is not None
+    assert state.attributes["adjustment_pct"] == pytest.approx(70.0)
 
 
 async def test_zone_enabled_switch_off_skips_as_zone_disabled(

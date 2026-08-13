@@ -5,8 +5,8 @@ import type { HassEntity, HomeAssistant } from "../types";
 import { asString, defineElement } from "../types";
 import type { CycleInfo } from "../types";
 import { pickLanguage, localize } from "../localize/localize";
-import { readCycles, zoneHasFlowMeter, type ZoneBundle } from "../discovery";
-import { dayBase, isUniform } from "../schedule-math";
+import { readCycles, zoneAdjustmentPct, zoneHasFlowMeter, type ZoneBundle } from "../discovery";
+import { dayDelivery, isUniform } from "../schedule-math";
 import { describeTrigger } from "../format";
 import { describeCalendar } from "./calendar-editor";
 import { programToggleStyles, renderProgramToggle } from "./program-toggle";
@@ -220,6 +220,7 @@ export class ImcProgramList extends LitElement {
               .hass=${hass}
               .zoneId=${zone.zoneId}
               .weightedTemp=${this.weightedTemp}
+              .zoneAdjustmentPct=${zoneAdjustmentPct(zone)}
               @imc-wizard-finish=${() => (this._wizardOpen = false)}
               @imc-wizard-cancel=${() => (this._wizardOpen = false)}
             ></imc-program-wizard>`
@@ -245,7 +246,7 @@ export class ImcProgramList extends LitElement {
           <div class="name">${c.name ?? c.cycle_id}</div>
           <div class="days">${describeCalendar(c.calendar)}</div>
           <div class="meta">
-            ${describeTrigger(c.trigger, lang)} · ${this._minutesSummary(lang, c)}
+            ${describeTrigger(c.trigger, lang)} · ${this._minutesSummary(lang, zone, c)}
           </div>
           ${renderProgramToggle(lang, cycleSwitch, () => {
             if (cycleSwitch) this._onToggle(zone.zoneId, c, cycleSwitch);
@@ -280,6 +281,7 @@ export class ImcProgramList extends LitElement {
                 .cycleSwitch=${cycleSwitch}
                 .weightedTemp=${this.weightedTemp}
                 .zoneHasFlowMeter=${zoneHasFlowMeter(zone)}
+                .zoneAdjustmentPct=${zoneAdjustmentPct(zone)}
                 .allZones=${this.allZones}
                 @imc-program-save-schedule=${() => (this._editingId = undefined)}
                 @imc-program-save-minutes=${() => (this._editingId = undefined)}
@@ -341,13 +343,21 @@ export class ImcProgramList extends LitElement {
     this._dispatch<ProgramRemoveDetail>("imc-program-remove", { zoneId, programId: c.cycle_id });
   }
 
-  private _minutesSummary(lang: string, c: CycleInfo): string {
+  /**
+   * The user explicitly decided this line shows DELIVERY, not the SETTING
+   * the program editor's stepper seeds from: this list is describing what
+   * actually gets watered in this zone, factoring in its `adjustment_pct`
+   * (see `dayDelivery` in schedule-math.ts and the split documented on
+   * `dayBase` there).
+   */
+  private _minutesSummary(lang: string, zone: ZoneBundle, c: CycleInfo): string {
     if (!isUniform(c.day_intensity_pct)) {
       return localize(lang, "panel.per_day_minutes");
     }
     // Volume curves have no "minutes" reading — mirrors the sensor's own
     // `amount` (null for volume) before this derived field was removed.
-    const min = c.curve?.kind === "volume" ? undefined : dayBase(c, 0);
+    const min =
+      c.curve?.kind === "volume" ? undefined : dayDelivery(c, 0, zoneAdjustmentPct(zone));
     return localize(lang, "panel.minutes_value", { min: min ?? "?" });
   }
 }

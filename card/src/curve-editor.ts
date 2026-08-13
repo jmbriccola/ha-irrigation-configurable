@@ -64,6 +64,11 @@ export class ImcCurveEditor extends LitElement {
   /** Whether the zone has a usable flow meter — gates the volume option in
    *  the kind selector, mirroring the backend's `volume_requires_flow` guard. */
   @property({ type: Boolean }) zoneHasFlowMeter = false;
+  /** The zone's `adjustment_pct` (docs/design/card-contract.md), folded into
+   *  the DELIVERY figures this editor shows (the preview tiles and the
+   *  "today" banner) but not into the graph itself, which draws the curve's
+   *  raw shape — see `_deliveryValue` vs `_previewValue`. */
+  @property({ type: Number }) zoneAdjustmentPct = 100;
 
   @state() private _points: CurvePoint[] = [[REFERENCE_TEMP, 15]];
   @state() private _min = 1;
@@ -279,10 +284,24 @@ export class ImcCurveEditor extends LitElement {
     this._error = null;
   }
 
-  /** The curve as the user is drawing it: unscaled (intensity 100%), since
-   *  saving always resets the program's intensity to 100% anyway. */
+  /** The curve's raw shape, as the user is drawing it: unscaled (intensity
+   *  100%, no zone adjustment), since saving always resets the program's
+   *  intensity to 100% anyway. Drives the graph line and handle positions —
+   *  those must track the points being authored, not what any particular
+   *  zone will deliver. For that, see `_deliveryValue`. */
   private _previewValue(temp: number): number {
     return roundHalfEven(scaledValue(this._points, temp, 100, this._min, this._max));
+  }
+
+  /** What this curve actually delivers IN THIS ZONE: the raw shape times
+   *  `zoneAdjustmentPct`, then the clamps — same order as `curve_value`
+   *  (`engine/curves.py`) and `previewMinutes`/`dayDelivery`
+   *  (schedule-math.ts). Drives the preview tiles and the "today" banner,
+   *  which exist to answer "what will this water", not "what shape did I
+   *  draw". Saving resets the program's own intensity to 100%, so the only
+   *  per-zone factor left to fold in here is the adjustment. */
+  private _deliveryValue(temp: number): number {
+    return roundHalfEven(scaledValue(this._points, temp, this.zoneAdjustmentPct, this._min, this._max));
   }
 
   private _unit(): string {
@@ -416,7 +435,7 @@ export class ImcCurveEditor extends LitElement {
 
       <div class="caption">${localize(lang, "editor.preview_title")}</div>
       <div class="examples">
-        ${PREVIEW_TEMPS.map((t) => this._exampleTile(`${t}°`, this._previewValue(t)))}
+        ${PREVIEW_TEMPS.map((t) => this._exampleTile(`${t}°`, this._deliveryValue(t)))}
       </div>
 
       ${this._renderToday(lang)}
@@ -495,7 +514,7 @@ export class ImcCurveEditor extends LitElement {
   private _renderToday(lang: string): TemplateResult | typeof nothing {
     const t = this.weightedTemp;
     if (t === undefined || Number.isNaN(t)) return nothing;
-    const value = this._previewValue(t);
+    const value = this._deliveryValue(t);
     return html`<div class="today-banner">${localize(lang, "editor.today", {
       temp: Math.round(t),
       value,

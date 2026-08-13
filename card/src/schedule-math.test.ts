@@ -5,6 +5,8 @@ import {
   isUniform,
   dayIntensity,
   dayBase,
+  dayDelivery,
+  previewMinutes,
   minutesChanged,
   WEEKDAYS,
 } from "./schedule-math";
@@ -52,6 +54,65 @@ describe("dayBase", () => {
   it("is the scaled minutes at the reference temperature", () => {
     expect(dayBase(CYCLE, 3)).toBe(30); // 20 * 1.5
     expect(dayBase(CYCLE, 0)).toBe(10); // 20 * 0.5
+  });
+
+  it("is the SETTING: untouched by the zone's adjustment_pct", () => {
+    // dayBase has no adjustment parameter at all -- it feeds the minutes
+    // stepper and set_program_minutes, which must never see a
+    // post-adjustment number (see the module doc on dayDelivery/previewMinutes).
+    // This test pins that by construction: dayBase(CYCLE, 3) is 30 no
+    // matter what a zone's adjustment_pct is, because there's nowhere to
+    // even pass one in.
+    expect(dayBase(CYCLE, 3)).toBe(30);
+  });
+});
+
+describe("dayDelivery", () => {
+  it("folds the zone's adjustment_pct into the SETTING, engine-order: multiply first, then clamp", () => {
+    // dayIntensity(CYCLE, 3) is 150. At 70% zone adjustment the combined
+    // percentage is 150 * 70 / 100 = 105, applied to raw(25) = 20:
+    // 20 * 105 / 100 = 21 -- the same figure engine/curves.py::curve_value
+    // would produce for zone.adjustment_pct=70, intensity_pct=150 at 25 °C.
+    expect(dayDelivery(CYCLE, 3, 70)).toBe(21);
+    // dayIntensity(CYCLE, 0) is 50 (the Sunday override). Combined: 50 * 70
+    // / 100 = 35. 20 * 35 / 100 = 7.
+    expect(dayDelivery(CYCLE, 0, 70)).toBe(7);
+  });
+
+  it("is unchanged from dayBase's figure at a 100% (no-op) adjustment", () => {
+    expect(dayDelivery(CYCLE, 3, 100)).toBe(dayBase(CYCLE, 3));
+    expect(dayDelivery(CYCLE, 0, 100)).toBe(dayBase(CYCLE, 0));
+  });
+
+  it("never scales the clamps themselves", () => {
+    // A tiny curve value pushed further down by the adjustment still hits
+    // the floor, not zero or a fraction of the floor.
+    const clamped = { curve: { points: [[25, 10]], min: 5, max: 60 } };
+    // 10 * (100 * 10 / 100) / 100 = 1, floored to the clamp minimum of 5 --
+    // never 5 * 0.1 = 0.5.
+    expect(dayDelivery(clamped, 0, 10)).toBe(5);
+  });
+});
+
+describe("previewMinutes", () => {
+  it("with a known curve and intensity, produces what the engine would deliver at 70% zone adjustment", () => {
+    // reference value at 25 °C is 20 (matches CYCLE's own middle point), so
+    // minutesAtReference=20 means the derived intensity is exactly 100%.
+    // At 35 °C the raw curve reads 32. Combined percentage with a 70%
+    // zone adjustment: 100 * 70 / 100 = 70. 32 * 70 / 100 = 22.4, rounded
+    // (banker's rounding) to 22 -- the same value
+    // curve_value(curve, 35, 70) would produce, then rounded for display.
+    expect(previewMinutes(CYCLE, 20, 35, 70)).toBe(22);
+  });
+
+  it("is unchanged from today's behaviour at a 100% (no-op) adjustment", () => {
+    // Omitting the parameter defaults to 100 -- the pre-adjustment figure.
+    expect(previewMinutes(CYCLE, 20, 35)).toBe(previewMinutes(CYCLE, 20, 35, 100));
+    expect(previewMinutes(CYCLE, 20, 35)).toBe(32); // raw(35) unscaled
+  });
+
+  it("reads an absent adjustment as 100 (the engine's own default)", () => {
+    expect(previewMinutes(CYCLE, 20, 35)).toBe(previewMinutes(CYCLE, 20, 35, 100));
   });
 });
 

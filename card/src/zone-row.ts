@@ -1,7 +1,7 @@
 import { css, html, LitElement, nothing } from "lit";
 import type { TemplateResult } from "lit";
 import { property, state } from "lit/decorators.js";
-import { zoneHasFlowMeter, type ZoneBundle } from "./discovery";
+import { zoneAdjustmentPct, zoneHasFlowMeter, type ZoneBundle } from "./discovery";
 import type { CycleInfo, ZoneAction, ZoneState } from "./types";
 import {
   asArray,
@@ -589,6 +589,7 @@ export class ImcZoneRow extends LitElement {
           .cycle=${cycle}
           .weightedTemp=${this.weightedTemp}
           .zoneHasFlowMeter=${this.zone ? zoneHasFlowMeter(this.zone) : false}
+          .zoneAdjustmentPct=${this.zone ? zoneAdjustmentPct(this.zone) : 100}
           @imc-curve-save=${this._onCurveSave}
           @imc-curve-cancel=${() => (this._editingCycle = undefined)}
         ></imc-curve-editor>`
