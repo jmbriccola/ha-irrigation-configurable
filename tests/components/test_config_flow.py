@@ -142,7 +142,7 @@ async def test_hub_happy_path(hass: HomeAssistant) -> None:
     }
 
     entry = hass.config_entries.async_entries(const.DOMAIN)[0]
-    assert entry.version == 2
+    assert entry.version == 3
     assert entry.minor_version == 1
     # The options must parse into the typed hub model.
     hub = HubConfig.from_options(dict(entry.options))

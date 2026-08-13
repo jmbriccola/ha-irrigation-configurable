@@ -15,6 +15,7 @@ from .migration import (
     MigrationNote,
     migrate_hub_restrictions,
     migrate_zone_v1_to_v2,
+    migrate_zone_v2_to_v3,
 )
 from .panel import async_register_panel, async_unregister_panel
 from .resources import async_register_frontend
@@ -85,32 +86,54 @@ def async_report_migration_notes(hass: HomeAssistant, notes: list[MigrationNote]
 
 async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Migrate old config entries (schema versioning from 1.0, §7)."""
-    if entry.version > 2:
+    if entry.version > 3:
         # Downgrade from a future major version: refuse, do not guess.
         return False
-    if entry.version == 2:
-        return True
 
-    # v1 -> v2: the program becomes the single owner of "when". Every zone is
-    # rewritten and anything the new model cannot express is reported.
-    hub_restrictions = dict(entry.options.get(const.CONF_RESTRICTIONS) or {})
-    notes: list[MigrationNote] = []
-    for subentry in entry.subentries.values():
-        if subentry.subentry_type != const.SUBENTRY_TYPE_ZONE:
-            continue
-        data, zone_notes = migrate_zone_v1_to_v2(dict(subentry.data), hub_restrictions)
-        notes.extend(zone_notes)
-        hass.config_entries.async_update_subentry(entry, subentry, data=data)
+    if entry.version < 2:
+        # v1 -> v2: the program becomes the single owner of "when". Every zone
+        # is rewritten and anything the new model cannot express is reported.
+        hub_restrictions = dict(entry.options.get(const.CONF_RESTRICTIONS) or {})
+        notes: list[MigrationNote] = []
+        for subentry in entry.subentries.values():
+            if subentry.subentry_type != const.SUBENTRY_TYPE_ZONE:
+                continue
+            data, zone_notes = migrate_zone_v1_to_v2(dict(subentry.data), hub_restrictions)
+            notes.extend(zone_notes)
+            hass.config_entries.async_update_subentry(entry, subentry, data=data)
 
-    options = dict(entry.options)
-    options[const.CONF_RESTRICTIONS] = migrate_hub_restrictions(hub_restrictions)
-    hass.config_entries.async_update_entry(entry, options=options, version=2, minor_version=0)
+        options = dict(entry.options)
+        options[const.CONF_RESTRICTIONS] = migrate_hub_restrictions(hub_restrictions)
+        hass.config_entries.async_update_entry(entry, options=options, version=2, minor_version=0)
 
-    if notes:
-        async_report_migration_notes(hass, notes)
-    _LOGGER.info(
-        "Migrated config entry %s to the unified schedule model (%s note(s))",
-        entry.entry_id,
-        len(notes),
-    )
+        if notes:
+            async_report_migration_notes(hass, notes)
+        _LOGGER.info(
+            "Migrated config entry %s to the unified schedule model (%s note(s))",
+            entry.entry_id,
+            len(notes),
+        )
+
+    if entry.version < 3:
+        # v2 -> v3: curve template references become explicit points and
+        # per-day minutes become a per-day intensity percentage.
+        templates = entry.options.get(const.CONF_CURVE_TEMPLATES, {})
+        notes = []
+        for subentry in entry.subentries.values():
+            if subentry.subentry_type != const.SUBENTRY_TYPE_ZONE:
+                continue
+            data, zone_notes = migrate_zone_v2_to_v3(dict(subentry.data), templates)
+            notes.extend(zone_notes)
+            hass.config_entries.async_update_subentry(entry, subentry, data=data)
+
+        hass.config_entries.async_update_entry(entry, version=3, minor_version=0)
+
+        if notes:
+            async_report_migration_notes(hass, notes)
+        _LOGGER.info(
+            "Migrated config entry %s to explicit curve points and per-day intensity (%s note(s))",
+            entry.entry_id,
+            len(notes),
+        )
+
     return True

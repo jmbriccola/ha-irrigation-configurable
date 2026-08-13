@@ -295,7 +295,7 @@ class TestEndToEnd:
         assert await hass.config_entries.async_setup(entry.entry_id)
         await hass.async_block_till_done()
 
-        assert entry.version == 2
+        assert entry.version == 3
         data = next(iter(entry.subentries.values())).data
         # The grid the user picked wins; the cadence and the parity are gone.
         assert data["cycles"][0]["calendar"] == {"mode": "weekdays", "days": [0, 2, 4]}
@@ -356,3 +356,43 @@ class TestCurveMaterialisation:
         data, notes = migrate_zone_v2_to_v3(self._zone({"template": "gone"}), {})
         assert data["cycles"][0]["curve"] == {"template": "gone"}
         assert [note.kind for note in notes] == ["curve_template_missing"]
+
+
+class TestPerDayMinutesConversion:
+    def _zone(self, curve: dict[str, Any], day_minutes: dict[str, int]) -> dict[str, Any]:
+        return {
+            "name": "Pots",
+            "valve_entity": "valve.pots",
+            "cycles": [{"id": "c1", "name": "Morning", "curve": curve, "day_minutes": day_minutes}],
+        }
+
+    def test_minutes_become_an_equivalent_percentage(self) -> None:
+        # Raw value at 25 C is 20 min; 30 minutes on Monday is 150 %.
+        curve = {"points": [[25.0, 20.0]], "min_value": 1.0, "max_value": 60.0}
+        data, notes = migrate_zone_v2_to_v3(self._zone(curve, {"0": 30, "3": 10}), {})
+        cycle = data["cycles"][0]
+        assert "day_minutes" not in cycle
+        assert cycle["day_intensity_pct"] == {"0": 150.0, "3": 50.0}
+        assert notes == []
+
+    def test_conversion_uses_the_unclamped_value(self) -> None:
+        """A floor of 10 over a raw 8 must not distort the factor: asking for
+        20 minutes is 250 % of 8, not 200 % of the clamped 10."""
+        curve = {"points": [[25.0, 8.0]], "min_value": 10.0, "max_value": 60.0}
+        data, _ = migrate_zone_v2_to_v3(self._zone(curve, {"0": 20}), {})
+        assert data["cycles"][0]["day_intensity_pct"] == {"0": 250.0}
+
+    def test_running_twice_changes_nothing(self) -> None:
+        curve = {"points": [[25.0, 20.0]], "min_value": 1.0, "max_value": 60.0}
+        once, _ = migrate_zone_v2_to_v3(self._zone(curve, {"0": 30}), {})
+        twice, notes = migrate_zone_v2_to_v3(deepcopy(once), {})
+        assert twice == once
+        assert notes == []
+
+    def test_a_zero_curve_cannot_be_scaled_and_is_reported(self) -> None:
+        curve = {"points": [[25.0, 0.0]], "min_value": 0.0, "max_value": 60.0}
+        data, notes = migrate_zone_v2_to_v3(self._zone(curve, {"0": 30}), {})
+        cycle = data["cycles"][0]
+        assert "day_minutes" not in cycle
+        assert "day_intensity_pct" not in cycle
+        assert [note.kind for note in notes] == ["day_minutes_dropped"]

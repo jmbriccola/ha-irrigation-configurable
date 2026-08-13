@@ -18,7 +18,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from . import const
-from .engine.curves import CurveError
+from .engine.curves import CurveError, interpolate
 from .models import resolve_curve
 
 _ALL_WEEKDAYS = frozenset(range(7))
@@ -182,6 +182,27 @@ def migrate_zone_v2_to_v3(
                 const.CONF_CURVE_MAX: resolved.max_value,
                 const.CONF_CURVE_KIND: str(resolved.kind),
             }
+
+        day_minutes = cycle.pop(const.CONF_CYCLE_DAY_MINUTES, None)
+        if day_minutes:
+            points = cycle[const.CONF_CURVE].get(const.CONF_CURVE_POINTS)
+            reference = (
+                interpolate([(float(t), float(v)) for t, v in points], const.CURVE_REFERENCE_TEMP_C)
+                if points
+                else 0.0
+            )
+            if reference > 0:
+                cycle[const.CONF_CYCLE_DAY_INTENSITY_PCT] = {
+                    str(day): round(100.0 * float(minutes) / reference, 2)
+                    for day, minutes in day_minutes.items()
+                }
+            else:
+                # A curve worth zero minutes at the reference cannot be scaled
+                # into anything; report the loss instead of inventing a factor.
+                notes.append(
+                    MigrationNote("day_minutes_dropped", zone_name, name, dict(day_minutes))
+                )
+
         cycles.append(cycle)
 
     zone[const.CONF_CYCLES] = cycles

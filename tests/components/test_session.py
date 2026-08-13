@@ -94,7 +94,7 @@ async def setup_hub(
     await hass.config.async_set_time_zone("UTC")
     entry = MockConfigEntry(
         domain=DOMAIN,
-        version=2,
+        version=3,
         title="Irrigation Maestro",
         data={},
         options={
