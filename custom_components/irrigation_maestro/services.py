@@ -8,6 +8,7 @@ single hub entry at call time. Every user-facing failure raises
 from __future__ import annotations
 
 import json
+import re
 from collections.abc import Callable
 from copy import deepcopy
 from types import MappingProxyType
@@ -34,15 +35,10 @@ from .engine.curves import CurveError, CurveKind, interpolate, validate_points
 from .migration import MigrationNote, migrate_zone_v2_to_v3
 from .models import CycleConfig, HubConfig, ZoneConfig, resolve_curve
 from .notify import (
-    EVENT_ANOMALY,
-    EVENT_CANCELLED,
-    EVENT_COMPLETED,
-    EVENT_CONSUMPTION_BUDGET,
-    EVENT_INTERRUPTED,
-    EVENT_SENTINEL,
-    EVENT_SESSION_OVERRUN,
-    EVENT_SKIPPED,
-    EVENT_WATCHDOG,
+    ALL_EVENTS,
+    PRIORITY_HIGH,
+    PRIORITY_NORMAL,
+    normalize_service,
 )
 from .runtime import IrrigationRuntime
 
@@ -140,8 +136,12 @@ ATTR_COMPATIBILITY_GROUPS: Final = "compatibility_groups"
 ATTR_MASTER_PRE_OPEN_S: Final = "master_pre_open_s"
 ATTR_MASTER_POST_CLOSE_S: Final = "master_post_close_s"
 ATTR_EVENT: Final = "event"
+ATTR_EVENTS: Final = "events"
 ATTR_ENABLED: Final = "enabled"
 ATTR_SERVICES: Final = "services"
+ATTR_PRIORITY: Final = "priority"
+ATTR_TITLE: Final = "title"
+ATTR_MESSAGE: Final = "message"
 ATTR_SOAK_MAX_RUN_MIN: Final = "soak_max_run_min"
 ATTR_SOAK_PAUSE_MIN: Final = "soak_pause_min"
 ATTR_VOLUME_SAFETY_TIMEOUT_MIN: Final = "volume_safety_timeout_min"
@@ -365,19 +365,6 @@ _CONCURRENCY_KEYS: Final = {
     ATTR_MASTER_POST_CLOSE_S: const.CONF_MASTER_POST_CLOSE_S,
 }
 
-# Built from notify.py so a renamed event cannot drift out of sync here.
-_NOTIFY_EVENTS: Final = (
-    EVENT_COMPLETED,
-    EVENT_SKIPPED,
-    EVENT_INTERRUPTED,
-    EVENT_CANCELLED,
-    EVENT_ANOMALY,
-    EVENT_WATCHDOG,
-    EVENT_SENTINEL,
-    EVENT_SESSION_OVERRUN,
-    EVENT_CONSUMPTION_BUDGET,
-)
-
 _SET_PROGRAM_ADVANCED_SCHEMA = vol.Schema(
     {
         vol.Required(ATTR_ZONE_ID): cv.string,
@@ -389,12 +376,22 @@ _SET_PROGRAM_ADVANCED_SCHEMA = vol.Schema(
         ),
     }
 )
-_SET_NOTIFICATIONS_SCHEMA = vol.Schema(
-    {
-        vol.Required(ATTR_EVENT): vol.In(_NOTIFY_EVENTS),
-        vol.Optional(ATTR_ENABLED): cv.boolean,
-        vol.Optional(ATTR_SERVICES): vol.All(cv.ensure_list, [cv.string]),
-    }
+_NOTIFY_SERVICE_NAME = re.compile(r"[a-z0-9_]+")
+
+_SET_NOTIFICATIONS_SCHEMA = vol.All(
+    vol.Schema(
+        {
+            vol.Optional(ATTR_EVENT): vol.In(ALL_EVENTS),
+            vol.Optional(ATTR_EVENTS): vol.All(
+                cv.ensure_list, [vol.In(ALL_EVENTS)], vol.Length(min=1)
+            ),
+            vol.Optional(ATTR_ENABLED): cv.boolean,
+            vol.Optional(ATTR_SERVICES): vol.All(cv.ensure_list, [cv.string]),
+            vol.Optional(ATTR_PRIORITY): vol.In([PRIORITY_HIGH, PRIORITY_NORMAL]),
+        }
+    ),
+    cv.has_at_least_one_key(ATTR_EVENT, ATTR_EVENTS),
+    cv.has_at_most_one_key(ATTR_EVENT, ATTR_EVENTS),
 )
 _SET_SESSION_LIMITS_SCHEMA = vol.Schema(
     {
@@ -1154,11 +1151,33 @@ async def _async_set_program_advanced(call: ServiceCall) -> None:
     _update_cycle(hass, entry, zone_id, program_id, mutate)
 
 
-async def _async_set_notifications(call: ServiceCall) -> None:
-    """Enable/disable one event and set the notify services it calls.
+def _clean_notify_services(raw: list[str]) -> list[str]:
+    """Bare, de-duplicated service names, or a refusal.
 
-    One event per call: a caller never has to post the whole nested structure
-    back, and so cannot clobber the events it did not mean to touch.
+    Well-formed names that are not registered yet are accepted: a notify
+    integration can load after us, and refusing here would block a legitimate
+    configuration.
+    """
+    cleaned: list[str] = []
+    for item in raw:
+        name = normalize_service(str(item))
+        if not _NOTIFY_SERVICE_NAME.fullmatch(name):
+            raise ServiceValidationError(
+                translation_domain=DOMAIN,
+                translation_key="invalid_notify_service",
+                translation_placeholders={"service": str(item)},
+            )
+        if name not in cleaned:
+            cleaned.append(name)
+    return cleaned
+
+
+async def _async_set_notifications(call: ServiceCall) -> None:
+    """Configure one event, or several that share a setting.
+
+    A call only ever touches the events it names, so a caller never has to post
+    the whole nested structure back and cannot clobber the rest. `events` exists
+    so the wizard can save nine events in two calls without weakening that.
     """
     hass = call.hass
     entry = _loaded_entry(hass)
@@ -1166,13 +1185,31 @@ async def _async_set_notifications(call: ServiceCall) -> None:
     notifications = {
         key: dict(value) for key, value in options.get(const.CONF_NOTIFICATIONS, {}).items()
     }
-    event = call.data[ATTR_EVENT]
-    current = notifications.get(event, {})
-    if ATTR_ENABLED in call.data:
-        current[const.CONF_NOTIFY_ENABLED] = call.data[ATTR_ENABLED]
-    if ATTR_SERVICES in call.data:
-        current[const.CONF_NOTIFY_SERVICES] = list(call.data[ATTR_SERVICES])
-    notifications[event] = current
+    events: list[str] = list(call.data.get(ATTR_EVENTS) or [call.data[ATTR_EVENT]])
+    services = (
+        _clean_notify_services(call.data[ATTR_SERVICES]) if ATTR_SERVICES in call.data else None
+    )
+    for event in events:
+        current = dict(notifications.get(event, {}))
+        if ATTR_ENABLED in call.data:
+            current[const.CONF_NOTIFY_ENABLED] = call.data[ATTR_ENABLED]
+        if services is not None:
+            current[const.CONF_NOTIFY_SERVICES] = list(services)
+        if ATTR_PRIORITY in call.data:
+            current[const.CONF_NOTIFY_PRIORITY] = call.data[ATTR_PRIORITY]
+        # Judge the RESULT, not the payload. A call that only flips `enabled`
+        # on an event whose stored list is empty produces exactly the
+        # configured-looking, mute shape this service exists to refuse -- and
+        # validating the payload alone would wave it through.
+        if current.get(const.CONF_NOTIFY_ENABLED) and not current.get(const.CONF_NOTIFY_SERVICES):
+            raise ServiceValidationError(
+                translation_domain=DOMAIN,
+                translation_key="notify_enabled_without_target",
+                translation_placeholders={"event": event},
+            )
+        notifications[event] = current
+    # Nothing is persisted until every named event validated: a multi-event
+    # call is all-or-nothing.
     options[const.CONF_NOTIFICATIONS] = notifications
     _write_hub_options(hass, entry, options)
 

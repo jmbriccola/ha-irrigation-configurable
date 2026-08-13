@@ -620,10 +620,24 @@ set_concurrency:
 set_notifications:
   fields:
     event:
-      required: true
       example: completed
       selector:
         select:
+          options:
+            - completed
+            - skipped
+            - interrupted
+            - cancelled
+            - anomaly
+            - watchdog
+            - sentinel
+            - session_overrun
+            - consumption_budget
+    events:
+      example: '["watchdog", "anomaly", "sentinel", "interrupted"]'
+      selector:
+        select:
+          multiple: true
           options:
             - completed
             - skipped
@@ -639,9 +653,16 @@ set_notifications:
       selector:
         boolean:
     services:
-      example: '["notify.mobile_app"]'
+      example: '["mobile_app_pixel_10_pro_xl"]'
       selector:
         object:
+    priority:
+      example: high
+      selector:
+        select:
+          options:
+            - high
+            - normal
 
 set_program_advanced:
   fields:

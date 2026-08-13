@@ -695,19 +695,27 @@
     },
     "set_notifications": {
       "name": "Imposta notifiche",
-      "description": "Abilita un evento e scegli i servizi di notifica che richiama.",
+      "description": "Abilita un evento (o più insieme) e scegli i servizi notify che deve chiamare.",
       "fields": {
         "event": {
           "name": "Evento",
-          "description": "Quale evento configurare."
+          "description": "Quale evento configurare. Usa questo oppure Eventi, non entrambi."
+        },
+        "events": {
+          "name": "Eventi",
+          "description": "Più eventi da configurare con le stesse impostazioni. Usa questo oppure Evento, non entrambi."
         },
         "enabled": {
           "name": "Abilitato",
-          "description": "Se questo evento invia notifiche."
+          "description": "Se questi eventi devono notificare."
         },
         "services": {
-          "name": "Servizi di notifica",
-          "description": "Elenco di servizi notify, es. notify.mobile_app_telefono."
+          "name": "Servizi notify",
+          "description": "Nomi dei servizi notify, con o senza il prefisso notify., ad esempio mobile_app_phone. Abilitare un evento con la lista vuota viene rifiutato: sembrerebbe configurato e non manderebbe nulla."
+        },
+        "priority": {
+          "name": "Priorità",
+          "description": "Alta aggiunge segnali di urgenza compresi dalle app mobili. Predefinita alta per guasto valvola, anomalia, sentinella e interruzione."
         }
       }
     },
@@ -862,6 +870,12 @@
     },
     "soak_pause_without_max_run": {
       "message": "La pausa di ammollo richiede una durata massima per corsa: senza, la corsa non viene mai divisa e la pausa non farebbe nulla."
+    },
+    "notify_enabled_without_target": {
+      "message": "L'evento \"{event}\" non può essere abilitato senza destinatari: sembrerebbe configurato e non manderebbe nulla. Scegli almeno un destinatario."
+    },
+    "invalid_notify_service": {
+      "message": "\"{service}\" non è un nome valido di servizio notify. Usa il nome del servizio, ad esempio mobile_app_phone."
     }
   },
   "selector": {
