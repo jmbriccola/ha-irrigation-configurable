@@ -4,6 +4,72 @@ All notable changes to this project are documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/).
 
+## [3.0.0] - Unreleased
+
+Backend half of the curve-authoring rework. The dashboard card is unchanged
+in this release — see "Not yet done" below.
+
+### Changed — breaking
+
+- **A curve now has one stored form.** Until now a program's watering curve
+  could be either explicit control points or a reference to a preset such as
+  `{"template": "preset_pots"}`, and every dashboard save silently converted
+  the reference into materialised points without telling you. Storage
+  migrates v2 → v3 on first load: any stored template reference is
+  materialised losslessly (the points written are exactly the preset's), and
+  the migration is idempotent.
+- **"Minutes" is now an intensity percentage that scales your curve, not a
+  value that rebuilds it.** Nudging a program's minutes used to re-derive a
+  "heat" value and regenerate a fresh two/three-point curve, destroying any
+  authored shape underneath it — a six-point curve silently became three
+  points. Minutes now scale the existing curve through the adjustment factor
+  the engine already had, so a curve with any number of points keeps every
+  point regardless of how often the minutes are adjusted.
+- **Per-day minutes became a per-day intensity, and the migration that
+  converts them changes what a "hot day" value means.** Per-day minutes used
+  to make the engine discard the configured curve and rebuild a three-anchor
+  one at evaluation time, keeping the heat *delta* absolute. The migrated
+  per-day intensity instead scales the whole curve proportionally: the mild
+  value is unchanged, but the hot value now follows your own curve's shape
+  rather than the old fixed delta. Check each program's watering after
+  upgrading if you rely on a per-day override on a hot day.
+- **Zones and programs left Home Assistant's Settings.** The zone subentry
+  flow (Settings → Devices & services → Irrigation Maestro → Add zone /
+  reconfigure) is gone. The panel creates the first zone from its empty
+  state; if the panel cannot load, `add_zone` is still callable from
+  Developer Tools → Actions. Hub setup (weather sources) and the
+  engine-parameters step are unchanged and still live in Settings.
+- **Watering presets left the user interface.** `preset_pots` and
+  `preset_lawn` can no longer be selected or created through the panel or a
+  service call. They remain in the engine as the field-validated reference
+  curves the §8 regression tests pin, and `resolve_curve` still resolves a
+  template reference, so a configuration exported from a 2.x install still
+  imports correctly.
+
+### Added
+
+- `duplicate_program` service: copies a program to a fresh id, so no cadence
+  marker or outcome history follows the copy. Refuses to create a volume-mode
+  copy in a zone with no flow meter.
+- `copy_curve` service: copies only the curve's shape into another program,
+  leaving that program's intensity, name, schedule and soak settings alone.
+- `set_curve` gained a `kind` field. Setting a curve's kind through this
+  service is now the only way to create a volume-mode program.
+- `add_zone` now writes `order` (highest existing zone's order + 1, so a new
+  zone lands at the end of the watering sequence) and `adjustment_pct`
+  explicitly, now that it is the only path that creates a zone.
+
+### Not yet done (lands with Phase B)
+
+The dashboard card has **not** been rewritten yet. The zone sensor still
+publishes `amount`, `heat` and `day_minutes` as derived, backward-compatible
+attributes (now folding in the intensity, so the numbers shown stay
+truthful), and `set_simple_curve` and `engine/semantic.py` still exist to
+support the current card. The point-based curve editor, the card's switch to
+reading the curve and intensity directly, and the removal of the
+compatibility layer land in the next phase, along with the version bump this
+entry's number anticipates.
+
 ## [2.1.1] - 2026-08-13
 
 ### Fixed

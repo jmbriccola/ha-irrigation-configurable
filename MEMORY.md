@@ -139,6 +139,49 @@ details harvested from it (kept as engine behaviour):
   by test: pre-expanding all segments made slice 2 start immediately).
 - Brands PR assets generated in docs/brands/irrigation_maestro/ (droplet over
   field, Pillow-generated placeholder — replaceable with real artwork).
+- **A curve has one stored form (3.0.0).** Before 3.0.0 a curve could be
+  explicit points OR a `{"template": ...}` reference, and every dashboard
+  save silently materialised the reference into points with no visible
+  change — the card reduced any curve to two friendly numbers, so nobody
+  could tell. Storage now holds points + min/max/kind only; migration v2→v3
+  materialises a stored reference losslessly (the points written are exactly
+  the preset's) and is idempotent. Do not reintroduce a second stored form
+  for the same value — that is the exact defect this migration removes.
+- **Intensity scales the curve; it does not rebuild it (3.0.0).** The minutes
+  control used to re-derive a "heat" value from the curve and regenerate a
+  fresh two/three-point curve on every nudge, destroying any authored shape
+  underneath — a six-point curve silently became three points. `intensity_pct`
+  now multiplies through the adjustment factor `curve_value` already had,
+  applied via the new unclamped `interpolate()`; any curve keeps every point
+  no matter how often intensity changes. Per-day minutes became a per-day
+  intensity for the same reason, one level down in the engine, where uniform
+  per-day minutes used to force a three-anchor rebuild at evaluation time.
+  This is a deliberate semantic change, not just a rename: the old per-day
+  delta was absolute (mild fixed, hot = mild + heat), the new one is
+  proportional (hot scales with the whole curve) — the migration preserves
+  the mild value exactly and lets the hot value follow the user's own curve
+  instead of a fixed offset.
+- **Presets retired from the interface, kept as engine constants (3.0.0).**
+  `PRESET_POTS` / `PRESET_LAWN` can no longer be selected or created through
+  the panel or a service call — only explicit points can. They stay in
+  `engine/curves.py` because §8 pins them as field-validated reference
+  curves, and `resolve_curve` still resolves a template reference so a
+  configuration exported from a 2.x install still imports.
+- **Zone-defaults convention (3.0.0): the creating service writes them.**
+  `add_zone` now writes `order` (highest existing + 1) and `adjustment_pct`
+  explicitly instead of leaving them to fall back implicitly, because it is
+  now the only path that creates a zone (the subentry add flow is deleted).
+  One writer, one convention — do not let a second zone-creation path leave
+  these implicit again.
+- **Subentries: the storage model survived, the flow did not (3.0.0).**
+  `docs/design/architecture.md` still gives "a native Add zone button" as
+  the historical rationale for choosing subentries — that record is
+  intentionally left alone. What changed is narrower: zones are still config
+  subentries (their own devices, stable ids, `async_update_subentry`); only
+  the subentry *flow* (add/reconfigure UI in Settings) was deleted, because
+  the panel is now the only place a zone is created or edited. Do not read
+  the architecture doc's rationale as still describing current UI — it
+  explains why the storage model was picked, not how zones are edited today.
 
 ## Progress log
 
