@@ -149,7 +149,7 @@ async def test_volume_mode_closes_at_target(
     freezer.move_to(START)
     park = MockValvePark(hass)
     park.add("valve.a")
-    hass.states.async_set("sensor.flow", "0.0")
+    hass.states.async_set("sensor.flow", "0.0", {"unit_of_measurement": "L/min"})
     mock_weather(hass)
     zone = zone_data(
         "Alpha",
@@ -178,9 +178,11 @@ async def test_volume_mode_closes_at_target(
     assert hass.states.get("valve.a").state == "open"
 
     # 10 L/min: the 20 L target is reached after ~2 minutes.
-    hass.states.async_set("sensor.flow", "10.0")
+    hass.states.async_set("sensor.flow", "10.0", {"unit_of_measurement": "L/min"})
     await advance(hass, freezer, 150)
-    hass.states.async_set("sensor.flow", "10.0", force_update=True)
+    hass.states.async_set(
+        "sensor.flow", "10.0", {"unit_of_measurement": "L/min"}, force_update=True
+    )
     await advance(hass, freezer, 60)
 
     assert hass.states.get("valve.a").state == "closed"
@@ -196,7 +198,7 @@ async def test_zero_flow_interrupts_cycle(
     freezer.move_to(START)
     park = MockValvePark(hass)
     park.add("valve.a")
-    hass.states.async_set("sensor.flow", "0.0")
+    hass.states.async_set("sensor.flow", "0.0", {"unit_of_measurement": "L/min"})
     mock_weather(hass)
     entry = await setup_hub(
         hass,
@@ -305,3 +307,159 @@ async def test_soak_interleaves_other_zone(
     runtime = entry.runtime_data
     assert runtime.state.last_outcome(runtime.zone_ids[0])["result"] == "completed"
     assert runtime.state.last_outcome(runtime.zone_ids[1])["result"] == "completed"
+
+
+async def test_a_cubic_metres_per_hour_meter_reaches_the_volume_target(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    """0.45 m³/h is 7.5 L/min: the 20 L target arrives in under three minutes.
+
+    Read as L/min it would have been 0.45 L/min and the run would have hit its
+    safety timeout instead, 16.7x short.
+    """
+    freezer.move_to(START)
+    park = MockValvePark(hass)
+    park.add("valve.a")
+    hass.states.async_set("sensor.flow", "0.0", {"unit_of_measurement": "m³/h"})
+    mock_weather(hass)
+    zone = zone_data(
+        "Alpha",
+        "valve.a",
+        flow_sensor="sensor.flow",
+        nominal_flow_lpm=7.5,
+        cycles=[
+            {
+                "id": "cy_vol",
+                "name": "Volume",
+                "enabled": True,
+                "trigger": {"kind": "time", "at": "05:30"},
+                "curve": {
+                    "points": [[20.0, 20.0]],
+                    "min_value": 5.0,
+                    "max_value": 100.0,
+                    "kind": "volume",
+                },
+                "volume_safety_timeout_min": 30,
+            }
+        ],
+    )
+    entry = await setup_hub(hass, [zone])
+
+    await advance(hass, freezer, 31 * 60)
+    assert hass.states.get("valve.a").state == "open"
+
+    hass.states.async_set("sensor.flow", "0.45", {"unit_of_measurement": "m³/h"})
+    await advance(hass, freezer, 150)
+    hass.states.async_set("sensor.flow", "0.45", {"unit_of_measurement": "m³/h"}, force_update=True)
+    await advance(hass, freezer, 60)
+
+    assert hass.states.get("valve.a").state == "closed"
+    runtime = entry.runtime_data
+    outcome = runtime.state.last_outcome(runtime.zone_ids[0])
+    assert outcome["result"] == "completed"
+    assert outcome["volume_l"] >= 20
+
+
+async def test_a_unit_override_beats_the_declared_unit_end_to_end(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    """The sensor claims L/min but really reports m³/h. The user says so."""
+    freezer.move_to(START)
+    park = MockValvePark(hass)
+    park.add("valve.a")
+    hass.states.async_set("sensor.flow", "0.0", {"unit_of_measurement": "L/min"})
+    mock_weather(hass)
+    zone = zone_data(
+        "Alpha",
+        "valve.a",
+        flow_sensor="sensor.flow",
+        flow_sensor_unit="m³/h",
+        nominal_flow_lpm=7.5,
+        cycles=[
+            {
+                "id": "cy_vol",
+                "name": "Volume",
+                "enabled": True,
+                "trigger": {"kind": "time", "at": "05:30"},
+                "curve": {
+                    "points": [[20.0, 20.0]],
+                    "min_value": 5.0,
+                    "max_value": 100.0,
+                    "kind": "volume",
+                },
+                "volume_safety_timeout_min": 30,
+            }
+        ],
+    )
+    entry = await setup_hub(hass, [zone])
+    await advance(hass, freezer, 31 * 60)
+    hass.states.async_set("sensor.flow", "0.45", {"unit_of_measurement": "L/min"})
+    await advance(hass, freezer, 150)
+    hass.states.async_set(
+        "sensor.flow", "0.45", {"unit_of_measurement": "L/min"}, force_update=True
+    )
+    await advance(hass, freezer, 60)
+
+    runtime = entry.runtime_data
+    outcome = runtime.state.last_outcome(runtime.zone_ids[0])
+    assert outcome["volume_l"] >= 20
+
+
+async def test_a_meter_with_no_unit_does_not_interrupt_the_cycle(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    """An unknown unit accumulates nothing, so it must not trip the zero-flow
+    guard — which would otherwise interrupt every single run."""
+    freezer.move_to(START)
+    park = MockValvePark(hass)
+    park.add("valve.a")
+    hass.states.async_set("sensor.flow", "7.5")  # no unit declared
+    mock_weather(hass)
+    entry = await setup_hub(
+        hass,
+        [zone_data("Alpha", "valve.a", minutes=10, flow_sensor="sensor.flow")],
+    )
+
+    await advance(hass, freezer, 31 * 60)
+    assert hass.states.get("valve.a").state == "open"
+    await advance(hass, freezer, 3 * 60)
+    # Still watering: the guard is off, not tripped.
+    assert hass.states.get("valve.a").state == "open"
+
+    await advance(hass, freezer, 8 * 60)
+    runtime = entry.runtime_data
+    outcome = runtime.state.last_outcome(runtime.zone_ids[0])
+    assert outcome["result"] == "completed"
+
+    registry = ir.async_get(hass)
+    assert registry.async_get_issue(DOMAIN, "flow_unit_unknown_sensor.flow") is not None
+
+
+async def test_a_unit_lost_mid_cycle_freezes_litres_without_crashing(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    freezer.move_to(START)
+    park = MockValvePark(hass)
+    park.add("valve.a")
+    hass.states.async_set("sensor.flow", "10.0", {"unit_of_measurement": "L/min"})
+    mock_weather(hass)
+    entry = await setup_hub(
+        hass,
+        [
+            zone_data(
+                "Alpha", "valve.a", minutes=10, flow_sensor="sensor.flow", nominal_flow_lpm=10.0
+            )
+        ],
+    )
+
+    await advance(hass, freezer, 31 * 60)
+    await advance(hass, freezer, 120)
+    # An upstream update drops the unit halfway through.
+    hass.states.async_set("sensor.flow", "10.0")
+    await advance(hass, freezer, 10 * 60)
+
+    runtime = entry.runtime_data
+    outcome = runtime.state.last_outcome(runtime.zone_ids[0])
+    assert outcome["result"] == "completed"  # no crash, no interrupt
+    registry = ir.async_get(hass)
+    assert registry.async_get_issue(DOMAIN, "flow_unit_unknown_sensor.flow") is not None

@@ -35,6 +35,7 @@ from .engine.evaluate import evaluate_session
 from .engine.model import SessionEvaluation, SkipReason
 from .engine.planner import PlannedRun, build_session_plan
 from .engine.scheduling import split_soak
+from .flow import FlowSensorReader
 from .models import CycleConfig, HubConfig, ZoneConfig
 from .notify import (
     EVENT_ANOMALY,
@@ -218,6 +219,23 @@ class IrrigationRuntime:
 
     def flow_sensor_for(self, zone: ZoneRuntime) -> str | None:
         return zone.config.flow_sensor or self.hub.line_flow_sensor
+
+    def flow_reader_for(self, zone: ZoneRuntime) -> FlowSensorReader | None:
+        """A reader for whichever meter serves this zone, with its own override.
+
+        The override that applies belongs to the sensor being read: a zone
+        falling back to the shared line meter takes the hub's override, not its
+        own — its own describes a sensor it does not have.
+        """
+        if zone.config.flow_sensor is not None:
+            return FlowSensorReader(
+                self.hass, zone.config.flow_sensor, zone.config.flow_sensor_unit
+            )
+        if self.hub.line_flow_sensor is not None:
+            return FlowSensorReader(
+                self.hass, self.hub.line_flow_sensor, self.hub.line_flow_sensor_unit
+            )
+        return None
 
     def zone_has_flow_meter(self, zone: ZoneConfig) -> bool:
         return bool(zone.flow_sensor or self.hub.line_flow_sensor)
@@ -947,6 +965,25 @@ class IrrigationRuntime:
             ),
             name="irrigation_maestro_flow_range",
         )
+
+    def report_flow_unit_unknown(self, entity_id: str) -> None:
+        """The meter's unit cannot be determined, so its readings are unusable.
+
+        Not an assumption of L/min: a plausible number that is silently wrong
+        is worse than a declared absence (see the degradation matrix).
+        """
+        ir.async_create_issue(
+            self.hass,
+            DOMAIN,
+            f"flow_unit_unknown_{entity_id}",
+            is_fixable=False,
+            severity=ir.IssueSeverity.WARNING,
+            translation_key="flow_unit_unknown",
+            translation_placeholders={"entity_id": entity_id},
+        )
+
+    def clear_flow_unit_unknown(self, entity_id: str) -> None:
+        ir.async_delete_issue(self.hass, DOMAIN, f"flow_unit_unknown_{entity_id}")
 
     # Consumption -------------------------------------------------------------------
 

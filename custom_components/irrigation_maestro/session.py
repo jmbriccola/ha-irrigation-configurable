@@ -33,6 +33,7 @@ from homeassistant.util import dt as dt_util
 from .engine.model import SessionEvaluation, SkipReason
 from .engine.planner import PlannedRun
 from .engine.scheduling import max_run_minutes, next_allowed_start
+from .flow import FlowSensorReader
 from .valves import ValveController
 
 if TYPE_CHECKING:
@@ -101,7 +102,14 @@ class ActiveRun:
 
 
 class FlowMonitor:
-    """Integrates a flow sensor (L/min) during a run and detects anomalies."""
+    """Integrates a flow sensor during a run and detects anomalies.
+
+    Litres are canonical L/min throughout; the reader converts at the boundary.
+    A reading whose unit cannot be determined is not a number — it accumulates
+    nothing, chases no volume target, checks no range, and above all does NOT
+    trip the zero-flow guard, which fires when too few litres accrue in the
+    grace window and would otherwise interrupt every run on such a meter.
+    """
 
     ZERO_FLOW_GRACE_S = 120
     ZERO_FLOW_EPSILON_L = 0.1
@@ -110,7 +118,7 @@ class FlowMonitor:
     def __init__(
         self,
         runtime: IrrigationRuntime,
-        sensor: str,
+        reader: FlowSensorReader,
         *,
         volume_target_l: int | None,
         expected_lpm: Callable[[], tuple[float, float] | None],
@@ -118,7 +126,8 @@ class FlowMonitor:
         on_volume_reached: Callable[[], None],
     ) -> None:
         self._runtime = runtime
-        self._sensor = sensor
+        self._reader = reader
+        self._sensor = reader.entity_id
         self._volume_target = volume_target_l
         self._expected_lpm = expected_lpm
         self._on_no_flow = on_no_flow
@@ -131,15 +140,21 @@ class FlowMonitor:
         self._out_of_range_since: datetime | None = None
         self._range_notified = False
         self._unsubs: list[CALLBACK_TYPE] = []
+        self.unit_known = True
 
     def _read(self) -> float:
-        state = self._runtime.hass.states.get(self._sensor)
-        if state is None or state.state in ("unavailable", "unknown"):
+        """Current flow in L/min; 0.0 and unit_known=False when unresolvable."""
+        reading = self._reader.read()
+        if reading.lpm is None:
+            if self.unit_known:
+                # Report once per transition, not once per state change.
+                self._runtime.report_flow_unit_unknown(self._sensor)
+            self.unit_known = False
             return 0.0
-        try:
-            return max(float(state.state), 0.0)
-        except ValueError:
-            return 0.0
+        if not self.unit_known:
+            self._runtime.clear_flow_unit_unknown(self._sensor)
+        self.unit_known = True
+        return reading.lpm
 
     def start(self) -> None:
         now = dt_util.utcnow()
@@ -165,7 +180,9 @@ class FlowMonitor:
         return self.liters
 
     def _integrate(self, now: datetime) -> None:
-        if self._last_at is not None:
+        # An unknown unit accumulates nothing: the litre count freezes at the
+        # last value that was certain rather than drifting on a guess.
+        if self._last_at is not None and self.unit_known:
             minutes = (now - self._last_at).total_seconds() / 60
             self.liters += self._last_lpm * minutes
         self._last_at = now
@@ -175,6 +192,8 @@ class FlowMonitor:
         now = dt_util.utcnow()
         self._integrate(now)
         self._last_lpm = self._read()
+        if not self.unit_known:
+            return
         if self._volume_target is not None and self.liters >= self._volume_target:
             self._on_volume_reached()
             return
@@ -189,6 +208,14 @@ class FlowMonitor:
         checked in the state callback).
         """
         self._integrate(dt_util.utcnow())
+        self._last_lpm = self._read()
+        if not self.unit_known:
+            # No usable meter: this run finishes on its duration or its volume
+            # safety timeout, exactly as it would with no meter at all. Keep
+            # rescheduling so a unit that comes back is picked up.
+            self._liters_at_last_check = self.liters
+            self._schedule_periodic_check()
+            return
         if self._volume_target is not None and self.liters >= self._volume_target:
             self._on_volume_reached()
             return
@@ -201,7 +228,7 @@ class FlowMonitor:
 
     def _check_range(self, now: datetime) -> None:
         expected = self._expected_lpm()
-        if expected is None or self._range_notified:
+        if expected is None or self._range_notified or not self.unit_known:
             return
         low, high = expected
         if low <= self._last_lpm <= high:
@@ -875,11 +902,11 @@ class SessionRunner:
 
         unsub_timer = async_call_later(self._runtime.hass, duration_s, _on_duration_elapsed)
         monitor: FlowMonitor | None = None
-        sensor = self._runtime.flow_sensor_for(zone)
-        if sensor is not None:
+        reader = self._runtime.flow_reader_for(zone)
+        if reader is not None:
             monitor = FlowMonitor(
                 self._runtime,
-                sensor,
+                reader,
                 volume_target_l=segment.run.volume_l,
                 expected_lpm=self._runtime.expected_flow_range,
                 on_no_flow=lambda: _finish("no_flow"),
