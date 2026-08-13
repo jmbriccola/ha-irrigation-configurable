@@ -801,7 +801,7 @@
       "message": "Il minimo non può superare il massimo."
     },
     "simple_curve_on_volume": {
-      "message": "Le curve semplici sono solo a durata; questo programma usa una curva a volume. Modificala nelle impostazioni della zona."
+      "message": "Il programma {cycle_id} irriga a volume: la sua curva imposta l'obiettivo in litri, quindi il controllo dei minuti non si applica. Modifica invece la sua curva."
     },
     "volume_requires_flow": {
       "message": "Il programma {cycle_id} misura l'acqua in litri, il che richiede un misuratore di portata funzionante, e questa zona non ne ha uno. Assegna un sensore di portata alla zona, oppure modifica il programma perché irrighi per una durata in minuti."

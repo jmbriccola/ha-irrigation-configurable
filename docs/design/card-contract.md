@@ -137,8 +137,9 @@ copy.
   (`minutes`) or per weekday (`day_minutes`); the two fields are
   **exclusive** — passing both, or neither, is a validation error. It only
   applies to duration-kind curves: calling it on a program whose curve is
-  volume-target raises `simple_curve_on_volume` (edit volume curves via the
-  zone settings instead). Neither call ever touches `curve.points`: passing
+  volume-target raises `simple_curve_on_volume` (a volume program's
+  watering is set by its curve, in litres, instead — use `set_curve`).
+  Neither call ever touches `curve.points`: passing
   `minutes` writes a uniform `intensity_pct` (computed against the curve's
   value at the reference temperature) and clears any existing
   `day_intensity_pct`; passing `day_minutes` writes `day_intensity_pct`

@@ -801,7 +801,7 @@
       "message": "The minimum must not exceed the maximum."
     },
     "simple_curve_on_volume": {
-      "message": "Simple curves are duration-only; this program uses a volume curve. Edit it in the zone settings."
+      "message": "Program {cycle_id} waters by volume: its curve sets the target in litres, so the minutes control does not apply to it. Edit its curve instead."
     },
     "volume_requires_flow": {
       "message": "Program {cycle_id} measures water in litres, which needs a working flow meter, and this zone does not have one. Give the zone a flow sensor, or change the program to water for a duration in minutes instead."
