@@ -4,6 +4,7 @@ export interface ZoneData {
   area_m2?: number;
   icon?: string;
   flow_sensor?: string;
+  flow_sensor_unit?: string;
   nominal_flow_lpm?: number;
   flow_tolerance_pct?: number;
   adjustment_pct?: number;
@@ -34,6 +35,7 @@ export interface HubOptions {
   rain_sensor?: string;
   outdoor_temp_sensor?: string;
   line_flow_sensor?: string;
+  line_flow_sensor_unit?: string;
   master_valve?: string;
   consumption_budget?: {
     liters_per_month?: number;
