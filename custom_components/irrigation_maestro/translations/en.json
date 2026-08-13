@@ -806,6 +806,9 @@
     "volume_requires_flow": {
       "message": "Program {cycle_id} measures water in litres, which needs a working flow meter, and this zone does not have one. Give the zone a flow sensor, or change the program to water for a duration in minutes instead."
     },
+    "duration_point_out_of_range": {
+      "message": "Program {cycle_id} waters for a duration in minutes, and a duration point cannot exceed a day (1440 minutes). A volume curve, in litres, has no such limit."
+    },
     "invalid_payload": {
       "message": "The payload is not a valid exported configuration."
     },

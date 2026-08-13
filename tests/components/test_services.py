@@ -1685,17 +1685,52 @@ async def test_import_config_rejects_a_malformed_payload_cleanly(hass: HomeAssis
 async def test_set_curve_rejects_a_point_value_over_a_day(hass: HomeAssistant) -> None:
     """The config flow's only bound on a curve point's value (1440 minutes)
     disappeared with the flow itself. Now that set_curve is the authoring
-    surface, the bound must live in its schema instead."""
+    surface, the bound must live there instead -- but only for a DURATION
+    curve; the handler is the only place that knows the kind, so the check
+    runs there and raises a translated ServiceValidationError rather than a
+    bare vol.Invalid."""
     mock_weather(hass)
     entry = await setup_hub(hass, [zone_data("Pots", "valve.pots")])
     zone_id = entry.runtime_data.zone_ids[0]
 
-    with pytest.raises(vol.Invalid):
+    with pytest.raises(ServiceValidationError):
         await hass.services.async_call(
             DOMAIN,
             "set_curve",
             {"zone_id": zone_id, "cycle_id": "cy_pots", "points": [[10, 5000]]},
             blocking=True,
         )
-    # Schema validation runs before the handler: nothing was written.
+    # Nothing was written.
     assert entry.subentries[zone_id].data["cycles"][0]["curve"]["points"] == [[20.0, 3.0]]
+
+
+async def test_set_curve_accepts_a_point_value_over_a_day_for_volume(
+    hass: HomeAssistant,
+) -> None:
+    """The 1440-minute bound is duration-only. 2000 litres is an ordinary
+    target (25 mm over 80 m2) for a VOLUME curve and must not be capped by a
+    limit that only ever meant a day of minutes."""
+    mock_weather(hass)
+    entry = await setup_hub(
+        hass,
+        [zone_data("Pots", "valve.pots", flow_sensor="sensor.pots_flow")],
+    )
+    hass.states.async_set("sensor.pots_flow", "5.0")
+    zone_id = entry.runtime_data.zone_ids[0]
+
+    await hass.services.async_call(
+        DOMAIN,
+        "set_curve",
+        {
+            "zone_id": zone_id,
+            "cycle_id": "cy_pots",
+            "points": [[20.0, 2000.0]],
+            "kind": "volume",
+        },
+        blocking=True,
+    )
+    await hass.async_block_till_done()
+
+    cycle = entry.runtime_data.zones[zone_id].config.cycle("cy_pots")
+    assert cycle.curve.kind is CurveKind.VOLUME
+    assert cycle.curve.points == ((20.0, 2000.0),)

@@ -149,18 +149,22 @@ ATTR_VOLUME_SAFETY_TIMEOUT_MIN: Final = "volume_safety_timeout_min"
 _DATA_SERVICES_REGISTERED: Final = "services_registered"
 
 
-_CURVE_POINT_VALUE_RANGE: Final = vol.Range(min=0, max=1440)
+# A day (1440 minutes) bounds a DURATION curve's point values, but a VOLUME
+# curve's points are litres and have no such ceiling. The schema below sees
+# every point before the curve's kind is resolved, so it cannot tell which
+# bound applies; the check lives in _async_set_curve instead, where `kind`
+# is known.
+_CURVE_POINT_DURATION_RANGE: Final = vol.Range(min=0, max=1440)
 
 
 def _curve_point(value: Any) -> list[float]:
-    """One [temperature, value] control point; value capped at a day (1440 min)."""
+    """One [temperature, value] control point."""
     if not isinstance(value, list | tuple) or len(value) != 2:
         raise vol.Invalid("each point must be a [temperature, value] pair")
     try:
         temperature, point_value = float(value[0]), float(value[1])
     except (TypeError, ValueError) as err:
         raise vol.Invalid("point entries must be numbers") from err
-    _CURVE_POINT_VALUE_RANGE(point_value)
     return [temperature, point_value]
 
 
@@ -702,6 +706,16 @@ async def _async_set_curve(call: ServiceCall) -> None:
             translation_key="volume_requires_flow",
             translation_placeholders={"cycle_id": cycle_id},
         )
+    if kind == CurveKind.DURATION:
+        try:
+            for _, point_value in points:
+                _CURVE_POINT_DURATION_RANGE(point_value)
+        except vol.Invalid as err:
+            raise ServiceValidationError(
+                translation_domain=DOMAIN,
+                translation_key="duration_point_out_of_range",
+                translation_placeholders={"cycle_id": cycle_id},
+            ) from err
 
     _write_cycle_curve(hass, entry, zone_id, cycle_id, points, min_value, max_value, kind)
 

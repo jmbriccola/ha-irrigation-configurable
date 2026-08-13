@@ -67,6 +67,10 @@ backend, and a card and panel rebuilt to match.
   leaving that program's intensity, name, schedule and soak settings alone.
 - `set_curve` gained a `kind` field. Setting a curve's kind through this
   service is now the only way to create a volume-mode program.
+- A duration curve's point values are capped at 1440 minutes (a day) —
+  restoring, at `set_curve`, a bound the old config flow used to enforce.
+  The cap is duration-only: a volume curve's points are litres and have no
+  such ceiling.
 - `add_zone` now writes `order` (highest existing zone's order + 1, so a new
   zone lands at the end of the watering sequence) and `adjustment_pct`
   explicitly, now that it is the only path that creates a zone.

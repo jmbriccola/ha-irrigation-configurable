@@ -806,6 +806,9 @@
     "volume_requires_flow": {
       "message": "Il programma {cycle_id} misura l'acqua in litri, il che richiede un misuratore di portata funzionante, e questa zona non ne ha uno. Assegna un sensore di portata alla zona, oppure modifica il programma perché irrighi per una durata in minuti."
     },
+    "duration_point_out_of_range": {
+      "message": "Il programma {cycle_id} irriga per una durata in minuti, e un punto di durata non può superare un giorno (1440 minuti). Una curva a volume, in litri, non ha questo limite."
+    },
     "invalid_payload": {
       "message": "Il payload non è una configurazione esportata valida."
     },
