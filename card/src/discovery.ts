@@ -1,5 +1,5 @@
 import type { CycleInfo, HassEntity, HomeAssistant } from "./types";
-import { asArray, asNumber, asString } from "./types";
+import { asArray, asNumber, asString, isUnavailable } from "./types";
 
 /**
  * Attribute-based entity discovery, per the card contract: iterate
@@ -122,8 +122,17 @@ export function discover(hass: HomeAssistant): MaestroModel {
 /** A zone can measure litres when its `degraded` list does NOT report
  *  `no_flow_meter` (docs/design/card-contract.md) — gates the curve
  *  editor's volume option, mirroring the backend's own `volume_requires_flow`
- *  guard on `set_curve`. */
+ *  guard on `set_curve`.
+ *
+ *  Fails CLOSED when the zone's state entity is unavailable/unknown/absent:
+ *  an unavailable entity's attributes are empty, so `degraded` reads as `[]`
+ *  — indistinguishable, by absence alone, from "checked and found nothing
+ *  degraded". Reading that as "has a flow meter" would offer the volume
+ *  option on a zone the card knows nothing about, which `set_curve`'s own
+ *  `volume_requires_flow` guard would then refuse. "No data" must not read
+ *  as "capable". */
 export function zoneHasFlowMeter(zone: ZoneBundle): boolean {
+  if (isUnavailable(zone.state)) return false;
   const degraded = asArray(zone.state?.attributes?.["degraded"]);
   return !degraded.some((item) => asString(item) === "no_flow_meter");
 }

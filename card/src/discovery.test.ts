@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { buildCopyCandidates, readCycles, zoneAdjustmentPct } from "./discovery";
+import { buildCopyCandidates, readCycles, zoneAdjustmentPct, zoneHasFlowMeter } from "./discovery";
 import type { ZoneBundle } from "./discovery";
 
 function zoneWithCycles(cycles: unknown): ZoneBundle {
@@ -107,6 +107,52 @@ describe("zoneAdjustmentPct", () => {
     };
     expect(zoneAdjustmentPct(zone)).toBe(100);
     expect(zoneAdjustmentPct({ zoneId: "z2", name: "Herbs", order: 2, cycleSwitches: [] })).toBe(100);
+  });
+});
+
+describe("zoneHasFlowMeter", () => {
+  it("is true for an available zone reporting no degradation", () => {
+    const zone: ZoneBundle = {
+      zoneId: "z1", name: "Lawn", order: 1, cycleSwitches: [],
+      state: { entity_id: "sensor.z1", state: "idle", attributes: { degraded: [] } },
+    };
+    expect(zoneHasFlowMeter(zone)).toBe(true);
+  });
+
+  it("is false when the zone's degraded list reports no_flow_meter", () => {
+    const zone: ZoneBundle = {
+      zoneId: "z1", name: "Lawn", order: 1, cycleSwitches: [],
+      state: { entity_id: "sensor.z1", state: "idle", attributes: { degraded: ["no_flow_meter"] } },
+    };
+    expect(zoneHasFlowMeter(zone)).toBe(false);
+  });
+
+  /**
+   * Regression: an unavailable entity's attributes are `{}`, so `degraded`
+   * used to read as `[]` -- indistinguishable from "checked, nothing
+   * degraded" -- and the zone was concluded to HAVE a flow meter, offering
+   * a volume option the backend's `volume_requires_flow` guard would then
+   * refuse. "No data" must fail CLOSED, not read as "capable".
+   */
+  it("is false when the zone's state entity is unavailable, even with an empty degraded list", () => {
+    const zone: ZoneBundle = {
+      zoneId: "z1", name: "Lawn", order: 1, cycleSwitches: [],
+      state: { entity_id: "sensor.z1", state: "unavailable", attributes: {} },
+    };
+    expect(zoneHasFlowMeter(zone)).toBe(false);
+  });
+
+  it("is false when the zone's state entity is unknown", () => {
+    const zone: ZoneBundle = {
+      zoneId: "z1", name: "Lawn", order: 1, cycleSwitches: [],
+      state: { entity_id: "sensor.z1", state: "unknown", attributes: {} },
+    };
+    expect(zoneHasFlowMeter(zone)).toBe(false);
+  });
+
+  it("is false when the zone has no state entity at all", () => {
+    const zone: ZoneBundle = { zoneId: "z1", name: "Lawn", order: 1, cycleSwitches: [] };
+    expect(zoneHasFlowMeter(zone)).toBe(false);
   });
 });
 
