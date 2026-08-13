@@ -169,6 +169,14 @@ class FlowMonitor:
             # The window this happened in is now part blind, part measured;
             # _periodic_check must not judge it. Cleared when it consumes it.
             self._unit_recovered = True
+            # RANGE_SUSTAIN_S is wall-clock, but nothing was range-checked
+            # while the unit was unknown. Left standing, a timestamp from
+            # before the loss plus one reading after the recovery would report
+            # as "sustained" an interval that was mostly unobserved. Reset here
+            # rather than in _periodic_check's blind branch because recovery is
+            # normally delivered by _on_state, well before any tick observes
+            # the gap -- this is the one point every recovery passes through.
+            self._out_of_range_since = None
         self.unit_known = True
         self._unit_ever_known = True
         return reading.lpm
@@ -246,11 +254,6 @@ class FlowMonitor:
             # safety timeout, exactly as it would with no meter at all. Keep
             # rescheduling so a unit that comes back is picked up.
             self._liters_at_last_check = self.liters
-            # The range clock is wall-clock too: without this, a reading out of
-            # range before the loss and another after recovery would satisfy
-            # RANGE_SUSTAIN_S at once, reporting as sustained an interval that
-            # was mostly unobserved.
-            self._out_of_range_since = None
             self._schedule_periodic_check()
             return
         if self._unit_recovered:
