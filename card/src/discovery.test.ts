@@ -19,14 +19,10 @@ describe("readCycles", () => {
         trigger: { kind: "time", at: "06:30" },
         curve: { points: [[12, 0], [25, 15], [35, 23]], min: 1, max: 60, kind: "duration" },
         calendar: { mode: "weekdays", days: [0, 2, 4] },
-        day_minutes: { "0": 10, "4": 20 }, amount: 15, heat: 8,
         intensity_pct: 100, day_intensity_pct: { "0": 50, "4": 150 } },
     ]));
     expect(cycles).toHaveLength(1);
     expect(cycles[0]?.calendar).toEqual({ mode: "weekdays", days: [0, 2, 4] });
-    expect(cycles[0]?.day_minutes).toEqual({ "0": 10, "4": 20 });
-    expect(cycles[0]?.amount).toBe(15);
-    expect(cycles[0]?.heat).toBe(8);
     expect(cycles[0]?.intensity_pct).toBe(100);
     expect(cycles[0]?.day_intensity_pct).toEqual({ "0": 50, "4": 150 });
   });
@@ -34,7 +30,7 @@ describe("readCycles", () => {
   it("tolerates missing schedule fields (day-less program)", () => {
     const cycles = readCycles(zoneWithCycles([{ cycle_id: "a1", name: "X" }]));
     expect(cycles[0]?.calendar).toBeUndefined();
-    expect(cycles[0]?.day_minutes).toBeUndefined();
+    expect(cycles[0]?.day_intensity_pct).toBeUndefined();
   });
 
   it("returns [] when there is no cycles attribute", () => {

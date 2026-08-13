@@ -136,11 +136,6 @@ export interface CycleInfo {
   curve?: CycleCurve;
   /** Weekdays 0=Mon..6=Sun the program runs; undefined/absent = every day. */
   days?: number[];
-  /** Per-weekday base minutes, keyed by weekday-as-string; absent = uniform. */
-  day_minutes?: Record<string, number>;
-  /** Friendly derived values for a duration curve (null/absent for volume). */
-  amount?: number;
-  heat?: number;
   /** Watering strength as a percentage of the curve; absent reads as 100. */
   intensity_pct?: number;
   /** Per-weekday override of `intensity_pct`, keyed by weekday-as-string. */

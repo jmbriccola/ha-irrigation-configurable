@@ -205,17 +205,6 @@ export function readCycles(zone: ZoneBundle): CycleInfo[] {
     info.soak_max_run_min = asNumber(c["soak_max_run_min"]);
     info.soak_pause_min = asNumber(c["soak_pause_min"]);
     info.volume_safety_timeout_min = asNumber(c["volume_safety_timeout_min"]);
-    const dm = c["day_minutes"];
-    if (dm && typeof dm === "object") {
-      const map: Record<string, number> = {};
-      for (const [k, v] of Object.entries(dm as Record<string, unknown>)) {
-        const n = asNumber(v);
-        if (n !== undefined) map[k] = n;
-      }
-      info.day_minutes = map;
-    }
-    info.amount = asNumber(c["amount"]);
-    info.heat = asNumber(c["heat"]);
     info.intensity_pct = asNumber(c["intensity_pct"]);
     const di = c["day_intensity_pct"];
     if (di && typeof di === "object") {

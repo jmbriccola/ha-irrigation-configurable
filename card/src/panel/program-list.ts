@@ -6,6 +6,7 @@ import { asString, defineElement } from "../types";
 import type { CycleInfo } from "../types";
 import { pickLanguage, localize } from "../localize/localize";
 import { readCycles, zoneHasFlowMeter, type ZoneBundle } from "../discovery";
+import { dayBase, isUniform } from "../schedule-math";
 import { describeTrigger } from "../format";
 import { describeCalendar } from "./calendar-editor";
 import { programToggleStyles, renderProgramToggle } from "./program-toggle";
@@ -341,10 +342,13 @@ export class ImcProgramList extends LitElement {
   }
 
   private _minutesSummary(lang: string, c: CycleInfo): string {
-    if (c.day_minutes && Object.keys(c.day_minutes).length > 0) {
+    if (!isUniform(c.day_intensity_pct)) {
       return localize(lang, "panel.per_day_minutes");
     }
-    return localize(lang, "panel.minutes_value", { min: c.amount ?? "?" });
+    // Volume curves have no "minutes" reading — mirrors the sensor's own
+    // `amount` (null for volume) before this derived field was removed.
+    const min = c.curve?.kind === "volume" ? undefined : dayBase(c, 0);
+    return localize(lang, "panel.minutes_value", { min: min ?? "?" });
   }
 }
 
