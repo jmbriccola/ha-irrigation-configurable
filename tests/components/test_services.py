@@ -209,6 +209,52 @@ async def test_evaluate_returns_full_plan(
     assert run["duration_min"] == 3
 
 
+async def test_evaluate_omits_the_volume_target_when_the_meters_unit_is_unresolvable(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    """The plan is where zone_flow_meter_usable is actually observable: the
+    run's wall-clock duration is identical whether the meter is usable or not
+    (both are capped at the safety timeout), but volume_l is only ever set
+    when the unit resolved at plan time."""
+    freezer.move_to(START)
+    park = MockValvePark(hass)
+    park.add("valve.a")
+    hass.states.async_set("sensor.flow", "7.5")  # no unit
+    mock_weather(hass)
+    zone = zone_data(
+        "Alpha",
+        "valve.a",
+        flow_sensor="sensor.flow",
+        cycles=[
+            {
+                "id": "cy_vol",
+                "name": "Volume",
+                "enabled": True,
+                "trigger": {"kind": "time", "at": "05:30"},
+                "curve": {
+                    "points": [[20.0, 20.0]],
+                    "min_value": 5.0,
+                    "max_value": 100.0,
+                    "kind": "volume",
+                },
+                "volume_safety_timeout_min": 5,
+            }
+        ],
+    )
+    await setup_hub(hass, [zone])
+
+    response = await hass.services.async_call(
+        DOMAIN, "evaluate", {}, blocking=True, return_response=True
+    )
+    assert response["runs"][0]["volume_l"] is None
+
+    hass.states.async_set("sensor.flow", "0.45", {"unit_of_measurement": "m³/h"})
+    response = await hass.services.async_call(
+        DOMAIN, "evaluate", {}, blocking=True, return_response=True
+    )
+    assert response["runs"][0]["volume_l"] is not None
+
+
 async def test_set_zone_order_updates_subentry(
     hass: HomeAssistant, freezer: FrozenDateTimeFactory
 ) -> None:
