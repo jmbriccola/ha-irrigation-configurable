@@ -219,19 +219,19 @@ def test_cycle_defaults_to_a_daily_calendar():
     cycle = CycleConfig.from_config(_cycle_data(), templates={})
     assert cycle.calendar == ProgramCalendar.daily()
     assert cycle.season_months is None  # inherits the hub season
-    assert cycle.day_minutes == {}  # empty = use the curve as-is
+    assert cycle.day_intensity_pct == {}  # empty = uniform intensity
 
 
-def test_cycle_parses_calendar_and_day_minutes():
+def test_cycle_parses_calendar_and_day_intensity():
     cycle = CycleConfig.from_config(
         _cycle_data(
             calendar={"mode": "weekdays", "days": [0, 2, 4]},
-            day_minutes={"0": 10, "4": 20},
+            day_intensity_pct={"0": 50.0, "4": 200.0},
         ),
         templates={},
     )
     assert cycle.calendar == ProgramCalendar.weekdays({0, 2, 4})
-    assert cycle.day_minutes == {0: 10, 4: 20}  # keys coerced to int
+    assert cycle.day_intensity_pct == {0: 50.0, 4: 200.0}  # keys coerced to int
 
 
 def test_cycle_parses_its_own_season():
@@ -242,3 +242,36 @@ def test_cycle_parses_its_own_season():
 def test_zone_no_longer_owns_calendar_fields():
     for removed in ("interval_days", "season_months", "restrictions"):
         assert removed not in ZoneConfig.__dataclass_fields__
+
+
+class TestCycleIntensity:
+    def test_absent_intensity_reads_as_one_hundred(self) -> None:
+        cycle = CycleConfig.from_config(
+            {
+                "id": "c1",
+                "name": "Morning",
+                "trigger": {"kind": "time", "at": "05:30"},
+                "curve": {"points": [[20.0, 5.0]], "min_value": 1.0, "max_value": 60.0},
+            },
+            {},
+        )
+        assert cycle.intensity_pct == 100.0
+        assert cycle.day_intensity_pct == {}
+
+    def test_intensity_parsed_and_forwarded_to_the_spec(self) -> None:
+        cycle = CycleConfig.from_config(
+            {
+                "id": "c1",
+                "name": "Morning",
+                "trigger": {"kind": "time", "at": "05:30"},
+                "curve": {"points": [[20.0, 5.0]], "min_value": 1.0, "max_value": 60.0},
+                "intensity_pct": 133.0,
+                "day_intensity_pct": {"0": 50.0, "6": 200.0},
+            },
+            {},
+        )
+        assert cycle.intensity_pct == 133.0
+        assert cycle.day_intensity_pct == {0: 50.0, 6: 200.0}
+        spec = cycle.to_spec(enabled=True)
+        assert spec.intensity_pct == 133.0
+        assert spec.day_intensity_pct == {0: 50.0, 6: 200.0}

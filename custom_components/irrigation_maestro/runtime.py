@@ -566,11 +566,21 @@ class IrrigationRuntime:
                 # cycle's safety timeout instead of misreading the target.
                 duration_min = cycle.volume_safety_timeout_min or 10
             elif cycle is not None and evaluation.weighted_temp is not None:
-                # TODO(later task): fold cycle.intensity_pct in here once the
-                # config layer exposes it; resolve_day_curve is gone (engine
-                # no longer rebuilds a three-anchor curve from day minutes).
+                # Mirror the engine's scaling (planner._cycle_target) so a manual
+                # run agrees with a scheduled one: fold today's per-day intensity
+                # (falling back to the cycle's overall intensity) into the zone's
+                # adjustment before evaluating the curve. Weekday is read from
+                # local time, matching how the schedule is authored.
+                weekday = dt_util.now().weekday()
+                factor = cycle.day_intensity_pct.get(weekday, cycle.intensity_pct)
                 duration_min = max(
-                    round(curve_value(cycle.curve, evaluation.weighted_temp, zone.adjustment_pct)),
+                    round(
+                        curve_value(
+                            cycle.curve,
+                            evaluation.weighted_temp,
+                            zone.adjustment_pct * factor / 100.0,
+                        )
+                    ),
                     1,
                 )
             else:

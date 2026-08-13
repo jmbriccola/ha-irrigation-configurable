@@ -43,12 +43,15 @@ async def test_run_zone_with_duration_override(
     assert runtime.state.last_completed(zone_id, "cy_pots") is None
 
 
-async def test_manual_run_uses_per_day_minutes(
+async def test_manual_run_applies_per_day_intensity(
     hass: HomeAssistant, freezer: FrozenDateTimeFactory
 ) -> None:
-    """A manual run (no explicit duration) must route through
-    resolve_day_curve, same as a scheduled run — so a per-day base for
-    today's weekday changes the outcome versus the zone's raw curve."""
+    """A manual run (no explicit duration) must fold in today's per-day
+    intensity override the same way a scheduled run does: runtime._manual_run
+    mirrors planner._cycle_target's `zone.adjustment_pct * factor / 100.0`
+    composition, where factor is cycle.day_intensity_pct.get(weekday,
+    cycle.intensity_pct). So a per-day intensity for today's weekday changes
+    the outcome versus the zone's unscaled curve."""
     freezer.move_to(START)
     # runtime._manual_run derives the weekday from local time (dt_util.now()),
     # not UTC. setup_hub() below pins HA's time zone to UTC, so pin it here
@@ -71,11 +74,8 @@ async def test_manual_run_uses_per_day_minutes(
         const.CONF_CURVE_MAX: 60,
         const.CONF_CURVE_KIND: "duration",
     }
-    # Today's per-day base is 7' instead of the curve's 20' mild value.
-    # resolve_day_curve rebuilds with this base and the curve's own heat
-    # (curve_value(curve, 35) - curve_value(curve, 25) == 30 - 20 == 10),
-    # giving day-curve points (12, 0), (25, 7), (35, 17).
-    zone[const.CONF_CYCLES][0][const.CONF_CYCLE_DAY_MINUTES] = {str(weekday): 7}
+    # Today's per-day intensity is 40% instead of the cycle's default 100%.
+    zone[const.CONF_CYCLES][0][const.CONF_CYCLE_DAY_INTENSITY_PCT] = {str(weekday): 40.0}
     entry = await setup_hub(hass, [zone])
     runtime = entry.runtime_data
     zone_id = runtime.zone_ids[0]
@@ -91,13 +91,14 @@ async def test_manual_run_uses_per_day_minutes(
     await advance(hass, freezer, 30)  # gather window + open
     assert hass.states.get("valve.pots").state == "open"
 
-    await advance(hass, freezer, 13 * 60)  # 12-minute per-day duration elapses
+    await advance(hass, freezer, 11 * 60)  # 10-minute intensity-scaled duration elapses
     assert hass.states.get("valve.pots").state == "closed"
     outcome = runtime.state.last_outcome(zone_id)
     assert outcome["result"] == "completed"
-    # Per-day curve interpolated at 30C between (25, 7) and (35, 17) -> 12',
-    # not the raw curve's 25' — proof that day_minutes was consulted.
-    assert outcome["duration_min"] == 12
+    # 40% of the raw curve's 25' value at 30C -> 10', not the raw curve's 25'
+    # — proof that day_intensity_pct was consulted, exactly as the engine
+    # would consult it for a scheduled run.
+    assert outcome["duration_min"] == 10
     assert outcome["duration_min"] != raw_expected
 
 

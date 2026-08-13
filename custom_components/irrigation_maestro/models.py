@@ -120,13 +120,14 @@ class CycleConfig:
     soak_max_run_min: int | None = None
     soak_pause_min: int = 0
     volume_safety_timeout_min: int | None = None
-    day_minutes: dict[int, int] = field(default_factory=dict)
+    intensity_pct: float = 100.0
+    day_intensity_pct: dict[int, float] = field(default_factory=dict)
 
     @classmethod
     def from_config(cls, config: dict[str, Any], templates: dict[str, Any]) -> Self:
         months = config.get(const.CONF_SEASON_MONTHS)
         calendar_raw = config.get(const.CONF_CALENDAR)
-        day_minutes_raw = config.get(const.CONF_CYCLE_DAY_MINUTES, {})
+        day_intensity_raw = config.get(const.CONF_CYCLE_DAY_INTENSITY_PCT, {})
         return cls(
             cycle_id=config[const.CONF_CYCLE_ID],
             name=config.get(const.CONF_CYCLE_NAME, config[const.CONF_CYCLE_ID]),
@@ -143,7 +144,8 @@ class CycleConfig:
             soak_max_run_min=config.get(const.CONF_SOAK_MAX_RUN_MIN),
             soak_pause_min=int(config.get(const.CONF_SOAK_PAUSE_MIN, 0)),
             volume_safety_timeout_min=config.get(const.CONF_VOLUME_SAFETY_TIMEOUT_MIN),
-            day_minutes={int(k): int(v) for k, v in day_minutes_raw.items()},
+            intensity_pct=float(config.get(const.CONF_CYCLE_INTENSITY_PCT, 100.0)),
+            day_intensity_pct={int(k): float(v) for k, v in day_intensity_raw.items()},
         )
 
     def to_spec(self, *, enabled: bool, last_completed: date | None = None) -> CycleSpec:
@@ -157,9 +159,8 @@ class CycleConfig:
             soak_max_run_min=self.soak_max_run_min,
             soak_pause_min=self.soak_pause_min,
             volume_safety_timeout_min=self.volume_safety_timeout_min,
-            # TODO(later task): wire intensity_pct / day_intensity_pct through
-            # from config once the config layer exposes them; the engine no
-            # longer accepts day_minutes (see planner.CycleSpec).
+            intensity_pct=self.intensity_pct,
+            day_intensity_pct=self.day_intensity_pct,
         )
 
 
