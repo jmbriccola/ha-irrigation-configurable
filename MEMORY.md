@@ -182,6 +182,39 @@ details harvested from it (kept as engine behaviour):
   the panel is now the only place a zone is created or edited. Do not read
   the architecture doc's rationale as still describing current UI — it
   explains why the storage model was picked, not how zones are edited today.
+- **The card derives minutes; nothing publishes them twice (3.0.0 Phase B).**
+  The zone sensor stopped publishing `amount`/`heat`/`day_minutes` the same
+  release the card stopped reading them (deliberately ordered together —
+  see below). The card now computes displayed minutes client-side from
+  `curve.points`, `intensity_pct` and `day_intensity_pct`, the same
+  `interpolate()`-based adjustment the engine applies server-side. One
+  source of truth on the wire (the curve + the intensity), not a curve plus
+  a second, pre-baked representation of what it means — do not add a derived
+  "minutes" attribute back onto the sensor; compute it where it's displayed.
+- **The point editor replaced the semantic mapping outright, not as an
+  "advanced" alternative to a simplified mode (3.0.0 Phase B).** The
+  amount/heat two-slider editor was kept alive through Phase A specifically
+  as a bridge (`engine/semantic.py`, `set_simple_curve`, the derived
+  attributes) so the backend rework could ship without breaking the running
+  card. Phase B deletes all three. The reason it was deleted rather than
+  retained as a "simple mode" next to the point editor: amount/heat cannot
+  express what points can (a floor, a knee above 35 °C, an anchor outside
+  12–35 °C), it isn't a projection of a general curve (round-tripping a
+  hand-authored curve through it silently reshaped it — every curve it wrote
+  started at (12, 0), because its own formula zeroed the cold anchor), and a
+  second editable model of the same curve is exactly the "two stored forms"
+  defect the 3.0.0 migration exists to remove one level up. Do not
+  reintroduce a derived, coarser curve editor alongside the point one.
+- **The intensity-reset notice is a UI surface for a Phase A backend rule,
+  not a new rule (3.0.0 Phase B).** Explicitly setting a curve (`set_curve`)
+  already reset a program's intensity to 100% server-side before Phase B —
+  a curve write and a scale of that curve are different axes, and keeping a
+  stale scale on a newly authored curve would silently reshape it again. The
+  point editor now warns before save when the program carries a non-100%
+  uniform or per-day intensity, so the reset is seen instead of discovered
+  after the fact. The warning is a notice, not a new confirmation gate — do
+  not add a blocking dialog here; the backend rule is unconditional and
+  correct, the card's job is only to make it visible.
 
 ## Progress log
 

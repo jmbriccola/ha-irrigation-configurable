@@ -4,10 +4,10 @@ All notable changes to this project are documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/).
 
-## [3.0.0] - Unreleased
+## [3.0.0] - 2026-08-13
 
-Backend half of the curve-authoring rework. The dashboard card is unchanged
-in this release — see "Not yet done" below.
+The full curve-authoring rework: a new storage model and services on the
+backend, and a card and panel rebuilt to match.
 
 ### Changed — breaking
 
@@ -45,6 +45,18 @@ in this release — see "Not yet done" below.
   curves the §8 regression tests pin, and `resolve_curve` still resolves a
   template reference, so a configuration exported from a 2.x install still
   imports correctly.
+- **`set_simple_curve` is removed.** The old amount/heat pair could only ever
+  express a curve through three fixed anchors at 12/25/35 °C, and it zeroed
+  the 12 °C anchor on every save. Any automation calling
+  `irrigation_maestro.set_simple_curve` breaks — switch it to `set_curve`,
+  which takes explicit points. `engine/semantic.py`, the module that
+  converted between the amount/heat pair and points, is gone with it.
+- **The zone sensor no longer publishes `amount`, `heat` or `day_minutes`.**
+  Those were derived, backward-compatible attributes kept only as a bridge
+  for the old two-slider card editor. Anything reading them — a template
+  sensor, a custom card — breaks. The card and panel now read `curve.points`,
+  `intensity_pct` and `day_intensity_pct` and compute displayed minutes
+  themselves.
 
 ### Added
 
@@ -58,17 +70,22 @@ in this release — see "Not yet done" below.
 - `add_zone` now writes `order` (highest existing zone's order + 1, so a new
   zone lands at the end of the watering sequence) and `adjustment_pct`
   explicitly, now that it is the only path that creates a zone.
-
-### Not yet done (lands with Phase B)
-
-The dashboard card has **not** been rewritten yet. The zone sensor still
-publishes `amount`, `heat` and `day_minutes` as derived, backward-compatible
-attributes (now folding in the intensity, so the numbers shown stay
-truthful), and `set_simple_curve` and `engine/semantic.py` still exist to
-support the current card. The point-based curve editor, the card's switch to
-reading the curve and intensity directly, and the removal of the
-compatibility layer land in the next phase, along with the version bump this
-entry's number anticipates.
+- **A point-based curve editor**, shared verbatim by the card and the panel.
+  Add, remove, drag or type each control point directly, with explicit
+  min/max clamps, an explicit duration/volume kind, and a preview of the
+  resulting curve at seven temperatures. The old two-slider editor could only
+  ever express three fixed anchors at 12/25/35 °C — a floor, a knee above
+  35 °C, or an anchor outside that window was unreachable — and every curve
+  it authored started at (12, 0), because its amount/heat formula zeroed the
+  cold anchor.
+- The card now computes the minutes it displays from the real curve and the
+  program's intensity, instead of reconstructing them from three fixed
+  anchors. A six-point curve is displayed as six points.
+- **Duplicate program** and **copy curve**, both reachable from the panel
+  (backing the `duplicate_program` and `copy_curve` services above).
+- The curve editor **warns before saving** when the program carries a
+  watering intensity — uniform or per-day — because saving a curve resets
+  that scale back to 100%.
 
 ## [2.1.1] - 2026-08-13
 

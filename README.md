@@ -28,10 +28,13 @@ Irrigation Maestro is built around two ideas:
 
 - **Unlimited zones** (`valve` or `switch` entities), each with one or more
   daily cycles anchored to sun events (± offset) or fixed times.
-- **Per-cycle temperature→duration curves**: control points with linear
-  interpolation, flat extrapolation, explicit min/max clamps; two
-  field-validated presets included; shared curve templates and copy-between-
-  cycles for many-zone setups; optional **volume mode** (liters) with flow
+- **Per-cycle temperature→duration curves**: a point editor — add, remove,
+  drag or type each control point, with explicit min/max clamps and an
+  explicit duration/volume kind — plus a live preview of the resulting
+  minutes at seven temperatures. The two field-validated presets (§8 below)
+  live on as the engine's reference curves but are no longer offered as a
+  selectable template in the UI; `copy_curve` copies a curve's shape into
+  another program instead. Optional **volume mode** (liters) with flow
   meter; optional **cycle-and-soak** with cross-zone interleaving.
 - **One calendar per program**, in exactly one of three mutually exclusive
   modes: specific **weekdays**, **every N days** (counted from the day that
@@ -62,8 +65,8 @@ Irrigation Maestro is built around two ideas:
   message per shared reason, never one per zone), rich bus events
   (`irrigation_maestro_*`) and per-zone outcome sensors.
 - **Custom Lovelace card** (installed automatically in storage mode) with
-  live progress, queue, controls, degraded-feature badges, a live
-  beginner-friendly curve editor and full EN/IT localization.
+  live progress, queue, controls, degraded-feature badges, the same
+  point-based curve editor as the panel, and full EN/IT localization.
 - **Repairs** issues for detected problems, downloadable **diagnostics**,
   config **export/import**, schema versioning with migrations from day one.
 
@@ -102,9 +105,12 @@ The integration also registers a dedicated **sidebar panel** — look for
 **Irrigazione** (sprinkler icon) in the Home Assistant sidebar. It's the
 day-to-day **configuration hub**: pick a zone tab and add or edit its
 watering programs (giorni/days on a weekly grid, orario/start time,
-durata/duration per day or uniform), with a guided wizard for new programs
-and an **Advanced** drawer for the heat-response curve when a fixed duration
-isn't enough — plus **＋ Aggiungi zona / ✎ Modifica zona** to create, edit
+durata/duration per day or uniform), with a guided wizard for new programs,
+**duplicate program** and **copy curve** actions to reuse a program or a
+curve's shape across zones, and an **Advanced** drawer with the point-based
+curve editor (add, remove, drag or type control points; min/max clamps; a
+seven-temperature preview) for programs that scale duration with
+temperature — plus **＋ Aggiungi zona / ✎ Modifica zona** to create, edit
 or delete zones themselves, and a **⚙️ Impostazioni** view to edit the
 everyday hub settings (weather & sensors, consumption budget, calendar
 restrictions), all without leaving the sidebar. The HA **config flow**
