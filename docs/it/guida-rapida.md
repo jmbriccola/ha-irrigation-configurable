@@ -22,6 +22,12 @@ rigorose sulle valvole. Tutto si configura dall'interfaccia, senza YAML.
    l'editor a punti di controllo (aggiungi, rimuovi, trascina o digita).
    Ordine, cadenza e gli altri dettagli della zona si trovano in
    **✎ Modifica zona → Avanzate**.
+5. **Configura le notifiche** in **⚙️ Impostazioni → Notifiche**: la
+   procedura guidata propone come destinatari i servizi `notify.*` che
+   l'istanza ha già, con un invio di prova, e come eventi i quattro che un
+   impianto di irrigazione non dovrebbe mai perdere — watchdog, anomalia,
+   sentinella, ciclo interrotto — già preselezionati: accettare il
+   consiglio è un clic.
 
 Richiede Home Assistant **2025.7.0 o successivo**.
 

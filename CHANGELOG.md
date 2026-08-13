@@ -4,6 +4,34 @@ All notable changes to this project are documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/).
 
+## [3.1.0] - 2026-08-13
+
+### Notifications are configured, not guessed
+
+- **Guided setup in the panel.** Recipients are picked from the `notify.*`
+  services the instance actually has, never typed. The four events an
+  irrigation system should never miss — valve failure, flow anomaly,
+  irrigation not executed, interrupted cycle — are proposed pre-selected, so
+  accepting the recommendation is one click. Events browse by severity
+  (critical / operational / informational) instead of nine flat rows.
+- **A test send** inside the wizard, per recipient, with the failure reason.
+- **`enabled: true` with no recipients is refused**, in the wizard and in
+  `set_notifications`. Validation judges the merged result, so flipping
+  `enabled` on an event whose recipient list is already empty fails too.
+- **Recipients are stored bare.** The old field's placeholder read
+  `notify.mobile_app_phone`, but the integration calls `notify.<service>` — a
+  configuration written that way was invoked as
+  `notify.notify.mobile_app_phone` and never arrived. New values are
+  normalised on write and existing ones on read, so no migration is needed.
+- **Repairs when it matters**: notifications enabled with no recipient; no
+  essential event reaching anyone; a configured recipient that no longer
+  exists (for essential events, where a log line was not enough).
+- **Priority per event**, defaulting to high for the four essential events.
+- **`notification_status`** — a new action reporting which events notify,
+  where they go and whether the system is mute; the same summary is in the
+  downloadable diagnostics.
+- **`test_notification`** — a new action, also callable from Developer Tools.
+
 ## [3.0.0] - 2026-08-13
 
 The full curve-authoring rework: a new storage model and services on the

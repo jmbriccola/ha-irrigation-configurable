@@ -164,18 +164,23 @@ e le impostazioni quotidiane dell'hub, tutto in un unico posto.
    linea, valvola principale), **Budget di consumo** (litri al mese e
    azione al superamento — notifica, riduci, sospendi), **Restrizioni
    calendario** (giorni consentiti, parità pari/dispari, finestre orarie
-   vietate) e **Notifiche** (per ogni tipo di evento — completato, saltato,
-   interrotto, annullato, anomalia, watchdog, sentinella, sforamento
-   sessione, budget di consumo — abilitazione, servizio `notify.*` di
-   destinazione e priorità; i salti con lo stesso motivo producono una sola
-   notifica aggregata). Due cassetti **Avanzate**, chiusi per default,
-   contengono il resto: **sessione e sicurezza** (durata massima di
-   sessione, orario must-finish-by, attesa valvole libere, finestra di
-   blocco dopo uno stop manuale, pausa di assestamento tra zone, orario
-   della sentinella) e **valvole e concorrenza** (finestre di conferma
-   apertura/chiusura/switch, timeout di chiusura all'avvio, massimo del
-   watchdog, zone simultanee massime e gruppi di compatibilità, ritardi
-   pre-apertura/post-chiusura della valvola master).
+   vietate) e **Notifiche** (una procedura guidata in tre passi: i
+   destinatari si scelgono tra i servizi `notify.*` che l'istanza ha
+   davvero — mai digitati, ciascuno con un pulsante di invio di prova — gli
+   eventi si scelgono per preset (*Consigliato*, *Solo critici*, *Tutto*) su
+   tre gruppi di gravità apribili, con un chip di priorità per evento, poi
+   un riepilogo da salvare; i quattro eventi che un impianto di irrigazione
+   non dovrebbe mai perdere — watchdog, anomalia, sentinella, ciclo
+   interrotto — arrivano già preselezionati; i salti con lo stesso motivo
+   producono comunque una sola notifica aggregata). Due cassetti
+   **Avanzate**, chiusi per default, contengono il resto: **sessione e
+   sicurezza** (durata massima di sessione, orario must-finish-by, attesa
+   valvole libere, finestra di blocco dopo uno stop manuale, pausa di
+   assestamento tra zone, orario della sentinella) e **valvole e
+   concorrenza** (finestre di conferma apertura/chiusura/switch, timeout di
+   chiusura all'avvio, massimo del watchdog, zone simultanee massime e
+   gruppi di compatibilità, ritardi pre-apertura/post-chiusura della
+   valvola master).
 
 I parametri esperti — pesi e soglie del motore meteo (§3 sopra) — non sono
 nel pannello: restano nel menu **Configura** dell'hub (il config flow), che

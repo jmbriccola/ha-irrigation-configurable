@@ -152,16 +152,20 @@ hub settings, all in one place.
    outdoor-temperature/line-flow sensors, master valve), **Consumption
    budget** (liters per month and the action on exceeding it — notify,
    reduce, suspend), **Calendar restrictions** (allowed weekdays, odd/even
-   parity, forbidden time windows) and **Notifications** (per event type —
-   completed, skipped, interrupted, cancelled, anomaly, watchdog, sentinel,
-   session overrun, consumption budget — enabled, target `notify.*` service
-   and priority; skips sharing a reason produce one aggregated message).
-   Two collapsed **Advanced** drawers hold the rest: **session and safety**
-   (max session length, must-finish-by, wait-for-free-valves, block window
-   after a manual stop, settle pause between zones, sentinel time) and
-   **valves and concurrency** (open/close/switch confirmation windows,
-   startup close timeout, watchdog maximum, max concurrent zones and
-   compatibility groups, master valve pre-open/post-close delays).
+   parity, forbidden time windows) and **Notifications** (a three-step
+   guided wizard: recipients are picked from the `notify.*` services this
+   instance actually has — never typed, each with a test-send button —
+   events are chosen by preset (*Recommended*, *Critical only*,
+   *Everything*) across three collapsible severity groups with a priority
+   chip per event, then a summary to save; the four events an irrigation
+   system should never miss — watchdog, anomaly, sentinel, interrupted —
+   come pre-selected; skips sharing a reason still produce one aggregated
+   message). Two collapsed **Advanced** drawers hold the rest: **session
+   and safety** (max session length, must-finish-by, wait-for-free-valves,
+   block window after a manual stop, settle pause between zones, sentinel
+   time) and **valves and concurrency** (open/close/switch confirmation
+   windows, startup close timeout, watchdog maximum, max concurrent zones
+   and compatibility groups, master valve pre-open/post-close delays).
 
 Expert parameters — the weather engine's weights and thresholds (§3 above)
 — aren't in the panel; they stay in the hub's **Configure** menu (the
