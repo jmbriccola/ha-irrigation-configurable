@@ -5,7 +5,7 @@ import {
   presetSelection,
   selectionFromStatus,
 } from "./notification-wizard-state";
-import type { NotificationStatusResponse } from "./notification-wizard-state";
+import type { NotificationStatusResponse, WizardSelection } from "./notification-wizard-state";
 
 const STATUS: NotificationStatusResponse = {
   verdict: "silent",
@@ -28,16 +28,23 @@ const STATUS: NotificationStatusResponse = {
     "sentinel",
     "session_overrun",
     "consumption_budget",
-  ].map((event) => ({
-    event,
-    group: "critical",
-    enabled: false,
-    services: [],
-    missing: [],
-    priority: "normal",
-    essential: ["watchdog", "anomaly", "sentinel", "interrupted"].includes(event),
-    reachable: false,
-  })),
+  ].map((event) => {
+    const essential = ["watchdog", "anomaly", "sentinel", "interrupted"].includes(event);
+    return {
+      event,
+      group: "critical",
+      enabled: false,
+      services: [],
+      missing: [],
+      // notify.py:161 reports default_priority(event) for an unconfigured
+      // event, which is "high" for the essential ones — not "normal" for
+      // everything, which is the impossible state this fixture used to
+      // encode.
+      priority: essential ? "high" : "normal",
+      essential,
+      reachable: false,
+    };
+  }),
 };
 
 describe("presetSelection", () => {
@@ -127,6 +134,41 @@ describe("buildSaveCalls", () => {
     expect(calls).toHaveLength(1);
     expect(calls[0]!.enabled).toBe(false);
     expect(calls[0]!.events).toHaveLength(9);
+  });
+});
+
+describe("selectionFromStatus piped into buildSaveCalls", () => {
+  it("omits priority for the recommended events, so the backend's own default applies", () => {
+    // Nothing is configured, so selectionFromStatus proposes the
+    // recommendation with no stored priorities. The wizard would still
+    // need the user to pick a recipient before Save is enabled; that step
+    // is not this module's job, so it's added here to exercise the call.
+    const selection: WizardSelection = {
+      ...selectionFromStatus(STATUS),
+      recipients: ["mobile_app_pixel"],
+    };
+    const calls = buildSaveCalls(selection);
+    const enabling = calls.find((call) => call.enabled);
+    expect(enabling?.events.sort()).toEqual(["anomaly", "interrupted", "sentinel", "watchdog"]);
+    expect(enabling).not.toHaveProperty("priority");
+  });
+
+  it("keeps an event with no explicit priority out of a call that carries one", () => {
+    // watchdog and completed would both resolve to "normal" under a
+    // default-resolved bucketing (watchdog explicitly, completed by
+    // fallback) — the point of this test is that only the explicit one may
+    // carry the priority field.
+    const calls = buildSaveCalls({
+      recipients: ["phone"],
+      events: ["watchdog", "completed"],
+      priorities: { watchdog: "normal" },
+    });
+    const enabling = calls.filter((call) => call.enabled);
+    expect(enabling).toHaveLength(2);
+    const withPriority = enabling.find((call) => call.events.includes("watchdog"));
+    const withoutPriority = enabling.find((call) => call.events.includes("completed"));
+    expect(withPriority?.priority).toBe("normal");
+    expect(withoutPriority).not.toHaveProperty("priority");
   });
 });
 

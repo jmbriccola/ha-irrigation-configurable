@@ -90,7 +90,11 @@ export function selectionFromStatus(status: NotificationStatusResponse): WizardS
   const configured = status.events.filter((event) => event.enabled);
   const recipients = [...new Set(configured.flatMap((event) => event.services))];
   const priorities: Record<string, NotifyPriority> = {};
-  for (const event of status.events) {
+  // Only a configured event has a stored priority worth preserving across a
+  // re-save. An unconfigured event has none — seeding one for it here would
+  // pin it explicitly, and buildSaveCalls would then send it, permanently
+  // shadowing the backend's own default for that event (see there).
+  for (const event of configured) {
     priorities[event.event] = event.priority === "high" ? "high" : "normal";
   }
   return {
@@ -116,9 +120,14 @@ export function buildSaveCalls(selection: WizardSelection): SetNotificationsCall
     throw new Error("Choose at least one recipient before enabling an event.");
   }
   const calls: SetNotificationsCall[] = [];
-  const byPriority = new Map<NotifyPriority, string[]>();
+  // Bucket by the RAW per-event value, including "not present" as its own
+  // bucket — not by a "?? normal"-resolved value. An event with no explicit
+  // priority must never share a bucket with one that has an explicit
+  // "normal", or it would inherit that explicit value and gain a priority it
+  // never asked for.
+  const byPriority = new Map<NotifyPriority | undefined, string[]>();
   for (const event of selection.events) {
-    const priority = selection.priorities[event] ?? "normal";
+    const priority = selection.priorities[event];
     byPriority.set(priority, [...(byPriority.get(priority) ?? []), event]);
   }
   for (const [priority, events] of byPriority) {
@@ -127,10 +136,12 @@ export function buildSaveCalls(selection: WizardSelection): SetNotificationsCall
       enabled: true,
       services: [...selection.recipients],
     };
-    // Only send a priority the user actually chose. Omitting it lets the
-    // backend apply its own default, which is high for the essential events —
-    // sending "normal" here would quietly override that.
-    if (events.some((event) => selection.priorities[event] !== undefined)) {
+    // Only send a priority the user actually chose for these events.
+    // Omitting it lets the backend apply its own default, which is high for
+    // the essential events — sending "normal" here would quietly and
+    // permanently override that default (notify.py's write path treats a
+    // stored priority as taking precedence over default_priority).
+    if (priority !== undefined) {
       call.priority = priority;
     }
     calls.push(call);
