@@ -28,10 +28,20 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
 - **A unit that changes at runtime** is picked up on the next read. If it
   becomes unresolvable mid-cycle the litres freeze at the last certain value
   and the cycle finishes on its timeout, without a crash or an interruption.
-- **Upgrading with a non-L/min meter**: a Repairs notice names the sensors and
-  explains that the current period's consumption total is understated and will
-  be correct from the next period. The stored counter is deliberately not
+- **The meters are watched, not read once at startup.** A flow sensor that
+  only reaches the state machine after Home Assistant has started — the normal
+  case for Zigbee and MQTT — refreshes the zone's status and the Repairs
+  notice the moment it does, and so does one added or repointed later without
+  a reload. A working meter is no longer left reading as "unit unknown", with
+  volume mode declared unavailable, until some unrelated update happens by.
+- **A non-L/min meter is named in Repairs**: the notice lists which meters
+  report which unit and states that their readings are converted to L/min. For
+  an install upgraded from before 3.2.0 it adds that the litres those meters
+  recorded back then are understated; that history is deliberately not
   rewritten — see the release notes.
+- **In Italian** the two unit fields are labelled "Unità del sensore di
+  portata" and "Unità del sensore di portata di linea", matching the sensor
+  picker each one sits under, in the panel and in the service dialogs alike.
 
 ## [3.1.0] - 2026-08-13
 

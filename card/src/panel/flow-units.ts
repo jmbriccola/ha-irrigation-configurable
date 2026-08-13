@@ -21,11 +21,16 @@ import type { HomeAssistant } from "../types";
  *  - a unit missing here that the backend converts fine makes
  *    `detectedFlowUnit` return undefined, so the note claims "no usable unit"
  *    about a working meter;
- *  - a stored unit missing here (a new HA unit, or one written by
- *    import_config or Developer Tools) matches no <option>, so the select
- *    falls back to "detected automatically" while the note right below reads
- *    "Using X — you set this". That one is display-only: `_save` sends the
- *    component's state, not the DOM's, so an untouched save round-trips it.
+ *  - a stored unit missing here matches no <option>, so the select falls back
+ *    to "detected automatically". For a unit HA has added and this list has
+ *    not, that is display-only: the backend converts it fine, and `_save`
+ *    sends the component's state rather than the DOM's, so an untouched save
+ *    round-trips it. For a unit the backend rejects too -- one written by
+ *    import_config or Developer Tools, neither of which validates the field --
+ *    it is not: the card always sends the unit, so every save of that zone
+ *    comes back as an opaque voluptuous error and the zone cannot be edited
+ *    from the panel at all. `effectiveFlowUnit` therefore honours an override
+ *    only when this list contains it, matching flow.py's own resolution rule.
  */
 export const FLOW_UNITS: readonly string[] = [
   "L/min",
@@ -49,12 +54,19 @@ export function detectedFlowUnit(hass: HomeAssistant, entityId: string): string 
   return unit && FLOW_UNITS.includes(unit) ? unit : undefined;
 }
 
-/** Which unit will actually be used, and who decided it. */
+/**
+ * Which unit will actually be used, and who decided it.
+ *
+ * An override only counts if the converter handles it — the same condition
+ * flow.py applies before letting an override win. Accepting any truthy string
+ * made the note claim "Using widgets/s — you set this" about a unit the
+ * backend was ignoring.
+ */
 export function effectiveFlowUnit(
   override: string | undefined,
   detected: string | undefined,
 ): { unit: string | undefined; source: FlowUnitSource } {
-  if (override) return { unit: override, source: "override" };
+  if (override && FLOW_UNITS.includes(override)) return { unit: override, source: "override" };
   if (detected) return { unit: detected, source: "detected" };
   return { unit: undefined, source: "unknown" };
 }

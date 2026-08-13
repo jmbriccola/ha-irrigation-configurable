@@ -530,7 +530,7 @@
           "description": "Il flussometro proprio della zona (L/min). Se vuoto, si usa il contatore di linea condiviso, quando disponibile."
         },
         "flow_sensor_unit": {
-          "name": "Unità del flussometro",
+          "name": "Unità del sensore di portata",
           "description": "Serve solo se il sensore non dichiara un'unità, o ne dichiara una non convertibile. Lascia vuoto per usare quella dichiarata dall'entità. Se la imposti qui, vince sull'unità dell'entità."
         },
         "nominal_flow_lpm": {
@@ -586,7 +586,7 @@
           "description": "Un unico contatore di portata (L/min) sul collettore, condiviso dalle zone che non ne hanno uno proprio. Lascia vuoto per rimuoverlo; ometti per lasciarlo invariato."
         },
         "line_flow_sensor_unit": {
-          "name": "Unità del flussometro di linea",
+          "name": "Unità del sensore di portata di linea",
           "description": "Serve solo se il flussometro di linea non dichiara un'unità, o ne dichiara una non convertibile. Lascia vuoto per usare quella dichiarata dall'entità."
         },
         "master_valve": {
@@ -842,8 +842,8 @@
       "description": "Il sensore {entity_id} non dichiara un'unità di misura, o ne dichiara una non convertibile in litri al minuto. Le sue letture non vengono usate: per questo sensore la modalità volume e il rilevamento delle anomalie di portata sono spenti, e il consumo ricade sulla portata nominale. Imposta l'unità esplicitamente sulla zona (o sul flussometro di linea) per riattivarli."
     },
     "flow_unit_corrected": {
-      "title": "Le letture di portata hanno cambiato scala",
-      "description": "Questi flussometri riportano in un'unità diversa dai litri al minuto ed erano letti come se fossero L/min: {sensors}. Ora le letture vengono convertite, quindi litri misurati, target di volume e contatore dei consumi sono corretti d'ora in avanti. Il totale del periodo in corso è sottostimato e sarà corretto dal prossimo periodo; non viene riscritto di proposito, perché mescola litri misurati e stime che il difetto non toccava."
+      "title": "Le letture di portata vengono convertite da un'altra unità",
+      "description": "Questi flussometri riportano in un'unità diversa dai litri al minuto: {sensors}. Le loro letture vengono convertite in L/min, quindi litri misurati, target di volume e contatore dei consumi sono corretti. Se hai aggiornato da una versione precedente alla 3.2.0, i litri registrati allora da quei flussometri erano letti come se fossero già L/min e risultano sottostimati; quello storico non viene riscritto di proposito, perché il totale dei consumi mescola litri misurati e stime calcolate come portata nominale × minuti, che il difetto non toccava."
     }
   },
   "exceptions": {

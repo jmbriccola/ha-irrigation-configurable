@@ -14,7 +14,8 @@ from datetime import datetime, timedelta
 from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import CALLBACK_TYPE, Event, EventStateChangedData, callback
+from homeassistant.const import ATTR_UNIT_OF_MEASUREMENT
+from homeassistant.core import CALLBACK_TYPE, Event, EventStateChangedData, State, callback
 from homeassistant.helpers import issue_registry as ir
 from homeassistant.helpers import sun
 from homeassistant.helpers.dispatcher import async_dispatcher_send
@@ -78,6 +79,11 @@ _TEMP_TRACK_MINUTES = 10
 _INDEFINITE = datetime(2999, 1, 1, tzinfo=dt_util.UTC)
 
 
+def _declared_unit(state: State | None) -> str | None:
+    """The unit an entity declares, or None if it declares (or is) nothing."""
+    return None if state is None else state.attributes.get(ATTR_UNIT_OF_MEASUREMENT)
+
+
 class ZoneRuntime:
     """A zone's live objects: parsed config + valve controller."""
 
@@ -105,6 +111,7 @@ class IrrigationRuntime:
         self._ledger: dict[tuple[str, str], list[datetime]] = {}
         self._trigger_unsubs: list[CALLBACK_TYPE] = []
         self._tracker_unsubs: list[CALLBACK_TYPE] = []
+        self._flow_tracker_unsub: CALLBACK_TYPE | None = None
         self._skip_notices: dict[str, list[str]] = {}
         self._skip_flush_unsub: CALLBACK_TYPE | None = None
         self._last_evaluation: tuple[datetime, SessionEvaluation] | None = None
@@ -140,6 +147,9 @@ class IrrigationRuntime:
         for unsub in self._tracker_unsubs:
             unsub()
         self._tracker_unsubs.clear()
+        if self._flow_tracker_unsub is not None:
+            self._flow_tracker_unsub()
+            self._flow_tracker_unsub = None
         if self._skip_flush_unsub is not None:
             self._skip_flush_unsub()
             self._skip_flush_unsub = None
@@ -178,6 +188,7 @@ class IrrigationRuntime:
                 await self.session.async_stop_all(reason="zone_removed", manual=False)
             self.state.drop_zone(zone_id)
         self._schedule_triggers()
+        self._track_flow_sensors()  # a repointed or new meter, watched at once
         self.sentinel.start()  # re-arm at the (possibly new) sentinel time
         self.state.schedule_save()
         # Signal the platforms to add/remove entities when the zone set OR any
@@ -906,14 +917,22 @@ class IrrigationRuntime:
             ir.async_delete_issue(self.hass, DOMAIN, "notifications_silent")
 
     def _report_rescaled_flow_meters(self) -> None:
-        """Tell an upgrading install that its counter changed scale.
+        """State which meters are being converted, and from what.
 
-        The stored consumption counter is deliberately NOT rewritten. It is
-        monthly and resets at period start, so the distortion self-heals within
-        31 days; and the accumulated total mixes litres measured through the
-        meter with litres estimated as nominal x minutes, which were never
-        affected. Multiplying the whole total by a single factor would be
-        exactly the plausible-but-false number this feature removes.
+        A standing fact, not an event: there is no version gate and no
+        one-shot flag, so this runs on every setup and config update and the
+        issue is present exactly while some meter reads non-canonically. The
+        text says so -- it describes the conversion in force, and mentions the
+        understated history only as a conditional for an install upgraded from
+        before 3.2.0. Anchoring it to "the current period" instead was false
+        on a fresh install, false again once the month rolled over, and back
+        at every HA version bump that reset the issue's dismissal.
+
+        The stored consumption counter is deliberately NOT rewritten: the
+        accumulated total mixes litres measured through the meter with litres
+        estimated as nominal x minutes, which the defect never touched.
+        Multiplying the whole total by a single factor would be exactly the
+        plausible-but-false number this feature removes.
         """
         rescaled: dict[str, str] = {}
         for zone in self.zones.values():
@@ -1095,6 +1114,66 @@ class IrrigationRuntime:
                     self.hass, [self.hub.rain_sensor], self._on_rain_sensor
                 )
             )
+        self._track_flow_sensors()
+
+    def _flow_sensor_entities(self) -> list[str]:
+        """Every configured meter, de-duplicated, in a stable order.
+
+        Truthiness, not ``is not None``, and for the same reason as
+        flow_reader_for: an empty string is a reachable way of saying "no
+        meter", and subscribing to it would bind a listener to nothing.
+        """
+        entity_ids: list[str] = []
+        for zone in self.zones.values():
+            if zone.config.flow_sensor and zone.config.flow_sensor not in entity_ids:
+                entity_ids.append(zone.config.flow_sensor)
+        if self.hub.line_flow_sensor and self.hub.line_flow_sensor not in entity_ids:
+            entity_ids.append(self.hub.line_flow_sensor)
+        return entity_ids
+
+    def _track_flow_sensors(self) -> None:
+        """Watch every configured meter's state; rebuilt on every config change.
+
+        A meter's live state feeds two things that have no other reason to
+        re-run: the zone's declared degradation (rendered only on
+        SIGNAL_UPDATE, since the entities do not poll) and the rescale notice.
+        Without this subscription a meter that appears *after* setup -- the
+        normal case for Zigbee/MQTT, whose restored states are written at
+        EVENT_HOMEASSISTANT_START, i.e. after the config entries are set up --
+        leaves a perfectly good meter accused of having no usable unit, and
+        leaves the upgrade notice unfired on the very install it exists for.
+
+        Rebuilt rather than added to, like _schedule_triggers, so repointing a
+        zone's meter takes effect without a reload (§5).
+        """
+        if self._flow_tracker_unsub is not None:
+            self._flow_tracker_unsub()
+            self._flow_tracker_unsub = None
+        entity_ids = self._flow_sensor_entities()
+        if not entity_ids:
+            return
+        self._flow_tracker_unsub = async_track_state_change_event(
+            self.hass, entity_ids, self._on_flow_sensor
+        )
+
+    @callback
+    def _on_flow_sensor(self, event: Event[EventStateChangedData]) -> None:
+        """A meter appeared, vanished, or changed the unit it declares.
+
+        Filtered on the declared unit, not on the event: both consumers depend
+        on the unit the reader resolves and on nothing else -- the litres of a
+        running cycle are read straight from the reader by the session. A
+        meter reporting every second would otherwise re-render every entity of
+        the integration and rewrite the issue registry at 1 Hz, all to reach
+        the same two conclusions.
+
+        Both consumers re-read live state themselves, so this only has to tell
+        them to look again.
+        """
+        if _declared_unit(event.data["old_state"]) == _declared_unit(event.data["new_state"]):
+            return
+        self.dispatch_update()
+        self._report_rescaled_flow_meters()
 
     @callback
     def _track_temp(self, _now: Any) -> None:
