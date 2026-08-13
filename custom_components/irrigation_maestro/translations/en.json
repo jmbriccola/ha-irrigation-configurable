@@ -840,6 +840,10 @@
     "flow_unit_unknown": {
       "title": "Flow sensor unit unknown",
       "description": "The sensor {entity_id} does not declare a unit of measurement, or declares one that cannot be converted to litres per minute. Its readings are not being used: volume mode and flow anomaly detection are off for it, and consumption falls back to the nominal flow rate. Set the unit explicitly on the zone (or on the line meter) to turn them back on."
+    },
+    "flow_unit_corrected": {
+      "title": "Flow readings changed scale",
+      "description": "These meters report in a unit other than litres per minute and were previously read as if they were L/min: {sensors}. Their readings are now converted, so measured litres, volume targets and the consumption counter are correct from here on. The current period's consumption total is understated and will be right from the next period; it is deliberately not rewritten, because it mixes measured litres with estimates that were never affected."
     }
   },
   "exceptions": {
