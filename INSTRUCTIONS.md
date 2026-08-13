@@ -42,11 +42,15 @@ Avanzate**. Cycle (program) IDs are stable, so history and per-cycle
 switches survive edits.
 
 A program's curve — the temperature→duration mapping, with explicit min/max
-clamps and optional volume mode or cycle-and-soak — is reshaped live with
-the two-slider editor (§6, and §5 for the same editor on the card). A curve
-needing more than three control points, or set by exact coordinates, is set
-with the `set_curve` service instead (Developer tools → Actions; see the
-README's service list).
+clamps ("Never less than" / "Never more than") and an explicit duration or
+volume kind — is edited live with the point-based curve editor (§6, and §5
+for the same editor on the card): add, remove, drag or type each control
+point, with a preview of the resulting value at seven reference
+temperatures. Saving a curve resets the program's watering intensity —
+uniform or per-day — back to the curve's own values; the editor warns first
+if there's one to lose. `set_curve` (Developer tools → Actions; see the
+README's service list) sets a curve the same way from an automation or a
+scripted import.
 
 **Zone order** is the number entity on each zone (or the `set_zone_order`
 service) — there is deliberately no drag-and-drop in the panel.
@@ -101,13 +105,16 @@ mode, zone filter. Curves are displayed (sparkline per cycle) and can be
 edited live from the card.
 
 Editing curves from the card — expand a zone, open a cycle and press
-**Edit curve**. Two sliders (*How much water* and *How much more when it's
-hot*) reshape the watering live: the graph, the cool/mild/hot examples and
-the 'with today's weather' line update as you drag. **Advanced** adds the
-*Never less than / Never more than* safety limits and lets you drag the
-three points. Curves needing more than three points, or set by exact
-coordinates, use the `set_curve` service instead (Developer tools →
-Actions).
+**Edit curve**. The editor shows the curve as a live graph and as a list of
+control points: add a point, remove one, or drag or type its temperature
+and value directly. The graph, the seven-temperature preview and the 'with
+today's weather' line update as you edit. *Never less than / Never more
+than* set the absolute clamps applied after the curve and any intensity
+scaling, and a duration/volume selector appears for zones with a flow
+meter. Saving resets the program's watering intensity — uniform or per-day
+— back to the curve's own values; the editor warns first if there's one to
+lose. `set_curve` (Developer tools → Actions) sets a curve the same way
+from an automation.
 
 ## 6. The "Irrigazione" panel
 
@@ -125,10 +132,13 @@ hub settings, all in one place.
    should run on (empty = every day) — a start time or sun-event trigger,
    and a duration: one value for every scheduled day, or a different value
    per day (e.g. shorter after a day it rained).
-4. **Advanced** settings on a program — the heat-response curve (the same
-   two-slider editor as the card, "how much water" / "how much more when
-   it's hot") for programs that scale duration with temperature instead of
-   a fixed value — live behind a drawer, collapsed by default.
+4. **Advanced** settings on a program — the same point-based curve editor as
+   the card (§5): add, remove, drag or type each control point, set the
+   *Never less than / Never more than* clamps and the duration/volume kind,
+   and preview the result at seven reference temperatures — for programs
+   that scale duration with temperature instead of a fixed value. Saving a
+   curve resets the program's watering intensity to the curve's own values;
+   the editor warns first. Live behind a drawer, collapsed by default.
 5. **＋ Aggiungi zona** (next to the zone tabs) opens a short form — name,
    valve (or switch) entity, area — and creates the zone with one sensible
    default program, ready to refine. **✎ Modifica zona** (above the program

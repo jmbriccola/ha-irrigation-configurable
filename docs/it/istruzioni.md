@@ -46,11 +46,15 @@ dietro **✎ Modifica zona → Avanzate**. Gli ID dei programmi (cicli) sono
 stabili: storico e interruttori per ciclo sopravvivono alle modifiche.
 
 La curva di un programma — la relazione temperatura→durata, con i limiti
-min/max espliciti e le opzioni volume o cycle-and-soak — si rimodella dal
-vivo con l'editor a due slider (§6, e §5 per lo stesso editor sulla card).
-Una curva che richiede più di tre punti di controllo, o punti impostati per
-coordinate esatte, si imposta invece con il servizio `set_curve` (Strumenti
-per sviluppatori → Azioni; vedi l'elenco dei servizi nel README).
+min/max espliciti ("Mai meno di" / "Mai più di") e un tipo esplicito, durata
+o volume — si modifica dal vivo con l'editor a punti di controllo (§6, e §5
+per lo stesso editor sulla card): aggiungi, rimuovi, trascina o digita ogni
+punto, con un'anteprima del risultato a sette temperature di riferimento.
+Salvare una curva riporta l'intensità di irrigazione del programma —
+uniforme o per singolo giorno — ai valori della curva stessa; l'editor
+avvisa prima, se c'è qualcosa da perdere. Il servizio `set_curve` (Strumenti
+per sviluppatori → Azioni; vedi l'elenco dei servizi nel README) imposta una
+curva allo stesso modo da un'automazione o da un'importazione via script.
 
 **L'ordine delle zone** è l'entità number di ogni zona (o il servizio
 `set_zone_order`) — volutamente non c'è drag-and-drop nel pannello.
@@ -108,13 +112,17 @@ curve sono visualizzate (sparkline per ciclo) e possono essere modificate
 dal vivo direttamente dalla card.
 
 Modificare le curve dalla card — espandi una zona, apri un ciclo e premi
-**Modifica curva**. Due slider (*Quanta acqua* e *Quanto di più quando fa
-caldo*) rimodellano l'irrigazione dal vivo: il grafico, gli esempi
-fresco/mite/caldo e la riga 'con il meteo di oggi' si aggiornano mentre
-trascini. **Avanzate** aggiunge i limiti di sicurezza *Mai meno di / Mai più
-di* e ti fa trascinare i tre punti. Le curve con più di tre punti, o
-impostate per coordinate esatte, si modificano con il servizio `set_curve`
-(Strumenti per sviluppatori → Azioni).
+**Modifica curva**. L'editor mostra la curva come grafico dal vivo e come
+elenco di punti di controllo: aggiungi un punto, rimuovine uno, oppure
+trascina o digita temperatura e valore di ciascuno. Il grafico, l'anteprima
+alle sette temperature di riferimento e la riga 'con il meteo di oggi' si
+aggiornano mentre modifichi. *Mai meno di / Mai più di* impostano i limiti
+assoluti applicati dopo la curva ed eventuali variazioni d'intensità, e per
+le zone con un flussometro compare anche il selettore durata/volume.
+Salvare riporta l'intensità di irrigazione del programma — uniforme o per
+singolo giorno — ai valori della curva stessa; l'editor avvisa prima, se
+c'è qualcosa da perdere. Il servizio `set_curve` (Strumenti per sviluppatori
+→ Azioni) imposta una curva allo stesso modo da un'automazione.
 
 ## 6. Il pannello "Irrigazione"
 
@@ -133,11 +141,14 @@ e le impostazioni quotidiane dell'hub, tutto in un unico posto.
    solare, e la durata: un unico valore per tutti i giorni programmati,
    oppure un valore diverso per ciascun giorno (es. più breve dopo un
    giorno di pioggia).
-4. Le impostazioni **avanzate** di un programma — la curva di risposta al
-   caldo (lo stesso editor a due slider della card, "quanta acqua" / "quanto
-   di più quando fa caldo") per i programmi che scalano la durata con la
-   temperatura invece di un valore fisso — sono dietro un cassetto (drawer),
-   chiuso per default.
+4. Le impostazioni **avanzate** di un programma — lo stesso editor a punti
+   di controllo della card (§5): aggiungi, rimuovi, trascina o digita ogni
+   punto, imposta i limiti *Mai meno di / Mai più di* e il tipo durata/
+   volume, e vedi l'anteprima del risultato a sette temperature di
+   riferimento — per i programmi che scalano la durata con la temperatura
+   invece di un valore fisso. Salvare una curva riporta l'intensità di
+   irrigazione del programma ai valori della curva stessa; l'editor avvisa
+   prima. Dietro un cassetto (drawer), chiuso per default.
 5. **＋ Aggiungi zona** (accanto alle schede zona) apre un modulo breve —
    nome, entità valvola (o switch), area — e crea la zona con un programma
    predefinito sensato, pronto da rifinire. **✎ Modifica zona** (sopra

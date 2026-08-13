@@ -19,8 +19,9 @@ rigorose sulle valvole. Tutto si configura dall'interfaccia, senza YAML.
    bastano per crearla, con un programma predefinito già pronto (tutti i
    giorni, all'alba) che poi rifinisci — orario o evento solare, giorni e
    durata sulla griglia settimanale, e la curva temperatura→durata con
-   l'editor a due slider. Ordine, cadenza e gli altri dettagli della zona si
-   trovano in **✎ Modifica zona → Avanzate**.
+   l'editor a punti di controllo (aggiungi, rimuovi, trascina o digita).
+   Ordine, cadenza e gli altri dettagli della zona si trovano in
+   **✎ Modifica zona → Avanzate**.
 
 Richiede Home Assistant **2025.7.0 o successivo**.
 
