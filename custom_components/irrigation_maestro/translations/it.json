@@ -836,6 +836,10 @@
     "notify_target_missing": {
       "title": "Destinatario delle notifiche non più esistente",
       "description": "Il servizio notify.{service} è configurato per l'evento \"{event}\" ma non esiste più, quindi quell'avviso si sta perdendo. Apri Irrigazione → Impostazioni → Notifiche e scegli un destinatario esistente."
+    },
+    "flow_unit_unknown": {
+      "title": "Unità del flussometro sconosciuta",
+      "description": "Il sensore {entity_id} non dichiara un'unità di misura, o ne dichiara una non convertibile in litri al minuto. Le sue letture non vengono usate: per lui la modalità volume e il rilevamento delle anomalie di portata sono spenti, e il consumo ricade sulla portata nominale. Imposta l'unità esplicitamente sulla zona (o sul flussometro di linea) per riattivarli."
     }
   },
   "exceptions": {

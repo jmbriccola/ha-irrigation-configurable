@@ -836,6 +836,10 @@
     "notify_target_missing": {
       "title": "Notification recipient no longer exists",
       "description": "The notify service notify.{service} is configured for the event \"{event}\" but no longer exists, so that alert is being lost. Open Irrigazione → Settings → Notifications and choose a recipient that exists."
+    },
+    "flow_unit_unknown": {
+      "title": "Flow sensor unit unknown",
+      "description": "The sensor {entity_id} does not declare a unit of measurement, or declares one that cannot be converted to litres per minute. Its readings are not being used: volume mode and flow anomaly detection are off for it, and consumption falls back to the nominal flow rate. Set the unit explicitly on the zone (or on the line meter) to turn them back on."
     }
   },
   "exceptions": {
