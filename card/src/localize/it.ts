@@ -283,6 +283,9 @@ export const it: Record<keyof typeof en, string> = {
   "notify.step_summary": "Conferma",
   "notify.no_recipients":
     "Questa istanza non ha ancora nessun servizio notify. Configurane uno — l'app companion, Telegram, l'e-mail — e comparirà qui.",
+  "notify.recipient_gone": "non esiste più",
+  "notify.recipient_gone_hint":
+    "Un destinatario indicato come non più esistente resta memorizzato e viene riscritto a ogni salvataggio. Deselezionalo per rimuoverlo.",
   "notify.send_test": "Invia prova",
   "notify.test_ok": "Inviata",
   "notify.test_failed": "Non consegnata: {error}",

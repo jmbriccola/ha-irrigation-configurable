@@ -9,11 +9,14 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
 ### Notifications are configured, not guessed
 
 - **Guided setup in the panel.** Recipients are picked from the `notify.*`
-  services the instance actually has, never typed. The four events an
-  irrigation system should never miss — valve failure, flow anomaly,
-  irrigation not executed, interrupted cycle — are proposed pre-selected, so
-  accepting the recommendation is one click. Events browse by severity
-  (critical / operational / informational) instead of nine flat rows.
+  services the instance actually has (`notify.send_message` excepted: Home
+  Assistant registers it on every instance, but it addresses notify *entities*
+  and, called without one, reports success while delivering nothing), never
+  typed. The four events an irrigation system should never miss — valve
+  failure, flow anomaly, irrigation not executed, interrupted cycle — are
+  proposed pre-selected, so accepting the recommendation is one click. Events
+  browse by severity (critical / operational / informational) instead of nine
+  flat rows.
 - **A test send** inside the wizard, per recipient, with the failure reason.
 - **`enabled: true` with no recipients is refused**, in the wizard and in
   `set_notifications`. Validation judges the merged result, so flipping
@@ -25,7 +28,12 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
   normalised on write and existing ones on read, so no migration is needed.
 - **Repairs when it matters**: notifications enabled with no recipient; no
   essential event reaching anyone; a configured recipient that no longer
-  exists (for essential events, where a log line was not enough).
+  exists (for essential events, where a log line was not enough). Each one
+  names the path to the wizard in the language Home Assistant is running in.
+- **A recipient that has vanished is still listed**, marked as no longer
+  existing, so it can be unchecked. It is what the repair issue asks you to
+  do: without a row of its own there was nothing to clear, every save wrote
+  the dead recipient back, and the issue returned.
 - **Priority per event**, defaulting to high for the four essential events.
 - **`notification_status`** — a new action reporting which events notify,
   where they go and whether the system is mute; the same summary is in the

@@ -3,6 +3,7 @@ import {
   buildSaveCalls,
   discoverRecipients,
   presetSelection,
+  recipientRows,
   selectionFromStatus,
 } from "./notification-wizard-state";
 import type { NotificationStatusResponse, WizardSelection } from "./notification-wizard-state";
@@ -36,11 +37,12 @@ const STATUS: NotificationStatusResponse = {
       enabled: false,
       services: [],
       missing: [],
-      // notify.py:161 reports default_priority(event) for an unconfigured
-      // event, which is "high" for the essential ones — not "normal" for
-      // everything, which is the impossible state this fixture used to
-      // encode.
+      // notify.py reports default_priority(event) as the RESOLVED priority of
+      // an unconfigured event, which is "high" for the essential ones — not
+      // "normal" for everything, which is the impossible state this fixture
+      // used to encode. Nothing is stored, so stored_priority is null.
       priority: essential ? "high" : "normal",
+      stored_priority: null,
       essential,
       reachable: false,
     };
@@ -89,6 +91,42 @@ describe("selectionFromStatus", () => {
     const selection = selectionFromStatus(configured);
     expect(selection.events).toEqual(["completed"]);
     expect(selection.recipients).toEqual(["casabrangi"]);
+  });
+
+  it("seeds no priority for an enabled event that has none stored", () => {
+    // The four essentials resolve to "high" for display, but nothing is
+    // stored for them. Seeding from the resolved value would make the very
+    // first Save pin "high" explicitly, and notify.py lets a stored priority
+    // beat default_priority forever after.
+    const configured: NotificationStatusResponse = {
+      ...STATUS,
+      verdict: "ok",
+      events: STATUS.events.map((event) =>
+        event.essential
+          ? { ...event, enabled: true, services: ["casabrangi"], reachable: true }
+          : event,
+      ),
+    };
+    expect(selectionFromStatus(configured).priorities).toEqual({});
+  });
+
+  it("keeps a priority the user did store", () => {
+    const configured: NotificationStatusResponse = {
+      ...STATUS,
+      events: STATUS.events.map((event) =>
+        event.event === "watchdog"
+          ? {
+              ...event,
+              enabled: true,
+              services: ["casabrangi"],
+              reachable: true,
+              priority: "normal",
+              stored_priority: "normal",
+            }
+          : event,
+      ),
+    };
+    expect(selectionFromStatus(configured).priorities).toEqual({ watchdog: "normal" });
   });
 });
 
@@ -153,6 +191,27 @@ describe("selectionFromStatus piped into buildSaveCalls", () => {
     expect(enabling).not.toHaveProperty("priority");
   });
 
+  it("re-saves an already-configured install without pinning its resolved defaults", () => {
+    // The round trip a returning user makes: open the wizard on a working
+    // configuration, change something else, Save. The four essentials are
+    // enabled and display "high", but none of them has a stored priority, so
+    // none may be written back — that would freeze today's default.
+    const configured: NotificationStatusResponse = {
+      ...STATUS,
+      verdict: "ok",
+      events: STATUS.events.map((event) =>
+        event.essential
+          ? { ...event, enabled: true, services: ["mobile_app_pixel"], reachable: true }
+          : event,
+      ),
+    };
+    const calls = buildSaveCalls(selectionFromStatus(configured));
+    const enabling = calls.filter((call) => call.enabled);
+    expect(enabling).toHaveLength(1);
+    expect(enabling[0]!.events.sort()).toEqual(["anomaly", "interrupted", "sentinel", "watchdog"]);
+    expect(enabling[0]).not.toHaveProperty("priority");
+  });
+
   it("keeps an event with no explicit priority out of a call that carries one", () => {
     // watchdog and completed would both resolve to "normal" under a
     // default-resolved bucketing (watchdog explicitly, completed by
@@ -191,5 +250,43 @@ describe("discoverRecipients", () => {
 
   it("survives an instance with no notify domain at all", () => {
     expect(discoverRecipients({ services: {} } as never)).toEqual([]);
+  });
+
+  it("never offers notify.send_message, which is registered everywhere and delivers nothing", () => {
+    // It is an entity service: with only a title and a message it resolves to
+    // zero entities and reports success. Choosing it would produce exactly the
+    // configured-looking-but-mute state the wizard exists to prevent.
+    const hass = {
+      services: { notify: { send_message: {}, persistent_notification: {}, phone: {} } },
+    };
+    expect(discoverRecipients(hass as never).map((r) => r.service)).toEqual([
+      "persistent_notification",
+      "phone",
+    ]);
+  });
+});
+
+describe("recipientRows", () => {
+  it("keeps a stored recipient that has vanished, so it can be unchecked", () => {
+    // Without a row of its own the dead recipient has no checkbox, buildSaveCalls
+    // writes it back on every Save, and its ERROR repair never clears.
+    const hass = { services: { notify: { phone: { name: "Phone" } } } };
+    expect(recipientRows(hass as never, ["phone", "old_tablet"])).toEqual([
+      { service: "phone", label: "Phone" },
+      { service: "old_tablet", label: "old_tablet", missing: true },
+    ]);
+  });
+
+  it("marks nothing when every selected recipient still exists", () => {
+    const hass = { services: { notify: { phone: {} } } };
+    expect(recipientRows(hass as never, ["phone"])).toEqual([
+      { service: "phone", label: "phone" },
+    ]);
+  });
+
+  it("lists a vanished recipient even on an instance with no notify service left", () => {
+    expect(recipientRows({ services: {} } as never, ["old_tablet"])).toEqual([
+      { service: "old_tablet", label: "old_tablet", missing: true },
+    ]);
   });
 });

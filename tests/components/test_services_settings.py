@@ -409,3 +409,42 @@ async def test_notification_status_reports_the_field_install_shape(hass: HomeAss
     )
     assert response["enabled_without_target"] == ["interrupted"]
     assert response["verdict"] == "silent"
+
+
+async def test_notification_status_never_offers_the_notify_entity_service(
+    hass: HomeAssistant,
+) -> None:
+    """notify.send_message is always registered and always undeliverable here.
+
+    The notify integration registers it as an entity service, so it exists on
+    every instance; called with a title and a message it resolves to zero
+    entities and reports success having sent nothing. Offering it would let the
+    wizard build the configured-looking-but-mute state this status exists to
+    catch, and counting it as known would make the verdict bless it.
+    """
+    await setup_hub(
+        hass,
+        [zone_data("Pots", "valve.pots")],
+        {
+            "notifications": {
+                event: {"enabled": True, "services": ["send_message"]}
+                for event in ("watchdog", "anomaly", "sentinel", "interrupted")
+            }
+        },
+    )
+
+    async def handler(call: ServiceCall) -> None:
+        return None
+
+    hass.services.async_register("notify", "send_message", handler)
+    hass.services.async_register("notify", "persistent_notification", handler)
+    response = await hass.services.async_call(
+        DOMAIN, "notification_status", {}, blocking=True, return_response=True
+    )
+    assert "send_message" not in response["available_services"]
+    # persistent_notification is a plain service and a legitimate target.
+    assert "persistent_notification" in response["available_services"]
+    assert response["verdict"] == "silent"
+    assert response["unreachable"] == {
+        "send_message": ["anomaly", "interrupted", "sentinel", "watchdog"]
+    }

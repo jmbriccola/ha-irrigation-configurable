@@ -102,6 +102,9 @@ function statusWith(priorities: Record<string, string>): NotificationStatusRespo
       services: [],
       missing: [],
       priority,
+      // Resolved-only: what the backend reports for an event nobody has
+      // chosen a priority for. effectiveNotifyPriority must still display it.
+      stored_priority: null,
       essential: priority === "high",
       reachable: false,
     })),
@@ -126,6 +129,7 @@ function essentialsStatus(reachable: string[]): NotificationStatusResponse {
       services: [],
       missing: [],
       priority: "high",
+      stored_priority: null,
       essential: ESSENTIALS.includes(event),
       reachable: reachable.includes(event),
     })),
