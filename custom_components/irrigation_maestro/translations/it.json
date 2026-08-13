@@ -766,6 +766,10 @@
           "description": "Corpo del messaggio di prova."
         }
       }
+    },
+    "notification_status": {
+      "name": "Stato notifiche",
+      "description": "Riferisce quali eventi notificano, verso quali destinatari, quali destinatari non esistono più e se il sistema è muto."
     }
   },
   "issues": {

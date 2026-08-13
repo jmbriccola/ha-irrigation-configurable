@@ -369,3 +369,43 @@ async def test_a_test_notification_reports_a_recipient_that_raises(hass: HomeAss
     )
     assert response["results"]["mail"]["sent"] is False
     assert "smtp refused" in response["results"]["mail"]["error"]
+
+
+async def test_notification_status_says_mute_when_nothing_is_configured(
+    hass: HomeAssistant,
+) -> None:
+    await setup_hub(hass, [zone_data("Pots", "valve.pots")])
+    response = await hass.services.async_call(
+        DOMAIN, "notification_status", {}, blocking=True, return_response=True
+    )
+    assert response["verdict"] == "silent"
+    assert sorted(response["recommended"]) == ["anomaly", "interrupted", "sentinel", "watchdog"]
+    assert len(response["events"]) == 9
+
+
+async def test_notification_status_lists_the_discovered_recipients(hass: HomeAssistant) -> None:
+    await setup_hub(hass, [zone_data("Pots", "valve.pots")])
+
+    async def handler(call: ServiceCall) -> None:
+        return None
+
+    hass.services.async_register("notify", "casabrangi", handler)
+    hass.services.async_register("notify", "mobile_app_pixel", handler)
+    response = await hass.services.async_call(
+        DOMAIN, "notification_status", {}, blocking=True, return_response=True
+    )
+    assert "casabrangi" in response["available_services"]
+    assert "mobile_app_pixel" in response["available_services"]
+
+
+async def test_notification_status_reports_the_field_install_shape(hass: HomeAssistant) -> None:
+    await setup_hub(
+        hass,
+        [zone_data("Pots", "valve.pots")],
+        {"notifications": {"interrupted": {"enabled": True, "services": []}}},
+    )
+    response = await hass.services.async_call(
+        DOMAIN, "notification_status", {}, blocking=True, return_response=True
+    )
+    assert response["enabled_without_target"] == ["interrupted"]
+    assert response["verdict"] == "silent"
