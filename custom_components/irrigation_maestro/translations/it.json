@@ -498,14 +498,6 @@
         "icon": {
           "name": "Icona",
           "description": "Icona mostrata per il dispositivo di questa zona. Vuoto per quella predefinita."
-        },
-        "flow_sensor": {
-          "name": "Sensore di portata",
-          "description": "Il flussometro proprio della zona (L/min). Se vuoto, si usa il contatore di linea condiviso, quando disponibile."
-        },
-        "flow_sensor_unit": {
-          "name": "Unità del flussometro",
-          "description": "Serve solo se il sensore non dichiara un'unità, o ne dichiara una non convertibile. Lascia vuoto per usare quella dichiarata dall'entità. Se la imposti qui, vince sull'unità dell'entità."
         }
       }
     },

@@ -156,8 +156,12 @@ ATTR_VOLUME_SAFETY_TIMEOUT_MIN: Final = "volume_safety_timeout_min"
 
 # Validated against the converter itself: an override it cannot handle would
 # be stored and then silently ignored at read time, which is the class of
-# defect this feature exists to remove.
-_FLOW_UNIT: Final = vol.In(sorted(SUPPORTED_FLOW_UNITS))
+# defect this feature exists to remove. Empty string is also accepted -- it
+# is how a caller asks to clear a stored override and resume detection.
+# (The cast: HA's base converter types VALID_UNITS as set[str | None] for a
+# "no unit" key that volume-flow-rate units never use in practice, which
+# would otherwise defeat sorted()'s comparable-type bound.)
+_FLOW_UNIT: Final = vol.In(["", *sorted(cast("frozenset[str]", SUPPORTED_FLOW_UNITS))])
 
 _DATA_SERVICES_REGISTERED: Final = "services_registered"
 
@@ -292,8 +296,6 @@ _ADD_ZONE_SCHEMA = vol.Schema(
         vol.Required(ATTR_VALVE_ENTITY): cv.string,
         vol.Optional(ATTR_AREA_M2): vol.Coerce(float),
         vol.Optional(ATTR_ICON): cv.string,
-        vol.Optional(ATTR_FLOW_SENSOR): cv.string,
-        vol.Optional(ATTR_FLOW_SENSOR_UNIT): _FLOW_UNIT,
     }
 )
 _UPDATE_ZONE_SCHEMA = vol.Schema(
@@ -457,13 +459,16 @@ _SET_CONCURRENCY_SCHEMA = vol.Schema(
     }
 )
 
+# flow_sensor_unit is handled separately in _async_update_zone: it is the
+# only zone field whose "unset" state is itself a user-visible, user-choosable
+# option (detect automatically), so an empty string must clear the key rather
+# than store it like every other field here does.
 _ZONE_PATCH_KEYS: Final = {
     ATTR_NAME: const.CONF_ZONE_NAME,
     ATTR_VALVE_ENTITY: const.CONF_VALVE_ENTITY,
     ATTR_AREA_M2: const.CONF_AREA_M2,
     ATTR_ICON: const.CONF_ZONE_ICON,
     ATTR_FLOW_SENSOR: const.CONF_FLOW_SENSOR,
-    ATTR_FLOW_SENSOR_UNIT: const.CONF_FLOW_SENSOR_UNIT,
     ATTR_NOMINAL_FLOW_LPM: const.CONF_NOMINAL_FLOW_LPM,
     ATTR_FLOW_TOLERANCE_PCT: const.CONF_FLOW_TOLERANCE_PCT,
     ATTR_ADJUSTMENT_PCT: const.CONF_ADJUSTMENT_PCT,
@@ -1069,10 +1074,6 @@ async def _async_add_zone(call: ServiceCall) -> ServiceResponse:
         data[const.CONF_AREA_M2] = float(call.data[ATTR_AREA_M2])
     if ATTR_ICON in call.data:
         data[const.CONF_ZONE_ICON] = call.data[ATTR_ICON]
-    if ATTR_FLOW_SENSOR in call.data:
-        data[const.CONF_FLOW_SENSOR] = call.data[ATTR_FLOW_SENSOR]
-    if ATTR_FLOW_SENSOR_UNIT in call.data:
-        data[const.CONF_FLOW_SENSOR_UNIT] = call.data[ATTR_FLOW_SENSOR_UNIT]
 
     # One convention, on the service side: the service is the only path that
     # creates a zone now, so it writes the defaults rather than leaving them
@@ -1108,6 +1109,14 @@ async def _async_update_zone(call: ServiceCall) -> None:
     for attr, conf_key in _ZONE_PATCH_KEYS.items():
         if attr in call.data:
             data[conf_key] = call.data[attr]
+    if ATTR_FLOW_SENSOR_UNIT in call.data:
+        # Unlike every other zone field above, "unset" is itself a real,
+        # user-chosen option here (detect automatically) -- so an empty
+        # string clears the override instead of storing one.
+        if call.data[ATTR_FLOW_SENSOR_UNIT]:
+            data[const.CONF_FLOW_SENSOR_UNIT] = call.data[ATTR_FLOW_SENSOR_UNIT]
+        else:
+            data.pop(const.CONF_FLOW_SENSOR_UNIT, None)
     _validate_zone(data, runtime.hub.curve_templates)
     title = call.data.get(ATTR_NAME, subentry.title)
     hass.config_entries.async_update_subentry(entry, subentry, data=data, title=title)
