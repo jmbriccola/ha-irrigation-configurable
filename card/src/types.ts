@@ -219,7 +219,9 @@ export type ZoneAction =
       points: [number, number][];
       min: number;
       max: number;
-      kind: "duration" | "volume";
+      /** Absent when the kind selector wasn't offered — the service must
+       *  keep the program's current kind, not have one asserted over it. */
+      kind?: "duration" | "volume";
     };
 
 export type GlobalAction =

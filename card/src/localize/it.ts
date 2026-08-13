@@ -209,7 +209,7 @@ export const it: Record<keyof typeof en, string> = {
   "editor.min.help": "Minimo assoluto, applicato dopo la curva ed eventuali variazioni d'intensità.",
   "editor.max.label": "⬆️ Mai più di",
   "editor.max.help": "Massimo assoluto, applicato dopo la curva ed eventuali variazioni d'intensità.",
-  "editor.intensity_reset": "Questo programma irriga al {pct}% della sua curva. Salvando una curva modificata qui riporti l'intensità al 100%, quindi i minuti erogati cambieranno.",
+  "editor.intensity_reset": "Salvare qui una curva modificata riporta l'intensità di irrigazione di questo programma — comprese eventuali quantità per singolo giorno — ai valori della curva stessa.",
   "editor.curve_empty": "La curva deve avere almeno un punto.",
   "editor.curve_negative_value": "Nessun punto può avere un valore negativo.",
   "editor.curve_temps_not_increasing": "Le temperature devono essere strettamente crescenti da sinistra a destra.",
@@ -219,7 +219,7 @@ export const it: Record<keyof typeof en, string> = {
   "editor.cancel": "Annulla",
   "editor.saved": "Curva aggiornata.",
   "editor.save_error": "Non è stato possibile salvare la curva: {error}",
-  "editor.volume_note": "Questo programma usa una curva a volume (litri). Modificala nelle impostazioni della zona.",
+  "editor.volume_note": "Questo programma usa una curva a volume (litri) — modificane i punti nelle Impostazioni avanzate qui sotto.",
 
   // Editor zona (pannello)
   "zone.add": "Aggiungi zona",

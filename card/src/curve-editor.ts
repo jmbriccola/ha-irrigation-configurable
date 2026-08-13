@@ -10,23 +10,38 @@ import {
   validatePoints,
 } from "./curve-math";
 import type { CurvePoint } from "./curve-math";
-import { addPoint, removePoint, sortPoints, updatePoint } from "./curve-editor-state";
+import {
+  addPoint,
+  curveKindForSave,
+  dragValue,
+  needsIntensityResetNotice,
+  removePoint,
+  sortPoints,
+  updatePoint,
+} from "./curve-editor-state";
 import { localize, localizeDynamic } from "./localize/localize";
 import { asNumber, defineElement } from "./types";
 import type { CycleInfo } from "./types";
 
 /**
- * A single curve save: the full set of authored points plus the clamps and
- * the target kind. There is no longer a "simple" variant — every save
- * carries exact points, because the editor now authors them directly
- * instead of deriving them from a semantic amount/heat pair.
+ * A single curve save: the full set of authored points plus the clamps.
+ * There is no longer a "simple" variant — every save carries exact points,
+ * because the editor now authors them directly instead of deriving them
+ * from a semantic amount/heat pair.
+ *
+ * `kind` is OPTIONAL, not always-sent: it is present only when the kind
+ * selector was actually offered (the zone has a usable flow meter — see
+ * `curveKindForSave`). A meterless zone must never be able to flip a
+ * stored curve's kind just by opening and re-saving the editor, so when
+ * the selector was hidden the field is omitted entirely and `set_curve`
+ * falls back to whatever kind the program already has.
  */
 export type CurveSavePayload = {
   cycleId: string;
   points: [number, number][];
   min: number;
   max: number;
-  kind: "duration" | "volume";
+  kind?: "duration" | "volume";
 };
 
 const GRAPH_W = 320;
@@ -254,10 +269,13 @@ export class ImcCurveEditor extends LitElement {
     this._points = pts;
     this._min = asNumber(curve?.min) ?? 1;
     this._max = asNumber(curve?.max) ?? 120;
-    // A zone that can no longer measure litres must never have "volume"
-    // silently re-offered to it — the kind selector stays hidden and this
-    // falls back to "duration", matching the backend's own guard.
-    this._kind = this.zoneHasFlowMeter && curve?.kind === "volume" ? "volume" : "duration";
+    // Always seeded from the STORED kind, regardless of zoneHasFlowMeter: a
+    // zone that lost its flow meter after a volume curve was already saved
+    // must not have that curve silently reinterpreted as duration just
+    // because it's opened again. zoneHasFlowMeter only gates whether the
+    // user can OFFER a change (see the kind selector, and curveKindForSave
+    // in _save below) — it must never rewrite what's already stored.
+    this._kind = curve?.kind === "volume" ? "volume" : "duration";
     this._error = null;
   }
 
@@ -295,26 +313,51 @@ export class ImcCurveEditor extends LitElement {
     return GRAPH_H - PAD_B - (v / top) * (GRAPH_H - PAD_T - PAD_B);
   }
 
-  private _valueFromY(y: number): number {
-    const top = this._graphTop();
-    const v = ((GRAPH_H - PAD_B - y) / (GRAPH_H - PAD_T - PAD_B)) * top;
-    return Math.max(0, roundHalfEven(v));
+  /** Client coordinates of a pointer event, converted into the SVG's
+   *  viewBox units (0..GRAPH_H on the y-axis). */
+  private _pointerViewY(svgEl: SVGSVGElement, ctm: DOMMatrix, ev: PointerEvent): number {
+    const pt = svgEl.createSVGPoint();
+    pt.x = ev.clientX;
+    pt.y = ev.clientY;
+    return pt.matrixTransform(ctm.inverse()).y;
   }
 
+  /**
+   * A drag is RELATIVE: the point's raw value at pointerdown, and the
+   * pointer's own y at pointerdown, are both captured once and never
+   * re-derived from the current pointer position. Every subsequent move
+   * only ever applies `dragValue`'s delta to that frozen starting point, so
+   * a drag of zero pixels leaves the point byte-identical — even when a
+   * min/max clamp has pulled the handle's DRAWN position away from the
+   * point's real value (e.g. a floor of 5 drawing a point of 2 at y(5)):
+   * grabbing that handle no longer snaps the stored value to wherever it
+   * happens to be drawn.
+   */
   private _startDrag(index: number, ev: PointerEvent): void {
     ev.preventDefault();
     const svgEl = (ev.currentTarget as SVGElement).ownerSVGElement;
     if (!svgEl) return;
+    const current = this._points[index];
+    if (!current) return;
+    const startValue = current[1];
+    const startCtm = svgEl.getScreenCTM();
+    if (!startCtm) return;
+    const startY = this._pointerViewY(svgEl, startCtm, ev);
+    // Frozen at drag start alongside startValue/startY: recomputing the
+    // scale from the point's own (mutating) value mid-drag would make the
+    // pointer's sensitivity shift under the user's finger as the curve's
+    // plotted height changes.
+    const unitsPerPixel = this._graphTop() / (GRAPH_H - PAD_T - PAD_B);
     const move = (e: PointerEvent): void => {
       const ctm = svgEl.getScreenCTM();
       if (!ctm) return;
-      const pt = svgEl.createSVGPoint();
-      pt.x = e.clientX;
-      pt.y = e.clientY;
-      const viewY = pt.matrixTransform(ctm.inverse()).y; // already in viewBox units (0..GRAPH_H)
-      const current = this._points[index];
-      if (!current) return;
-      this._points = updatePoint(this._points, index, current[0], this._valueFromY(viewY));
+      const deltaY = this._pointerViewY(svgEl, ctm, e) - startY;
+      this._points = updatePoint(
+        this._points,
+        index,
+        current[0],
+        dragValue(startValue, deltaY, unitsPerPixel),
+      );
       this._error = null;
     };
     const up = (): void => {
@@ -337,6 +380,7 @@ export class ImcCurveEditor extends LitElement {
       return;
     }
     this._error = null;
+    const kind = curveKindForSave(this._kind, this.zoneHasFlowMeter);
     this.dispatchEvent(
       new CustomEvent<CurveSavePayload>("imc-curve-save", {
         detail: {
@@ -344,7 +388,7 @@ export class ImcCurveEditor extends LitElement {
           points: this._points.map((p) => [p[0], p[1]] as [number, number]),
           min: this._min,
           max: this._max,
-          kind: this._kind,
+          ...(kind !== undefined ? { kind } : {}),
         },
         bubbles: true,
         composed: true,
@@ -421,10 +465,9 @@ export class ImcCurveEditor extends LitElement {
   }
 
   private _renderIntensityNotice(lang: string): TemplateResult | typeof nothing {
-    const pct = this.cycle?.intensity_pct;
-    if (pct === undefined || pct === 100) return nothing;
+    if (!needsIntensityResetNotice(this.cycle ?? {})) return nothing;
     return html`<div class="intensity-notice">
-      ${localize(lang, "editor.intensity_reset", { pct: Math.round(pct) })}
+      ${localize(lang, "editor.intensity_reset")}
     </div>`;
   }
 

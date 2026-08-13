@@ -211,13 +211,16 @@ export class IrrigationMaestroCard extends LitElement {
         break;
       }
       case "save-curve":
+        // kind is omitted (not sent as `undefined`) when the editor's kind
+        // selector wasn't offered — set_curve then keeps the program's
+        // current kind instead of having "duration" asserted over it.
         void this._call("irrigation_maestro", "set_curve", {
           zone_id: detail.zoneId,
           cycle_id: detail.cycleId,
           points: detail.points,
           min_value: detail.min,
           max_value: detail.max,
-          kind: detail.kind,
+          ...(detail.kind !== undefined ? { kind: detail.kind } : {}),
         });
         break;
     }

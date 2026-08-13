@@ -333,13 +333,16 @@ export class IrrigationMaestroPanel extends LitElement {
    */
   private _onCurveSave(ev: CustomEvent<ProgramCurveSaveDetail>): void {
     const { zoneId, curve } = ev.detail;
+    // kind is omitted (not sent as `undefined`) when the editor's kind
+    // selector wasn't offered — set_curve then keeps the program's current
+    // kind instead of having "duration" asserted over it.
     void this._call("irrigation_maestro", "set_curve", {
       zone_id: zoneId,
       cycle_id: curve.cycleId,
       points: curve.points,
       min_value: curve.min,
       max_value: curve.max,
-      kind: curve.kind,
+      ...(curve.kind !== undefined ? { kind: curve.kind } : {}),
     });
   }
 

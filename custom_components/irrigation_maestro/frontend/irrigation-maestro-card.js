@@ -5,7 +5,7 @@
  * @license MIT
  */
 const ae = globalThis, xe = ae.ShadowRoot && (ae.ShadyCSS === void 0 || ae.ShadyCSS.nativeShadow) && "adoptedStyleSheets" in Document.prototype && "replace" in CSSStyleSheet.prototype, $e = /* @__PURE__ */ Symbol(), Ie = /* @__PURE__ */ new WeakMap();
-let tt = class {
+let et = class {
   constructor(e, t, i) {
     if (this._$cssResult$ = !0, i !== $e) throw Error("CSSResult is not constructable. Use `unsafeCSS` or `css` instead.");
     this.cssText = e, this.t = t;
@@ -23,13 +23,13 @@ let tt = class {
     return this.cssText;
   }
 };
-const ht = (n) => new tt(typeof n == "string" ? n : n + "", void 0, $e), Z = (n, ...e) => {
+const ht = (n) => new et(typeof n == "string" ? n : n + "", void 0, $e), Z = (n, ...e) => {
   const t = n.length === 1 ? n[0] : e.reduce((i, o, s) => i + ((r) => {
     if (r._$cssResult$ === !0) return r.cssText;
     if (typeof r == "number") return r;
     throw Error("Value passed to 'css' function must be a 'css' function result: " + r + ". Use 'unsafeCSS' to pass non-literal values, but take care to ensure page security.");
   })(o) + n[s + 1], n[0]);
-  return new tt(t, n, $e);
+  return new et(t, n, $e);
 }, _t = (n, e) => {
   if (xe) n.adoptedStyleSheets = e.map((t) => t instanceof CSSStyleSheet ? t : t.styleSheet);
   else for (const t of e) {
@@ -71,7 +71,7 @@ const { is: mt, defineProperty: gt, getOwnPropertyDescriptor: ft, getOwnProperty
   return t;
 } }, we = (n, e) => !mt(n, e), Re = { attribute: !0, type: String, converter: le, reflect: !1, useDefault: !1, hasChanged: we };
 Symbol.metadata ??= /* @__PURE__ */ Symbol("metadata"), pe.litPropertyMetadata ??= /* @__PURE__ */ new WeakMap();
-let L = class extends HTMLElement {
+let F = class extends HTMLElement {
   static addInitializer(e) {
     this._$Ei(), (this.l ??= []).push(e);
   }
@@ -252,25 +252,25 @@ let L = class extends HTMLElement {
   firstUpdated(e) {
   }
 };
-L.elementStyles = [], L.shadowRootOptions = { mode: "open" }, L[Y("elementProperties")] = /* @__PURE__ */ new Map(), L[Y("finalized")] = /* @__PURE__ */ new Map(), $t?.({ ReactiveElement: L }), (pe.reactiveElementVersions ??= []).push("2.1.2");
-const ze = globalThis, qe = (n) => n, ce = ze.trustedTypes, Ue = ce ? ce.createPolicy("lit-html", { createHTML: (n) => n }) : void 0, it = "$lit$", P = `lit$${Math.random().toFixed(9).slice(2)}$`, ot = "?" + P, wt = `<${ot}>`, q = document, J = () => q.createComment(""), ee = (n) => n === null || typeof n != "object" && typeof n != "function", ke = Array.isArray, zt = (n) => ke(n) || typeof n?.[Symbol.iterator] == "function", fe = `[ 	
-\f\r]`, Q = /<(?:(!--|\/[^a-zA-Z])|(\/?[a-zA-Z][^>\s]*)|(\/?$))/g, He = /-->/g, Fe = />/g, I = RegExp(`>|${fe}(?:([^\\s"'>=/]+)(${fe}*=${fe}*(?:[^ 	
-\f\r"'\`<>=]|("|')|))|$)`, "g"), Le = /'/g, Be = /"/g, nt = /^(?:script|style|textarea|title)$/i, st = (n) => (e, ...t) => ({ _$litType$: n, strings: e, values: t }), u = st(1), D = st(2), j = /* @__PURE__ */ Symbol.for("lit-noChange"), d = /* @__PURE__ */ Symbol.for("lit-nothing"), je = /* @__PURE__ */ new WeakMap(), O = q.createTreeWalker(q, 129);
-function rt(n, e) {
+F.elementStyles = [], F.shadowRootOptions = { mode: "open" }, F[Y("elementProperties")] = /* @__PURE__ */ new Map(), F[Y("finalized")] = /* @__PURE__ */ new Map(), $t?.({ ReactiveElement: F }), (pe.reactiveElementVersions ??= []).push("2.1.2");
+const ze = globalThis, qe = (n) => n, ce = ze.trustedTypes, Ue = ce ? ce.createPolicy("lit-html", { createHTML: (n) => n }) : void 0, tt = "$lit$", M = `lit$${Math.random().toFixed(9).slice(2)}$`, it = "?" + M, wt = `<${it}>`, q = document, J = () => q.createComment(""), ee = (n) => n === null || typeof n != "object" && typeof n != "function", ke = Array.isArray, zt = (n) => ke(n) || typeof n?.[Symbol.iterator] == "function", fe = `[ 	
+\f\r]`, K = /<(?:(!--|\/[^a-zA-Z])|(\/?[a-zA-Z][^>\s]*)|(\/?$))/g, He = /-->/g, Le = />/g, T = RegExp(`>|${fe}(?:([^\\s"'>=/]+)(${fe}*=${fe}*(?:[^ 	
+\f\r"'\`<>=]|("|')|))|$)`, "g"), Fe = /'/g, Be = /"/g, ot = /^(?:script|style|textarea|title)$/i, nt = (n) => (e, ...t) => ({ _$litType$: n, strings: e, values: t }), u = nt(1), D = nt(2), V = /* @__PURE__ */ Symbol.for("lit-noChange"), d = /* @__PURE__ */ Symbol.for("lit-nothing"), Ve = /* @__PURE__ */ new WeakMap(), O = q.createTreeWalker(q, 129);
+function st(n, e) {
   if (!ke(n) || !n.hasOwnProperty("raw")) throw Error("invalid template strings array");
   return Ue !== void 0 ? Ue.createHTML(e) : e;
 }
 const kt = (n, e) => {
   const t = n.length - 1, i = [];
-  let o, s = e === 2 ? "<svg>" : e === 3 ? "<math>" : "", r = Q;
+  let o, s = e === 2 ? "<svg>" : e === 3 ? "<math>" : "", r = K;
   for (let l = 0; l < t; l++) {
     const a = n[l];
     let p, h, _ = -1, m = 0;
-    for (; m < a.length && (r.lastIndex = m, h = r.exec(a), h !== null); ) m = r.lastIndex, r === Q ? h[1] === "!--" ? r = He : h[1] !== void 0 ? r = Fe : h[2] !== void 0 ? (nt.test(h[2]) && (o = RegExp("</" + h[2], "g")), r = I) : h[3] !== void 0 && (r = I) : r === I ? h[0] === ">" ? (r = o ?? Q, _ = -1) : h[1] === void 0 ? _ = -2 : (_ = r.lastIndex - h[2].length, p = h[1], r = h[3] === void 0 ? I : h[3] === '"' ? Be : Le) : r === Be || r === Le ? r = I : r === He || r === Fe ? r = Q : (r = I, o = void 0);
-    const f = r === I && n[l + 1].startsWith("/>") ? " " : "";
-    s += r === Q ? a + wt : _ >= 0 ? (i.push(p), a.slice(0, _) + it + a.slice(_) + P + f) : a + P + (_ === -2 ? l : f);
+    for (; m < a.length && (r.lastIndex = m, h = r.exec(a), h !== null); ) m = r.lastIndex, r === K ? h[1] === "!--" ? r = He : h[1] !== void 0 ? r = Le : h[2] !== void 0 ? (ot.test(h[2]) && (o = RegExp("</" + h[2], "g")), r = T) : h[3] !== void 0 && (r = T) : r === T ? h[0] === ">" ? (r = o ?? K, _ = -1) : h[1] === void 0 ? _ = -2 : (_ = r.lastIndex - h[2].length, p = h[1], r = h[3] === void 0 ? T : h[3] === '"' ? Be : Fe) : r === Be || r === Fe ? r = T : r === He || r === Le ? r = K : (r = T, o = void 0);
+    const g = r === T && n[l + 1].startsWith("/>") ? " " : "";
+    s += r === K ? a + wt : _ >= 0 ? (i.push(p), a.slice(0, _) + tt + a.slice(_) + M + g) : a + M + (_ === -2 ? l : g);
   }
-  return [rt(n, s + (n[t] || "<?>") + (e === 2 ? "</svg>" : e === 3 ? "</math>" : "")), i];
+  return [st(n, s + (n[t] || "<?>") + (e === 2 ? "</svg>" : e === 3 ? "</math>" : "")), i];
 };
 class te {
   constructor({ strings: e, _$litType$: t }, i) {
@@ -284,22 +284,22 @@ class te {
     }
     for (; (o = O.nextNode()) !== null && a.length < l; ) {
       if (o.nodeType === 1) {
-        if (o.hasAttributes()) for (const _ of o.getAttributeNames()) if (_.endsWith(it)) {
-          const m = h[r++], f = o.getAttribute(_).split(P), x = /([.?@])?(.*)/.exec(m);
-          a.push({ type: 1, index: s, name: x[2], strings: f, ctor: x[1] === "." ? At : x[1] === "?" ? Ct : x[1] === "@" ? Et : he }), o.removeAttribute(_);
-        } else _.startsWith(P) && (a.push({ type: 6, index: s }), o.removeAttribute(_));
-        if (nt.test(o.tagName)) {
-          const _ = o.textContent.split(P), m = _.length - 1;
+        if (o.hasAttributes()) for (const _ of o.getAttributeNames()) if (_.endsWith(tt)) {
+          const m = h[r++], g = o.getAttribute(_).split(M), x = /([.?@])?(.*)/.exec(m);
+          a.push({ type: 1, index: s, name: x[2], strings: g, ctor: x[1] === "." ? At : x[1] === "?" ? Ct : x[1] === "@" ? Et : he }), o.removeAttribute(_);
+        } else _.startsWith(M) && (a.push({ type: 6, index: s }), o.removeAttribute(_));
+        if (ot.test(o.tagName)) {
+          const _ = o.textContent.split(M), m = _.length - 1;
           if (m > 0) {
             o.textContent = ce ? ce.emptyScript : "";
-            for (let f = 0; f < m; f++) o.append(_[f], J()), O.nextNode(), a.push({ type: 2, index: ++s });
+            for (let g = 0; g < m; g++) o.append(_[g], J()), O.nextNode(), a.push({ type: 2, index: ++s });
             o.append(_[m], J());
           }
         }
-      } else if (o.nodeType === 8) if (o.data === ot) a.push({ type: 2, index: s });
+      } else if (o.nodeType === 8) if (o.data === it) a.push({ type: 2, index: s });
       else {
         let _ = -1;
-        for (; (_ = o.data.indexOf(P, _ + 1)) !== -1; ) a.push({ type: 7, index: s }), _ += P.length - 1;
+        for (; (_ = o.data.indexOf(M, _ + 1)) !== -1; ) a.push({ type: 7, index: s }), _ += M.length - 1;
       }
       s++;
     }
@@ -309,11 +309,11 @@ class te {
     return i.innerHTML = e, i;
   }
 }
-function V(n, e, t = n, i) {
-  if (e === j) return e;
+function j(n, e, t = n, i) {
+  if (e === V) return e;
   let o = i !== void 0 ? t._$Co?.[i] : t._$Cl;
   const s = ee(e) ? void 0 : e._$litDirective$;
-  return o?.constructor !== s && (o?._$AO?.(!1), s === void 0 ? o = void 0 : (o = new s(n), o._$AT(n, t, i)), i !== void 0 ? (t._$Co ??= [])[i] = o : t._$Cl = o), o !== void 0 && (e = V(n, o._$AS(n, e.values), o, i)), e;
+  return o?.constructor !== s && (o?._$AO?.(!1), s === void 0 ? o = void 0 : (o = new s(n), o._$AT(n, t, i)), i !== void 0 ? (t._$Co ??= [])[i] = o : t._$Cl = o), o !== void 0 && (e = j(n, o._$AS(n, e.values), o, i)), e;
 }
 class St {
   constructor(e, t) {
@@ -362,7 +362,7 @@ class oe {
     return this._$AB;
   }
   _$AI(e, t = this) {
-    e = V(this, e, t), ee(e) ? e === d || e == null || e === "" ? (this._$AH !== d && this._$AR(), this._$AH = d) : e !== this._$AH && e !== j && this._(e) : e._$litType$ !== void 0 ? this.$(e) : e.nodeType !== void 0 ? this.T(e) : zt(e) ? this.k(e) : this._(e);
+    e = j(this, e, t), ee(e) ? e === d || e == null || e === "" ? (this._$AH !== d && this._$AR(), this._$AH = d) : e !== this._$AH && e !== V && this._(e) : e._$litType$ !== void 0 ? this.$(e) : e.nodeType !== void 0 ? this.T(e) : zt(e) ? this.k(e) : this._(e);
   }
   O(e) {
     return this._$AA.parentNode.insertBefore(e, this._$AB);
@@ -374,7 +374,7 @@ class oe {
     this._$AH !== d && ee(this._$AH) ? this._$AA.nextSibling.data = e : this.T(q.createTextNode(e)), this._$AH = e;
   }
   $(e) {
-    const { values: t, _$litType$: i } = e, o = typeof i == "number" ? this._$AC(e) : (i.el === void 0 && (i.el = te.createElement(rt(i.h, i.h[0]), this.options)), i);
+    const { values: t, _$litType$: i } = e, o = typeof i == "number" ? this._$AC(e) : (i.el === void 0 && (i.el = te.createElement(st(i.h, i.h[0]), this.options)), i);
     if (this._$AH?._$AD === o) this._$AH.p(t);
     else {
       const s = new St(o, this), r = s.u(this.options);
@@ -382,8 +382,8 @@ class oe {
     }
   }
   _$AC(e) {
-    let t = je.get(e.strings);
-    return t === void 0 && je.set(e.strings, t = new te(e)), t;
+    let t = Ve.get(e.strings);
+    return t === void 0 && Ve.set(e.strings, t = new te(e)), t;
   }
   k(e) {
     ke(this._$AH) || (this._$AH = [], this._$AR());
@@ -415,11 +415,11 @@ class he {
   _$AI(e, t = this, i, o) {
     const s = this.strings;
     let r = !1;
-    if (s === void 0) e = V(this, e, t, 0), r = !ee(e) || e !== this._$AH && e !== j, r && (this._$AH = e);
+    if (s === void 0) e = j(this, e, t, 0), r = !ee(e) || e !== this._$AH && e !== V, r && (this._$AH = e);
     else {
       const l = e;
       let a, p;
-      for (e = s[0], a = 0; a < s.length - 1; a++) p = V(this, l[i + a], t, a), p === j && (p = this._$AH[a]), r ||= !ee(p) || p !== this._$AH[a], p === d ? e = d : e !== d && (e += (p ?? "") + s[a + 1]), this._$AH[a] = p;
+      for (e = s[0], a = 0; a < s.length - 1; a++) p = j(this, l[i + a], t, a), p === V && (p = this._$AH[a]), r ||= !ee(p) || p !== this._$AH[a], p === d ? e = d : e !== d && (e += (p ?? "") + s[a + 1]), this._$AH[a] = p;
     }
     r && !o && this.j(e);
   }
@@ -448,7 +448,7 @@ class Et extends he {
     super(e, t, i, o, s), this.type = 5;
   }
   _$AI(e, t = this) {
-    if ((e = V(this, e, t, 0) ?? d) === j) return;
+    if ((e = j(this, e, t, 0) ?? d) === V) return;
     const i = this._$AH, o = e === d && i !== d || e.capture !== i.capture || e.once !== i.once || e.passive !== i.passive, s = e !== d && (i === d || o);
     o && this.element.removeEventListener(this.name, this, i), s && this.element.addEventListener(this.name, this, e), this._$AH = e;
   }
@@ -464,12 +464,12 @@ class Mt {
     return this._$AM._$AU;
   }
   _$AI(e) {
-    V(this, e);
+    j(this, e);
   }
 }
 const Pt = ze.litHtmlPolyfillSupport;
 Pt?.(te, oe), (ze.litHtmlVersions ??= []).push("3.3.3");
-const Tt = (n, e, t) => {
+const Nt = (n, e, t) => {
   const i = t?.renderBefore ?? e;
   let o = i._$litPart$;
   if (o === void 0) {
@@ -479,7 +479,7 @@ const Tt = (n, e, t) => {
   return o._$AI(n), o;
 };
 const Se = globalThis;
-class k extends L {
+class k extends F {
   constructor() {
     super(...arguments), this.renderOptions = { host: this }, this._$Do = void 0;
   }
@@ -489,7 +489,7 @@ class k extends L {
   }
   update(e) {
     const t = this.render();
-    this.hasUpdated || (this.renderOptions.isConnected = this.isConnected), super.update(e), this._$Do = Tt(t, this.renderRoot, this.renderOptions);
+    this.hasUpdated || (this.renderOptions.isConnected = this.isConnected), super.update(e), this._$Do = Nt(t, this.renderRoot, this.renderOptions);
   }
   connectedCallback() {
     super.connectedCallback(), this._$Do?.setConnected(!0);
@@ -498,12 +498,12 @@ class k extends L {
     super.disconnectedCallback(), this._$Do?.setConnected(!1);
   }
   render() {
-    return j;
+    return V;
   }
 }
 k._$litElement$ = !0, k.finalized = !0, Se.litElementHydrateSupport?.({ LitElement: k });
-const Nt = Se.litElementPolyfillSupport;
-Nt?.({ LitElement: k });
+const Tt = Se.litElementPolyfillSupport;
+Tt?.({ LitElement: k });
 (Se.litElementVersions ??= []).push("4.2.2");
 const It = { attribute: !0, type: String, converter: le, reflect: !1, hasChanged: we }, Dt = (n = It, e, t) => {
   const { kind: i, metadata: o } = t;
@@ -541,7 +541,7 @@ const Ot = {
   show_controls: !0,
   compact: !1
 };
-function g(n) {
+function f(n) {
   if (typeof n == "number" && Number.isFinite(n)) return n;
   if (typeof n == "string" && n.trim() !== "") {
     const e = Number(n);
@@ -580,7 +580,7 @@ const Rt = {
   zone_order: "orderNumber",
   zone_suspend_until: "suspendUntil"
 };
-function at(n) {
+function rt(n) {
   const e = {}, t = /* @__PURE__ */ new Map(), i = [];
   for (const s of Object.values(n.states)) {
     const r = v(s.attributes.maestro_role);
@@ -608,7 +608,7 @@ function at(n) {
   const o = [...t.values()];
   for (const s of o) {
     const r = s.state?.attributes ?? {};
-    s.name = v(r.zone_name) ?? v(s.state?.attributes.friendly_name) ?? s.zoneId, s.order = g(r.order) ?? g(s.orderNumber?.state) ?? Number.MAX_SAFE_INTEGER;
+    s.name = v(r.zone_name) ?? v(s.state?.attributes.friendly_name) ?? s.zoneId, s.order = f(r.order) ?? f(s.orderNumber?.state) ?? Number.MAX_SAFE_INTEGER;
   }
   return o.sort(
     (s, r) => s.order - r.order || s.name.localeCompare(r.name)
@@ -617,7 +617,7 @@ function at(n) {
 function Ut(n) {
   return !de(n.state?.attributes?.degraded).some((t) => v(t) === "no_flow_meter");
 }
-const A = {
+const S = {
   // Card-level messages
   "card.name": "Irrigation Maestro Card",
   "card.description": "Overview and control of the Irrigation Maestro integration: water budget, zones, queue and curves.",
@@ -801,7 +801,7 @@ const A = {
   "editor.min.help": "Absolute minimum, applied after the curve and any scaling.",
   "editor.max.label": "⬆️ Never more than",
   "editor.max.help": "Absolute maximum, applied after the curve and any scaling.",
-  "editor.intensity_reset": "This program waters at {pct}% of its curve. Saving a curve you edited here resets that to 100%, so the minutes will change.",
+  "editor.intensity_reset": "Saving a curve you edit here resets this program's watering strength — including any per-day amounts — to the curve's own values.",
   "editor.curve_empty": "The curve needs at least one point.",
   "editor.curve_negative_value": "No point can have a negative value.",
   "editor.curve_temps_not_increasing": "Temperatures must strictly increase from left to right.",
@@ -811,7 +811,7 @@ const A = {
   "editor.cancel": "Cancel",
   "editor.saved": "Curve updated.",
   "editor.save_error": "Couldn't save the curve: {error}",
-  "editor.volume_note": "This program uses a volume curve (liters). Edit it in the zone settings.",
+  "editor.volume_note": "This program uses a volume curve (liters) — edit its points in Advanced settings below.",
   // Zone editor (panel)
   "zone.add": "Add zone",
   "zone.edit": "Edit zone",
@@ -1086,7 +1086,7 @@ const A = {
   "editor.min.help": "Minimo assoluto, applicato dopo la curva ed eventuali variazioni d'intensità.",
   "editor.max.label": "⬆️ Mai più di",
   "editor.max.help": "Massimo assoluto, applicato dopo la curva ed eventuali variazioni d'intensità.",
-  "editor.intensity_reset": "Questo programma irriga al {pct}% della sua curva. Salvando una curva modificata qui riporti l'intensità al 100%, quindi i minuti erogati cambieranno.",
+  "editor.intensity_reset": "Salvare qui una curva modificata riporta l'intensità di irrigazione di questo programma — comprese eventuali quantità per singolo giorno — ai valori della curva stessa.",
   "editor.curve_empty": "La curva deve avere almeno un punto.",
   "editor.curve_negative_value": "Nessun punto può avere un valore negativo.",
   "editor.curve_temps_not_increasing": "Le temperature devono essere strettamente crescenti da sinistra a destra.",
@@ -1096,7 +1096,7 @@ const A = {
   "editor.cancel": "Annulla",
   "editor.saved": "Curva aggiornata.",
   "editor.save_error": "Non è stato possibile salvare la curva: {error}",
-  "editor.volume_note": "Questo programma usa una curva a volume (litri). Modificala nelle impostazioni della zona.",
+  "editor.volume_note": "Questo programma usa una curva a volume (litri) — modificane i punti nelle Impostazioni avanzate qui sotto.",
   // Editor zona (pannello)
   "zone.add": "Aggiungi zona",
   "zone.edit": "Modifica zona",
@@ -1188,39 +1188,39 @@ const A = {
   "program_editor.volume_safety_timeout_hint": "Minuti dopo i quali una corsa a volume si ferma anche se il contatore non ha raggiunto il target.",
   "settings.advanced_note": "Parametri avanzati (motore, sicurezza, notifiche) → Impostazioni"
 }, _e = {
-  en: A,
+  en: S,
   it: Ht
 };
-function lt(n) {
+function at(n) {
   const t = (n?.locale?.language ?? n?.language ?? "en").toLowerCase().split(/[-_]/)[0] ?? "en";
   return t in _e ? t : "en";
 }
-function Ft(n, e) {
+function Lt(n, e) {
   return e ? n.replace(/\{(\w+)\}/g, (t, i) => {
     const o = e[i];
     return o === void 0 ? t : String(o);
   }) : n;
 }
 function c(n, e, t) {
-  const i = _e[n] ?? A;
-  return Ft(i[e] ?? A[e], t);
+  const i = _e[n] ?? S;
+  return Lt(i[e] ?? S[e], t);
 }
 function B(n, e, t) {
-  const i = `${e}.${t}`, o = _e[n] ?? A, s = A;
+  const i = `${e}.${t}`, o = _e[n] ?? S, s = S;
   return o[i] ?? s[i] ?? t;
 }
-function Lt(n, e) {
-  const t = _e[n] ?? A, i = A;
+function Ft(n, e) {
+  const t = _e[n] ?? S, i = S;
   for (const o of ["queue_state", "zone_state", "outcome"]) {
     const s = `${o}.${e}`, r = t[s] ?? i[s];
     if (r !== void 0) return r;
   }
   return e;
 }
-const Ve = /* @__PURE__ */ new Map(), We = /* @__PURE__ */ new Map(), Ze = /* @__PURE__ */ new Map();
+const je = /* @__PURE__ */ new Map(), We = /* @__PURE__ */ new Map(), Ze = /* @__PURE__ */ new Map();
 function ne(n) {
-  let e = Ve.get(n);
-  return e || (e = new Intl.RelativeTimeFormat(n, { numeric: "auto" }), Ve.set(n, e)), e;
+  let e = je.get(n);
+  return e || (e = new Intl.RelativeTimeFormat(n, { numeric: "auto" }), je.set(n, e)), e;
 }
 function Ge(n, e, t = Date.now()) {
   if (!n) return;
@@ -1245,7 +1245,7 @@ function Bt(n, e) {
     minute: "2-digit"
   }), We.set(e, i)), i.format(t);
 }
-function jt(n, e) {
+function Vt(n, e) {
   if (!n) return;
   const t = Date.parse(n);
   if (Number.isNaN(t)) return;
@@ -1257,31 +1257,31 @@ function jt(n, e) {
   }), Ze.set(e, i)), i.format(t);
 }
 function se(n, e = 1) {
-  const t = g(n);
+  const t = f(n);
   if (t !== void 0)
     return t.toFixed(e).replace(/\.0+$/, (i) => e > 0 ? "" : i);
 }
-function Vt(n) {
-  const e = g(n);
+function jt(n) {
+  const e = f(n);
   if (e !== void 0) return e;
   if (n && typeof n == "object") {
     const t = n;
-    return g(t.duration_min) ?? g(t.duration) ?? g(t.minutes);
+    return f(t.duration_min) ?? f(t.duration) ?? f(t.minutes);
   }
 }
 function Wt(n, e) {
-  const t = v(n.run_started_at), i = g(n.run_duration_min);
+  const t = v(n.run_started_at), i = f(n.run_duration_min);
   if (!t || i === void 0 || i <= 0)
     return;
   const o = Date.parse(t);
   if (Number.isNaN(o)) return;
   const s = (e - o) / 6e4, r = ye(s / i, 0, 1), l = Math.max(0, Math.ceil(i - s)), a = [], p = n.run_planned_runs;
   if (Array.isArray(p) && p.length > 1) {
-    const h = p.map(Vt).filter((m) => m !== void 0 && m > 0), _ = h.reduce((m, f) => m + f, 0);
+    const h = p.map(jt).filter((m) => m !== void 0 && m > 0), _ = h.reduce((m, g) => m + g, 0);
     if (h.length > 1 && _ > 0) {
       let m = 0;
-      for (let f = 0; f < h.length - 1; f += 1)
-        m += h[f] ?? 0, a.push(m / _);
+      for (let g = 0; g < h.length - 1; g += 1)
+        m += h[g] ?? 0, a.push(m / _);
     }
   }
   return { fraction: r, remainingMin: l, segmentBounds: a };
@@ -1296,7 +1296,7 @@ function Gt(n, e) {
     const i = c(
       e,
       n.event === "sunrise" ? "trigger.sunrise" : "trigger.sunset"
-    ), o = g(n.offset_s) ?? 0;
+    ), o = f(n.offset_s) ?? 0;
     if (o === 0) return i;
     const s = o < 0 ? "−" : "+";
     return `${i} ${s} ${Zt(o)}`;
@@ -1304,7 +1304,7 @@ function Gt(n, e) {
   const t = v(n.at) ?? v(n.time);
   return t ? c(e, "trigger.at", { time: t }) : v(n.kind) ?? "";
 }
-function Qe(n) {
+function lt(n) {
   const e = Math.floor(n), t = n - e;
   return t < 0.5 ? e : t > 0.5 ? e + 1 : e % 2 === 0 ? e : e + 1;
 }
@@ -1313,12 +1313,12 @@ function ct(n) {
   const e = [];
   for (const t of n) {
     if (!Array.isArray(t) || t.length < 2) continue;
-    const i = g(t[0]), o = g(t[1]);
+    const i = f(t[0]), o = f(t[1]);
     i !== void 0 && o !== void 0 && e.push([i, o]);
   }
   return [...e].sort((t, i) => t[0] - i[0]);
 }
-const Qt = 25, Kt = [5, 12, 20, 25, 30, 35, 40];
+const Kt = 25, Qt = [5, 12, 20, 25, 30, 35, 40];
 function Xt(n, e) {
   const t = n[0], i = n[n.length - 1];
   if (!t || !i) return 0;
@@ -1352,15 +1352,15 @@ var ei = Object.defineProperty, ti = (n, e, t, i) => {
     (r = n[s]) && (o = r(e, t, o) || o);
   return o && ei(e, t, o), o;
 };
-const H = 150, F = 44, re = 6, Ke = 6, Ce = class Ce extends k {
+const H = 150, L = 44, re = 6, Ke = 6, Ce = class Ce extends k {
   render() {
     const e = this.curve, t = ct(e?.points);
     if (t.length === 0) return d;
-    const i = g(e?.min), o = g(e?.max), s = t.map((b) => b[0]), r = t.map((b) => b[1]);
+    const i = f(e?.min), o = f(e?.max), s = t.map((b) => b[0]), r = t.map((b) => b[1]);
     i !== void 0 && r.push(i), o !== void 0 && r.push(o);
     let l = Math.min(...s), a = Math.max(...s), p = Math.min(...r), h = Math.max(...r);
     a - l < 1e-9 && (l -= 1, a += 1), h - p < 1e-9 && (p -= 1, h += 1);
-    const _ = (b) => re + (b - l) / (a - l) * (H - 2 * re), m = (b) => F - Ke - (b - p) / (h - p) * (F - 2 * Ke), f = t.map((b, ge) => `${ge === 0 ? "M" : "L"}${_(b[0]).toFixed(1)},${m(b[1]).toFixed(1)}`).join(" "), x = (b, ge) => D`
+    const _ = (b) => re + (b - l) / (a - l) * (H - 2 * re), m = (b) => L - Ke - (b - p) / (h - p) * (L - 2 * Ke), g = t.map((b, ge) => `${ge === 0 ? "M" : "L"}${_(b[0]).toFixed(1)},${m(b[1]).toFixed(1)}`).join(" "), x = (b, ge) => D`
       <line
         class="clamp"
         x1="0" x2="${H}"
@@ -1368,26 +1368,26 @@ const H = 150, F = 44, re = 6, Ke = 6, Ce = class Ce extends k {
       ></line>
       <text class="clamp-label" x="${H - 2}" text-anchor="end"
         y="${(m(b) - 2).toFixed(1)}">${ge}</text>
-    `, N = t[0], E = t[t.length - 1];
+    `, N = t[0], C = t[t.length - 1];
     return u`
       <svg
-        viewBox="0 0 ${H} ${F + 10}"
+        viewBox="0 0 ${H} ${L + 10}"
         width="${H}"
-        height="${F + 10}"
+        height="${L + 10}"
         role="img"
         aria-hidden="true"
       >
         ${i !== void 0 ? x(i, String(i)) : d}
         ${o !== void 0 ? x(o, String(o)) : d}
-        <path class="line" d="${f}"></path>
+        <path class="line" d="${g}"></path>
         ${t.map(
       (b) => D`<circle class="dot" r="2"
             cx="${_(b[0]).toFixed(1)}" cy="${m(b[1]).toFixed(1)}"></circle>`
     )}
-        ${N ? D`<text class="axis-label" x="${re}" y="${F + 8}"
+        ${N ? D`<text class="axis-label" x="${re}" y="${L + 8}"
               text-anchor="start">${N[0]}°</text>` : d}
-        ${E && E !== N ? D`<text class="axis-label" x="${H - re}" y="${F + 8}"
-              text-anchor="end">${E[0]}°</text>` : d}
+        ${C && C !== N ? D`<text class="axis-label" x="${H - re}" y="${L + 8}"
+              text-anchor="end">${C[0]}°</text>` : d}
       </svg>
     `;
   }
@@ -1449,14 +1449,23 @@ function ve(n, e, t, i) {
   const o = [...n];
   return o[e] ? (o[e] = [t, Math.max(0, i)], o) : n;
 }
-var ni = Object.defineProperty, C = (n, e, t, i) => {
+function ni(n, e) {
+  return e ? n : void 0;
+}
+function si(n) {
+  return n.intensity_pct !== void 0 && n.intensity_pct !== 100 ? !0 : Object.keys(n.day_intensity_pct ?? {}).length > 0;
+}
+function ri(n, e, t) {
+  return Math.max(0, lt(n - e * t));
+}
+var ai = Object.defineProperty, A = (n, e, t, i) => {
   for (var o = void 0, s = n.length - 1, r; s >= 0; s--)
     (r = n[s]) && (o = r(e, t, o) || o);
-  return o && ni(e, t, o), o;
+  return o && ai(e, t, o), o;
 };
-const be = 320, S = 170, K = 34, Xe = 12, X = 16, M = 24, Ye = 5, Je = 40, et = 2, Ee = class Ee extends k {
+const be = 320, E = 170, Q = 34, Qe = 12, X = 16, I = 24, Xe = 5, Ye = 40, Je = 2, Ee = class Ee extends k {
   constructor() {
-    super(...arguments), this.language = "en", this.zoneHasFlowMeter = !1, this._points = [[Qt, 15]], this._min = 1, this._max = 120, this._kind = "duration", this._error = null;
+    super(...arguments), this.language = "en", this.zoneHasFlowMeter = !1, this._points = [[Kt, 15]], this._min = 1, this._max = 120, this._kind = "duration", this._error = null;
   }
   willUpdate(e) {
     if (e.has("cycle")) {
@@ -1466,53 +1475,73 @@ const be = 320, S = 170, K = 34, Xe = 12, X = 16, M = 24, Ye = 5, Je = 40, et = 
   }
   _seedFromCycle() {
     const e = this.cycle?.curve, t = ct(e?.points);
-    t.length !== 0 && (this._points = t, this._min = g(e?.min) ?? 1, this._max = g(e?.max) ?? 120, this._kind = this.zoneHasFlowMeter && e?.kind === "volume" ? "volume" : "duration", this._error = null);
+    t.length !== 0 && (this._points = t, this._min = f(e?.min) ?? 1, this._max = f(e?.max) ?? 120, this._kind = e?.kind === "volume" ? "volume" : "duration", this._error = null);
   }
   /** The curve as the user is drawing it: unscaled (intensity 100%), since
    *  saving always resets the program's intensity to 100% anyway. */
   _previewValue(e) {
-    return Qe(Yt(this._points, e, 100, this._min, this._max));
+    return lt(Yt(this._points, e, 100, this._min, this._max));
   }
   _unit() {
     return c(this.language, this._kind === "volume" ? "curve.unit_volume" : "curve.unit_duration");
   }
   _axisMin() {
-    return Math.min(this._points[0]?.[0] ?? Ye, Ye) - et;
+    return Math.min(this._points[0]?.[0] ?? Xe, Xe) - Je;
   }
   _axisMax() {
     const e = this._points[this._points.length - 1];
-    return Math.max(e?.[0] ?? Je, Je) + et;
+    return Math.max(e?.[0] ?? Ye, Ye) + Je;
   }
   _sx(e) {
     const t = this._axisMin(), i = this._axisMax();
-    return K + (e - t) / (i - t) * (be - K - Xe);
+    return Q + (e - t) / (i - t) * (be - Q - Qe);
   }
   _graphTop() {
     return Math.max(12, ...this._points.map((e) => e[1])) + 4;
   }
   _sy(e) {
     const t = this._graphTop();
-    return S - M - e / t * (S - X - M);
+    return E - I - e / t * (E - X - I);
   }
-  _valueFromY(e) {
-    const t = this._graphTop(), i = (S - M - e) / (S - X - M) * t;
-    return Math.max(0, Qe(i));
+  /** Client coordinates of a pointer event, converted into the SVG's
+   *  viewBox units (0..GRAPH_H on the y-axis). */
+  _pointerViewY(e, t, i) {
+    const o = e.createSVGPoint();
+    return o.x = i.clientX, o.y = i.clientY, o.matrixTransform(t.inverse()).y;
   }
+  /**
+   * A drag is RELATIVE: the point's raw value at pointerdown, and the
+   * pointer's own y at pointerdown, are both captured once and never
+   * re-derived from the current pointer position. Every subsequent move
+   * only ever applies `dragValue`'s delta to that frozen starting point, so
+   * a drag of zero pixels leaves the point byte-identical — even when a
+   * min/max clamp has pulled the handle's DRAWN position away from the
+   * point's real value (e.g. a floor of 5 drawing a point of 2 at y(5)):
+   * grabbing that handle no longer snaps the stored value to wherever it
+   * happens to be drawn.
+   */
   _startDrag(e, t) {
     t.preventDefault();
     const i = t.currentTarget.ownerSVGElement;
     if (!i) return;
-    const o = (r) => {
-      const l = i.getScreenCTM();
-      if (!l) return;
-      const a = i.createSVGPoint();
-      a.x = r.clientX, a.y = r.clientY;
-      const p = a.matrixTransform(l.inverse()).y, h = this._points[e];
-      h && (this._points = ve(this._points, e, h[0], this._valueFromY(p)), this._error = null);
-    }, s = () => {
-      window.removeEventListener("pointermove", o), window.removeEventListener("pointerup", s);
+    const o = this._points[e];
+    if (!o) return;
+    const s = o[1], r = i.getScreenCTM();
+    if (!r) return;
+    const l = this._pointerViewY(i, r, t), a = this._graphTop() / (E - X - I), p = (_) => {
+      const m = i.getScreenCTM();
+      if (!m) return;
+      const g = this._pointerViewY(i, m, _) - l;
+      this._points = ve(
+        this._points,
+        e,
+        o[0],
+        ri(s, g, a)
+      ), this._error = null;
+    }, h = () => {
+      window.removeEventListener("pointermove", p), window.removeEventListener("pointerup", h);
     };
-    window.addEventListener("pointermove", o), window.addEventListener("pointerup", s);
+    window.addEventListener("pointermove", p), window.addEventListener("pointerup", h);
   }
   _save() {
     const e = Jt(this._points) ?? (this._min > this._max ? "min_above_max" : null) ?? (this._min < 0 ? "negative_clamp" : null);
@@ -1520,14 +1549,16 @@ const be = 320, S = 170, K = 34, Xe = 12, X = 16, M = 24, Ye = 5, Je = 40, et = 
       this._error = e;
       return;
     }
-    this._error = null, this.dispatchEvent(
+    this._error = null;
+    const t = ni(this._kind, this.zoneHasFlowMeter);
+    this.dispatchEvent(
       new CustomEvent("imc-curve-save", {
         detail: {
           cycleId: this.cycle?.cycle_id ?? "",
-          points: this._points.map((t) => [t[0], t[1]]),
+          points: this._points.map((i) => [i[0], i[1]]),
           min: this._min,
           max: this._max,
-          kind: this._kind
+          ...t !== void 0 ? { kind: t } : {}
         },
         bubbles: !0,
         composed: !0
@@ -1553,7 +1584,7 @@ const be = 320, S = 170, K = 34, Xe = 12, X = 16, M = 24, Ye = 5, Je = 40, et = 
 
       <div class="caption">${c(e, "editor.preview_title")}</div>
       <div class="examples">
-        ${Kt.map((t) => this._exampleTile(`${t}°`, this._previewValue(t)))}
+        ${Qt.map((t) => this._exampleTile(`${t}°`, this._previewValue(t)))}
       </div>
 
       ${this._renderToday(e)}
@@ -1593,10 +1624,9 @@ const be = 320, S = 170, K = 34, Xe = 12, X = 16, M = 24, Ye = 5, Je = 40, et = 
     `;
   }
   _renderIntensityNotice(e) {
-    const t = this.cycle?.intensity_pct;
-    return t === void 0 || t === 100 ? d : u`<div class="intensity-notice">
-      ${c(e, "editor.intensity_reset", { pct: Math.round(t) })}
-    </div>`;
+    return si(this.cycle ?? {}) ? u`<div class="intensity-notice">
+      ${c(e, "editor.intensity_reset")}
+    </div>` : d;
   }
   _renderKind(e) {
     return u`<div class="kind">
@@ -1675,10 +1705,10 @@ const be = 320, S = 170, K = 34, Xe = 12, X = 16, M = 24, Ye = 5, Je = 40, et = 
       o.push([this._sx(a), this._sy(this._previewValue(a))]);
     const s = o.map((a, p) => `${p === 0 ? "M" : "L"}${a[0].toFixed(1)},${a[1].toFixed(1)}`).join(" "), r = this.weightedTemp, l = r !== void 0 && !Number.isNaN(r) && r >= t && r <= i;
     return D`
-      <svg viewBox="0 0 ${be} ${S}">
-        <line class="axis" x1=${K} y1=${X} x2=${K} y2=${S - M}></line>
-        <line class="axis" x1=${K} y1=${S - M} x2=${be - Xe} y2=${S - M}></line>
-        ${l ? D`<line class="today" x1=${this._sx(r)} y1=${X} x2=${this._sx(r)} y2=${S - M}></line>
+      <svg viewBox="0 0 ${be} ${E}">
+        <line class="axis" x1=${Q} y1=${X} x2=${Q} y2=${E - I}></line>
+        <line class="axis" x1=${Q} y1=${E - I} x2=${be - Qe} y2=${E - I}></line>
+        ${l ? D`<line class="today" x1=${this._sx(r)} y1=${X} x2=${this._sx(r)} y2=${E - I}></line>
               <text class="today-text" x=${this._sx(r)} y=${X - 4} text-anchor="middle">${c(e, "editor.graph.today", { temp: Math.round(r) })}</text>` : d}
         <path class="curve" d=${s}></path>
         ${this._points.map(
@@ -1868,38 +1898,38 @@ Ee.styles = Z`
     }
   `;
 let $ = Ee;
-C([
+A([
   y()
 ], $.prototype, "language");
-C([
+A([
   y({ attribute: !1 })
 ], $.prototype, "cycle");
-C([
+A([
   y({ attribute: !1 })
 ], $.prototype, "weightedTemp");
-C([
+A([
   y({ type: Boolean })
 ], $.prototype, "zoneHasFlowMeter");
-C([
+A([
   z()
 ], $.prototype, "_points");
-C([
+A([
   z()
 ], $.prototype, "_min");
-C([
+A([
   z()
 ], $.prototype, "_max");
-C([
+A([
   z()
 ], $.prototype, "_kind");
-C([
+A([
   z()
 ], $.prototype, "_error");
 G("imc-curve-editor", $);
-var si = Object.defineProperty, T = (n, e, t, i) => {
+var li = Object.defineProperty, P = (n, e, t, i) => {
   for (var o = void 0, s = n.length - 1, r; s >= 0; s--)
     (r = n[s]) && (o = r(e, t, o) || o);
-  return o && si(e, t, o), o;
+  return o && li(e, t, o), o;
 };
 const ut = {
   idle: "mdi:water-outline",
@@ -1909,8 +1939,8 @@ const ut = {
   paused: "mdi:pause-circle-outline",
   suspended: "mdi:calendar-remove-outline",
   disabled: "mdi:water-off-outline"
-}, ri = [1, 4, 8, 24];
-function ai(n) {
+}, ci = [1, 4, 8, 24];
+function di(n) {
   return n in ut;
 }
 const Me = class Me extends k {
@@ -1919,7 +1949,7 @@ const Me = class Me extends k {
   }
   get _zoneState() {
     const e = this.zone?.state?.state;
-    return e && ai(e) ? e : void 0;
+    return e && di(e) ? e : void 0;
   }
   _dispatch(e) {
     this.dispatchEvent(
@@ -1956,7 +1986,7 @@ const Me = class Me extends k {
     if (!e) return d;
     const t = e.state?.attributes ?? {}, i = [], o = v(t.suspended_until) ?? (R(e.suspendUntil) ? void 0 : e.suspendUntil?.state);
     if (this._zoneState === "suspended" && o) {
-      const s = jt(o, this.language) ?? o;
+      const s = Vt(o, this.language) ?? o;
       i.push(u`
         <span class="badge" title=${c(this.language, "zone.suspended_until", { date: s })}>
           <ha-icon icon="mdi:calendar-remove-outline" style="--mdc-icon-size:12px"></ha-icon>
@@ -2048,7 +2078,7 @@ const Me = class Me extends k {
           <option value="" disabled selected hidden>
             ${c(t, "controls.pause_for")}
           </option>
-          ${ri.map(
+          ${ci.map(
       (a) => u`<option value=${a}>
               ${c(t, "controls.hours", { hours: a })}
             </option>`
@@ -2094,8 +2124,8 @@ const Me = class Me extends k {
   }
   _renderCycle(e) {
     const t = this.language, i = this.zone, o = v(e.cycle_id), s = i?.cycleSwitches.find(
-      (E) => v(E.attributes.cycle_id) === o
-    ), r = s ? s.state === "on" : e.enabled !== !1, l = Gt(e.trigger, t), a = e.curve, p = g(a?.min), h = g(a?.max), _ = c(
+      (C) => v(C.attributes.cycle_id) === o
+    ), r = s ? s.state === "on" : e.enabled !== !1, l = Gt(e.trigger, t), a = e.curve, p = f(a?.min), h = f(a?.max), _ = c(
       t,
       a?.kind === "volume" ? "curve.unit_volume" : "curve.unit_duration"
     ), m = [];
@@ -2104,12 +2134,12 @@ const Me = class Me extends k {
     ), h !== void 0 && m.push(
       `${c(t, "curve.clamp_max")} ${h} ${_}`
     );
-    const f = !!o && this._editingCycle === o, x = o ? u`<button
+    const g = !!o && this._editingCycle === o, x = o ? u`<button
           class="link-btn"
-          @click=${() => this._editingCycle = f ? void 0 : o}
+          @click=${() => this._editingCycle = g ? void 0 : o}
         >
           ${c(t, "editor.edit_curve")}
-        </button>` : d, N = f ? u`<imc-curve-editor
+        </button>` : d, N = g ? u`<imc-curve-editor
           .language=${t}
           .cycle=${e}
           .weightedTemp=${this.weightedTemp}
@@ -2431,35 +2461,35 @@ Me.styles = Z`
     }
   `;
 let w = Me;
-T([
+P([
   y({ attribute: !1 })
 ], w.prototype, "zone");
-T([
+P([
   y()
 ], w.prototype, "language");
-T([
+P([
   y({ attribute: !1 })
 ], w.prototype, "now");
-T([
+P([
   y({ type: Boolean, reflect: !0 })
 ], w.prototype, "compact");
-T([
+P([
   y({ type: Boolean })
 ], w.prototype, "showControls");
-T([
+P([
   y({ attribute: !1 })
 ], w.prototype, "weightedTemp");
-T([
+P([
   z()
 ], w.prototype, "_expanded");
-T([
+P([
   z()
 ], w.prototype, "_editingCycle");
 G("imc-zone-row", w);
-var li = Object.defineProperty, Ae = (n, e, t, i) => {
+var ui = Object.defineProperty, Ae = (n, e, t, i) => {
   for (var o = void 0, s = n.length - 1, r; s >= 0; s--)
     (r = n[s]) && (o = r(e, t, o) || o);
-  return o && li(e, t, o), o;
+  return o && ui(e, t, o), o;
 };
 const Pe = class Pe extends k {
   constructor() {
@@ -2550,20 +2580,20 @@ Ae([
   y({ type: Boolean })
 ], W.prototype, "hasPauseSwitch");
 G("imc-global-controls", W);
-var ci = Object.defineProperty, me = (n, e, t, i) => {
+var pi = Object.defineProperty, me = (n, e, t, i) => {
   for (var o = void 0, s = n.length - 1, r; s >= 0; s--)
     (r = n[s]) && (o = r(e, t, o) || o);
-  return o && ci(e, t, o), o;
+  return o && pi(e, t, o), o;
 };
-const di = [
+const hi = [
   "idle",
   "evaluating",
   "running"
 ];
-function ui(n) {
-  return !!n && di.includes(n);
+function _i(n) {
+  return !!n && hi.includes(n);
 }
-const Te = class Te extends k {
+const Ne = class Ne extends k {
   constructor() {
     super(...arguments), this._now = Date.now(), this._relevantIds = [], this._statesCount = 0, this._timerPeriod = 0;
   }
@@ -2681,7 +2711,7 @@ const Te = class Te extends k {
           points: t.points,
           min_value: t.min,
           max_value: t.max,
-          kind: t.kind
+          ...t.kind !== void 0 ? { kind: t.kind } : {}
         });
         break;
     }
@@ -2713,10 +2743,10 @@ const Te = class Te extends k {
   /* Render fragments                                              */
   /* ------------------------------------------------------------ */
   _renderHeader(e, t) {
-    const i = e.hub, o = R(i.waterBudget) ? void 0 : g(i.waterBudget?.state), s = R(i.skipThreshold) ? void 0 : g(i.skipThreshold?.state);
+    const i = e.hub, o = R(i.waterBudget) ? void 0 : f(i.waterBudget?.state), s = R(i.skipThreshold) ? void 0 : f(i.skipThreshold?.state);
     let r = d;
     if (o !== void 0 || s !== void 0) {
-      const x = Math.max(o ?? 0, s ?? 0, 1e-3), N = ye((o ?? 0) / x, 0, 1), E = s !== void 0 ? ye(s / x, 0, 1) : void 0, b = o !== void 0 && s !== void 0 && o >= s;
+      const x = Math.max(o ?? 0, s ?? 0, 1e-3), N = ye((o ?? 0) / x, 0, 1), C = s !== void 0 ? ye(s / x, 0, 1) : void 0, b = o !== void 0 && s !== void 0 && o >= s;
       r = u`
         <div
           class="budget"
@@ -2728,9 +2758,9 @@ const Te = class Te extends k {
               class="meter-fill ${b ? "sufficient" : ""}"
               style="width:${(N * 100).toFixed(1)}%"
             ></div>
-            ${E !== void 0 ? u`<div
+            ${C !== void 0 ? u`<div
                   class="meter-mark"
-                  style="left:${(E * 100).toFixed(1)}%"
+                  style="left:${(C * 100).toFixed(1)}%"
                 ></div>` : d}
           </div>
           <span class="budget-numbers">
@@ -2740,7 +2770,7 @@ const Te = class Te extends k {
         </div>
       `;
     }
-    const l = i.weightedTemp, a = R(l) ? void 0 : g(l?.state), p = l?.attributes.stale_weather === !0, h = i.session?.state, _ = ui(h) ? h : void 0, m = i.pauseSwitch?.state === "on", f = R(i.consumptionLeft) ? void 0 : g(i.consumptionLeft?.state);
+    const l = i.weightedTemp, a = R(l) ? void 0 : f(l?.state), p = l?.attributes.stale_weather === !0, h = i.session?.state, _ = _i(h) ? h : void 0, m = i.pauseSwitch?.state === "on", g = R(i.consumptionLeft) ? void 0 : f(i.consumptionLeft?.state);
     return u`
       <div class="header">
         ${r}
@@ -2770,12 +2800,12 @@ const Te = class Te extends k {
                 <ha-icon icon="mdi:pause" style="--mdc-icon-size:14px"></ha-icon>
                 ${c(t, "header.global_pause")}
               </span>` : d}
-          ${f !== void 0 ? u`<span
+          ${g !== void 0 ? u`<span
                 class="chip"
                 title=${c(t, "header.consumption_left")}
               >
                 <ha-icon icon="mdi:counter" style="--mdc-icon-size:14px"></ha-icon>
-                ${se(f, 0)} L
+                ${se(g, 0)} L
               </span>` : d}
         </div>
       </div>
@@ -2793,7 +2823,7 @@ const Te = class Te extends k {
       <div class="queue">
         <div class="queue-title">${c(t, "queue.title")}</div>
         ${o.map((r, l) => {
-      const a = v(r.state), p = s !== void 0 && r.zone_id === s || a === "watering" || a === "running", h = g(r.duration_min);
+      const a = v(r.state), p = s !== void 0 && r.zone_id === s || a === "watering" || a === "running", h = f(r.duration_min);
       return u`
             <div class="queue-item ${p ? "active" : ""}">
               <span class="queue-index">${l + 1}.</span>
@@ -2804,7 +2834,7 @@ const Te = class Te extends k {
                     ${c(t, "queue.duration", { minutes: h })}
                   </span>` : d}
               ${a ? u`<span class="queue-state">
-                    ${Lt(t, a)}
+                    ${Ft(t, a)}
                   </span>` : d}
             </div>
           `;
@@ -2818,7 +2848,7 @@ const Te = class Te extends k {
   render() {
     const e = this._config, t = this.hass;
     if (!e || !t) return d;
-    const i = lt(t), o = at(t);
+    const i = at(t), o = rt(t);
     this._model = o, this._relevantIds = o.entityIds, this._statesCount = Object.keys(t.states).length;
     const s = e.title ? u`<h1 class="card-title">${e.title}</h1>` : d;
     if (!o.found)
@@ -2843,7 +2873,7 @@ const Te = class Te extends k {
                   .now=${this._now}
                   .compact=${e.compact === !0}
                   .showControls=${e.show_controls !== !1}
-                  .weightedTemp=${g(o.hub.weightedTemp?.state)}
+                  .weightedTemp=${f(o.hub.weightedTemp?.state)}
                 ></imc-zone-row>
               `
     )}
@@ -2856,7 +2886,7 @@ const Te = class Te extends k {
     `;
   }
 };
-Te.styles = Z`
+Ne.styles = Z`
     :host {
       display: block;
     }
@@ -3010,7 +3040,7 @@ Te.styles = Z`
       color: var(--primary-color, #03a9f4);
     }
   `;
-let U = Te;
+let U = Ne;
 me([
   y({ attribute: !1 })
 ], U.prototype, "hass");
@@ -3024,17 +3054,17 @@ me([
   z()
 ], U.prototype, "_error");
 G("irrigation-maestro-card", U);
-var pi = Object.defineProperty, pt = (n, e, t, i) => {
+var mi = Object.defineProperty, pt = (n, e, t, i) => {
   for (var o = void 0, s = n.length - 1, r; s >= 0; s--)
     (r = n[s]) && (o = r(e, t, o) || o);
-  return o && pi(e, t, o), o;
+  return o && mi(e, t, o), o;
 };
-const hi = [
+const gi = [
   { key: "show_header", label: "editor.show_header", fallback: !0 },
   { key: "show_queue", label: "editor.show_queue", fallback: !0 },
   { key: "show_controls", label: "editor.show_controls", fallback: !0 },
   { key: "compact", label: "editor.compact", fallback: !1 }
-], Ne = class Ne extends k {
+], Te = class Te extends k {
   setConfig(e) {
     this._config = { ...e };
   }
@@ -3067,7 +3097,7 @@ const hi = [
   render() {
     const e = this._config, t = this.hass;
     if (!e || !t) return d;
-    const i = lt(t), o = at(t).zones, s = new Set(e.zones ?? []);
+    const i = at(t), o = rt(t).zones, s = new Set(e.zones ?? []);
     return u`
       <div class="form">
         <label class="field">
@@ -3080,7 +3110,7 @@ const hi = [
           />
         </label>
 
-        ${hi.map(
+        ${gi.map(
       ({ key: r, label: l, fallback: a }) => u`
             <label class="toggle">
               <input
@@ -3115,7 +3145,7 @@ const hi = [
     `;
   }
 };
-Ne.styles = Z`
+Te.styles = Z`
     :host {
       display: block;
       color: var(--primary-text-color);
@@ -3175,7 +3205,7 @@ Ne.styles = Z`
       opacity: 0.9;
     }
   `;
-let ie = Ne;
+let ie = Te;
 pt([
   y({ attribute: !1 })
 ], ie.prototype, "hass");
@@ -3186,8 +3216,8 @@ G("irrigation-maestro-card-editor", ie);
 window.customCards = window.customCards ?? [];
 window.customCards.some((n) => n.type === "irrigation-maestro-card") || window.customCards.push({
   type: "irrigation-maestro-card",
-  name: A["card.name"],
-  description: A["card.description"],
+  name: S["card.name"],
+  description: S["card.description"],
   preview: !0,
   documentationURL: "https://github.com/jmbriccola/ha-irrigation-configurable"
 });

@@ -206,7 +206,7 @@ export const en = {
   "editor.min.help": "Absolute minimum, applied after the curve and any scaling.",
   "editor.max.label": "⬆️ Never more than",
   "editor.max.help": "Absolute maximum, applied after the curve and any scaling.",
-  "editor.intensity_reset": "This program waters at {pct}% of its curve. Saving a curve you edited here resets that to 100%, so the minutes will change.",
+  "editor.intensity_reset": "Saving a curve you edit here resets this program's watering strength — including any per-day amounts — to the curve's own values.",
   "editor.curve_empty": "The curve needs at least one point.",
   "editor.curve_negative_value": "No point can have a negative value.",
   "editor.curve_temps_not_increasing": "Temperatures must strictly increase from left to right.",
@@ -216,7 +216,7 @@ export const en = {
   "editor.cancel": "Cancel",
   "editor.saved": "Curve updated.",
   "editor.save_error": "Couldn't save the curve: {error}",
-  "editor.volume_note": "This program uses a volume curve (liters). Edit it in the zone settings.",
+  "editor.volume_note": "This program uses a volume curve (liters) — edit its points in Advanced settings below.",
 
   // Zone editor (panel)
   "zone.add": "Add zone",
