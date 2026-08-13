@@ -29,8 +29,8 @@ from homeassistant.util import dt as dt_util
 from . import const
 from .const import DOMAIN, SUBENTRY_TYPE_ZONE
 from .engine.calendar import ProgramCalendar
-from .engine.curves import CurveError, CurveKind, validate_points
-from .engine.semantic import points_from_semantic, semantic_from_curve
+from .engine.curves import CurveError, CurveKind, interpolate, validate_points
+from .engine.semantic import points_from_semantic
 from .models import CycleConfig, HubConfig, ZoneConfig
 from .notify import (
     EVENT_ANOMALY,
@@ -794,22 +794,28 @@ async def _async_set_program_minutes(call: ServiceCall) -> None:
             translation_key="simple_curve_on_volume",
             translation_placeholders={"cycle_id": program_id},
         )
+    reference = interpolate(cycle.curve.points, const.CURVE_REFERENCE_TEMP_C)
+    if reference <= 0:
+        # A curve worth zero minutes at the reference cannot be scaled into
+        # any target; refuse rather than divide by zero or invent points.
+        raise ServiceValidationError(
+            translation_domain=DOMAIN,
+            translation_key="cannot_scale_zero_curve",
+            translation_placeholders={"cycle_id": program_id},
+        )
+
     mutate: Callable[[dict[str, Any]], None]
     if ATTR_MINUTES in call.data:
-        _, heat = semantic_from_curve(cycle.curve)
-        points = list(points_from_semantic(int(call.data[ATTR_MINUTES]), heat))
+        intensity = round(100.0 * float(call.data[ATTR_MINUTES]) / reference, 2)
 
         def mutate(item: dict[str, Any]) -> None:
-            item[const.CONF_CURVE] = {
-                const.CONF_CURVE_POINTS: [[t, v] for t, v in points],
-                const.CONF_CURVE_MIN: cycle.curve.min_value,
-                const.CONF_CURVE_MAX: cycle.curve.max_value,
-                const.CONF_CURVE_KIND: str(cycle.curve.kind),
-            }
-            item.pop(const.CONF_CYCLE_DAY_MINUTES, None)  # uniform clears per-day
+            # The curve is never touched here: minutes are a strength, not a
+            # shape. Uniform minutes clear any per-day override.
+            item[const.CONF_CYCLE_INTENSITY_PCT] = intensity
+            item.pop(const.CONF_CYCLE_DAY_INTENSITY_PCT, None)
 
     elif ATTR_DAY_MINUTES in call.data:
-        day_map: dict[str, int] = {}
+        day_map: dict[str, float] = {}
         for raw_key, raw_val in call.data[ATTR_DAY_MINUTES].items():
             try:
                 weekday = int(raw_key)
@@ -821,10 +827,10 @@ async def _async_set_program_minutes(call: ServiceCall) -> None:
                 raise ServiceValidationError(
                     translation_domain=DOMAIN, translation_key="invalid_weekday"
                 )
-            day_map[str(weekday)] = int(raw_val)
+            day_map[str(weekday)] = round(100.0 * float(raw_val) / reference, 2)
 
         def mutate(item: dict[str, Any]) -> None:
-            item[const.CONF_CYCLE_DAY_MINUTES] = day_map
+            item[const.CONF_CYCLE_DAY_INTENSITY_PCT] = day_map
 
     else:
         raise ServiceValidationError(translation_domain=DOMAIN, translation_key="minutes_required")

@@ -564,18 +564,19 @@ async def test_set_program_schedule_rejects_unparseable_time(
     assert runtime.zones[zone_id].config.cycles[0].trigger.at.strftime("%H:%M") == "05:30"
 
 
-async def test_set_program_minutes_uniform_preserves_heat(
+async def test_set_program_minutes_uniform_sets_intensity_and_clears_per_day(
     hass: HomeAssistant, freezer: FrozenDateTimeFactory
 ) -> None:
+    """This used to decode a "heat" value from the curve and rewrite its
+    points; now minutes only ever set an intensity percentage, and the
+    curve's control points are left exactly as they were."""
     freezer.move_to(START)
     mock_weather(hass)
     entry = await setup_hub(hass, [zone_data("Pots", "valve.pots")])
     runtime = entry.runtime_data
     zone_id = runtime.zone_ids[0]
     program_id = runtime.zones[zone_id].config.cycles[0].cycle_id
-    from custom_components.irrigation_maestro.engine.semantic import semantic_from_curve
-
-    _, heat_before = semantic_from_curve(runtime.zones[zone_id].config.cycles[0].curve)
+    curve_before = dict(entry.subentries[zone_id].data["cycles"][0]["curve"])
 
     await hass.services.async_call(
         DOMAIN,
@@ -583,13 +584,16 @@ async def test_set_program_minutes_uniform_preserves_heat(
         {"zone_id": zone_id, "program_id": program_id, "minutes": 18},
         blocking=True,
     )
-    amount_after, heat_after = semantic_from_curve(runtime.zones[zone_id].config.cycles[0].curve)
-    assert amount_after == 18
-    assert heat_after == heat_before  # heat preserved
-    assert runtime.zones[zone_id].config.cycles[0].day_minutes == {}  # per-day cleared
+    await hass.async_block_till_done()
+
+    stored = entry.subentries[zone_id].data["cycles"][0]
+    assert stored["curve"] == curve_before  # every control point survives
+    # The fixture's curve is flat at 3 minutes, so 18 minutes is 600 %.
+    assert stored["intensity_pct"] == 600.0
+    assert runtime.zones[zone_id].config.cycles[0].day_intensity_pct == {}  # per-day cleared
 
 
-async def test_set_program_minutes_per_day(
+async def test_set_program_minutes_per_day_sets_day_intensity(
     hass: HomeAssistant, freezer: FrozenDateTimeFactory
 ) -> None:
     freezer.move_to(START)
@@ -605,7 +609,11 @@ async def test_set_program_minutes_per_day(
         {"zone_id": zone_id, "program_id": program_id, "day_minutes": {"0": 10, "4": 20}},
         blocking=True,
     )
-    assert runtime.zones[zone_id].config.cycles[0].day_minutes == {0: 10, 4: 20}
+    # The fixture's curve is flat at 3 minutes at 25 C.
+    assert runtime.zones[zone_id].config.cycles[0].day_intensity_pct == {
+        0: pytest.approx(333.33),
+        4: pytest.approx(666.67),
+    }
 
 
 async def test_set_program_minutes_rejects_non_numeric_day_key(
@@ -626,7 +634,7 @@ async def test_set_program_minutes_rejects_non_numeric_day_key(
             blocking=True,
         )
     # Nothing was written: the bad key was rejected before persisting.
-    assert runtime.zones[zone_id].config.cycles[0].day_minutes == {}
+    assert runtime.zones[zone_id].config.cycles[0].day_intensity_pct == {}
 
 
 async def test_set_program_minutes_rejects_unknown_program(
@@ -995,3 +1003,159 @@ async def test_set_restrictions_normalizes_window_times(hass, freezer):
     window_data = entry.options[const.CONF_RESTRICTIONS][const.CONF_FORBIDDEN_WINDOWS][0]
     assert window_data[const.CONF_WINDOW_START] == "22:00"
     assert window_data[const.CONF_WINDOW_END] == "06:00"
+
+
+async def test_set_program_minutes_never_touches_the_curve(hass: HomeAssistant) -> None:
+    """The regression this release exists for: a quick minutes change used to
+    rewrite the control points, silently replacing whatever curve was there."""
+    mock_weather(hass)
+    curve = {
+        "points": [[10.0, 10.0], [30.0, 30.0], [42.5, 55.0]],
+        "min_value": 10.0,
+        "max_value": 55.0,
+    }
+    entry = await setup_hub(
+        hass,
+        [
+            zone_data(
+                "Pots",
+                "valve.pots",
+                cycles=[
+                    {
+                        "id": "c1",
+                        "name": "Morning",
+                        "trigger": {"kind": "time", "at": "05:30"},
+                        "curve": dict(curve),
+                    }
+                ],
+            )
+        ],
+    )
+    zone_id = entry.runtime_data.zone_ids[0]
+
+    await hass.services.async_call(
+        DOMAIN,
+        "set_program_minutes",
+        {"zone_id": zone_id, "program_id": "c1", "minutes": 50},
+        blocking=True,
+    )
+    await hass.async_block_till_done()
+
+    stored = entry.subentries[zone_id].data["cycles"][0]
+    assert stored["curve"] == curve  # every control point survives
+    # Raw value at 25 C is 25 min, so 50 minutes is 200 %.
+    assert stored["intensity_pct"] == 200.0
+
+
+async def test_set_program_minutes_hits_the_target_through_a_floor(
+    hass: HomeAssistant,
+) -> None:
+    """The factor comes from the unclamped value: deriving it from the clamped
+    one would ask for 200 % and deliver 16 minutes instead of 20."""
+    mock_weather(hass)
+    entry = await setup_hub(
+        hass,
+        [
+            zone_data(
+                "Pots",
+                "valve.pots",
+                cycles=[
+                    {
+                        "id": "c1",
+                        "name": "Morning",
+                        "trigger": {"kind": "time", "at": "05:30"},
+                        "curve": {
+                            "points": [[25.0, 8.0]],
+                            "min_value": 10.0,
+                            "max_value": 60.0,
+                        },
+                    }
+                ],
+            )
+        ],
+    )
+    zone_id = entry.runtime_data.zone_ids[0]
+
+    await hass.services.async_call(
+        DOMAIN,
+        "set_program_minutes",
+        {"zone_id": zone_id, "program_id": "c1", "minutes": 20},
+        blocking=True,
+    )
+    await hass.async_block_till_done()
+
+    cycle = entry.runtime_data.zones[zone_id].config.cycle("c1")
+    assert cycle.intensity_pct == 250.0
+    assert curve_value(cycle.curve, 25.0, cycle.intensity_pct) == pytest.approx(20.0)
+
+
+async def test_set_program_minutes_refuses_a_curve_worth_zero(hass: HomeAssistant) -> None:
+    mock_weather(hass)
+    entry = await setup_hub(
+        hass,
+        [
+            zone_data(
+                "Pots",
+                "valve.pots",
+                cycles=[
+                    {
+                        "id": "c1",
+                        "name": "Morning",
+                        "trigger": {"kind": "time", "at": "05:30"},
+                        "curve": {
+                            "points": [[25.0, 0.0]],
+                            "min_value": 0.0,
+                            "max_value": 60.0,
+                        },
+                    }
+                ],
+            )
+        ],
+    )
+    zone_id = entry.runtime_data.zone_ids[0]
+
+    with pytest.raises(ServiceValidationError):
+        await hass.services.async_call(
+            DOMAIN,
+            "set_program_minutes",
+            {"zone_id": zone_id, "program_id": "c1", "minutes": 20},
+            blocking=True,
+        )
+
+
+async def test_set_program_day_minutes_writes_per_day_intensity(hass: HomeAssistant) -> None:
+    mock_weather(hass)
+    entry = await setup_hub(
+        hass,
+        [
+            zone_data(
+                "Pots",
+                "valve.pots",
+                cycles=[
+                    {
+                        "id": "c1",
+                        "name": "Morning",
+                        "trigger": {"kind": "time", "at": "05:30"},
+                        "curve": {
+                            "points": [[25.0, 20.0]],
+                            "min_value": 1.0,
+                            "max_value": 60.0,
+                        },
+                    }
+                ],
+            )
+        ],
+    )
+    zone_id = entry.runtime_data.zone_ids[0]
+
+    await hass.services.async_call(
+        DOMAIN,
+        "set_program_minutes",
+        {"zone_id": zone_id, "program_id": "c1", "day_minutes": {"0": 30, "3": 10}},
+        blocking=True,
+    )
+    await hass.async_block_till_done()
+
+    stored = entry.subentries[zone_id].data["cycles"][0]
+    assert stored["day_intensity_pct"] == {"0": 150.0, "3": 50.0}
+    assert "day_minutes" not in stored

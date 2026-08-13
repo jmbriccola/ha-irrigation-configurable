@@ -957,6 +957,14 @@
     "migration_zone_restrictions_dropped": {
       "title": "Le restrizioni per zona sono state rimosse",
       "description": "Queste zone avevano restrizioni di calendario proprie, che non avevano interfaccia e si potevano impostare solo modificando la configurazione esportata. Le restrizioni ora sono globali e riguardano solo le fasce orarie vietate; i giorni di irrigazione si impostano su ogni programma: {items}."
+    },
+    "migration_curve_template_missing": {
+      "title": "Alcuni programmi avevano un preset di curva che non esiste più",
+      "description": "Questi programmi facevano riferimento a un preset di curva non più risolvibile, quindi la migrazione non ha potuto convertirlo in una curva esplicita e lo ha lasciato invariato invece di indovinare una durata di irrigazione. Imposta esplicitamente la loro curva: {items}."
+    },
+    "migration_day_minutes_dropped": {
+      "title": "I minuti di irrigazione per giorno sono stati eliminati per alcuni programmi",
+      "description": "Questi programmi avevano minuti di irrigazione per singolo giorno, ma la loro curva a 25 °C irriga per zero minuti, quindi i minuti non potevano essere espressi come percentuale di essa e sono stati eliminati. Imposta la curva del programma, poi imposta di nuovo i minuti per giorno: {items}."
     }
   },
   "exceptions": {
@@ -998,6 +1006,9 @@
     },
     "invalid_weekday": {
       "message": "I giorni vanno da 0 (lunedì) a 6 (domenica)."
+    },
+    "cannot_scale_zero_curve": {
+      "message": "Il programma {cycle_id} a 25 °C irriga per zero minuti, quindi non può essere scalato a un obiettivo. Modifica invece la sua curva."
     },
     "cannot_remove_last_program": {
       "message": "Una zona deve avere almeno un programma."

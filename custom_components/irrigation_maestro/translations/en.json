@@ -957,6 +957,14 @@
     "migration_zone_restrictions_dropped": {
       "title": "Per-zone restrictions were removed",
       "description": "These zones carried their own calendar restrictions, which had no interface and could only be set by editing exported configuration. Restrictions are now hub-wide and cover forbidden hours only; watering days are set on each program: {items}."
+    },
+    "migration_curve_template_missing": {
+      "title": "Some programs kept a curve preset that no longer exists",
+      "description": "These programs referenced a curve preset that no longer resolves, so the migration could not convert it into an explicit curve and left it untouched rather than guessing a watering duration. Set their curve explicitly: {items}."
+    },
+    "migration_day_minutes_dropped": {
+      "title": "Per-day watering minutes were dropped for some programs",
+      "description": "These programs had per-day watering minutes, but their curve waters for zero minutes at 25 °C, so the minutes could not be expressed as a percentage of it and were dropped. Set the program's curve, then set the per-day minutes again: {items}."
     }
   },
   "exceptions": {
@@ -998,6 +1006,9 @@
     },
     "invalid_weekday": {
       "message": "Weekdays must be 0 (Monday) to 6 (Sunday)."
+    },
+    "cannot_scale_zero_curve": {
+      "message": "Program {cycle_id} waters for zero minutes at 25 °C, so it cannot be scaled to a target. Edit its curve instead."
     },
     "cannot_remove_last_program": {
       "message": "A zone must keep at least one program."
