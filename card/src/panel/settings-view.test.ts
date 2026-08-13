@@ -8,6 +8,7 @@ import {
   sameEventSet,
   unreachableEssentials,
 } from "./settings-view";
+import type { WeatherSaveDetail } from "./settings-view";
 import type {
   NotificationStatusResponse,
   SetNotificationsCall,
@@ -135,6 +136,61 @@ function essentialsStatus(reachable: string[]): NotificationStatusResponse {
     })),
   };
 }
+
+/** The weather section's own state, likewise private. */
+interface WeatherInternals {
+  _weatherEntity: string;
+  _lineFlowSensor: string;
+  _lineFlowSensorUnit: string;
+  _setLineFlowSensor(value: string): void;
+  _saveWeather(): void;
+}
+
+/** The one weather detail a save produced, or undefined if it sent nothing. */
+function savedWeather(seed: (inner: WeatherInternals) => void): WeatherSaveDetail | undefined {
+  const element = new ImcSettingsView();
+  const inner = element as unknown as WeatherInternals;
+  inner._weatherEntity = "weather.home";
+  seed(inner);
+  let detail: WeatherSaveDetail | undefined;
+  element.addEventListener("imc-settings-save-weather", (event) => {
+    detail = (event as CustomEvent<WeatherSaveDetail>).detail;
+  });
+  inner._saveWeather();
+  return detail;
+}
+
+describe("the line meter's unit", () => {
+  it("goes out with the rest of the weather sources", () => {
+    const detail = savedWeather((inner) => {
+      inner._lineFlowSensor = "sensor.line";
+      inner._lineFlowSensorUnit = "m³/h";
+    });
+    expect(detail?.line_flow_sensor_unit).toBe("m³/h");
+  });
+
+  it("goes out as an empty string when detection is left to the entity", () => {
+    // `set_weather_sources` merges its patch, so an omitted key means "leave
+    // unchanged" -- omitting this one would make a stored override
+    // unremovable. The empty string is what clears it.
+    const detail = savedWeather((inner) => {
+      inner._lineFlowSensor = "sensor.line";
+      inner._lineFlowSensorUnit = "";
+    });
+    expect(detail?.line_flow_sensor_unit).toBe("");
+  });
+
+  it("is dropped when the meter it describes is cleared", () => {
+    // An override that outlived its sensor would silently apply to whatever
+    // sensor is configured next; the backend drops it, and so does the form.
+    const detail = savedWeather((inner) => {
+      inner._lineFlowSensor = "sensor.line";
+      inner._lineFlowSensorUnit = "m³/h";
+      inner._setLineFlowSensor("");
+    });
+    expect(detail?.line_flow_sensor_unit).toBe("");
+  });
+});
 
 /** The wizard's own state: private, and there is no public setter for it. */
 interface WizardInternals {

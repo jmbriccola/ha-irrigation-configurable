@@ -7,6 +7,7 @@ import type { TranslationKey } from "../localize/localize";
 import { asNumber, defineElement } from "../types";
 import type { HomeAssistant } from "../types";
 import type { HubOptions } from "./config-read";
+import { FLOW_UNITS, detectedFlowUnit, flowUnitNote } from "./flow-units";
 import {
   ALL_EVENT_ORDER,
   NOTIFY_GROUP_ORDER,
@@ -208,6 +209,7 @@ export interface WeatherSaveDetail {
   rain_sensor?: string;
   outdoor_temp_sensor?: string;
   line_flow_sensor?: string;
+  line_flow_sensor_unit?: string;
   master_valve?: string;
 }
 
@@ -243,6 +245,7 @@ export class ImcSettingsView extends LitElement {
   @state() private _rainSensor = "";
   @state() private _outdoorTempSensor = "";
   @state() private _lineFlowSensor = "";
+  @state() private _lineFlowSensorUnit = "";
   @state() private _masterValve = "";
 
   // Budget consumo
@@ -340,6 +343,11 @@ export class ImcSettingsView extends LitElement {
       color: var(--primary-text-color);
       font-size: 13px;
       font-family: inherit;
+    }
+    .field-note {
+      margin-top: 6px;
+      font-size: 12.5px;
+      color: var(--secondary-text-color, #8b93a7);
     }
     .two {
       display: flex;
@@ -581,6 +589,7 @@ export class ImcSettingsView extends LitElement {
     this._rainSensor = o.rain_sensor ?? "";
     this._outdoorTempSensor = o.outdoor_temp_sensor ?? "";
     this._lineFlowSensor = o.line_flow_sensor ?? "";
+    this._lineFlowSensorUnit = o.line_flow_sensor_unit ?? "";
     this._masterValve = o.master_valve ?? "";
 
     const budget = o.consumption_budget;
@@ -666,6 +675,51 @@ export class ImcSettingsView extends LitElement {
     `;
   }
 
+  /**
+   * `set_weather_sources` already drops a stored line-meter unit whenever the
+   * line meter itself is cleared — an override that outlived its sensor would
+   * silently apply to whatever sensor is configured next. Mirror that here so
+   * the form shows what the save will actually do.
+   */
+  private _setLineFlowSensor(value: string): void {
+    this._lineFlowSensor = value;
+    if (value.trim() === "") this._lineFlowSensorUnit = "";
+  }
+
+  /**
+   * The unit the line meter reports in, under the picker it belongs to.
+   * Rendered only once a meter is chosen (see `_setLineFlowSensor`), and
+   * offering "detected from the entity" as a real option: saving it sends
+   * `""`, which `set_weather_sources` reads as "clear the override".
+   */
+  private _renderLineFlowUnit(lang: string): TemplateResult | typeof nothing {
+    const sensor = this._lineFlowSensor.trim();
+    if (sensor === "") return nothing;
+    const detected = this.hass ? detectedFlowUnit(this.hass, sensor) : undefined;
+    const label = localize(lang, "settings.field_line_flow_unit");
+    const chosen = this._lineFlowSensorUnit;
+    // Selection lives on the options rather than in a `.value` binding on the
+    // <select>, for the reason spelled out in zone-editor's `_renderFlowUnit`:
+    // lit-html commits an element's bindings before its children exist.
+    // The note's strings are the `zone.*` ones — they are not zone-specific.
+    return html`
+      <div class="section-label">${label}</div>
+      <select
+        class="field"
+        aria-label=${label}
+        @change=${(e: Event) => (this._lineFlowSensorUnit = (e.target as HTMLSelectElement).value)}
+      >
+        <option value="" ?selected=${chosen === ""}>
+          ${localize(lang, "zone.flow_unit_auto")}
+        </option>
+        ${FLOW_UNITS.map(
+          (unit) => html`<option value=${unit} ?selected=${chosen === unit}>${unit}</option>`,
+        )}
+      </select>
+      <div class="field-note">${flowUnitNote(lang, this._lineFlowSensorUnit, detected)}</div>
+    `;
+  }
+
   protected override render(): TemplateResult {
     const lang = pickLanguage(this.hass);
     return html`
@@ -725,8 +779,9 @@ export class ImcSettingsView extends LitElement {
               "settings.line_flow",
               this._lineFlowSensor,
               { entity: { domain: "sensor" } },
-              (v) => (this._lineFlowSensor = v),
+              (v) => this._setLineFlowSensor(v),
             )}
+            ${this._renderLineFlowUnit(lang)}
           </div>
           <div>
             ${this._optionalPicker(
@@ -898,6 +953,7 @@ export class ImcSettingsView extends LitElement {
       rain_sensor: this._rainSensor.trim(),
       outdoor_temp_sensor: this._outdoorTempSensor.trim(),
       line_flow_sensor: this._lineFlowSensor.trim(),
+      line_flow_sensor_unit: this._lineFlowSensorUnit.trim(),
       master_valve: this._masterValve.trim(),
     };
     this.dispatchEvent(

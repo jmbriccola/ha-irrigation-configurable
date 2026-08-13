@@ -5,6 +5,7 @@ import { localize, pickLanguage } from "../localize/localize";
 import { asNumber, defineElement } from "../types";
 import type { HomeAssistant } from "../types";
 import type { ZoneData } from "./config-read";
+import { FLOW_UNITS, detectedFlowUnit, flowUnitNote } from "./flow-units";
 // Side-effect import: registers <imc-entity-picker>, used for the Valvola
 // field (and, in the Avanzate drawer, the flow-sensor field).
 import "./ha-selector";
@@ -32,6 +33,7 @@ export interface ZoneSaveDetail {
     area_m2?: number;
     icon?: string;
     flow_sensor?: string;
+    flow_sensor_unit?: string;
     nominal_flow_lpm?: number;
     flow_tolerance_pct?: number;
     adjustment_pct?: number;
@@ -65,6 +67,7 @@ export class ImcZoneEditor extends LitElement {
   // Advanced fields — only ever populated (seeded/edited) in edit mode; see
   // the class doc comment + `_save` for why they must never reach `add_zone`.
   @state() private _flowSensor = "";
+  @state() private _flowSensorUnit = "";
   @state() private _nominalFlowLpm?: number;
   @state() private _flowTolerancePct?: number;
   @state() private _adjustmentPct?: number;
@@ -104,6 +107,11 @@ export class ImcZoneEditor extends LitElement {
       color: var(--primary-text-color);
       font-size: 13px;
       font-family: inherit;
+    }
+    .field-note {
+      margin-top: 6px;
+      font-size: 12.5px;
+      color: var(--secondary-text-color, #8b93a7);
     }
     .months {
       display: flex;
@@ -176,6 +184,7 @@ export class ImcZoneEditor extends LitElement {
     this._valve = zone?.valve_entity ?? "";
     this._areaM2 = zone?.area_m2;
     this._flowSensor = zone?.flow_sensor ?? "";
+    this._flowSensorUnit = zone?.flow_sensor_unit ?? "";
     this._nominalFlowLpm = zone?.nominal_flow_lpm;
     this._flowTolerancePct = zone?.flow_tolerance_pct;
     this._adjustmentPct = zone?.adjustment_pct;
@@ -253,6 +262,51 @@ export class ImcZoneEditor extends LitElement {
     `;
   }
 
+  /**
+   * The unit this zone's meter reports in. Rendered only while a meter is in
+   * the picker above: with no meter there is nothing to state a unit for, and
+   * the note below would warn about ignored readings that do not exist.
+   *
+   * Emptying the picker only hides this field, it does not clear the stored
+   * override — an empty `flow_sensor` is omitted from the patch, so the zone
+   * keeps the meter it had, and dropping the unit under it would leave that
+   * meter being read in whatever unit it declares. (The hub's line meter
+   * differs: `set_weather_sources` really does clear it, and drops its unit
+   * with it — see settings-view's `_setLineFlowSensor`.)
+   *
+   * "Detected from the entity" is a real option, not an empty placeholder —
+   * it is how the user hands the decision back to the entity, and saving it
+   * sends `""`, which `update_zone` treats as "clear the override".
+   */
+  private _renderFlowUnit(lang: string): TemplateResult | typeof nothing {
+    const sensor = this._flowSensor.trim();
+    if (sensor === "") return nothing;
+    const detected = this.hass ? detectedFlowUnit(this.hass, sensor) : undefined;
+    const label = localize(lang, "zone.field_flow_unit");
+    const chosen = this._flowSensorUnit;
+    // The selection is carried by each <option>, NOT by a `.value` binding on
+    // the <select>: lit-html commits an element's own bindings before its
+    // children, so on first render `.value` would be assigned while the unit
+    // options do not exist yet and would silently fall back to "auto" — the
+    // control would then contradict the note right below it.
+    return html`
+      <div class="section-label">${label}</div>
+      <select
+        class="field"
+        aria-label=${label}
+        @change=${(e: Event) => (this._flowSensorUnit = (e.target as HTMLSelectElement).value)}
+      >
+        <option value="" ?selected=${chosen === ""}>
+          ${localize(lang, "zone.flow_unit_auto")}
+        </option>
+        ${FLOW_UNITS.map(
+          (unit) => html`<option value=${unit} ?selected=${chosen === unit}>${unit}</option>`,
+        )}
+      </select>
+      <div class="field-note">${flowUnitNote(lang, this._flowSensorUnit, detected)}</div>
+    `;
+  }
+
   private _renderAdvanced(lang: string): TemplateResult {
     return html`
       <div class="section-label">${localize(lang, "zone.field_flow_sensor")}</div>
@@ -264,6 +318,7 @@ export class ImcZoneEditor extends LitElement {
         @value-changed=${(e: CustomEvent<{ value: string }>) =>
           (this._flowSensor = e.detail.value)}
       ></imc-entity-picker>
+      ${this._renderFlowUnit(lang)}
 
       <div class="section-label">${localize(lang, "zone.field_flow_nominal")}</div>
       <input
@@ -337,6 +392,11 @@ export class ImcZoneEditor extends LitElement {
     // so a create-mode `patch` can never carry a field `add_zone` rejects.
     if (isEdit) {
       if (this._flowSensor.trim() !== "") patch.flow_sensor = this._flowSensor.trim();
+      // Always sent, unlike every other field here: for this one "unset" is
+      // itself a choice the user can make in the picker (detect
+      // automatically), and `update_zone` reads `""` as "clear the override".
+      // Omitting it when empty would leave a stored override unremovable.
+      patch.flow_sensor_unit = this._flowSensorUnit.trim();
       if (this._nominalFlowLpm !== undefined) patch.nominal_flow_lpm = this._nominalFlowLpm;
       if (this._flowTolerancePct !== undefined) {
         patch.flow_tolerance_pct = this._flowTolerancePct;
