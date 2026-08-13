@@ -141,6 +141,10 @@ export interface CycleInfo {
   /** Friendly derived values for a duration curve (null/absent for volume). */
   amount?: number;
   heat?: number;
+  /** Watering strength as a percentage of the curve; absent reads as 100. */
+  intensity_pct?: number;
+  /** Per-weekday override of `intensity_pct`, keyed by weekday-as-string. */
+  day_intensity_pct?: Record<string, number>;
 }
 
 export interface QueueItem {

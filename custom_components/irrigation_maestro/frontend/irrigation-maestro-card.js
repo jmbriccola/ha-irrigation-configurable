@@ -1322,27 +1322,7 @@ function it(n, e) {
   ];
 }
 function Z(n, e, t, i) {
-  const o = n[0], s = n[n.length - 1];
-  let a;
-  if (!o || !s)
-    a = 0;
-  else if (e <= o[0])
-    a = o[1];
-  else if (e >= s[0])
-    a = s[1];
-  else {
-    a = s[1];
-    for (let l = 0; l < n.length - 1; l++) {
-      const r = n[l], p = n[l + 1];
-      if (!r || !p) continue;
-      const [h, m] = r, [_, g] = p;
-      if (h <= e && e <= _) {
-        a = m + (g - m) * (e - h) / (_ - h);
-        break;
-      }
-    }
-  }
-  return t !== void 0 && (a = Math.max(a, t)), i !== void 0 && (a = Math.min(a, i)), a;
+  return ni(n, e, 100, t, i);
 }
 function ot(n, e, t) {
   const i = Z(n, U, e, t), o = Z(n, W, e, t);
@@ -1361,10 +1341,27 @@ function vt(n) {
   }
   return [...e].sort((t, i) => t[0] - i[0]);
 }
-var oi = Object.defineProperty, ni = (n, e, t, i) => {
+function oi(n, e) {
+  const t = n[0], i = n[n.length - 1];
+  if (!t || !i) return 0;
+  if (e <= t[0]) return t[1];
+  if (e >= i[0]) return i[1];
+  for (let o = 0; o < n.length - 1; o++) {
+    const s = n[o], a = n[o + 1];
+    if (!s || !a) continue;
+    const [l, r] = s, [p, h] = a;
+    if (l <= e && e <= p) return r + (h - r) * (e - l) / (p - l);
+  }
+  return i[1];
+}
+function ni(n, e, t = 100, i, o) {
+  let s = oi(n, e) * t / 100;
+  return i !== void 0 && (s = Math.max(s, i)), o !== void 0 && (s = Math.min(s, o)), s;
+}
+var si = Object.defineProperty, ai = (n, e, t, i) => {
   for (var o = void 0, s = n.length - 1, a; s >= 0; s--)
     (a = n[s]) && (o = a(e, t, o) || o);
-  return o && oi(e, t, o), o;
+  return o && si(e, t, o), o;
 };
 const F = 150, j = 44, ue = 6, nt = 6, Ie = class Ie extends k {
   render() {
@@ -1443,14 +1440,14 @@ Ie.styles = X`
     }
   `;
 let ge = Ie;
-ni([
+ai([
   y({ attribute: !1 })
 ], ge.prototype, "curve");
 Y("imc-curve-sparkline", ge);
-var si = Object.defineProperty, C = (n, e, t, i) => {
+var ri = Object.defineProperty, C = (n, e, t, i) => {
   for (var o = void 0, s = n.length - 1, a; s >= 0; s--)
     (a = n[s]) && (o = a(e, t, o) || o);
-  return o && si(e, t, o), o;
+  return o && ri(e, t, o), o;
 };
 const we = 320, z = 170, ee = 34, st = 12, te = 16, A = 24, pe = 5, ze = 40, De = class De extends k {
   constructor() {
@@ -1859,10 +1856,10 @@ C([
   w()
 ], $.prototype, "_points");
 Y("imc-curve-editor", $);
-var ai = Object.defineProperty, P = (n, e, t, i) => {
+var li = Object.defineProperty, P = (n, e, t, i) => {
   for (var o = void 0, s = n.length - 1, a; s >= 0; s--)
     (a = n[s]) && (o = a(e, t, o) || o);
-  return o && ai(e, t, o), o;
+  return o && li(e, t, o), o;
 };
 const bt = {
   idle: "mdi:water-outline",
@@ -1872,8 +1869,8 @@ const bt = {
   paused: "mdi:pause-circle-outline",
   suspended: "mdi:calendar-remove-outline",
   disabled: "mdi:water-off-outline"
-}, ri = [1, 4, 8, 24];
-function li(n) {
+}, ci = [1, 4, 8, 24];
+function di(n) {
   return n in bt;
 }
 const Oe = class Oe extends k {
@@ -1882,7 +1879,7 @@ const Oe = class Oe extends k {
   }
   get _zoneState() {
     const e = this.zone?.state?.state;
-    return e && li(e) ? e : void 0;
+    return e && di(e) ? e : void 0;
   }
   _dispatch(e) {
     this.dispatchEvent(
@@ -2011,7 +2008,7 @@ const Oe = class Oe extends k {
           <option value="" disabled selected hidden>
             ${c(t, "controls.pause_for")}
           </option>
-          ${ri.map(
+          ${ci.map(
       (r) => u`<option value=${r}>
               ${c(t, "controls.hours", { hours: r })}
             </option>`
@@ -2425,10 +2422,10 @@ P([
   w()
 ], S.prototype, "_editingCycle");
 Y("imc-zone-row", S);
-var ci = Object.defineProperty, Pe = (n, e, t, i) => {
+var ui = Object.defineProperty, Pe = (n, e, t, i) => {
   for (var o = void 0, s = n.length - 1, a; s >= 0; s--)
     (a = n[s]) && (o = a(e, t, o) || o);
-  return o && ci(e, t, o), o;
+  return o && ui(e, t, o), o;
 };
 const qe = class qe extends k {
   constructor() {
@@ -2519,18 +2516,18 @@ Pe([
   y({ type: Boolean })
 ], K.prototype, "hasPauseSwitch");
 Y("imc-global-controls", K);
-var di = Object.defineProperty, ye = (n, e, t, i) => {
+var pi = Object.defineProperty, ye = (n, e, t, i) => {
   for (var o = void 0, s = n.length - 1, a; s >= 0; s--)
     (a = n[s]) && (o = a(e, t, o) || o);
-  return o && di(e, t, o), o;
+  return o && pi(e, t, o), o;
 };
-const ui = [
+const hi = [
   "idle",
   "evaluating",
   "running"
 ];
-function pi(n) {
-  return !!n && ui.includes(n);
+function mi(n) {
+  return !!n && hi.includes(n);
 }
 const Re = class Re extends k {
   constructor() {
@@ -2718,7 +2715,7 @@ const Re = class Re extends k {
         </div>
       `;
     }
-    const l = i.weightedTemp, r = R(l) ? void 0 : f(l?.state), p = l?.attributes.stale_weather === !0, h = i.session?.state, m = pi(h) ? h : void 0, _ = i.pauseSwitch?.state === "on", g = R(i.consumptionLeft) ? void 0 : f(i.consumptionLeft?.state);
+    const l = i.weightedTemp, r = R(l) ? void 0 : f(l?.state), p = l?.attributes.stale_weather === !0, h = i.session?.state, m = mi(h) ? h : void 0, _ = i.pauseSwitch?.state === "on", g = R(i.consumptionLeft) ? void 0 : f(i.consumptionLeft?.state);
     return u`
       <div class="header">
         ${a}
@@ -3002,12 +2999,12 @@ ye([
   w()
 ], L.prototype, "_error");
 Y("irrigation-maestro-card", L);
-var hi = Object.defineProperty, yt = (n, e, t, i) => {
+var _i = Object.defineProperty, yt = (n, e, t, i) => {
   for (var o = void 0, s = n.length - 1, a; s >= 0; s--)
     (a = n[s]) && (o = a(e, t, o) || o);
-  return o && hi(e, t, o), o;
+  return o && _i(e, t, o), o;
 };
-const mi = [
+const gi = [
   { key: "show_header", label: "editor.show_header", fallback: !0 },
   { key: "show_queue", label: "editor.show_queue", fallback: !0 },
   { key: "show_controls", label: "editor.show_controls", fallback: !0 },
@@ -3058,7 +3055,7 @@ const mi = [
           />
         </label>
 
-        ${mi.map(
+        ${gi.map(
       ({ key: a, label: l, fallback: r }) => u`
             <label class="toggle">
               <input

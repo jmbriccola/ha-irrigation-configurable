@@ -1,12 +1,13 @@
 import { css, html, LitElement, nothing } from "lit";
 import type { TemplateResult } from "lit";
 import { property, state } from "lit/decorators.js";
-import { WEEKDAYS, effectiveMinutes, toggleWeekday, weekdayLabels } from "../schedule-math";
+import { WEEKDAYS, previewMinutes, toggleWeekday, weekdayLabels } from "../schedule-math";
 import "./calendar-editor";
 import { type CalendarConfig } from "./calendar-editor";
 import { localize, pickLanguage } from "../localize/localize";
+import { pointsFromSemantic } from "../curve-math";
 import { clamp, defineElement } from "../types";
-import type { HomeAssistant } from "../types";
+import type { CycleInfo, HomeAssistant } from "../types";
 
 /**
  * The 3-step "add program" wizard (spec §1.3, mockup `wizard-advanced`):
@@ -50,6 +51,17 @@ const DEFAULT_MINUTES = 15;
 const DEFAULT_HEAT = 8;
 const DEFAULT_CURVE_MIN = 1;
 const DEFAULT_CURVE_MAX = 60;
+
+// The draft's curve shape — `add_program` always writes exactly this curve
+// for a fresh program, so the wizard's live preview evaluates the same
+// points the backend will actually save.
+const DRAFT_CYCLE: Partial<CycleInfo> = {
+  curve: {
+    points: pointsFromSemantic(DEFAULT_MINUTES, DEFAULT_HEAT),
+    min: DEFAULT_CURVE_MIN,
+    max: DEFAULT_CURVE_MAX,
+  },
+};
 
 // Bounds mirror the backend service schemas (same as program-editor.ts).
 const MIN_MINUTES = 1;
@@ -394,13 +406,7 @@ export class ImcProgramWizard extends LitElement {
     const dayName = new Date().toLocaleDateString(lang === "it" ? "it-IT" : "en-US", {
       weekday: "long",
     });
-    const min = effectiveMinutes(
-      this._minutes,
-      DEFAULT_HEAT,
-      t,
-      DEFAULT_CURVE_MIN,
-      DEFAULT_CURVE_MAX,
-    );
+    const min = previewMinutes(DRAFT_CYCLE, this._minutes, t);
     return html`<div class="done">
       ${localize(lang, "wizard.done_prefix")}
       ${localize(lang, "panel.weather_line", { day: dayName, min })}

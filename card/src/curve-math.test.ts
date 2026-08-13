@@ -2,9 +2,13 @@ import { describe, expect, it } from "vitest";
 import {
   curveValue,
   pointsFromSemantic,
+  previewFromMinutes,
   roundHalfEven,
+  scaledValue,
   semanticFromPoints,
+  validatePoints,
 } from "./curve-math";
+import type { CurvePoint } from "./curve-math";
 
 describe("pointsFromSemantic (parity with engine/semantic.py)", () => {
   it("matches the Python reference table", () => {
@@ -99,5 +103,65 @@ describe("curveValue", () => {
         30,
       ),
     ).toBe(30);
+  });
+});
+
+describe("scaledValue", () => {
+  const points: CurvePoint[] = [
+    [10, 10],
+    [25, 20],
+    [35, 32],
+  ];
+
+  it("applies the intensity before the clamps, like the engine", () => {
+    // raw 20 at the reference, 150% -> 30, inside the clamps.
+    expect(scaledValue(points, 25, 150, 1, 60)).toBeCloseTo(30);
+    // A floor must not be scaled with the value it guards: raw 10 at 50%
+    // is 5, floored back up to the unscaled minimum.
+    expect(scaledValue(points, 10, 50, 10, 60)).toBeCloseTo(10);
+  });
+
+  it("defaults to an unscaled curve", () => {
+    expect(scaledValue(points, 25, 100)).toBeCloseTo(20);
+  });
+});
+
+describe("previewFromMinutes", () => {
+  const points: CurvePoint[] = [
+    [10, 10],
+    [25, 20],
+    [35, 32],
+  ];
+
+  it("reproduces the requested minutes at the reference", () => {
+    expect(previewFromMinutes(points, 30, 25, 1, 60)).toBe(30);
+  });
+
+  it("keeps the curve's shape at other temperatures", () => {
+    // 30 minutes asked at 25 C is a factor of 1.5; raw 32 at 35 C -> 48.
+    expect(previewFromMinutes(points, 30, 35, 1, 60)).toBe(48);
+  });
+
+  it("returns 0 rather than dividing by a curve worth nothing", () => {
+    expect(previewFromMinutes([[25, 0]], 20, 30)).toBe(0);
+  });
+});
+
+describe("validatePoints", () => {
+  it("accepts a valid multi-point curve", () => {
+    expect(validatePoints([[5, 1], [25, 20], [40, 55]])).toBeNull();
+  });
+
+  it("rejects an empty curve", () => {
+    expect(validatePoints([])).toBe("curve_empty");
+  });
+
+  it("rejects a negative value", () => {
+    expect(validatePoints([[25, -1]])).toBe("curve_negative_value");
+  });
+
+  it("rejects temperatures that do not strictly increase", () => {
+    expect(validatePoints([[25, 10], [25, 12]])).toBe("curve_temps_not_increasing");
+    expect(validatePoints([[30, 10], [25, 12]])).toBe("curve_temps_not_increasing");
   });
 });

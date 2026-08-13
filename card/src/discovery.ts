@@ -161,6 +161,16 @@ export function readCycles(zone: ZoneBundle): CycleInfo[] {
     }
     info.amount = asNumber(c["amount"]);
     info.heat = asNumber(c["heat"]);
+    info.intensity_pct = asNumber(c["intensity_pct"]);
+    const di = c["day_intensity_pct"];
+    if (di && typeof di === "object") {
+      const map: Record<string, number> = {};
+      for (const [k, v] of Object.entries(di as Record<string, unknown>)) {
+        const n = asNumber(v);
+        if (n !== undefined) map[k] = n;
+      }
+      info.day_intensity_pct = map;
+    }
     out.push(info);
   }
   return out;

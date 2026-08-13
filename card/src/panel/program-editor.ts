@@ -4,8 +4,8 @@ import { property, state } from "lit/decorators.js";
 import {
   WEEKDAYS,
   dayBase,
-  effectiveMinutes,
   isUniform,
+  previewMinutes,
   toggleWeekday,
   weekdayLabels,
 } from "../schedule-math";
@@ -382,9 +382,18 @@ export class ImcProgramEditor extends LitElement {
     }
     this._startAt = trigger?.at ?? trigger?.time ?? "06:00";
 
-    this._uniformMinutes = asNumber(cycle.amount) ?? DEFAULT_MINUTES;
-    this._dayMinutes = cycle.day_minutes ? { ...cycle.day_minutes } : {};
-    this._sameForAll = isUniform(cycle.day_minutes);
+    // The reference-temperature minutes, computed from the real curve and
+    // the uniform intensity (day overrides ignored — this seeds the "same
+    // for all" control, not any particular day).
+    this._uniformMinutes = cycle.curve
+      ? dayBase({ curve: cycle.curve, intensity_pct: cycle.intensity_pct }, 0)
+      : DEFAULT_MINUTES;
+    this._dayMinutes = cycle.day_intensity_pct
+      ? Object.fromEntries(
+          Object.keys(cycle.day_intensity_pct).map((wd) => [wd, dayBase(cycle, Number(wd))]),
+        )
+      : {};
+    this._sameForAll = isUniform(cycle.day_intensity_pct);
   }
 
   protected override render(): TemplateResult {
@@ -580,7 +589,8 @@ export class ImcProgramEditor extends LitElement {
       </div>`;
     }
     return html`${this._activeDays.map((wd) => {
-      const value = dayBase({ amount: this._uniformMinutes, day_minutes: this._dayMinutes }, wd);
+      // The saved per-day value until the user overrides it in this session.
+      const value = this._dayMinutes[String(wd)] ?? dayBase(this.cycle ?? {}, wd);
       return html`<div class="duration-row">
         <span class="dname">${labels[wd] ?? ""}</span>
         ${this._stepper(
@@ -631,18 +641,13 @@ export class ImcProgramEditor extends LitElement {
 
     // Base comes from the WORKING (unsaved) state, not the saved `cycle`
     // prop, so the preview moves live as the user drags a stepper —
-    // matching the wizard's live preview (program-wizard.ts).
+    // matching the wizard's live preview (program-wizard.ts). The real
+    // curve is evaluated at `t`, so the preview cannot diverge from what
+    // the engine will actually deliver.
     const base = this._sameForAll
       ? this._uniformMinutes
-      : dayBase({ amount: this._uniformMinutes, day_minutes: this._dayMinutes }, today);
-    const heat = asNumber(cycle.heat) ?? 8;
-    const min = effectiveMinutes(
-      base,
-      heat,
-      t,
-      asNumber(cycle.curve?.min),
-      asNumber(cycle.curve?.max),
-    );
+      : (this._dayMinutes[String(today)] ?? this._uniformMinutes);
+    const min = previewMinutes(cycle, base, t);
     const dayName = new Date().toLocaleDateString(lang === "it" ? "it-IT" : "en-US", {
       weekday: "long",
     });
@@ -654,10 +659,7 @@ export class ImcProgramEditor extends LitElement {
   private _buildDayMinutes(): Record<string, number> {
     const map: Record<string, number> = {};
     for (const wd of this._activeDays) {
-      map[String(wd)] = dayBase(
-        { amount: this._uniformMinutes, day_minutes: this._dayMinutes },
-        wd,
-      );
+      map[String(wd)] = this._dayMinutes[String(wd)] ?? dayBase(this.cycle ?? {}, wd);
     }
     return map;
   }
