@@ -4,6 +4,35 @@ All notable changes to this project are documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/).
 
+## [3.2.0] - 2026-08-14
+
+### Flow sensors are read in the unit they declare
+
+- **Automatic conversion.** A meter reporting m³/h, L/h, gal/min or any other
+  unit `VolumeFlowRateConverter` handles is now converted on the way in.
+  Previously every reading was treated as L/min whatever the sensor declared,
+  so an m³/h meter undercounted litres by a factor of 1000/60 ≈ 16.7.
+- **L/min stays canonical** throughout the engine — `nominal_flow_lpm`,
+  tolerances, accumulated litres, volume targets, the monthly counter and the
+  anomaly messages. Conversion happens at one boundary, on read.
+- **An explicit unit per sensor**, on the zone and on the hub's line meter,
+  for a sensor that declares nothing or declares something unconvertible. The
+  detected unit is offered as the default, the override wins over it, and the
+  panel states which one is in use.
+- **No silent assumption.** A meter whose unit cannot be determined has its
+  readings ignored rather than guessed: volume mode and flow anomaly detection
+  switch off for it, consumption falls back to nominal flow × minutes, and a
+  Repairs issue names the sensor. In particular the zero-flow guard stands
+  down instead of firing — otherwise every run on such a meter would have been
+  interrupted.
+- **A unit that changes at runtime** is picked up on the next read. If it
+  becomes unresolvable mid-cycle the litres freeze at the last certain value
+  and the cycle finishes on its timeout, without a crash or an interruption.
+- **Upgrading with a non-L/min meter**: a Repairs notice names the sensors and
+  explains that the current period's consumption total is understated and will
+  be correct from the next period. The stored counter is deliberately not
+  rewritten — see the release notes.
+
 ## [3.1.0] - 2026-08-13
 
 ### Notifications are configured, not guessed

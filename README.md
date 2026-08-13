@@ -194,12 +194,13 @@ and the UI (zone attributes + card badges) declares it:
 
 | Feature | Requires | Without it |
 |---|---|---|
-| Volume mode (liters target) | Flow meter (zone or line) | Cycle runs as a plain duration cycle for its safety-timeout minutes; volume mode not offered in the flow |
-| Flow anomalies (leak, no-flow, out-of-range) | Flow meter | No flow diagnostics; time-based watering only |
+| Flow readings in the right scale | A meter that declares a convertible unit, or an explicit unit override | Readings are ignored entirely rather than assumed to be L/min: volume mode and flow anomalies are off for that meter and consumption falls back to nominal flow × minutes, with a Repairs issue naming the sensor |
+| Volume mode (liters target) | Flow meter (zone or line) whose unit can be determined | Cycle runs as a plain duration cycle for its safety-timeout minutes; volume mode not offered in the flow |
+| Flow anomalies (leak, no-flow, out-of-range) | Flow meter whose unit can be determined | No flow diagnostics; time-based watering only |
 | Out-of-range diagnosis per zone | Per-zone nominal flow rates | With a shared line meter the expected range is the **sum of nominal flows of the open zones** (± tolerance); if any open zone lacks a nominal rate, range checks are skipped. A line meter cannot tell *which* zone misbehaves |
 | Position feedback, open/close confirmation | `valve` entity | `switch` zones run **optimistically**: commands are assumed to actuate after a short configurable delay; surveillance still reacts to state changes, but a stuck-open head cannot be detected — the watchdog and (if present) flow meter are the remaining guards |
 | Hourly rain staging, hourly forecast precision | Weather provider with hourly forecast | Falls back to `daily` forecast with a conservative prorated estimate; stage-and-commit disabled |
-| Measured consumption | Flow meter | Consumption estimated as nominal flow × minutes (needs nominal flow; otherwise not tracked) |
+| Measured consumption | Flow meter whose unit can be determined | Consumption estimated as nominal flow × minutes (needs nominal flow; otherwise not tracked) |
 | Rain measured | Rain sensor (daily mm) | Stage-and-commit forecast estimation (above) |
 | Card auto-install | Lovelace storage mode | Manual resource registration (documented above) |
 

@@ -20,8 +20,9 @@ rigorose sulle valvole. Tutto si configura dall'interfaccia, senza YAML.
    giorni, all'alba) che poi rifinisci — orario o evento solare, giorni e
    durata sulla griglia settimanale, e la curva temperatura→durata con
    l'editor a punti di controllo (aggiungi, rimuovi, trascina o digita).
-   Ordine, cadenza e gli altri dettagli della zona si trovano in
-   **✎ Modifica zona → Avanzate**.
+   Ordine, cadenza, il flussometro con la sua unità (rilevata
+   automaticamente, sovrascrivibile) e gli altri dettagli della zona si
+   trovano in **✎ Modifica zona → Avanzate**.
 5. **Configura le notifiche** in **⚙️ Impostazioni → Notifiche**: la
    procedura guidata propone come destinatari i servizi `notify.*` che
    l'istanza ha già, con un invio di prova, e come eventi i quattro che un

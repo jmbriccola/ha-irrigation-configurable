@@ -232,6 +232,29 @@ details harvested from it (kept as engine behaviour):
   `Notifier` then invoked as `notify.notify.mobile_app_phone` — a third silent
   exit next to the two in the brief. Normalising on read repairs existing
   configurations without a migration; do not remove either half.
+- **L/min is canonical and `flow.py` is the only converter (3.2.0).** Every
+  flow number in the engine is litres per minute; conversion happens once, on
+  read, so no downstream code sees a foreign unit or has to know one exists.
+  Do not convert anywhere else, and do not add a second canonical unit.
+- **An unknown unit disables the zero-flow guard rather than tripping it
+  (3.2.0).** `FlowMonitor._periodic_check` interrupts a cycle when fewer than
+  `ZERO_FLOW_EPSILON_L` litres accrue in the grace window. A monitor that
+  cannot accumulate would therefore have interrupted every run on a meter
+  whose unit is unresolvable — turning a reporting gap into an outage. An
+  unresolvable unit degrades exactly like a missing meter, at every point
+  where a missing meter is already handled.
+- **`zone_has_flow_meter` stays configuration-only; `zone_flow_meter_usable`
+  reads live state (3.2.0).** The services that create a volume curve use the
+  first, so an edit cannot fail because a sensor was momentarily unavailable.
+  Plan time and the zone's declared status use the second, where the
+  consequence is a degraded run rather than a refused edit. Do not merge them.
+- **The consumption counter was not rescaled for existing installs (3.2.0).**
+  It is monthly and resets at period start, so the distortion self-heals
+  within 31 days; and the accumulated total mixes litres measured through the
+  meter with litres estimated as nominal × minutes, which the defect never
+  touched. Applying one factor to the whole total would be exactly the
+  plausible-but-false number this feature removes. A Repairs notice states the
+  scale change instead.
 
 ## Progress log
 
