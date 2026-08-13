@@ -65,6 +65,21 @@ describe("effectiveFlowUnit", () => {
   it("treats an empty override as no override", () => {
     expect(effectiveFlowUnit("", "L/min")).toEqual({ unit: "L/min", source: "detected" });
   });
+
+  it("ignores an override the converter cannot handle, like the backend does", () => {
+    // import_config validates a zone only through ZoneConfig.from_subentry,
+    // which never checks this field, so a hand-edited payload really can
+    // store "widgets/s". flow.py then ignores it and uses the declared unit.
+    // Claiming the override won would be the panel contradicting the engine.
+    expect(effectiveFlowUnit("widgets/s", "m³/h")).toEqual({ unit: "m³/h", source: "detected" });
+  });
+
+  it("reports unknown when an unusable override is all there is", () => {
+    expect(effectiveFlowUnit("widgets/s", undefined)).toEqual({
+      unit: undefined,
+      source: "unknown",
+    });
+  });
 });
 
 describe("flowUnitNote", () => {

@@ -645,6 +645,63 @@ async def test_a_meter_with_a_convertible_unit_is_not_degraded(
     assert "flow_unit_unknown" not in state.attributes["degraded"]
 
 
+async def test_a_meter_that_appears_after_setup_stops_reading_as_degraded(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    """A restart must not leave a good meter accused of having no unit.
+
+    Zone entities do not poll and re-render only on SIGNAL_UPDATE, so with
+    nothing watching the flow sensor a zone kept showing flow_unit_unknown
+    (and volume_mode_unavailable) until some unrelated dispatch happened to
+    fire. The false signal is exactly what this feature exists to remove.
+    """
+    freezer.move_to(START)
+    park = MockValvePark(hass)
+    park.add("valve.a")
+    mock_weather(hass)
+    entry = await setup_hub(
+        hass,
+        [
+            zone_data(
+                "Alpha",
+                "valve.a",
+                flow_sensor="sensor.flow",
+                cycles=[
+                    {
+                        "id": "cy_alpha",
+                        "name": "Morning",
+                        "enabled": True,
+                        "trigger": {"kind": "time", "at": "05:30"},
+                        "curve": {
+                            "points": [[20.0, 40.0]],
+                            "min_value": 1.0,
+                            "max_value": 200.0,
+                            "kind": "volume",
+                        },
+                    }
+                ],
+            )
+        ],
+    )
+    zone_id = entry.runtime_data.zone_ids[0]
+
+    # No state for the meter yet: the zone rightly reports both.
+    before = role_state(hass, "zone_state", zone_id)
+    assert before is not None
+    assert "flow_unit_unknown" in before.attributes["degraded"]
+    assert "volume_mode_unavailable" in before.attributes["degraded"]
+
+    # The meter turns up, declaring a unit the converter handles. No unrelated
+    # dispatch, no reload -- the zone must re-render on the sensor itself.
+    hass.states.async_set("sensor.flow", "0.45", {"unit_of_measurement": "m³/h"})
+    await hass.async_block_till_done()
+
+    after = role_state(hass, "zone_state", zone_id)
+    assert after is not None
+    assert "flow_unit_unknown" not in after.attributes["degraded"]
+    assert "volume_mode_unavailable" not in after.attributes["degraded"]
+
+
 async def test_a_zone_with_an_empty_flow_sensor_falls_through_to_the_line_meter(
     hass: HomeAssistant, freezer: FrozenDateTimeFactory
 ) -> None:
