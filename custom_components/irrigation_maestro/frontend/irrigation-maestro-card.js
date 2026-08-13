@@ -872,6 +872,8 @@ const M = {
   "notify.step_events": "What to send",
   "notify.step_summary": "Confirm",
   "notify.no_recipients": "This instance has no notify service yet. Set one up first — the companion app, Telegram, e-mail — and it will appear here.",
+  "notify.recipient_gone": "no longer exists",
+  "notify.recipient_gone_hint": "A recipient marked as no longer existing is still stored and is still written back on every save. Uncheck it to remove it.",
   "notify.send_test": "Send a test",
   // "Sent", not "Delivered": the service learns only that notify.<service>
   // accepted the call without raising — a push can still die downstream.
@@ -1191,6 +1193,8 @@ const M = {
   "notify.step_events": "Cosa inviare",
   "notify.step_summary": "Conferma",
   "notify.no_recipients": "Questa istanza non ha ancora nessun servizio notify. Configurane uno — l'app companion, Telegram, l'e-mail — e comparirà qui.",
+  "notify.recipient_gone": "non esiste più",
+  "notify.recipient_gone_hint": "Un destinatario indicato come non più esistente resta memorizzato e viene riscritto a ogni salvataggio. Deselezionalo per rimuoverlo.",
   "notify.send_test": "Invia prova",
   "notify.test_ok": "Inviata",
   "notify.test_failed": "Non consegnata: {error}",
