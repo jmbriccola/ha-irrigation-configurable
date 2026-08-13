@@ -33,7 +33,7 @@ from .const import (
 from .engine.curves import CurveKind, curve_value
 from .engine.evaluate import evaluate_session
 from .engine.model import SessionEvaluation, SkipReason
-from .engine.planner import PlannedRun, build_session_plan, resolve_day_curve
+from .engine.planner import PlannedRun, build_session_plan
 from .engine.scheduling import split_soak
 from .models import CycleConfig, HubConfig, ZoneConfig
 from .notify import (
@@ -566,11 +566,11 @@ class IrrigationRuntime:
                 # cycle's safety timeout instead of misreading the target.
                 duration_min = cycle.volume_safety_timeout_min or 10
             elif cycle is not None and evaluation.weighted_temp is not None:
-                day_curve = resolve_day_curve(
-                    cycle.curve, cycle.day_minutes, dt_util.now().weekday()
-                )
+                # TODO(later task): fold cycle.intensity_pct in here once the
+                # config layer exposes it; resolve_day_curve is gone (engine
+                # no longer rebuilds a three-anchor curve from day minutes).
                 duration_min = max(
-                    round(curve_value(day_curve, evaluation.weighted_temp, zone.adjustment_pct)),
+                    round(curve_value(cycle.curve, evaluation.weighted_temp, zone.adjustment_pct)),
                     1,
                 )
             else:

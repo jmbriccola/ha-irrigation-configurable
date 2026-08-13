@@ -114,6 +114,13 @@ CONF_CURVE_MIN: Final = "min_value"
 CONF_CURVE_MAX: Final = "max_value"
 CONF_CURVE_KIND: Final = "kind"
 CONF_CURVE_TEMPLATE: Final = "template"
+CONF_CYCLE_INTENSITY_PCT: Final = "intensity_pct"
+CONF_CYCLE_DAY_INTENSITY_PCT: Final = "day_intensity_pct"
+
+#: Temperature the quick minutes control converts against: "N minutes" means
+#: N minutes at this temperature, expressed as a percentage of the curve's
+#: raw value there.
+CURVE_REFERENCE_TEMP_C: Final = 25.0
 CONF_SOAK_MAX_RUN_MIN: Final = "soak_max_run_min"
 CONF_SOAK_PAUSE_MIN: Final = "soak_pause_min"
 CONF_VOLUME_SAFETY_TIMEOUT_MIN: Final = "volume_safety_timeout_min"

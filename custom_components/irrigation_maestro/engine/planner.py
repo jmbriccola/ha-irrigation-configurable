@@ -16,7 +16,6 @@ from .calendar import ProgramCalendar, calendar_allows
 from .curves import Curve, CurveKind, curve_value
 from .model import EngineParams, SessionEvaluation, SkipReason
 from .scheduling import split_soak
-from .semantic import ANCHORS, points_from_semantic
 
 _DEFAULT_VOLUME_TIMEOUT_MIN = 30
 
@@ -34,7 +33,8 @@ class CycleSpec:
     soak_max_run_min: int | None = None
     soak_pause_min: int = 0
     volume_safety_timeout_min: int | None = None
-    day_minutes: dict[int, int] = field(default_factory=dict)
+    intensity_pct: float = 100.0
+    day_intensity_pct: dict[int, float] = field(default_factory=dict)
 
 
 @dataclass(frozen=True, slots=True)
@@ -51,24 +51,6 @@ class ZoneSpec:
     skip_today: bool
     has_flow_meter: bool
     cycles: tuple[CycleSpec, ...]
-
-
-def resolve_day_curve(curve: Curve, day_minutes: dict[int, int], weekday: int) -> Curve:
-    """The curve to use today: a per-day base rebuilt via the semantic mapping,
-    or the original curve unchanged (legacy path — keeps §8 identical)."""
-    if curve.kind is CurveKind.VOLUME:
-        return curve  # per-day minutes is a duration concept
-    base = day_minutes.get(weekday)
-    if base is None:
-        return curve
-    _cool, mild, hot = ANCHORS
-    heat = round(curve_value(curve, hot) - curve_value(curve, mild))
-    return Curve(
-        points=points_from_semantic(base, heat),
-        min_value=curve.min_value,
-        max_value=curve.max_value,
-        kind=curve.kind,
-    )
 
 
 @dataclass(frozen=True, slots=True)
@@ -142,8 +124,12 @@ def _cycle_target(
     into the time domain — soak splits, truncation and watchdog all reason
     in minutes).
     """
-    day_curve = resolve_day_curve(cycle.curve, cycle.day_minutes, weekday)
-    value = curve_value(day_curve, weighted_temp, zone.adjustment_pct)
+    # The intensity scales the configured curve instead of replacing it, so a
+    # curve keeps every control point the user authored. It rides the same
+    # adjustment argument curve_value already applies before its clamps, which
+    # fixes the order: curve -> zone adjustment -> intensity -> clamps.
+    factor = cycle.day_intensity_pct.get(weekday, cycle.intensity_pct)
+    value = curve_value(cycle.curve, weighted_temp, zone.adjustment_pct * factor / 100.0)
     target = max(round(value * duration_factor), 1)
     if cycle.curve.kind is CurveKind.VOLUME:
         timeout = cycle.volume_safety_timeout_min or _DEFAULT_VOLUME_TIMEOUT_MIN

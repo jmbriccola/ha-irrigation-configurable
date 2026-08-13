@@ -157,7 +157,9 @@ class CycleConfig:
             soak_max_run_min=self.soak_max_run_min,
             soak_pause_min=self.soak_pause_min,
             volume_safety_timeout_min=self.volume_safety_timeout_min,
-            day_minutes=self.day_minutes,
+            # TODO(later task): wire intensity_pct / day_intensity_pct through
+            # from config once the config layer exposes them; the engine no
+            # longer accepts day_minutes (see planner.CycleSpec).
         )
 
 

@@ -17,8 +17,8 @@ from custom_components.irrigation_maestro.engine.model import (
 from custom_components.irrigation_maestro.engine.planner import (
     CycleSpec,
     ZoneSpec,
+    _cycle_target,
     build_session_plan,
-    resolve_day_curve,
 )
 
 PARAMS = EngineParams()
@@ -52,6 +52,8 @@ def make_cycle(cycle_id="c1", **overrides):
         soak_max_run_min=None,
         soak_pause_min=0,
         volume_safety_timeout_min=None,
+        intensity_pct=100.0,
+        day_intensity_pct={},
     )
     defaults.update(overrides)
     return CycleSpec(**defaults)
@@ -82,37 +84,6 @@ def plan(zones, evaluation=WATER_EVAL, now=NOW, factor=1.0):
         now=now,
         duration_factor=factor,
     )
-
-
-_DAY_CURVE = Curve(points=((12.0, 0.0), (25.0, 10.0), (35.0, 20.0)), min_value=0.0, max_value=60.0)
-
-
-class TestPerDayDuration:
-    def test_day_minutes_override_rebuilds_curve(self):
-        # Friday base 20' at 25C, heat of the curve = 20-10 = 10.
-        # points_from_semantic(20, 10) -> (12,7),(25,20),(35,30); at 31C -> 26.
-        cycle = make_cycle(curve=_DAY_CURVE, day_minutes={4: 20})
-        result = plan([make_zone(cycles=(cycle,))])
-        assert result.runs[0].duration_min == 26
-
-    def test_missing_weekday_falls_back_to_curve(self):
-        # No Friday entry -> legacy path: curve at 31C -> 16.
-        cycle = make_cycle(curve=_DAY_CURVE, day_minutes={0: 20})
-        result = plan([make_zone(cycles=(cycle,))])
-        assert result.runs[0].duration_min == 16
-
-    def test_volume_ignores_day_minutes(self):
-        vol_curve = Curve(
-            points=((12.0, 0.0), (25.0, 10.0), (35.0, 20.0)),
-            min_value=0.0,
-            max_value=60.0,
-            kind=CurveKind.VOLUME,
-        )
-        # day_minutes never converts liters to duration; resolver returns unchanged.
-        assert resolve_day_curve(vol_curve, {4: 20}, 4) is vol_curve
-
-    def test_resolve_day_curve_is_identity_without_day_minutes(self):
-        assert resolve_day_curve(_DAY_CURVE, {}, 4) is _DAY_CURVE
 
 
 class TestDurations:
@@ -358,3 +329,52 @@ class TestAggregation:
         result = plan([zone], evaluation=BUDGET_SKIP_EVAL)
         assert result.aggregate_skips()[SkipReason.BUDGET_SUFFICIENT] == ["Pots"]
         assert len(result.skipped) == 2  # but every cycle still records its outcome
+
+
+SIX_POINT = Curve(
+    points=((5.0, 4.0), (12.0, 10.0), (20.0, 18.0), (25.0, 24.0), (33.0, 40.0), (40.0, 52.0)),
+    min_value=1.0,
+    max_value=60.0,
+)
+
+
+class TestIntensity:
+    """The intensity scales the configured curve; it never replaces it."""
+
+    def _duration(self, cycle, zone_kwargs=None, weekday=4):
+        return _cycle_target(cycle, make_zone(**(zone_kwargs or {})), 33.0, 1.0, weekday)[0]
+
+    def test_uniform_intensity_scales_every_point(self) -> None:
+        # 33 C sits exactly on a control point: raw 40 min.
+        plain = self._duration(make_cycle(curve=SIX_POINT))
+        scaled = self._duration(make_cycle(curve=SIX_POINT, intensity_pct=150.0))
+        assert plain == 40
+        assert scaled == 60  # 40 * 1.5, still under the 60 ceiling
+
+    def test_per_day_intensity_overrides_the_uniform_one(self) -> None:
+        cycle = make_cycle(curve=SIX_POINT, intensity_pct=150.0, day_intensity_pct={4: 50.0})
+        assert self._duration(cycle, weekday=4) == 20  # Friday: 40 * 0.5
+        assert self._duration(cycle, weekday=3) == 60  # Thursday: 40 * 1.5
+
+    def test_the_curve_shape_survives_the_scale(self) -> None:
+        """The defect this replaces: per-day minutes rebuilt three anchors,
+        flattening everything above the hot anchor. Scaling keeps the shape,
+        so the ratio between two temperatures is unchanged."""
+        cycle = make_cycle(curve=SIX_POINT, intensity_pct=50.0)
+        zone = make_zone()
+        cold = _cycle_target(cycle, zone, 12.0, 1.0, 4)[0]
+        hot = _cycle_target(cycle, zone, 40.0, 1.0, 4)[0]
+        assert cold == 5  # 10 * 0.5
+        assert hot == 26  # 52 * 0.5
+
+    def test_intensity_composes_with_the_zone_adjustment(self) -> None:
+        cycle = make_cycle(curve=SIX_POINT, intensity_pct=50.0)
+        assert self._duration(cycle, {"adjustment_pct": 200.0}) == 40  # 40 * 0.5 * 2.0
+
+    def test_the_clamps_are_not_scaled(self) -> None:
+        """min/max are safety guards the user set; the intensity must not move
+        the guard along with the thing it guards."""
+        floored = Curve(points=((25.0, 8.0),), min_value=10.0, max_value=55.0)
+        cycle = make_cycle(curve=floored, intensity_pct=50.0)
+        # raw 8 * 0.5 = 4, floored back up to the unscaled minimum of 10.
+        assert self._duration(cycle) == 10
