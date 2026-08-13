@@ -109,8 +109,10 @@ or delete zones themselves, and a **⚙️ Impostazioni** view to edit the
 everyday hub settings (weather & sensors, consumption budget, calendar
 restrictions), all without leaving the sidebar. The HA **config flow**
 (Settings → Devices & services) remains fully available too, for the
-initial setup and for the expert engine/safety/notification parameters the
-panel doesn't expose. The dashboard card described above keeps working
+initial setup and for the expert engine-tuning parameters (the only options
+step left there — safety, notifications, restrictions and the consumption
+budget are all edited in the panel now). The dashboard card described above
+keeps working
 exactly as before — the panel is an additional, more spacious place to
 manage zones and programs, not a replacement.
 
