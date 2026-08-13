@@ -77,21 +77,25 @@ export function needsIntensityResetNotice(cycle: {
 /**
  * A point's next raw value after dragging its handle by `deltaY` SVG
  * viewBox pixels, relative to the value it had when the drag started.
- * Relative, not absolute: deriving the value from the pointer's current
- * position (rather than its movement) meant that merely touching a handle
- * whose displayed position had been pulled away from its true value by a
- * min/max clamp would silently snap the stored point to wherever the
- * clamped display happened to be. A zero-pixel drag must leave the point
- * byte-identical, which this guarantees since `deltaY * unitsPerPixel` is
- * then exactly 0. `unitsPerPixel` is `_graphTop() / (plot height in px)`,
- * frozen at drag start alongside `startValue`.
+ * Relative, not absolute: only the accumulated pixel delta is ever applied
+ * to the frozen starting value, rather than re-deriving the value from the
+ * pointer's current position on every move. `unitsPerPixel` is
+ * `_axis().top / (plot height in px)` (curve-editor.ts), itself frozen at
+ * drag start alongside `startValue`, so the pointer's sensitivity can't
+ * drift mid-drag if the axis scale changes underneath it.
+ *
+ * The `deltaY === 0` early return below is its own branch, not a side
+ * effect of the arithmetic: `roundHalfEven` runs on every OTHER move, and
+ * `deltaY * unitsPerPixel` being exactly 0 does NOT by itself keep
+ * `startValue` untouched -- `roundHalfEven(startValue - 0)` still rounds a
+ * fractional `startValue`. Without the early return, a drag that went away
+ * and came back to its exact starting height would round a fractional
+ * stored point (curves legitimately carry them -- one shipped preset has
+ * 64/3) despite zero net displacement.
  */
 export function dragValue(startValue: number, deltaY: number, unitsPerPixel: number): number {
-  // A net-zero drag must not touch startValue at all -- not even to round
-  // it. Points legitimately carry fractional values (one shipped preset
-  // has 64/3), and routing a zero displacement through roundHalfEven would
-  // silently truncate one every time its handle was merely grabbed and
-  // released back where it started.
+  // See the docblock above: this branch, not the arithmetic below, is what
+  // keeps a net-zero drag byte-identical.
   if (deltaY === 0) return startValue;
   return Math.max(0, roundHalfEven(startValue - deltaY * unitsPerPixel));
 }

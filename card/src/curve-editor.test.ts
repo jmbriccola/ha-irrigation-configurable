@@ -141,8 +141,16 @@ describe("graphAxis", () => {
     // drawn AT the floor's height (zero visible drag room). The axis must
     // now scale to the floor even though no point reaches it, so the floor
     // line -- and the true, lower position of the point -- both fit.
-    const axis = graphAxis([[12, 2]], 5, 60, HEIGHT, PAD_TOP, PAD_BOTTOM);
-    expect(axis.top).toBeGreaterThanOrEqual(60);
+    //
+    // min=50 is deliberately the ONLY candidate taller than the point (2)
+    // or the fixed 12 floor of Math.max: max=8 is smaller than min, so if
+    // `min` were dropped from graphAxis's candidates, top would come out to
+    // 16 (from the point and max alone) instead of 54. An earlier version
+    // of this test used max=60 here, which alone satisfied `top >= 60`
+    // regardless of whether `min` was ever consulted -- a mutant that
+    // deleted `min` from the candidate list still passed it.
+    const axis = graphAxis([[12, 2]], 50, 8, HEIGHT, PAD_TOP, PAD_BOTTOM);
+    expect(axis.top).toBe(54);
   });
 
   it("stretches to keep a point far above the ceiling (max) on-screen too", () => {
