@@ -29,42 +29,29 @@ dell'hub (opzioni) e nelle zone che aggiungerai.
 
 ## 2. Aggiungere le zone
 
-Dalla pagina dell'integrazione premi **Aggiungi zona** e ripeti per ogni
-circuito:
+Le zone — e i programmi di irrigazione al loro interno — si creano e si
+modificano dal pannello laterale **Irrigazione**, non dalla pagina
+dell'integrazione: la procedura completa è al §6 più sotto (il modulo
+della zona, la procedura guidata per i programmi, la griglia dei giorni e
+l'editor della curva). In breve: apri il pannello, premi **＋ Aggiungi
+zona**, dai un nome e un'entità `valve` o `switch` alla zona, e questa nasce
+già con un programma predefinito sensato (tutti i giorni, all'alba, con una
+curva di risposta al caldo di default) pronto da rifinire. I campi
+aggiuntivi della zona — flussometro, portata nominale/tolleranza, fattore di
+aggiustamento (default 100% — es. 70% per un'aiuola in ombra), ordine,
+cadenza in giorni, mesi di stagione, gruppo di compatibilità — si trovano
+dietro **✎ Modifica zona → Avanzate**. Gli ID dei programmi (cicli) sono
+stabili: storico e interruttori per ciclo sopravvivono alle modifiche.
 
-1. **Dati base**: nome, icona, entità `valve` o `switch` della zona,
-   flussometro opzionale con portata nominale (L/min) e tolleranza %,
-   superficie opzionale (m²), fattore di aggiustamento (default 100% — es.
-   70% per un'aiuola in ombra), **ordine** nella sequenza, **cadenza** in
-   giorni (default 3 — 1 = tutti i giorni), mesi di stagione e gruppo di
-   compatibilità opzionali.
-2. **Cicli** — aggiungi uno o più cicli giornalieri. Ognuno ha:
-   - un **trigger**: evento solare (alba/tramonto con offset ± in minuti) o
-     orario fisso;
-   - mesi specifici opzionali (es. ciclo serale solo giugno–agosto);
-   - una **curva** (passo successivo).
-3. **Curva** — scegli la sorgente:
-   - **Preset "vasi"**: 1 min/°C, +1 min/°C extra sopra i 30 °C, limiti
-     10–55 min.
-   - **Preset "prato"**: obiettivo mm = 4 + 0.3·(t−25) (min 3, max 8 mm) a
-     0.375 mm/min, limiti 8–25 min.
-   - **Un template salvato** (gestiti nelle opzioni dell'hub) o **copia da
-     una zona/ciclo esistente**.
-   - **Personalizzata**: punti di controllo come testo — `10:5, 25:15,
-     35:30` significa 5 min a 10 °C, 15 min a 25 °C, 30 min a 35 °C,
-     interpolazione lineare in mezzo, piatta fuori — più i limiti min/max.
-   - Tipo **durata** (minuti) o **volume** (litri — proposto solo se la zona
-     ha un flussometro utilizzabile; imposta anche il timeout di sicurezza).
-   - **Cycle-and-soak** opzionale: minuti massimi per run e pausa di
-     assorbimento (es. 10 min run / 15 min soak). Durante la pausa irrigano
-     le altre zone in coda.
-
-Tutto è modificabile in seguito: apri la zona dalla pagina dell'integrazione
-e usa **Riconfigura** (menu a tre puntini). Gli ID dei cicli sono stabili:
-storico e interruttori per ciclo sopravvivono alle modifiche.
+La curva di un programma — la relazione temperatura→durata, con i limiti
+min/max espliciti e le opzioni volume o cycle-and-soak — si rimodella dal
+vivo con l'editor a due slider (§6, e §5 per lo stesso editor sulla card).
+Una curva che richiede più di tre punti di controllo, o punti impostati per
+coordinate esatte, si imposta invece con il servizio `set_curve` (Strumenti
+per sviluppatori → Azioni; vedi l'elenco dei servizi nel README).
 
 **L'ordine delle zone** è l'entità number di ogni zona (o il servizio
-`set_zone_order`) — volutamente non c'è drag-and-drop nel flow.
+`set_zone_order`) — volutamente non c'è drag-and-drop nel pannello.
 
 ## 3. Opzioni dell'hub (Configura)
 
@@ -131,8 +118,9 @@ Modificare le curve dalla card — espandi una zona, apri un ciclo e premi
 caldo*) rimodellano l'irrigazione dal vivo: il grafico, gli esempi
 fresco/mite/caldo e la riga 'con il meteo di oggi' si aggiornano mentre
 trascini. **Avanzate** aggiunge i limiti di sicurezza *Mai meno di / Mai più
-di* e ti fa trascinare i tre punti. Le curve con più di tre punti si
-modificano nelle impostazioni della zona.
+di* e ti fa trascinare i tre punti. Le curve con più di tre punti, o
+impostate per coordinate esatte, si modificano con il servizio `set_curve`
+(Strumenti per sviluppatori → Azioni).
 
 ## 6. Il pannello "Irrigazione"
 
@@ -176,9 +164,9 @@ e le impostazioni quotidiane dell'hub, tutto in un unico posto.
 I parametri avanzati (pesi/soglie del motore, tempistiche di sicurezza,
 instradamento delle notifiche — §3 sopra) non sono nel pannello: restano nel
 menu **Configura** dell'hub (il config flow), che resta anche il modo per
-fare la **configurazione iniziale** e aggiungere la primissima zona. Il
-pannello e il config flow scrivono la stessa configurazione: usa l'uno o
-l'altro, in qualsiasi momento — non serve migrare nulla.
+fare la **configurazione iniziale** dell'hub. Le zone e i programmi, invece,
+si creano e si modificano solo dal pannello — il config flow non ha più un
+passo per le zone, quindi non c'è nulla da tenere sincronizzato.
 
 Il pannello e la card della dashboard leggono e scrivono gli stessi
 programmi: usa l'uno, l'altra, o entrambi — non serve migrare nulla. La card

@@ -27,41 +27,27 @@ hub's **Configure** menu (options) and in the zones you add next.
 
 ## 2. Add zones
 
-On the Irrigation Maestro integration page press **Add zone** and repeat per
-circuit:
+Zones — and the watering programs on them — are created and edited from the
+**Irrigazione** sidebar panel, not from this integration page; see §6 below
+for the full walkthrough (the zone form, the program wizard, the day grid
+and the curve editor). In short: open the panel, press **＋ Aggiungi zona**,
+give it a name and a `valve` or `switch` entity, and it's created with one
+sensible default program (every day, sunrise, a default heat-response curve)
+ready to refine. The extra zone fields — flow meter, nominal flow/tolerance,
+adjustment % (default 100% — e.g. 70% for a shaded bed), order, cadence in
+days, season months, compatibility group — live behind **✎ Modifica zona →
+Avanzate**. Cycle (program) IDs are stable, so history and per-cycle
+switches survive edits.
 
-1. **Basics**: name, icon, the zone's `valve` or `switch` entity, optional
-   flow meter and nominal flow (L/min) with tolerance %, optional area (m²),
-   adjustment factor (default 100% — e.g. 70% for a shaded bed), **order**
-   (position in the watering sequence), **cadence** in days (default 3 —
-   1 = every day), optional per-zone season months and compatibility group.
-2. **Cycles** — add one or more daily cycles. Each cycle has:
-   - a **trigger**: sun event (sunrise/sunset with ± offset in minutes) or a
-     fixed time;
-   - optional month override (e.g. an evening cycle only June–August);
-   - a **curve** (next step).
-3. **Curve** — choose a source:
-   - **Preset "potted plants"**: 1 min/°C, +1 extra min/°C above 30 °C,
-     clamped 10–55 min.
-   - **Preset "lawn"**: target mm = 4 + 0.3·(t−25) (min 3, max 8 mm) at
-     0.375 mm/min, clamped 8–25 min.
-   - **A saved template** (managed in the hub options) or **copy from an
-     existing zone/cycle**.
-   - **Custom**: control points as text — `10:5, 25:15, 35:30` means 5 min at
-     10 °C, 15 min at 25 °C, 30 min at 35 °C, linear in between, flat
-     outside — plus explicit min/max clamps.
-   - Kind **duration** (minutes) or **volume** (liters — only offered when
-     the zone has a usable flow meter; set the safety timeout too).
-   - Optional **cycle-and-soak**: max minutes per run and soak pause (e.g.
-     10 min run / 15 min soak). Other queued zones water during the pause.
-
-Everything is editable later: open the zone from the integration page and
-use **Reconfigure** (zones have no gear icon — reconfigure is in the
-three-dot menu). Cycle IDs are stable, so history and per-cycle switches
-survive edits.
+A program's curve — the temperature→duration mapping, with explicit min/max
+clamps and optional volume mode or cycle-and-soak — is reshaped live with
+the two-slider editor (§6, and §5 for the same editor on the card). A curve
+needing more than three control points, or set by exact coordinates, is set
+with the `set_curve` service instead (Developer tools → Actions; see the
+README's service list).
 
 **Zone order** is the number entity on each zone (or the `set_zone_order`
-service) — there is deliberately no drag-and-drop in the flow.
+service) — there is deliberately no drag-and-drop in the panel.
 
 ## 3. Hub options (Configure)
 
@@ -123,8 +109,9 @@ Editing curves from the card — expand a zone, open a cycle and press
 hot*) reshape the watering live: the graph, the cool/mild/hot examples and
 the 'with today's weather' line update as you drag. **Advanced** adds the
 *Never less than / Never more than* safety limits and lets you drag the
-three points. Curves needing more than three points are still edited in the
-zone settings.
+three points. Curves needing more than three points, or set by exact
+coordinates, use the `set_curve` service instead (Developer tools →
+Actions).
 
 ## 6. The "Irrigazione" panel
 
@@ -163,9 +150,10 @@ hub settings, all in one place.
 
 Expert parameters (engine weights/thresholds, safety timings, notification
 routing — §3 above) aren't in the panel; they stay in the hub's **Configure**
-menu (the config flow), which also remains the way to do the **initial
-setup** and add the very first zone. The panel and the config flow write the
-same configuration — use either, at any time; nothing needs to be migrated.
+menu (the config flow), which also remains the way to do the **initial hub
+setup**. Zones and programs, though, are created and edited from the panel
+only — the config flow has no zone step, so there is nothing to keep in
+sync.
 
 The panel and the dashboard card read and write the same programs — use
 either, or both; nothing needs to be migrated. The card (§5 above) keeps

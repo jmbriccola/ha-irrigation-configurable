@@ -14,11 +14,13 @@ rigorose sulle valvole. Tutto si configura dall'interfaccia, senza YAML.
    Irrigation Maestro*: scegli l'entità `weather` (Met.no va benissimo) e,
    se li hai, sensore pioggia, sensore temperatura esterna, flussometro di
    linea e valvola master/pompa.
-4. Dalla pagina dell'integrazione premi **Aggiungi zona** per ogni circuito:
-   nome, valvola (`valve` o `switch`), ordine nella sequenza, cadenza in
-   giorni (default 3), poi i cicli (alba/tramonto con offset oppure orario
-   fisso) e la curva temperatura→durata — puoi partire dai preset "vasi"
-   e "prato" già pronti.
+4. Apri il pannello **Irrigazione** nella barra laterale e premi **＋
+   Aggiungi zona** per ogni circuito: nome e valvola (`valve` o `switch`)
+   bastano per crearla, con un programma predefinito già pronto (tutti i
+   giorni, all'alba) che poi rifinisci — orario o evento solare, giorni e
+   durata sulla griglia settimanale, e la curva temperatura→durata con
+   l'editor a due slider. Ordine, cadenza e gli altri dettagli della zona si
+   trovano in **✎ Modifica zona → Avanzate**.
 
 Richiede Home Assistant **2025.7.0 o successivo**.
 

@@ -47,9 +47,10 @@ Irrigation Maestro is built around two ideas:
 - **Everything configured from the sidebar panel** after setup: zones,
   programs and their calendars, weather sources, consumption budget, forbidden
   hours, notifications, and — behind Advanced drawers — session limits, valve
-  confirmations, the watchdog and concurrency. The config flow covers first-run
-  setup, zone creation and the weather decision engine, which stays deliberately
-  out of the dashboard's reach.
+  confirmations, the watchdog and concurrency. Zones and programs are created
+  and edited exclusively there. The config flow covers only first-run hub
+  setup and the weather decision engine, which stays deliberately out of the
+  dashboard's reach.
 - **Weather engine** (§ details below) with a single forecast fetch per
   session, stage-and-commit rain estimation without a rain sensor, and a
   configurable stale-weather policy.
@@ -75,9 +76,9 @@ Irrigation Maestro is built around two ideas:
 4. Settings → Devices & services → **Add integration** → *Irrigation
    Maestro*: pick your `weather` entity (plus optional rain / temperature /
    flow sensors and master valve).
-5. On the created hub, use **Add zone** to create each irrigation circuit —
-   or skip ahead and add zones later from the **Irrigazione** sidebar panel
-   (below); both stay in sync.
+5. Zones are created from the **Irrigazione** sidebar panel (below) — open
+   it from the Home Assistant sidebar and use **＋ Aggiungi zona** for each
+   irrigation circuit.
 
 Requires Home Assistant **2025.7.0 or newer**.
 
