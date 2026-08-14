@@ -154,6 +154,23 @@ const STEP_LABEL_KEYS: readonly TranslationKey[] = [
   "notify.step_summary",
 ];
 
+/**
+ * Enter/Space on something that is not a real button.
+ *
+ * Every click-only control in this view carries `role="button"` and
+ * `tabindex="0"`, which promise a keyboard user that the two activation keys
+ * work — this is what keeps that promise. `preventDefault` stops Space from
+ * scrolling the settings page out from under the control that was just used.
+ */
+export function activateOnKey(activate: () => void): (event: KeyboardEvent) => void {
+  return (event: KeyboardEvent) => {
+    if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      activate();
+    }
+  };
+}
+
 /** An event's label, degrading to the raw key for an event this card doesn't know. */
 function eventLabel(lang: string, event: string): string {
   const key = EVENT_LABEL_KEYS[event];
@@ -663,12 +680,7 @@ export class ImcSettingsView extends LitElement {
               role="button"
               tabindex="0"
               @click=${() => setValue("")}
-              @keydown=${(e: KeyboardEvent) => {
-                if (e.key === "Enter" || e.key === " ") {
-                  e.preventDefault();
-                  setValue("");
-                }
-              }}
+              @keydown=${activateOnKey(() => setValue(""))}
               >✕ ${localize(lang, "settings.clear")}</span
             >`
           : nothing}
@@ -1183,7 +1195,11 @@ export class ImcSettingsView extends LitElement {
           const current = sameEventSet(this._selection.events, presetSelection(preset, status));
           return html`<span
             class="${current ? "sel" : ""}"
+            role="button"
+            tabindex="0"
+            aria-pressed=${current ? "true" : "false"}
             @click=${() => this._applyPreset(preset, status)}
+            @keydown=${activateOnKey(() => this._applyPreset(preset, status))}
             >${localize(lang, PRESET_LABEL_KEYS[preset])}</span
           >`;
         })}
@@ -1200,7 +1216,14 @@ export class ImcSettingsView extends LitElement {
     const open = !this._collapsedGroups.includes(group);
     const events = status.groups[group] ?? [];
     return html`
-      <div class="group-header" @click=${() => this._toggleGroup(group)}>
+      <div
+        class="group-header"
+        role="button"
+        tabindex="0"
+        aria-expanded=${open ? "true" : "false"}
+        @click=${() => this._toggleGroup(group)}
+        @keydown=${activateOnKey(() => this._toggleGroup(group))}
+      >
         ${open ? "▾" : "▸"} ${localize(lang, GROUP_LABEL_KEYS[group])}
       </div>
       ${open ? events.map((event) => this._renderEventRow(lang, event, status)) : nothing}
@@ -1226,12 +1249,20 @@ export class ImcSettingsView extends LitElement {
         <span class="seg small">
           <span
             class="${priority === "high" ? "sel" : ""}"
+            role="button"
+            tabindex="0"
+            aria-pressed=${priority === "high" ? "true" : "false"}
             @click=${() => this._setPriority(event, "high")}
+            @keydown=${activateOnKey(() => this._setPriority(event, "high"))}
             >${localize(lang, "notify.priority_high")}</span
           >
           <span
             class="${priority === "normal" ? "sel" : ""}"
+            role="button"
+            tabindex="0"
+            aria-pressed=${priority === "normal" ? "true" : "false"}
             @click=${() => this._setPriority(event, "normal")}
+            @keydown=${activateOnKey(() => this._setPriority(event, "normal"))}
             >${localize(lang, "notify.priority_normal")}</span
           >
         </span>

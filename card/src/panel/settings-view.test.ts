@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   ImcSettingsView,
+  activateOnKey,
   buildConcurrencyPatch,
   buildSessionLimitsPatch,
   buildValveSafetyPatch,
@@ -214,6 +215,42 @@ describe("the line meter's unit", () => {
       inner._setLineFlowSensor("");
     });
     expect(detail?.line_flow_sensor_unit).toBe("");
+  });
+});
+
+describe("a control that is not a real button", () => {
+  /** A keydown carrying the one method the handler is allowed to call on it. */
+  function keydown(key: string): { event: KeyboardEvent; prevented: () => boolean } {
+    let prevented = false;
+    const event = {
+      key,
+      preventDefault: () => {
+        prevented = true;
+      },
+    } as unknown as KeyboardEvent;
+    return { event, prevented: () => prevented };
+  }
+
+  it("activates on the two keys its role promises", () => {
+    // The preset chips, the priority chips and the group headers are spans and
+    // divs carrying role="button" and tabindex="0". That promise is only kept
+    // if Enter and Space actually do what a click does.
+    for (const key of ["Enter", " "]) {
+      let activated = 0;
+      const { event, prevented } = keydown(key);
+      activateOnKey(() => (activated += 1))(event);
+      expect(activated).toBe(1);
+      // Space scrolls the page otherwise, out from under the control just used.
+      expect(prevented()).toBe(true);
+    }
+  });
+
+  it("ignores every other key, so typing and tabbing still work", () => {
+    let activated = 0;
+    const { event, prevented } = keydown("Tab");
+    activateOnKey(() => (activated += 1))(event);
+    expect(activated).toBe(0);
+    expect(prevented()).toBe(false);
   });
 });
 
