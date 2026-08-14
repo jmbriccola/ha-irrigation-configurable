@@ -36,15 +36,18 @@ def test_roll_into_day_accumulates_without_mutating() -> None:
 
 
 def test_roll_into_day_accumulates_closed_l_independently_of_l() -> None:
-    """closed_l is the leak-detection input: it must track apart from l.
+    """closed_l is the leak-detection input: it must accumulate, not overwrite.
 
-    l is every litre credited to the key; closed_l is only the subset seen
-    while every managed valve reported closed.
+    Both calls contribute a nonzero, distinct closed_l (3.0, then 5.0) so an
+    overwrite bug (last-write-wins) and true accumulation would disagree --
+    overwrite would leave closed_l at 5.0, not 8.0. l is driven by a
+    different pair of values (2.0, then 9.0) so the two fields are shown to
+    track apart from one another, not just move in lockstep.
     """
-    daily = roll_into_day({}, "2026-08-14", "z1", 2.0, estimated=False, gap_s=0.0, closed_l=0.0)
-    daily = roll_into_day(daily, "2026-08-14", "z1", 8.0, estimated=False, gap_s=0.0, closed_l=8.0)
+    daily = roll_into_day({}, "2026-08-14", "z1", 2.0, estimated=False, gap_s=0.0, closed_l=3.0)
+    daily = roll_into_day(daily, "2026-08-14", "z1", 9.0, estimated=False, gap_s=0.0, closed_l=5.0)
 
-    assert daily["2026-08-14"]["z1"]["l"] == 10.0
+    assert daily["2026-08-14"]["z1"]["l"] == 11.0
     assert daily["2026-08-14"]["z1"]["closed_l"] == 8.0
 
 
