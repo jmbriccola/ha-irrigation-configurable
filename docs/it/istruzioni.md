@@ -19,13 +19,13 @@ e la [guida rapida](guida-rapida.md).
      di oggi in mm**. Senza, la pioggia viene stimata dal forecast orario.
    - **Sensore temperatura esterna** (opzionale) — sostituisce la temperatura
      dell'entità meteo per il tracciamento delle massime giornaliere.
-   - **Flussometro di linea** (opzionale) — un contatore condiviso sul
-     collettore, usato da ogni zona senza contatore proprio. L'unità che
+   - **Flussometro di linea** (opzionale) — un flussometro condiviso sul
+     collettore, usato da ogni zona senza flussometro proprio. L'unità che
      dichiara (m³/h, L/h, gal/min, …) viene rilevata e convertita
      automaticamente in L/min; a un sensore che non dichiara nulla di
      utilizzabile si può assegnare un'unità esplicita nelle impostazioni
      **Meteo e sensori** del pannello (§6) — svuotarla riprende il
-     rilevamento. Finché l'unità non è nota, il contatore conta come
+     rilevamento. Finché l'unità non è nota, il flussometro conta come
      assente (vedi la matrice di degradazione nel README).
    - **Valvola master / pompa** (opzionale) — `valve` o `switch` aperta prima
      della prima zona di ogni sessione e chiusa dopo l'ultima.
@@ -160,7 +160,7 @@ e le impostazioni quotidiane dell'hub, tutto in un unico posto.
    nome, entità valvola (o switch), area — e crea la zona con un programma
    predefinito sensato, pronto da rifinire. **✎ Modifica zona** (sopra
    l'elenco programmi, per la zona selezionata) apre lo stesso modulo
-   precompilato, più un cassetto **Avanzate** per sensore di portata (con la
+   precompilato, più un cassetto **Avanzate** per flussometro (con la
    sua unità — rilevata automaticamente, o sovrascritta per un sensore che
    non dichiara nulla di utilizzabile; svuotare la sovrascrittura riprende
    il rilevamento), portata nominale/tolleranza, correzione %, ordine,
@@ -170,7 +170,7 @@ e le impostazioni quotidiane dell'hub, tutto in un unico posto.
 6. **⚙️ Impostazioni**, nell'intestazione, contiene le impostazioni
    quotidiane dell'hub, ciascuna salvata per conto proprio: **Meteo e
    sensori** (entità meteo, sensori pioggia/temperatura esterna/portata di
-   linea e la sovrascrittura dell'unità del contatore di linea, valvola
+   linea e la sovrascrittura dell'unità del flussometro di linea, valvola
    principale), **Budget di consumo** (litri al mese e
    azione al superamento — notifica, riduci, sospendi), **Restrizioni
    calendario** (giorni consentiti, parità pari/dispari, finestre orarie
