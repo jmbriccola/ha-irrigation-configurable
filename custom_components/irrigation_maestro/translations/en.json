@@ -852,6 +852,10 @@
     "flow_unit_corrected": {
       "title": "Flow readings are converted from another unit",
       "description": "These meters report in a unit other than litres per minute: {sensors}. Their readings are converted to L/min, so measured litres, volume targets and the consumption counter are correct. If you upgraded from a version before 3.2.0, the litres those meters recorded back then were read as if they were already L/min and are understated; that history is deliberately not rewritten, because the consumption total mixes measured litres with nominal flow × minutes estimates the defect never touched."
+    },
+    "consumption_history_restarted": {
+      "title": "Monthly water total restarts from a carried balance",
+      "description": "The old monthly consumption counter has been replaced by the per-zone water history introduced in 3.3.0. Its last value has been carried forward once as this period's opening balance: it mixes litres measured through a flow meter with litres estimated as nominal flow × minutes, and it has no day-by-day breakdown. Both limitations resolve themselves at the next period boundary, when the balance expires and the total comes entirely from the per-zone history again."
     }
   },
   "exceptions": {

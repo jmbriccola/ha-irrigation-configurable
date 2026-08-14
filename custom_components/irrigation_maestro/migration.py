@@ -15,6 +15,7 @@ flower bed.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from datetime import date
 from typing import Any
 
 from . import const
@@ -141,6 +142,38 @@ def migrate_last_completed(
         for program_id in zone_programs.get(zone_id, []):
             migrated[f"{zone_id}:{program_id}"] = day
     return migrated
+
+
+def seed_carried_over_and_drop_consumption(data: dict[str, Any], today: date) -> bool:
+    """Turn the standalone monthly counter into an opening balance, then drop it.
+
+    The monthly total is not merely displayed: _consumption_factor drives
+    reduce and suspend. Zeroing it mid-month would silently stop the budget
+    enforcing for the rest of the period, so the old value is carried as an
+    explicit balance stamped with its own period -- it expires by itself at
+    the next boundary rather than living on as a second counter of the same
+    water.
+
+    A counter from an earlier period is dropped rather than carried: it is
+    not this period's water.
+
+    Idempotent: the key is removed on the first pass, and a data set without
+    it is left exactly as found. Removing it from _default_data would not be
+    enough -- the defaults merge copies unknown stored keys through verbatim
+    and re-saves them.
+    """
+    consumption = data.pop("consumption", None)
+    if consumption is None:
+        return False
+    period_start = today.replace(day=1)
+    stored_start = consumption.get("period_start")
+    liters = float(consumption.get("liters", 0.0))
+    if stored_start == period_start.isoformat() and liters > 0:
+        data.setdefault("water", {})["carried_over"] = {
+            "period_start": period_start.isoformat(),
+            "liters": liters,
+        }
+    return True
 
 
 def migrate_zone_v2_to_v3(

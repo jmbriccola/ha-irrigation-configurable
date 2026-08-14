@@ -15,6 +15,7 @@ from typing import Any, cast
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.storage import Store
 
+from . import migration as migrate
 from .const import DOMAIN, STORAGE_VERSION
 from .engine import history, metering
 from .engine.model import EngineParams
@@ -46,7 +47,6 @@ class RuntimeState:
             "zone_enabled": {},
             "cycle_enabled": {},
             "outcome_log": {},
-            "consumption": {"period_start": None, "liters": 0.0},
             "water": {
                 "zones": {},
                 "unattributed": {},
@@ -73,6 +73,10 @@ class RuntimeState:
         self._data["last_completed"] = migrate_last_completed(
             self._data["last_completed"], zone_programs
         )
+
+    def migrate_consumption(self, today: date) -> bool:
+        """Carry the old monthly counter into an opening balance (3.3.0)."""
+        return migrate.seed_carried_over_and_drop_consumption(self._data, today)
 
     async def async_save(self) -> None:
         await self._store.async_save(self._data)
@@ -250,14 +254,22 @@ class RuntimeState:
         self._data["manual_stop_at"] = at.isoformat() if at else None
 
     # Consumption -----------------------------------------------------------
+    #
+    # No longer in _default_data: a fresh install never has it, and an
+    # upgraded one loses it the first time migrate_consumption runs (3.3.0).
+    # These three still tolerate its total absence -- via .get() rather than
+    # a bare subscript -- because add_consumption is only a test helper now
+    # (nothing in production calls it any more; _consumption_factor is the
+    # last production reader, until Task 11 replaces it with the derived
+    # total).
 
     @property
     def consumption_liters(self) -> float:
-        return float(self._data["consumption"]["liters"])
+        return float(self._data.get("consumption", {}).get("liters", 0.0))
 
     @property
     def consumption_period_start(self) -> date | None:
-        raw = self._data["consumption"]["period_start"]
+        raw = self._data.get("consumption", {}).get("period_start")
         return date.fromisoformat(raw) if raw else None
 
     def add_consumption(self, liters: float, *, period_start: date) -> None:
