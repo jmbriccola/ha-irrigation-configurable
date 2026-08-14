@@ -2,9 +2,10 @@
 
 Everything that is *state*, not *intent*, lives here — never in the config
 entry: daily temperature maxima, rain counters and staging, last completed day
-per zone, manual-stop timestamp, suspensions/pauses, last outcomes and the
-consumption counter. Histories are keyed by ISO date (see engine.history), so
-midnight needs no rotation step and restarts cannot corrupt the window.
+per zone, manual-stop timestamp, suspensions/pauses, last outcomes and
+per-zone water accounting. Histories are keyed by ISO date (see
+engine.history), so midnight needs no rotation step and restarts cannot
+corrupt the window.
 """
 
 from __future__ import annotations
