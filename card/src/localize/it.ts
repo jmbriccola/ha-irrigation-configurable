@@ -72,7 +72,6 @@ export const it: Record<keyof typeof en, string> = {
   "header.global_pause": "In pausa globale",
   "header.stale_weather": "Dati meteo non aggiornati",
   "header.consumption_left": "Acqua residua",
-  "header.unattributed_water": "Acqua non attribuita",
 
   // Stati sessione
   "session.idle": "Inattiva",

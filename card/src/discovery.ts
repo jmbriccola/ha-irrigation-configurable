@@ -166,6 +166,12 @@ export function waterSummary(zone: ZoneEntities): WaterSummary | null {
   if (!entity) return null;
   const total = asNumber(entity.state);
   if (total === undefined) return null;
+  // `?? 0` here is not the zero-vs-null slip this helper otherwise avoids:
+  // unlike `state`, today_l/month_l have no "unavailable" case of their own
+  // to lose -- the contract guarantees the sensor always publishes both
+  // alongside a valid total (docs/design/card-contract.md), so the only way
+  // to reach this line with a missing attribute is an older/malformed
+  // sensor, not a legitimate "we don't know".
   return {
     total,
     today: asNumber(entity.attributes["today_l"]) ?? 0,

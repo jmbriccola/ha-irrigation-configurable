@@ -7,7 +7,7 @@ import {
   zoneHasFlowMeter,
   type ZoneBundle,
 } from "./discovery";
-import type { CycleInfo, ZoneAction, ZoneState } from "./types";
+import type { CycleInfo, WaterSummary, ZoneAction, ZoneState } from "./types";
 import {
   asArray,
   asNumber,
@@ -355,7 +355,7 @@ export class ImcZoneRow extends LitElement {
   /* Render fragments                                              */
   /* ------------------------------------------------------------ */
 
-  private _renderBadges(): unknown {
+  private _renderBadges(water: WaterSummary | null): unknown {
     const zone = this.zone;
     if (!zone) return nothing;
     const attrs = zone.state?.attributes ?? {};
@@ -390,11 +390,16 @@ export class ImcZoneRow extends LitElement {
     // Redundant marking for a zone whose water is (partly) a nominal-flow
     // estimate rather than a meter reading -- see waterSummary()'s doc and
     // docs/design/card-contract.md's "Water accounting sensors" section.
-    if (waterSummary(zone)?.estimated) {
+    // Deliberately not from the `mdi:alert`/degraded family: an estimated
+    // zone is an intentional, healthy state the user chose (the sensor
+    // still carries device_class: water on purpose), not a problem -- and
+    // leak detection (next PR) needs a real alert glyph in this same row
+    // that this badge must not be confused with.
+    if (water?.estimated) {
       const label = localize(this.language, "zone.water_estimated");
       badges.push(html`
         <span class="badge" title=${label}>
-          <ha-icon icon="mdi:water-alert-outline" style="--mdc-icon-size:12px"></ha-icon>
+          <ha-icon icon="mdi:approximately-equal" style="--mdc-icon-size:12px"></ha-icon>
           ${this.compact ? nothing : label}
         </span>
       `);
@@ -430,7 +435,7 @@ export class ImcZoneRow extends LitElement {
     `;
   }
 
-  private _renderMeta(): unknown {
+  private _renderMeta(water: WaterSummary | null): unknown {
     const zone = this.zone;
     if (!zone) return nothing;
     const lang = this.language;
@@ -480,7 +485,6 @@ export class ImcZoneRow extends LitElement {
     // Cumulative water, with today/this-month as secondary figures. Absent
     // entirely (rather than shown as zero) when waterSummary() has nothing
     // trustworthy -- an unavailable sensor is not the same fact as "0 L".
-    const water = waterSummary(zone);
     if (water) {
       const unit = localize(lang, "curve.unit_volume");
       lines.push(html`
@@ -684,6 +688,10 @@ export class ImcZoneRow extends LitElement {
     const icon = zoneState ? STATE_ICONS[zoneState] : "mdi:help-circle-outline";
     const stateClass = zoneState ?? "unknown";
     const showBody = !this.compact || this._expanded;
+    // Computed once per render and threaded through, rather than each
+    // fragment calling the pure helper again -- cheap either way, but this
+    // avoids the two call sites drifting out of sync later.
+    const water = waterSummary(zone);
 
     return html`
       <div class="zone ${stateClass}">
@@ -699,7 +707,7 @@ export class ImcZoneRow extends LitElement {
           <div class="main">
             <div class="name-line">
               <span class="name">${zone.name}</span>
-              ${this._renderBadges()}
+              ${this._renderBadges(water)}
             </div>
           </div>
           <span class="state-chip ${stateClass}">${stateLabel}</span>
@@ -709,7 +717,7 @@ export class ImcZoneRow extends LitElement {
           ></ha-icon>
         </div>
         ${this._renderProgress()}
-        ${showBody ? this._renderMeta() : nothing}
+        ${showBody ? this._renderMeta(water) : nothing}
         ${showBody ? this._renderControls() : nothing}
         ${this._expanded ? this._renderCycles() : nothing}
       </div>
