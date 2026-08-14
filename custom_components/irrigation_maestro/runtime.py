@@ -1142,7 +1142,9 @@ class IrrigationRuntime:
 
     # Consumption -------------------------------------------------------------------
 
-    def add_consumption(self, zone: ZoneRuntime, liters: float, *, minutes: float) -> None:
+    def add_consumption(
+        self, zone: ZoneRuntime, liters: float, *, minutes: float, had_usable_unit: bool
+    ) -> None:
         """Close out a cycle's accounting for a zone with no usable meter.
 
         Metered litres are already in the ledger, continuously: adding them
@@ -1158,8 +1160,16 @@ class IrrigationRuntime:
         plausible-but-false number this feature exists to remove. ``liters``
         is accepted (session.py's call site is fixed) but no longer
         consulted: usability, not this cycle's tally, decides.
+
+        ``had_usable_unit`` is the run's own frozen answer
+        (``FlowMonitor.had_usable_unit``), not a live re-read via
+        ``zone_flow_meter_usable``: this is called after the valve close and
+        after the monitor's own ``stop()``, a gap in which the unit can
+        resolve or stop resolving without ever having mattered to the litres
+        this run actually put into the ledger. A zone with no meter at all
+        (no monitor was ever built) passes False here, same as before.
         """
-        if self.zone_flow_meter_usable(zone):
+        if had_usable_unit:
             return
         if zone.config.nominal_flow_lpm is None:
             return

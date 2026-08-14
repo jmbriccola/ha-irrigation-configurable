@@ -30,10 +30,10 @@ from homeassistant.helpers.event import (
 )
 from homeassistant.util import dt as dt_util
 
+from .accounting import MeterLedger, MeterSample
 from .engine.model import SessionEvaluation, SkipReason
 from .engine.planner import PlannedRun
 from .engine.scheduling import max_run_minutes, next_allowed_start
-from .flow import FlowSensorReader
 from .valves import ValveController
 
 if TYPE_CHECKING:
@@ -102,18 +102,19 @@ class ActiveRun:
 
 
 class FlowMonitor:
-    """Integrates a flow sensor during a run and detects anomalies.
+    """Watches a run's flow for anomalies. It no longer integrates.
 
-    Litres are canonical L/min throughout; the reader converts at the boundary.
-    A reading whose unit cannot be determined is not a number — it accumulates
-    nothing, chases no volume target, checks no range, and above all does NOT
-    trip the zero-flow guard, which fires when too few litres accrue in the
-    grace window and would otherwise interrupt every run on such a meter.
+    Litres come from the meter's ledger, which integrates continuously whether
+    or not anything is watering; this holds a baseline and reads deltas. One
+    integrator per meter, so a run's volume and the zone's cumulative total can
+    never disagree.
 
-    The window in which a unit comes back is skipped for the same reason: the
-    grace window elapses on the wall clock whether or not the meter is
-    readable, so a unit that returns part-way through one leaves too few
-    litres behind to be judged by.
+    The rules that survive unchanged: a reading whose unit cannot be determined
+    accumulates nothing, chases no volume target, checks no range, and above all
+    does NOT trip the zero-flow guard, which would otherwise interrupt every run
+    on such a meter. A window that was only partly measured is skipped for the
+    same reason -- the grace window elapses on the wall clock whether or not the
+    meter was readable.
     """
 
     ZERO_FLOW_GRACE_S = 120
@@ -123,7 +124,7 @@ class FlowMonitor:
     def __init__(
         self,
         runtime: IrrigationRuntime,
-        reader: FlowSensorReader,
+        ledger: MeterLedger,
         *,
         volume_target_l: int | None,
         expected_lpm: Callable[[], tuple[float, float] | None],
@@ -131,71 +132,46 @@ class FlowMonitor:
         on_volume_reached: Callable[[], None],
     ) -> None:
         self._runtime = runtime
-        self._reader = reader
-        self._sensor = reader.entity_id
+        self._ledger = ledger
+        self._sensor = ledger.entity_id
         self._volume_target = volume_target_l
         self._expected_lpm = expected_lpm
         self._on_no_flow = on_no_flow
         self._on_volume_reached = on_volume_reached
         self.liters = 0.0
-        self._last_at: datetime | None = None
+        self._baseline = 0.0
         self._last_lpm = 0.0
         self._liters_at_last_check = 0.0
+        self._measured_s_in_window = 0.0
         self._periodic_unsub: CALLBACK_TYPE | None = None
         self._out_of_range_since: datetime | None = None
         self._range_notified = False
         self._unsubs: list[CALLBACK_TYPE] = []
         self.unit_known = True
         self._unit_recovered = False
-        self._unit_ever_known = False
-
-    def _read(self) -> float:
-        """Current flow in L/min; 0.0 and unit_known=False when unresolvable."""
-        reading = self._reader.read()
-        if reading.lpm is None:
-            if self.unit_known:
-                # Report once per transition, not once per state change.
-                self._runtime.report_flow_unit_unknown(self._sensor)
-                if self._unit_ever_known:
-                    # A meter that was working and stopped is an event, so it
-                    # is pushed. A meter that never had a usable unit is a
-                    # standing configuration fault: the repair says so without
-                    # a high-priority notification on every single run.
-                    self._runtime.report_flow_unit_lost(self._sensor)
-            self.unit_known = False
-            return 0.0
-        if not self.unit_known:
-            self._runtime.clear_flow_unit_unknown(self._sensor)
-            # The window this happened in is now part blind, part measured;
-            # _periodic_check must not judge it. Cleared when it consumes it.
-            self._unit_recovered = True
-            # RANGE_SUSTAIN_S is wall-clock, but nothing was range-checked
-            # while the unit was unknown. Left standing, a timestamp from
-            # before the loss plus one reading after the recovery would report
-            # as "sustained" an interval that was mostly unobserved. Reset here
-            # rather than in _periodic_check's blind branch because recovery is
-            # normally delivered by _on_state, well before any tick observes
-            # the gap -- this is the one point every recovery passes through.
-            self._out_of_range_since = None
-        self.unit_known = True
-        self._unit_ever_known = True
-        return reading.lpm
 
     def start(self) -> None:
-        now = dt_util.utcnow()
-        self._last_at = now
-        self._last_lpm = self._read()
-        if self.unit_known:
-            # Unconditionally, not on a transition: every run builds a fresh
-            # monitor that starts out believing the unit is known, so a meter
-            # fixed between runs never presents a False->True edge and would
-            # keep its repair for the life of the process. Deleting an issue
-            # that is not there is a no-op.
-            self._runtime.clear_flow_unit_unknown(self._sensor)
+        self._baseline = self._ledger.total_l
+        self.liters = 0.0
         self._liters_at_last_check = 0.0
-        self._unsubs.append(
-            async_track_state_change_event(self._runtime.hass, [self._sensor], self._on_state)
-        )
+        self._measured_s_in_window = 0.0
+        self.unit_known = self._ledger.unit_known
+        if self.unit_known:
+            # Unconditionally, not on a transition: a meter fixed between runs
+            # never presents a False->True edge and would otherwise keep its
+            # repair for the life of the process. Deleting an issue that is not
+            # there is a no-op.
+            self._runtime.clear_flow_unit_unknown(self._sensor)
+        else:
+            # Also unconditional, for the same reason in reverse: every run
+            # builds a fresh monitor that starts out believing the unit is
+            # known, so a ledger whose unit was already unresolvable presents
+            # that as a transition from THIS monitor's own point of view.
+            # report_flow_unit_lost is withheld here -- nothing has resolved
+            # yet this run, so there is no "was working and stopped" event to
+            # push, only the standing configuration fault the repair states.
+            self._runtime.report_flow_unit_unknown(self._sensor)
+        self._unsubs.append(self._ledger.subscribe(self._on_sample))
         self._schedule_periodic_check()
 
     def _schedule_periodic_check(self) -> None:
@@ -205,67 +181,73 @@ class FlowMonitor:
         self._unsubs.append(self._periodic_unsub)
 
     def stop(self) -> float:
-        self._integrate(dt_util.utcnow())
+        self.liters = self._ledger.total_l - self._baseline
         for unsub in self._unsubs:
             unsub()
         self._unsubs.clear()
         return self.liters
 
-    def _integrate(self, now: datetime) -> None:
-        # An unknown unit accumulates nothing: the litre count freezes at the
-        # last value that was certain rather than drifting on a guess.
-        if self._last_at is not None and self.unit_known:
-            minutes = (now - self._last_at).total_seconds() / 60
-            self.liters += self._last_lpm * minutes
-        self._last_at = now
+    @property
+    def had_usable_unit(self) -> bool:
+        """Whether this run's own monitoring saw a resolvable unit, frozen.
+
+        A live re-read after the run (``runtime.zone_flow_meter_usable``) can
+        disagree with what was true during the cycle -- the moments between
+        this monitor's ``stop()`` and that later call are enough for the unit
+        to resolve or stop resolving. The monitor already knows the answer
+        that actually applied to this run's litres; this is that answer, not
+        a fresh one.
+        """
+        return self.unit_known
 
     @callback
-    def _on_state(self, _event: Event[EventStateChangedData]) -> None:
-        now = dt_util.utcnow()
-        self._integrate(now)
-        self._last_lpm = self._read()
+    def _on_sample(self, sample: MeterSample) -> None:
+        self.liters = sample.total_l - self._baseline
+        self._measured_s_in_window += sample.measured_s
+        self._last_lpm = sample.lpm or 0.0
+        if sample.unit_recovered:
+            # The window this happened in is now part blind, part measured;
+            # _periodic_check must not judge it. Cleared when it consumes it.
+            self._unit_recovered = True
+            # Nothing was range-checked while the unit was unknown, so a
+            # timestamp from before the loss plus one reading after it would
+            # report as "sustained" an interval that was mostly unobserved.
+            self._out_of_range_since = None
+            self._runtime.clear_flow_unit_unknown(self._sensor)
+        was_known = self.unit_known
+        self.unit_known = sample.lpm is not None
+        if was_known and not self.unit_known:
+            # Report once per transition, not once per read.
+            self._runtime.report_flow_unit_unknown(self._sensor)
+            self._runtime.report_flow_unit_lost(self._sensor)
         # Above the unit_known gate deliberately: these litres are the frozen,
-        # certain ones, and this read may be the one that lost the unit after
-        # _integrate had already carried them past the target. Water certainly
+        # certain ones, and this sample may be the one that lost the unit after
+        # the ledger had already carried them past the target. Water certainly
         # delivered still finishes the run.
         if self._volume_target is not None and self.liters >= self._volume_target:
             self._on_volume_reached()
             return
         if not self.unit_known:
             return
-        self._check_range(now)
+        self._check_range(sample.at)
 
     @callback
     def _periodic_check(self, _now: Any) -> None:
-        """Recurring guard: supply failure mid-run and steady-sensor volume.
-
-        A sensor that stops emitting events would otherwise defeat both the
-        zero-flow detection (only checked once) and the volume target (only
-        checked in the state callback).
-        """
-        self._integrate(dt_util.utcnow())
-        self._last_lpm = self._read()
-        # Above the unit_known gate for the same reason as in _on_state.
+        """Recurring guard: supply failure mid-run, on the run's own clock."""
         if self._volume_target is not None and self.liters >= self._volume_target:
             self._on_volume_reached()
             return
-        if not self.unit_known:
-            # No usable meter: this run finishes on its duration or its volume
-            # safety timeout, exactly as it would with no meter at all. Keep
-            # rescheduling so a unit that comes back is picked up.
-            self._liters_at_last_check = self.liters
-            self._schedule_periodic_check()
-            return
-        if self._unit_recovered:
-            # The unit came back part-way through this window, so only part of
-            # it was measurable and its litres cannot be weighed against a
-            # full window's threshold. Judge the next whole one instead.
-            self._unit_recovered = False
-            self._liters_at_last_check = self.liters
-            self._schedule_periodic_check()
-            return
+        blind = not self.unit_known or self._unit_recovered
+        # A window nobody could measure in full cannot be weighed against a
+        # full window's threshold. Judge the next whole one instead.
+        partly_blind = self._measured_s_in_window < self.ZERO_FLOW_GRACE_S * 0.5
+        self._unit_recovered = False
         delta = self.liters - self._liters_at_last_check
         self._liters_at_last_check = self.liters
+        self._measured_s_in_window = 0.0
+        if blind or partly_blind:
+            self._schedule_periodic_check()
+            return
         if delta < self.ZERO_FLOW_EPSILON_L:
             self._on_no_flow()
             return
@@ -874,13 +856,15 @@ class SessionRunner:
                 "duration_min": allowed_min,
             },
         )
-        watering_result, liters, elapsed_min = await self._water(segment, zone, allowed_min)
+        watering_result, liters, elapsed_min, had_usable_unit = await self._water(
+            segment, zone, allowed_min
+        )
 
         # Close with confirmation and one retry (always, whatever happened).
         close_ok = await self._close_valve(valve)
         self._clear_active(segment)
         self._last_zone = segment.zone_id
-        runtime.add_consumption(zone, liters, minutes=elapsed_min)
+        runtime.add_consumption(zone, liters, minutes=elapsed_min, had_usable_unit=had_usable_unit)
 
         if watering_result == "aborted":
             self._record(
@@ -928,8 +912,8 @@ class SessionRunner:
 
     async def _water(
         self, segment: QueuedSegment, zone: ZoneRuntime, allowed_min: int
-    ) -> tuple[str, float, float]:
-        """Run the watering wait; returns (result, liters, elapsed_minutes)."""
+    ) -> tuple[str, float, float, bool]:
+        """Run the watering wait; returns (result, liters, elapsed_minutes, had_usable_unit)."""
         self._set_active(segment, PHASE_WATERING, duration_min=allowed_min)
         future: asyncio.Future[str] = self._runtime.hass.loop.create_future()
 
@@ -947,11 +931,11 @@ class SessionRunner:
 
         unsub_timer = async_call_later(self._runtime.hass, duration_s, _on_duration_elapsed)
         monitor: FlowMonitor | None = None
-        reader = self._runtime.flow_reader_for(zone)
-        if reader is not None:
+        ledger = self._runtime.accountant.ledger_for(zone)
+        if ledger is not None:
             monitor = FlowMonitor(
                 self._runtime,
-                reader,
+                ledger,
                 volume_target_l=segment.run.volume_l,
                 expected_lpm=self._runtime.expected_flow_range,
                 on_no_flow=lambda: _finish("no_flow"),
@@ -965,10 +949,11 @@ class SessionRunner:
         finally:
             unsub_timer()
         liters = monitor.stop() if monitor is not None else 0.0
+        had_usable_unit = monitor.had_usable_unit if monitor is not None else False
         elapsed_min = (dt_util.utcnow() - started).total_seconds() / 60
         if self._abort.is_set() or not future.done():
-            return "aborted", liters, elapsed_min
-        return future.result(), liters, elapsed_min
+            return "aborted", liters, elapsed_min, had_usable_unit
+        return future.result(), liters, elapsed_min, had_usable_unit
 
     async def _close_valve(self, valve: ValveController) -> bool:
         self._runtime.ledger_expect(valve.entity_id, "close")
