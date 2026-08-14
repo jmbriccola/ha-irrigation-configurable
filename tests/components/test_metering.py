@@ -7,7 +7,8 @@ from custom_components.irrigation_maestro.flow import FlowSensorReader
 from freezegun.api import FrozenDateTimeFactory
 from homeassistant.core import HomeAssistant
 
-from .test_session import START, advance
+from .mocks import BEHAVIOR_STUCK, MockValvePark
+from .test_session import START, advance, mock_weather, setup_hub, zone_data
 
 
 async def _ledger(hass: HomeAssistant) -> tuple[MeterLedger, list[MeterSample]]:
@@ -212,3 +213,212 @@ async def test_a_raising_listener_does_not_stop_its_peers(
         assert received  # the second subscriber still got its sample
     finally:
         ledger.stop()
+
+
+async def test_litres_go_to_the_zone_whose_valve_is_open(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    freezer.move_to(START)
+    park = MockValvePark(hass)
+    park.add("valve.a")
+    hass.states.async_set("sensor.flow", "0", {"unit_of_measurement": "L/min"})
+    mock_weather(hass)
+    entry = await setup_hub(
+        hass, [zone_data("Alpha", "valve.a", minutes=10, flow_sensor="sensor.flow")]
+    )
+    runtime = entry.runtime_data
+    zone_id = runtime.zone_ids[0]
+
+    await advance(hass, freezer, 31 * 60)
+    assert hass.states.get("valve.a").state == "open"
+    hass.states.async_set("sensor.flow", "10", {"unit_of_measurement": "L/min"})
+    await advance(hass, freezer, 300, step=10.0)
+
+    assert runtime.state.zone_water_total(zone_id) > 40
+    assert runtime.state.unattributed_total() == 0.0
+
+
+async def test_litres_with_every_valve_closed_are_unattributed_and_suspect(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    freezer.move_to(START)
+    park = MockValvePark(hass)
+    park.add("valve.a")
+    hass.states.async_set("sensor.flow", "5", {"unit_of_measurement": "L/min"})
+    mock_weather(hass)
+    entry = await setup_hub(
+        hass, [zone_data("Alpha", "valve.a", minutes=10, flow_sensor="sensor.flow")]
+    )
+    runtime = entry.runtime_data
+    zone_id = runtime.zone_ids[0]
+
+    # Well before the 05:30 trigger: nothing is open.
+    await advance(hass, freezer, 600, step=10.0)
+
+    assert runtime.state.zone_water_total(zone_id) == 0.0
+    assert runtime.state.unattributed_closed(zone_id) > 40
+    assert runtime.state.unattributed_total(zone_id) == runtime.state.unattributed_closed(zone_id)
+
+
+async def test_a_shared_line_meter_splits_by_nominal_flow(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    """Two zones on one meter: proportional, not double.
+
+    Before this, both zones integrated the full line flow and both added it to
+    the monthly total -- the same water counted twice.
+
+    The zones share a compatibility_group: _gather_batch only ever lets zones
+    coexist within the same non-empty group, so max_concurrent alone would not
+    open both valves at once.
+    """
+    freezer.move_to(START)
+    park = MockValvePark(hass)
+    park.add("valve.a")
+    park.add("valve.b")
+    hass.states.async_set("sensor.line", "0", {"unit_of_measurement": "L/min"})
+    mock_weather(hass)
+    entry = await setup_hub(
+        hass,
+        [
+            zone_data(
+                "Alpha",
+                "valve.a",
+                minutes=10,
+                nominal_flow_lpm=10.0,
+                order=1,
+                compatibility_group="shared",
+            ),
+            zone_data(
+                "Beta",
+                "valve.b",
+                minutes=10,
+                nominal_flow_lpm=30.0,
+                order=2,
+                compatibility_group="shared",
+            ),
+        ],
+        {"line_flow_sensor": "sensor.line", "max_concurrent": 2},
+    )
+    runtime = entry.runtime_data
+    alpha, beta = runtime.zone_ids[0], runtime.zone_ids[1]
+
+    await advance(hass, freezer, 31 * 60)
+    assert hass.states.get("valve.a").state == "open"
+    assert hass.states.get("valve.b").state == "open"
+    hass.states.async_set("sensor.line", "40", {"unit_of_measurement": "L/min"})
+    await advance(hass, freezer, 300, step=10.0)
+
+    total = runtime.state.zone_water_total(alpha) + runtime.state.zone_water_total(beta)
+    assert 180 <= total <= 220  # 40 L/min x ~5 min, once
+    ratio = runtime.state.zone_water_total(beta) / runtime.state.zone_water_total(alpha)
+    assert 2.5 <= ratio <= 3.5  # 30:10
+
+
+async def test_a_zone_without_a_meter_gets_a_marked_estimate(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    freezer.move_to(START)
+    park = MockValvePark(hass)
+    park.add("valve.a")
+    mock_weather(hass)
+    entry = await setup_hub(hass, [zone_data("Alpha", "valve.a", minutes=10, nominal_flow_lpm=7.5)])
+    runtime = entry.runtime_data
+    zone_id = runtime.zone_ids[0]
+
+    await advance(hass, freezer, 31 * 60)
+    await advance(hass, freezer, 11 * 60)
+
+    assert 70 <= runtime.state.zone_water_total(zone_id) <= 80
+    assert runtime.state.zone_water_estimated(zone_id) == runtime.state.zone_water_total(zone_id)
+
+
+async def test_rebuild_keeps_a_live_subscription_when_the_meter_is_unaffected(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    """A config change to an unrelated setting must not deafen a running meter.
+
+    Before this fix, rebuild() called stop(), which stops every ledger and
+    clears every listener -- including a live FlowMonitor's subscription on a
+    meter the change never touched. Its zero-flow guard would then see zero
+    litres accrue on a perfectly healthy run and interrupt it.
+    """
+    freezer.move_to(START)
+    park = MockValvePark(hass)
+    park.add("valve.a")
+    hass.states.async_set("sensor.flow", "0", {"unit_of_measurement": "L/min"})
+    mock_weather(hass)
+    entry = await setup_hub(
+        hass, [zone_data("Alpha", "valve.a", minutes=10, flow_sensor="sensor.flow")]
+    )
+    runtime = entry.runtime_data
+    zone = runtime.zones[runtime.zone_ids[0]]
+    ledger = runtime.accountant.ledger_for(zone)
+    assert ledger is not None
+    samples: list[MeterSample] = []
+    ledger.subscribe(samples.append)
+
+    # A config change that does not touch this zone's meter.
+    hass.config_entries.async_update_entry(entry, options={**entry.options, "settle_pause_s": 45})
+    await hass.async_block_till_done()
+
+    assert runtime.accountant.ledger_for(zone) is ledger  # same object, not rebuilt from scratch
+
+    hass.states.async_set("sensor.flow", "10", {"unit_of_measurement": "L/min"})
+    await hass.async_block_till_done()
+
+    assert samples, "listener registered before rebuild() must still receive samples after it"
+
+
+async def test_a_stuck_open_valve_keeps_claiming_its_water_after_close_fails(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    """The worst case from the module docstring, made concrete.
+
+    _execute() clears the zone from active_runs right after attempting to
+    close its valve, whether or not the close actually succeeded. A rule keyed
+    off active_runs (run phase) would therefore stop crediting this zone's
+    water the instant the close attempt fails -- while the valve is still
+    physically open -- and hand the flowing water to the unattributed bucket
+    instead, misdiagnosing a stuck-open valve as a system leak. Attribution by
+    valve state must keep crediting the zone for as long as its valve reports
+    open, close attempt or no.
+    """
+    freezer.move_to(START)
+    park = MockValvePark(hass)
+    park.add("valve.a")
+    hass.states.async_set("sensor.flow", "0", {"unit_of_measurement": "L/min"})
+    mock_weather(hass)
+    entry = await setup_hub(
+        hass, [zone_data("Alpha", "valve.a", minutes=5, flow_sensor="sensor.flow")]
+    )
+    runtime = entry.runtime_data
+    zone_id = runtime.zone_ids[0]
+
+    await advance(hass, freezer, 31 * 60)
+    assert hass.states.get("valve.a").state == "open"
+    hass.states.async_set("sensor.flow", "10", {"unit_of_measurement": "L/min"})
+
+    # The valve stops responding to commands from here on: the close at the
+    # end of the cycle will be attempted, twice, and never confirm.
+    park.set_behavior("valve.a", BEHAVIOR_STUCK)
+
+    # Watering duration (5 min) + two close-confirm attempts (120 s each,
+    # the default) + margin.
+    await advance(hass, freezer, 5 * 60 + 260, step=10.0)
+
+    # The close genuinely failed and the zone was cleared from active_runs
+    # anyway -- the defect this test exists to catch, made observable.
+    assert hass.states.get("valve.a").state == "open"
+    assert zone_id not in runtime.session.active_runs
+
+    total_after_clear = runtime.state.zone_water_total(zone_id)
+    assert total_after_clear > 0.0
+    assert runtime.state.unattributed_total() == 0.0
+
+    # The valve is still open and water still flows; more must still land on
+    # the zone, not on the unattributed bucket.
+    await advance(hass, freezer, 120, step=10.0)
+
+    assert runtime.state.zone_water_total(zone_id) > total_after_clear
+    assert runtime.state.unattributed_total() == 0.0

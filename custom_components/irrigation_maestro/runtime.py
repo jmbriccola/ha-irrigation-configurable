@@ -27,6 +27,7 @@ from homeassistant.helpers.event import (
 )
 from homeassistant.util import dt as dt_util
 
+from .accounting import WaterAccountant
 from .const import (
     DOMAIN,
     SUBENTRY_TYPE_ZONE,
@@ -107,6 +108,7 @@ class IrrigationRuntime:
         self.session = SessionRunner(self)
         self.watchdog = Watchdog(self)
         self.sentinel = Sentinel(self)
+        self.accountant = WaterAccountant(self)
         self._session_lock = asyncio.Lock()
         self._ledger: dict[tuple[str, str], list[datetime]] = {}
         self._trigger_unsubs: list[CALLBACK_TYPE] = []
@@ -132,6 +134,7 @@ class IrrigationRuntime:
         )
         self._schedule_triggers()
         self._start_trackers()
+        self.accountant.start()
         self.watchdog.start()
         self.sentinel.start()
         self._refresh_notification_issues()
@@ -150,6 +153,7 @@ class IrrigationRuntime:
         if self._flow_tracker_unsub is not None:
             self._flow_tracker_unsub()
             self._flow_tracker_unsub = None
+        self.accountant.stop()
         if self._skip_flush_unsub is not None:
             self._skip_flush_unsub()
             self._skip_flush_unsub = None
@@ -1058,6 +1062,26 @@ class IrrigationRuntime:
     def clear_flow_unit_unknown(self, entity_id: str) -> None:
         ir.async_delete_issue(self.hass, DOMAIN, f"flow_unit_unknown_{entity_id}")
 
+    def report_flow_unit_override_conflict(self, entity_id: str, first: str, second: str) -> None:
+        """Two zones read one meter under different unit overrides.
+
+        One ledger per meter means one interpretation; this names both zones
+        rather than silently applying whichever was parsed first.
+        """
+        ir.async_create_issue(
+            self.hass,
+            DOMAIN,
+            f"flow_unit_override_conflict_{entity_id}",
+            is_fixable=False,
+            severity=ir.IssueSeverity.WARNING,
+            translation_key="flow_unit_override_conflict",
+            translation_placeholders={
+                "entity_id": entity_id,
+                "first": first,
+                "second": second,
+            },
+        )
+
     def report_flow_unit_lost(self, entity_id: str) -> None:
         """A meter that was readable stopped being so during a cycle.
 
@@ -1079,13 +1103,17 @@ class IrrigationRuntime:
     # Consumption -------------------------------------------------------------------
 
     def add_consumption(self, zone: ZoneRuntime, liters: float, *, minutes: float) -> None:
-        if liters <= 0 and zone.config.nominal_flow_lpm is not None:
-            liters = zone.config.nominal_flow_lpm * minutes
-        if liters <= 0:
+        """Close out a cycle's accounting for a zone with no usable meter.
+
+        Metered litres are already in the ledger, continuously: adding them
+        again here would count the same water twice. What is left is the
+        estimate for a zone that has nothing to integrate.
+        """
+        if liters > 0:
             return
-        period_start = dt_util.now().date().replace(day=1)
-        self.state.add_consumption(liters, period_start=period_start)
-        self.state.schedule_save()
+        if zone.config.nominal_flow_lpm is None:
+            return
+        self.accountant.record_estimate(zone.config.zone_id, zone.config.nominal_flow_lpm * minutes)
 
     # Trackers -----------------------------------------------------------------------
 
@@ -1144,17 +1172,21 @@ class IrrigationRuntime:
         leaves the upgrade notice unfired on the very install it exists for.
 
         Rebuilt rather than added to, like _schedule_triggers, so repointing a
-        zone's meter takes effect without a reload (§5).
+        zone's meter takes effect without a reload (§5). The accountant's own
+        ledgers are rebuilt here too, at the end, so a config change updates
+        both together -- WaterAccountant.rebuild() diffs rather than dropping
+        every ledger, so a meter this change did not touch keeps its running
+        total and its live subscriptions.
         """
         if self._flow_tracker_unsub is not None:
             self._flow_tracker_unsub()
             self._flow_tracker_unsub = None
         entity_ids = self._flow_sensor_entities()
-        if not entity_ids:
-            return
-        self._flow_tracker_unsub = async_track_state_change_event(
-            self.hass, entity_ids, self._on_flow_sensor
-        )
+        if entity_ids:
+            self._flow_tracker_unsub = async_track_state_change_event(
+                self.hass, entity_ids, self._on_flow_sensor
+            )
+        self.accountant.rebuild()
 
     @callback
     def _on_flow_sensor(self, event: Event[EventStateChangedData]) -> None:

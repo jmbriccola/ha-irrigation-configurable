@@ -17,13 +17,18 @@ import logging
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime, timedelta
+from functools import partial
+from typing import TYPE_CHECKING
 
 from homeassistant.core import CALLBACK_TYPE, Event, EventStateChangedData, HomeAssistant, callback
 from homeassistant.helpers.event import async_track_state_change_event, async_track_time_interval
 from homeassistant.util import dt as dt_util
 
-from .engine.metering import accumulate
+from .engine.metering import HUB_SCOPE, accumulate
 from .flow import FlowSensorReader
+
+if TYPE_CHECKING:
+    from .runtime import IrrigationRuntime, ZoneRuntime
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -167,3 +172,175 @@ class MeterLedger:
                 listener(sample)
             except Exception:  # a listener must not stop the ledger or starve its peers
                 _LOGGER.exception("Meter ledger listener failed for %s", self.entity_id)
+
+
+class WaterAccountant:
+    """Owns the ledgers and decides whose water each litre was.
+
+    Attribution follows valve state, not run phase. The phase is necessary and
+    not sufficient: PHASE_OPENING covers the whole open-confirm wait, the master
+    pre-open pressurises the line while the zone is still queued, and a failed
+    close clears the zone from active_runs while its valve is still open --
+    which would diagnose a stuck-open valve as a system leak. A valve that
+    reports open is watering; that is the physical truth, and it is the same
+    predicate leak detection reads.
+    """
+
+    def __init__(self, runtime: IrrigationRuntime) -> None:
+        self._runtime = runtime
+        self._ledgers: dict[str, MeterLedger] = {}
+        self._unsubs: dict[str, CALLBACK_TYPE] = {}
+        self._overrides: dict[str, str | None] = {}
+        self._last_totals: dict[str, float] = {}
+
+    def start(self) -> None:
+        self.rebuild()
+
+    def stop(self) -> None:
+        for unsub in self._unsubs.values():
+            unsub()
+        self._unsubs.clear()
+        for ledger in self._ledgers.values():
+            ledger.stop()
+        self._ledgers.clear()
+        self._overrides.clear()
+        self._last_totals.clear()
+
+    def rebuild(self) -> None:
+        """Rebuild the ledger set from the current configuration -- by diffing.
+
+        Rebuilt rather than added to, like _track_flow_sensors and
+        _schedule_triggers, so repointing a zone's meter takes effect without a
+        reload. But diffed against what is already running, not dropped and
+        recreated wholesale: a live FlowMonitor (Task 9) subscribes to a ledger
+        directly, and stopping every ledger on every config change -- even one
+        that touches no meter -- would silently deafen a monitor watching a
+        healthy, unrelated run. Its zero-flow guard would then see zero litres
+        accrue and interrupt a cycle that was never at fault.
+
+        Only a ledger whose entity disappeared from the configuration, or whose
+        resolved unit override changed, is stopped and dropped. Everything
+        else -- the ledger, its running total, and every subscription on it --
+        is left exactly as it was.
+        """
+        resolved = self._resolved_meters()
+        for entity_id in list(self._ledgers):
+            if entity_id in resolved and resolved[entity_id] == self._overrides.get(entity_id):
+                continue  # unaffected: leave the ledger and its subscribers running
+            self._unsubs.pop(entity_id)()
+            self._ledgers.pop(entity_id).stop()
+            self._overrides.pop(entity_id, None)
+            # A stale entry here would make a recreated ledger's first sample
+            # compute its delta against the old ledger's last known total,
+            # instead of the fresh ledger's own 0.0 starting point.
+            self._last_totals.pop(entity_id, None)
+        for entity_id, override in resolved.items():
+            if entity_id in self._ledgers:
+                continue  # already running, untouched above
+            reader = FlowSensorReader(self._runtime.hass, entity_id, override)
+            ledger = MeterLedger(self._runtime.hass, reader)
+            self._ledgers[entity_id] = ledger
+            self._overrides[entity_id] = override
+            self._unsubs[entity_id] = ledger.subscribe(partial(self._on_sample, entity_id))
+            ledger.start()
+
+    def _resolved_meters(self) -> dict[str, str | None]:
+        """Every configured meter, once, with the unit override that applies.
+
+        One ledger per entity: keying by (entity, override) would integrate the
+        same physical water twice. A zone that owns the meter and declares an
+        override wins over the hub's; two zones declaring different overrides
+        for one entity is a configuration fault, resolved deterministically by
+        zone order and reported.
+        """
+        meters: dict[str, str | None] = {}
+        claimed_by: dict[str, str] = {}
+        for zone in sorted(self._runtime.zones.values(), key=lambda z: z.config.order):
+            sensor = zone.config.flow_sensor
+            if not sensor:
+                continue
+            if sensor in meters and meters[sensor] != zone.config.flow_sensor_unit:
+                self._runtime.report_flow_unit_override_conflict(
+                    sensor, claimed_by[sensor], zone.config.name
+                )
+                continue
+            meters[sensor] = zone.config.flow_sensor_unit
+            claimed_by[sensor] = zone.config.name
+        line = self._runtime.hub.line_flow_sensor
+        if line and line not in meters:
+            meters[line] = self._runtime.hub.line_flow_sensor_unit
+        return meters
+
+    def ledger_for(self, zone: ZoneRuntime) -> MeterLedger | None:
+        """The ledger of whichever meter serves this zone, or None."""
+        sensor = zone.config.flow_sensor or self._runtime.hub.line_flow_sensor
+        return self._ledgers.get(sensor) if sensor else None
+
+    def _claimants(self, entity_id: str) -> list[ZoneRuntime]:
+        """Zones fed by this meter whose valve reports open."""
+        line = self._runtime.hub.line_flow_sensor
+        claimants = []
+        for zone in self._runtime.zones.values():
+            sensor = zone.config.flow_sensor or line
+            if sensor == entity_id and zone.valve.is_open:
+                claimants.append(zone)
+        return claimants
+
+    def _all_valves_closed(self) -> bool:
+        """Every managed valve, master included, reports closed."""
+        return not any(controller.is_open for controller in self._runtime.all_valve_controllers())
+
+    def _scope_for(self, entity_id: str) -> str:
+        """Whose leak this would be: the sole zone on this meter, or the hub."""
+        line = self._runtime.hub.line_flow_sensor
+        owners = [
+            zone.config.zone_id
+            for zone in self._runtime.zones.values()
+            if (zone.config.flow_sensor or line) == entity_id
+        ]
+        return owners[0] if len(owners) == 1 else HUB_SCOPE
+
+    @callback
+    def _on_sample(self, entity_id: str, sample: MeterSample) -> None:
+        liters = sample.total_l - self._last_totals.get(entity_id, 0.0)
+        self._last_totals[entity_id] = sample.total_l
+        if liters <= 0:
+            return
+        day = dt_util.as_local(sample.at).date()
+        claimants = self._claimants(entity_id)
+        state = self._runtime.state
+        if not claimants:
+            state.add_unattributed(
+                self._scope_for(entity_id),
+                liters,
+                day=day,
+                valves_closed=self._all_valves_closed(),
+            )
+        elif len(claimants) == 1:
+            state.add_water(claimants[0].config.zone_id, liters, day=day, estimated=False)
+        else:
+            weights = [zone.config.nominal_flow_lpm or 0.0 for zone in claimants]
+            total_weight = sum(weights)
+            if total_weight <= 0:
+                weights = [1.0] * len(claimants)
+                total_weight = float(len(claimants))
+            for zone, weight in zip(claimants, weights, strict=True):
+                state.add_water(
+                    zone.config.zone_id,
+                    liters * weight / total_weight,
+                    day=day,
+                    estimated=False,
+                )
+        state.schedule_save()
+
+    def record_estimate(self, zone_id: str, liters: float) -> None:
+        """Litres for a zone with no meter: nominal rate x minutes, marked.
+
+        Cycle-scoped on purpose. There is nothing to integrate continuously
+        without a meter, and an estimate must never be presented as a
+        measurement.
+        """
+        if liters <= 0:
+            return
+        self._runtime.state.add_water(zone_id, liters, day=dt_util.now().date(), estimated=True)
+        self._runtime.state.schedule_save()
