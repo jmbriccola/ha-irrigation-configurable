@@ -296,7 +296,7 @@ export const it: Record<keyof typeof en, string> = {
   "notify.recipient_gone_hint":
     "Un destinatario indicato come non più esistente resta memorizzato e viene riscritto a ogni salvataggio. Deselezionalo per rimuoverlo.",
   "notify.send_test": "Invia prova",
-  "notify.test_sending": "Invio in corso…",
+  "notify.test_sending": "Invio in corso",
   "notify.test_ok": "Inviata",
   "notify.test_failed": "Non consegnata: {error}",
   "notify.test_no_result": "nessun risultato ricevuto",
