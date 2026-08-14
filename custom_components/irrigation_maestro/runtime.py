@@ -964,10 +964,11 @@ class IrrigationRuntime:
         on a fresh install, false again once the month rolled over, and back
         at every HA version bump that reset the issue's dismissal.
 
-        The stored consumption counter is deliberately NOT rewritten: the
-        accumulated total mixes litres measured through the meter with litres
+        The litres already recorded -- now split between the carried-over
+        opening balance and the per-zone daily history -- are deliberately
+        NOT rewritten: they mix litres measured through the meter with litres
         estimated as nominal x minutes, which the defect never touched.
-        Multiplying the whole total by a single factor would be exactly the
+        Multiplying them by a single factor would be exactly the
         plausible-but-false number this feature removes.
         """
         rescaled: dict[str, str] = {}
@@ -1303,11 +1304,11 @@ class IrrigationRuntime:
         """A meter appeared, vanished, or changed the unit it declares.
 
         Filtered on the declared unit, not on the event: both consumers depend
-        on the unit the reader resolves and on nothing else -- the litres of a
-        running cycle are read straight from the reader by the session. A
-        meter reporting every second would otherwise re-render every entity of
-        the integration and rewrite the issue registry at 1 Hz, all to reach
-        the same two conclusions.
+        on the unit the reader resolves and on nothing else -- a running
+        cycle's litres come from the meter's ledger, which the reader feeds
+        continuously, not from this signal. A meter reporting every second
+        would otherwise re-render every entity of the integration and rewrite
+        the issue registry at 1 Hz, all to reach the same two conclusions.
 
         Both consumers re-read live state themselves, so this only has to tell
         them to look again.

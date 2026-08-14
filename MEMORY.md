@@ -238,11 +238,13 @@ details harvested from it (kept as engine behaviour):
   Do not convert anywhere else, and do not add a second canonical unit.
 - **An unknown unit disables the zero-flow guard rather than tripping it
   (3.2.0).** `FlowMonitor._periodic_check` interrupts a cycle when fewer than
-  `ZERO_FLOW_EPSILON_L` litres accrue in the grace window. A monitor that
-  cannot accumulate would therefore have interrupted every run on a meter
-  whose unit is unresolvable — turning a reporting gap into an outage. An
-  unresolvable unit degrades exactly like a missing meter, at every point
-  where a missing meter is already handled.
+  `ZERO_FLOW_EPSILON_L` litres accrue in the grace window — litres it reads as
+  deltas off the meter's ledger (3.3.0: see "Water becomes litres in one
+  place" below), not by accumulating them itself. A ledger that cannot
+  resolve a unit produces no litres, so a guard that trusted it blindly would
+  have interrupted every run on a meter whose unit is unresolvable — turning
+  a reporting gap into an outage. An unresolvable unit degrades exactly like
+  a missing meter, at every point where a missing meter is already handled.
 - **`zone_has_flow_meter` stays configuration-only; `zone_flow_meter_usable`
   reads live state (3.2.0).** The services that create a volume curve use the
   first, so an edit cannot fail because a sensor was momentarily unavailable.
@@ -265,6 +267,48 @@ details harvested from it (kept as engine behaviour):
   User-visible Italian now also lives in `services.py`
   (`_TEST_NOTIFICATION_DEFAULTS`, the localized `test_notification` title and
   message) — check there too, not just it.json, it.ts and the docs.
+- **Water becomes litres in one place (3.3.0).** One `MeterLedger` per meter
+  integrates continuously, whether or not anything is watering; `FlowMonitor`
+  holds a baseline and reads the ledger's deltas — it does not integrate.
+  Two integrators reading one meter were two numbers for the same water. Do
+  not add a second integrator, and do not let a consumer accumulate a
+  reading itself.
+- **Attribution follows valve state, not run phase (3.3.0).**
+  `WaterAccountant` credits each closed interval's litres to whichever
+  zone's valve reports open, not to whichever zone `PHASE_WATERING` claims.
+  The phase is necessary and not sufficient: it misses the whole
+  open-confirm wait (`PHASE_OPENING`), it misses the master pre-open that
+  pressurises the line while the zone is still queued, and a failed close
+  clears the zone from `active_runs` while its valve is still physically
+  open — which would diagnose a stuck-open valve as a system leak. A valve
+  that reports open is watering; that is the same predicate leak detection
+  reads.
+- **Unattributed water splits into total and all-closed (3.3.0).** Line
+  priming during `master_pre_open_s` is real water belonging to no zone, on
+  every single cycle — counting it as suspect would false-positive on every
+  run. `total_l` includes it; `closed_l`, the subset measured with every
+  managed valve (zones + master) reporting closed, does not, and is the
+  only figure leak detection reads. Do not let leak detection read
+  `total_l`, and do not fold `closed_l` back into it.
+- **The monthly budget is derived, never stored (3.3.0).**
+  `consumption_used_liters()` is `carried_over_for(period_start) +
+  water_for_period(...)`, computed on every read from the per-zone daily
+  history — one number for the water, so a per-zone total and the budget
+  can never drift apart. Unattributed water is excluded on purpose: letting
+  a leak into the budget would let it suspend irrigation, the right
+  consequence from the wrong cause. `carried_over` is a one-period opening
+  balance stamped with the period it belongs to (`carried_over_for` returns
+  0 once the stamp no longer matches) — do not turn it back into a running
+  counter.
+- **The meter-resolution predicate has one definition (3.3.0).**
+  `resolved_meter_entity` (`runtime.py`) resolves to the zone's own meter if
+  it has one, else the hub's line meter, else none — every one of its seven
+  call sites across `sensor.py`, `runtime.py` and `accounting.py` goes
+  through it instead of repeating the fallback. It used to be inlined at
+  each of those, and one of the seven drifted to `is None` where the rest
+  used truthiness: an empty-string meter (cleared by `update_zone`) then
+  kept silently feeding from the line meter without being labelled as such
+  (the `line_meter_shared` bug). Do not re-inline it.
 
 ## Progress log
 

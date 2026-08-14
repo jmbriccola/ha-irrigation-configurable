@@ -226,7 +226,8 @@ async def test_a_value_tick_does_not_re_render_every_entity(
     """The subscription reacts to the declared unit, not to the flow.
 
     Both consumers depend on the unit the reader resolves and on nothing else
-    -- a running cycle reads its litres straight from the reader. A meter
+    -- a running cycle's litres come from the meter's ledger, which the reader
+    feeds continuously, not from this per-entity update signal. A meter
     reporting every second would otherwise re-render every entity of the
     integration and rewrite the issue registry at 1 Hz to reach the same two
     conclusions.

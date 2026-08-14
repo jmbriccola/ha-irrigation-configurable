@@ -3,9 +3,11 @@
 Everything that is *state*, not *intent*, lives here — never in the config
 entry: daily temperature maxima, rain counters and staging, last completed day
 per zone, manual-stop timestamp, suspensions/pauses, last outcomes and
-per-zone water accounting. Histories are keyed by ISO date (see
+per-zone water accounting. Temp/rain histories are keyed by ISO date (see
 engine.history), so midnight needs no rotation step and restarts cannot
-corrupt the window.
+corrupt the window. The water section's own daily history follows the same
+keyed-by-day, no-rotation shape (see engine.metering instead), alongside
+cumulative per-zone and unattributed totals that are not date-keyed at all.
 """
 
 from __future__ import annotations

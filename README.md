@@ -201,8 +201,18 @@ and the UI (zone attributes + card badges) declares it:
 | Position feedback, open/close confirmation | `valve` entity | `switch` zones run **optimistically**: commands are assumed to actuate after a short configurable delay; surveillance still reacts to state changes, but a stuck-open head cannot be detected — the watchdog and (if present) flow meter are the remaining guards |
 | Hourly rain staging, hourly forecast precision | Weather provider with hourly forecast | Falls back to `daily` forecast with a conservative prorated estimate; stage-and-commit disabled |
 | Measured consumption | Flow meter whose unit can be determined | Consumption estimated as nominal flow × minutes (needs nominal flow; otherwise not tracked) |
+| Continuous water accounting | A flow meter (zone or line) whose unit can be determined | Litres are estimated once per cycle as nominal flow × minutes and marked `estimated`; water outside cycles is not seen at all, so unattributed-water detection is unavailable for that zone |
+| Unattributed-water detection | Same | Unavailable for that zone: with no meter there is nothing to observe while the valves are closed |
 | Rain measured | Rain sensor (daily mm) | Stage-and-commit forecast estimation (above) |
 | Card auto-install | Lovelace storage mode | Manual resource registration (documented above) |
+
+An **estimated** zone still gets `device_class: water` and `state_class:
+total_increasing`, so it still appears in the Water dashboard next to
+measured zones — excluding it was considered and rejected: a zone's
+long-term trend is more useful with an estimated contribution than with a
+silent gap. What compensates is redundant marking, not exclusion: the
+`estimated` and `source` attributes on `zone_water_total`, a badge in the
+card, and each day's own estimated flag in the daily history behind it.
 
 ## Entities & services
 
