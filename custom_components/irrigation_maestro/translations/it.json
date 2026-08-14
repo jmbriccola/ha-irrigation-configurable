@@ -843,7 +843,7 @@
     },
     "flow_unit_override_conflict": {
       "title": "Conflitto sull'unità del flussometro",
-      "description": "Il flussometro {entity_id} è rivendicato sia dalla zona {first} sia dalla zona {second}, che dichiarano per esso un'unità diversa. Un solo flussometro può essere letto con una sola interpretazione: vince l'unità impostata da {first}, quella di {second} viene ignorata. Imposta la stessa unità su entrambe le zone, oppure impostala sul flussometro di linea invece che su una singola zona."
+      "description": "Il flussometro {entity_id} viene letto con due unità di misura diverse, una proveniente da {first} e una da {second}. Vale una sola interpretazione: si usa quella proveniente da {first}, si ignora quella proveniente da {second}. Fai in modo che le due coincidano per risolvere il conflitto."
     },
     "flow_unit_corrected": {
       "title": "Le letture di portata vengono convertite da un'altra unità",

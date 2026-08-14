@@ -2,10 +2,13 @@
 
 from datetime import timedelta
 
+import pytest
 from custom_components.irrigation_maestro.accounting import MeterLedger, MeterSample
+from custom_components.irrigation_maestro.const import DOMAIN
 from custom_components.irrigation_maestro.flow import FlowSensorReader
 from freezegun.api import FrozenDateTimeFactory
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import issue_registry as ir
 
 from .mocks import BEHAVIOR_STUCK, MockValvePark
 from .test_session import START, advance, mock_weather, setup_hub, zone_data
@@ -422,3 +425,180 @@ async def test_a_stuck_open_valve_keeps_claiming_its_water_after_close_fails(
 
     assert runtime.state.zone_water_total(zone_id) > total_after_clear
     assert runtime.state.unattributed_total() == 0.0
+
+
+async def test_a_no_flow_interrupt_on_a_usable_meter_books_nothing(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    """A no-flow interrupt measures a real, true zero -- not "no usable meter".
+
+    add_consumption used to guard on liters > 0, which conflates "this cycle
+    measured no litres" with "this zone has no usable meter". A zone whose
+    meter is perfectly readable, interrupted by the zero-flow guard because
+    nothing actually flowed, would still get the nominal estimate booked onto
+    zone_water_total -- a device_class: water / total_increasing sensor the
+    user has chosen to expose on HA's Water dashboard -- as if that water had
+    been delivered. The guard must be "is there a usable meter", not "did
+    this cycle tally anything".
+    """
+    freezer.move_to(START)
+    park = MockValvePark(hass)
+    park.add("valve.a")
+    hass.states.async_set("sensor.flow", "0.0", {"unit_of_measurement": "L/min"})
+    mock_weather(hass)
+    entry = await setup_hub(
+        hass,
+        [
+            zone_data(
+                "Alpha",
+                "valve.a",
+                minutes=10,
+                flow_sensor="sensor.flow",
+                nominal_flow_lpm=10.0,
+            )
+        ],
+    )
+    runtime = entry.runtime_data
+    zone_id = runtime.zone_ids[0]
+
+    await advance(hass, freezer, 31 * 60)
+    assert hass.states.get("valve.a").state == "open"
+
+    # Flow never starts: after the grace period the cycle is interrupted.
+    await advance(hass, freezer, 3 * 60)
+    assert hass.states.get("valve.a").state == "closed"
+    outcome = runtime.state.last_outcome(zone_id)
+    assert outcome["result"] == "interrupted"
+    assert outcome["reason_key"] == "no_flow"
+
+    assert runtime.state.zone_water_total(zone_id) == 0.0
+    assert runtime.state.zone_water_estimated(zone_id) == 0.0
+
+
+async def test_a_shared_line_meter_without_nominals_splits_equally(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    """Neither zone declares a nominal flow: the equal-split fallback, not a crash.
+
+    Without the total_weight <= 0 guard, liters * weight / total_weight
+    divides by zero inside _on_sample -- which MeterLedger._sample's own
+    `except Exception` swallows into a log line, so every litre on that meter
+    would be dropped forever while the run looked perfectly healthy.
+    """
+    freezer.move_to(START)
+    park = MockValvePark(hass)
+    park.add("valve.a")
+    park.add("valve.b")
+    hass.states.async_set("sensor.line", "0", {"unit_of_measurement": "L/min"})
+    mock_weather(hass)
+    entry = await setup_hub(
+        hass,
+        [
+            zone_data("Alpha", "valve.a", minutes=10, order=1, compatibility_group="shared"),
+            zone_data("Beta", "valve.b", minutes=10, order=2, compatibility_group="shared"),
+        ],
+        {"line_flow_sensor": "sensor.line", "max_concurrent": 2},
+    )
+    runtime = entry.runtime_data
+    alpha, beta = runtime.zone_ids[0], runtime.zone_ids[1]
+
+    await advance(hass, freezer, 31 * 60)
+    assert hass.states.get("valve.a").state == "open"
+    assert hass.states.get("valve.b").state == "open"
+    hass.states.async_set("sensor.line", "40", {"unit_of_measurement": "L/min"})
+    await advance(hass, freezer, 300, step=10.0)
+
+    alpha_total = runtime.state.zone_water_total(alpha)
+    beta_total = runtime.state.zone_water_total(beta)
+    assert 180 <= alpha_total + beta_total <= 220  # 40 L/min x ~5 min, once
+    assert alpha_total == pytest.approx(beta_total, rel=0.05)  # 50/50
+
+
+async def test_a_zone_vs_zone_override_conflict_is_reported_then_cleared(
+    hass: HomeAssistant,
+) -> None:
+    park = MockValvePark(hass)
+    park.add("valve.a")
+    park.add("valve.b")
+    mock_weather(hass)
+    entry = await setup_hub(
+        hass,
+        [
+            zone_data(
+                "Alpha",
+                "valve.a",
+                flow_sensor="sensor.shared",
+                flow_sensor_unit="L/min",
+                order=1,
+            ),
+            zone_data(
+                "Beta",
+                "valve.b",
+                flow_sensor="sensor.shared",
+                flow_sensor_unit="m³/h",
+                order=2,
+            ),
+        ],
+    )
+    registry = ir.async_get(hass)
+    issue = registry.async_get_issue(DOMAIN, "flow_unit_override_conflict_sensor.shared")
+    assert issue is not None
+    assert issue.translation_placeholders == {
+        "entity_id": "sensor.shared",
+        "first": "zone Alpha",
+        "second": "zone Beta",
+    }
+
+    # Align the two zones' overrides; the next rebuild retires the warning.
+    beta_id = entry.runtime_data.zone_ids[1]
+    subentry = entry.subentries[beta_id]
+    hass.config_entries.async_update_subentry(
+        entry, subentry, data={**subentry.data, "flow_sensor_unit": "L/min"}
+    )
+    await hass.async_block_till_done()
+
+    assert registry.async_get_issue(DOMAIN, "flow_unit_override_conflict_sensor.shared") is None
+
+
+async def test_a_zone_vs_hub_override_conflict_on_the_line_meter_is_reported(
+    hass: HomeAssistant,
+) -> None:
+    """Same entity, two interpretations: a zone's own override on the shared
+    line meter must not silently disagree with the hub's line_flow_sensor_unit.
+
+    flow_reader_for builds a reader under the hub's override for any zone
+    that falls back to the line meter, while the ledger (via _resolved_meters)
+    reads it under the winning zone's override -- the zone-wins precedence is
+    correct and stays, but the disagreement must be visible.
+    """
+    park = MockValvePark(hass)
+    park.add("valve.a")
+    mock_weather(hass)
+    entry = await setup_hub(
+        hass,
+        [
+            zone_data(
+                "Alpha",
+                "valve.a",
+                flow_sensor="sensor.line",
+                flow_sensor_unit="m³/h",
+            )
+        ],
+        {"line_flow_sensor": "sensor.line", "line_flow_sensor_unit": "L/min"},
+    )
+    registry = ir.async_get(hass)
+    issue = registry.async_get_issue(DOMAIN, "flow_unit_override_conflict_sensor.line")
+    assert issue is not None
+    assert issue.translation_placeholders == {
+        "entity_id": "sensor.line",
+        "first": "zone Alpha",
+        "second": "the hub's line meter",
+    }
+
+    # Align the hub's override with the zone's; the next rebuild clears it.
+    hass.config_entries.async_update_entry(
+        entry, options={**entry.options, "line_flow_sensor_unit": "m³/h"}
+    )
+    await hass.async_block_till_done()
+
+    assert registry.async_get_issue(DOMAIN, "flow_unit_override_conflict_sensor.line") is None

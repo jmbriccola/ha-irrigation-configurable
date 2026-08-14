@@ -1063,10 +1063,17 @@ class IrrigationRuntime:
         ir.async_delete_issue(self.hass, DOMAIN, f"flow_unit_unknown_{entity_id}")
 
     def report_flow_unit_override_conflict(self, entity_id: str, first: str, second: str) -> None:
-        """Two zones read one meter under different unit overrides.
+        """Two claimants read one meter under different unit overrides.
 
-        One ledger per meter means one interpretation; this names both zones
-        rather than silently applying whichever was parsed first.
+        Zone-vs-zone (two zones set flow_sensor to the same entity with
+        different flow_sensor_unit) and zone-vs-hub (a zone's flow_sensor is
+        the shared line meter, and its override disagrees with the hub's own
+        line_flow_sensor_unit) both fire this one repair. One ledger per
+        meter means one interpretation; this names both claimants rather than
+        silently applying whichever was resolved first. ``first``/``second``
+        are pre-formatted labels ("zone Alpha", "the hub's line meter"), not
+        raw values, since a repair placeholder has no other way to say which
+        kind of claimant each one is.
         """
         ir.async_create_issue(
             self.hass,
@@ -1081,6 +1088,9 @@ class IrrigationRuntime:
                 "second": second,
             },
         )
+
+    def clear_flow_unit_override_conflict(self, entity_id: str) -> None:
+        ir.async_delete_issue(self.hass, DOMAIN, f"flow_unit_override_conflict_{entity_id}")
 
     def report_flow_unit_lost(self, entity_id: str) -> None:
         """A meter that was readable stopped being so during a cycle.
@@ -1107,9 +1117,19 @@ class IrrigationRuntime:
 
         Metered litres are already in the ledger, continuously: adding them
         again here would count the same water twice. What is left is the
-        estimate for a zone that has nothing to integrate.
+        estimate for a zone that has nothing to integrate -- which is a
+        property of whether a meter is usable right now, not of whether this
+        particular cycle happened to measure zero litres. Those are not the
+        same thing: a no-flow interrupt on a zone with a perfectly usable
+        meter measures a real, true zero, and booking the nominal estimate on
+        top of it would put a false number on zone_water_total, a
+        device_class: water / total_increasing sensor the user has chosen to
+        expose on HA's own Water dashboard -- precisely the kind of
+        plausible-but-false number this feature exists to remove. ``liters``
+        is accepted (session.py's call site is fixed) but no longer
+        consulted: usability, not this cycle's tally, decides.
         """
-        if liters > 0:
+        if self.zone_flow_meter_usable(zone):
             return
         if zone.config.nominal_flow_lpm is None:
             return
