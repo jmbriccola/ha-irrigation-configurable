@@ -238,7 +238,7 @@ describe("proving a recipient", () => {
     await inner._onTestNotification(testEvent(["phone"]));
 
     expect(calls[0]?.data["message"]).toBe(
-      "Notifica di prova. Se riesci a leggerla, questo destinatario funziona.",
+      "Notifica di prova. Se riesci a leggere questo messaggio, il destinatario funziona.",
     );
   });
 

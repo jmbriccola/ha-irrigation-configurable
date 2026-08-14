@@ -38,10 +38,11 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
 - **One Italian word for a flow meter: "flussometro."** The integration's
   translations, the card and the Italian docs previously mixed six terms
   for the same device — contatore di flusso, contatore di portata,
-  contatore di linea, sensore di portata, misuratore di portata —
-  depending on where you looked. They now all read "flussometro." The
-  consumption counter ("contatore dei consumi") and the cadence counter
-  are different concepts and were deliberately left as they were.
+  contatore di linea, sensore di portata, sensore di portata di linea,
+  misuratore di portata — depending on where you looked. They now all
+  read "flussometro." The consumption counter ("contatore dei consumi")
+  and the cadence counter are different concepts and were deliberately
+  left as they were.
 - The README degradation matrix's "Out-of-range diagnosis per zone" row
   now names the meter prerequisite it depends on, matching the row above
   it.
