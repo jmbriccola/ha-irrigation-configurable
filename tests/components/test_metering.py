@@ -431,6 +431,62 @@ async def test_rebuild_keeps_a_live_subscription_when_the_meter_is_unaffected(
     assert samples, "listener registered before rebuild() must still receive samples after it"
 
 
+async def test_editing_a_running_meters_override_does_not_deafen_its_monitor(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    """A unit override edited mid-cycle must not interrupt the cycle.
+
+    Config changes are applied in place precisely so a reload cannot abort a
+    running cycle. But rebuild() used to drop and recreate the ledger of any
+    meter whose resolved override changed, and MeterLedger.stop() clears its
+    listeners -- including the running FlowMonitor's, which holds the ledger
+    object and never re-resolves it. Its litres would freeze while unit_known
+    stayed True, so `blind` stayed False, the periodic check's delta was 0,
+    and within two grace windows the guard interrupted a perfectly healthy
+    run as no_flow. The ledger is retargeted in place instead.
+
+    The override written here is the unit the sensor already declares, so the
+    litres per minute are identical before and after: what the test isolates
+    is the deafening, not a change of scale.
+    """
+    freezer.move_to(START)
+    park = MockValvePark(hass)
+    park.add("valve.a")
+    hass.states.async_set("sensor.flow", "10", {"unit_of_measurement": "L/min"})
+    mock_weather(hass)
+    entry = await setup_hub(
+        hass, [zone_data("Alpha", "valve.a", minutes=10, flow_sensor="sensor.flow")]
+    )
+    runtime = entry.runtime_data
+    zone_id = runtime.zone_ids[0]
+
+    await advance(hass, freezer, 31 * 60)
+    assert hass.states.get("valve.a").state == "open"
+    ledger = runtime.accountant.ledger_for(runtime.zones[zone_id])
+    assert ledger is not None
+    await advance(hass, freezer, 30, step=10.0)
+    total_at_edit = runtime.state.zone_water_total(zone_id)
+    assert total_at_edit > 0.0
+
+    subentry = entry.subentries[zone_id]
+    hass.config_entries.async_update_subentry(
+        entry, subentry, data={**subentry.data, "flow_sensor_unit": "L/min"}
+    )
+    await hass.async_block_till_done()
+
+    # Same object, so the monitor's subscription and its baseline still mean
+    # what they meant: the litres carry on rather than restarting at zero.
+    assert runtime.accountant.ledger_for(runtime.zones[zone_id]) is ledger
+
+    # Well past two ZERO_FLOW_GRACE_S windows, and past the cycle's end.
+    await advance(hass, freezer, 11 * 60, step=10.0)
+
+    outcome = runtime.state.last_outcome(zone_id)
+    assert outcome["result"] == "completed"
+    assert outcome["reason_key"] != "no_flow"
+    assert runtime.state.zone_water_total(zone_id) > total_at_edit
+
+
 async def test_a_stuck_open_valve_keeps_claiming_its_water_after_close_fails(
     hass: HomeAssistant, freezer: FrozenDateTimeFactory
 ) -> None:
