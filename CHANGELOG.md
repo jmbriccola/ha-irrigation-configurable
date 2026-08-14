@@ -4,6 +4,75 @@ All notable changes to this project are documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/).
 
+## [3.3.0] - 2026-08-14
+
+### Water is metered continuously, not only during a cycle
+
+- **One ledger per flow meter, always running.** Litres now accrue whenever a
+  meter reports, whether or not anything is watering. Before this release the
+  integration only integrated flow while it believed a zone was watering, so
+  a dripping valve, a tap opened by hand, or a cycle that ended abnormally
+  were all invisible to it — even though an external `utility_meter` reading
+  the same sensor would have caught every drop. `FlowMonitor` no longer
+  integrates; it reads deltas off the meter's own ledger.
+- **Litres are attributed to whichever zone's valve reports open**, not to
+  whichever zone the run phase claims — a distinction that matters during
+  the open-confirm wait, during the master's pre-open, and above all when a
+  close command fails: the valve stays open, but a phase-based rule would
+  have stopped counting there and, worse, flagged the water it missed as a
+  system leak.
+- **Water no zone claims goes to an unattributed bucket**, split into a
+  total — which includes the master's pre-open line priming, real water
+  belonging to no zone on every single cycle — and an all-closed subset seen
+  with every managed valve reporting closed. Only the all-closed subset is a
+  leak signal.
+- **`zone_water_total`** (per zone) and **`hub_unattributed_water`** (hub)
+  are new sensors, `device_class: water` / `state_class: total_increasing`,
+  so Home Assistant's own statistics engine produces daily/monthly/yearly
+  figures for both and either is eligible for the Water dashboard. Neither
+  publishes a "today" or "this month" sibling entity — recorder statistics
+  already derive those from the recorded total, and a second entity holding
+  the same fact would be a second thing that could drift from it.
+  `zone_water_total` does carry `today_l`/`month_l` as attributes, sliced
+  from the same per-zone daily history that backs its cumulative state.
+- **A per-zone daily water history**, kept for 730 days, backs the totals
+  above and the derived monthly budget below.
+- **The monthly consumption budget is now derived**, not a standalone
+  counter: the carried-over opening balance (see "Behaviour changes") plus
+  the per-zone daily sum for the period, computed fresh on every read.
+  Unattributed water is deliberately excluded from it — a leak must not be
+  able to suspend irrigation, the right consequence from the wrong cause.
+- **An estimated zone (no usable meter) still gets `device_class: water`**
+  and appears in the Water dashboard next to measured ones. Hiding it was
+  considered and rejected: a zone's long-term trend is more useful with an
+  estimated contribution than with a silent gap. What compensates is
+  redundant marking, not exclusion — the `estimated`/`source` attributes, a
+  card badge, and a per-day estimated flag in the history behind it. The
+  README's degradation matrix states plainly what an estimated zone can and
+  cannot detect: it sees water only during its own cycles, so
+  unattributed-water (leak) detection is unavailable for it.
+- **A one-time Repairs notice on upgrade** states that the old monthly
+  counter has been carried forward once as this period's opening balance,
+  and why that balance — and the litres recorded before this release — are
+  not rewritten.
+
+### Behaviour changes
+
+- **Two zones sharing a line meter no longer double-count its water.**
+  Before this release, every zone drawing from a shared line meter
+  integrated the *full* line flow independently and each added that to the
+  monthly total — the same water counted twice. Litres measured while more
+  than one zone on the same meter is open are now split between the open
+  zones in proportion to their `nominal_flow_lpm`.
+- **`line_meter_shared` now catches a meter cleared to an empty string.**
+  The check used to test a zone's own meter with `is None`, while the rest
+  of the runtime resolves "does this zone have its own meter" by truthiness.
+  A zone whose `flow_sensor` had been cleared to `""` (rather than left
+  unset) fell back to the shared line meter without being labelled as
+  sharing it. Fixed by routing every meter-resolution call site through one
+  function, `resolved_meter_entity`, instead of seven separate copies of the
+  same rule.
+
 ## [3.2.1] - 2026-08-14
 
 ### Fixed

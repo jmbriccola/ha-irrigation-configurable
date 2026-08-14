@@ -139,7 +139,11 @@ manual_stop_at: iso_ts | None
 suspended_until: {zone_subentry_id: iso_ts}
 paused_until:   {zone_subentry_id | "__global__": iso_ts}
 last_outcome:  {zone_subentry_id: {result, reason_key, at, cycle_id, minutes, liters}}
-consumption:   {period_start: date_iso, liters: float}
+water:                # 3.3.0: replaced the standalone monthly counter
+  zones:        {zone_subentry_id: {total_l: float, estimated_l: float}}
+  unattributed: {scope: {total_l: float, closed_l: float}}   # scope: zone_id | "__hub__"
+  daily:        {date_iso: {zone_subentry_id | "__unattributed__": {l, est, gap_s, closed_l}}}
+  carried_over: {period_start: date_iso, liters: float}      # one-period opening balance
 ```
 
 Date-keyed dicts make midnight rotation trivial and restart-safe (no rotation
@@ -229,10 +233,14 @@ It is a *managed valve* for the watchdog and surveillance, but exempt from the
 - **Sentinel**: daily at `sentinel_time`, checks every cycle that was due today
   left an outcome (completed or skipped-with-reason); missing → notification +
   Repairs issue.
-- **Flow anomalies** (degrade if no meter): flow with all valves closed (leak,
-  urgent), zero flow with valve open (interrupt + notify), out-of-range flow —
-  expected range = Σ nominal flows of active zones (line meter) or zone nominal
-  (zone meter), ± tolerance.
+- **Flow anomalies** (degrade if no meter): zero flow with valve open
+  (interrupt + notify), out-of-range flow — expected range = Σ nominal flows
+  of active zones (line meter) or zone nominal (zone meter), ± tolerance.
+  Water measured while every managed valve reports closed is tracked
+  continuously as of 3.3.0 (`WaterAccountant`, surfaced on
+  `hub_unattributed_water`'s `closed_l`), but raises no notification of its
+  own yet — an active leak alert on top of that data is later work, not this
+  release's.
 - **Manual-stop block**: any manual interruption arms a block window; queued
   and new runs are cancelled with `manual_stop_block` until it expires.
 

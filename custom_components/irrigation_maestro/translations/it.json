@@ -857,7 +857,7 @@
     },
     "flow_unit_corrected": {
       "title": "Le letture di portata vengono convertite da un'altra unità",
-      "description": "Questi flussometri riportano in un'unità diversa dai litri al minuto: {sensors}. Le loro letture vengono convertite in L/min, quindi litri misurati, target di volume e contatore dei consumi sono corretti. Se hai aggiornato da una versione precedente alla 3.2.0, i litri registrati allora da quei flussometri erano letti come se fossero già L/min e risultano sottostimati; quello storico non viene riscritto di proposito, perché il totale dei consumi mescola litri misurati e stime calcolate come portata nominale × minuti, che il difetto non toccava."
+      "description": "Questi flussometri riportano in un'unità diversa dai litri al minuto: {sensors}. Le loro letture vengono convertite in L/min, quindi litri misurati, target di volume e i totali d'acqua da essi derivati sono corretti. Se hai aggiornato da una versione precedente alla 3.2.0, i litri registrati allora da quei flussometri erano letti come se fossero già L/min e risultano sottostimati; quello storico non viene riscritto di proposito, perché mescola litri misurati e stime calcolate come portata nominale × minuti, che il difetto non toccava."
     },
     "consumption_history_restarted": {
       "title": "Il totale mensile dell'acqua riparte da un saldo riportato",

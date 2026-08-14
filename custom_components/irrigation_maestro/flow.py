@@ -1,9 +1,10 @@
 """The one place a flow sensor's state is read, and the one place a unit is converted.
 
 Every flow number inside this integration is litres per minute: `nominal_flow_lpm`,
-the tolerance band, accumulated litres, volume-curve targets and the monthly
-consumption counter. Conversion happens here, at the boundary, so no downstream
-code ever sees a foreign unit and no downstream code has to know one exists.
+the tolerance band, accumulated litres, volume-curve targets, and every per-zone
+and monthly water total derived from them. Conversion happens here, at the
+boundary, so no downstream code ever sees a foreign unit and no downstream
+code has to know one exists.
 
 Before this module the component read `float(state.state)` and called it L/min
 whatever the sensor declared. On a real install the zone meters publish m³/h,
