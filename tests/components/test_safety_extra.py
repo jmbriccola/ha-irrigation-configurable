@@ -3,6 +3,7 @@
 from typing import Any
 
 import pytest
+from custom_components.irrigation_maestro.accounting import MeterSample
 from custom_components.irrigation_maestro.const import DOMAIN
 from freezegun.api import FrozenDateTimeFactory
 from homeassistant.core import HomeAssistant, ServiceCall
@@ -218,6 +219,54 @@ async def test_zero_flow_interrupts_cycle(
     assert hass.states.get("valve.a").state == "open"
 
     # Flow never starts: after the grace period the cycle is interrupted.
+    await advance(hass, freezer, 3 * 60)
+    assert hass.states.get("valve.a").state == "closed"
+    runtime = entry.runtime_data
+    outcome = runtime.state.last_outcome(runtime.zone_ids[0])
+    assert outcome["result"] == "interrupted"
+    assert outcome["reason_key"] == "no_flow"
+
+
+async def test_a_meter_that_goes_unavailable_still_interrupts_the_cycle(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    """An unavailable meter with a known unit is a genuine, known zero.
+
+    flow.py returns lpm=0.0, unit_known=True, available=False for an
+    unavailable/unknown state with a declared unit -- deliberately, so the
+    zero-flow guard is entitled to act on it (see the degradation matrix in
+    README.md). The guard's blind condition is `not unit_known or
+    unit_recovered`, nothing else: it must not also read
+    MeterSample.measured_s, because accounting.py reports measured_s=0.0 for
+    exactly this case (available=False; accounting.py:149-152). Gating on it
+    would leave the guard re-arming forever without ever judging a window --
+    watering blind to the run's duration or safety timeout with no
+    diagnosis, instead of interrupting at roughly the grace period like a
+    measured zero does.
+    """
+    freezer.move_to(START)
+    park = MockValvePark(hass)
+    park.add("valve.a")
+    hass.states.async_set("sensor.flow", "unavailable", {"unit_of_measurement": "L/min"})
+    mock_weather(hass)
+    entry = await setup_hub(
+        hass,
+        [
+            zone_data(
+                "Alpha",
+                "valve.a",
+                minutes=10,
+                flow_sensor="sensor.flow",
+                nominal_flow_lpm=10.0,
+            )
+        ],
+    )
+
+    await advance(hass, freezer, 31 * 60)
+    assert hass.states.get("valve.a").state == "open"
+
+    # The meter never becomes available: after the grace period the cycle is
+    # interrupted, exactly as it would be for a measured, known zero.
     await advance(hass, freezer, 3 * 60)
     assert hass.states.get("valve.a").state == "closed"
     runtime = entry.runtime_data
@@ -483,6 +532,56 @@ async def test_a_unit_lost_mid_cycle_freezes_litres_without_crashing(
     assert 25 < outcome["volume_l"] < 40
     registry = ir.async_get(hass)
     assert registry.async_get_issue(DOMAIN, "flow_unit_unknown_sensor.flow") is not None
+
+
+async def test_a_partial_unit_loss_does_not_double_book_the_meterless_estimate(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    """had_usable_unit is this run's own history, not just its last sample.
+
+    A meter that worked for part of a run and then lost its unit already has
+    its working-part litres recorded by the ledger, attributed to this zone
+    while its valve was open. add_consumption must not also book a
+    full-duration nominal estimate on top just because the run ended blind --
+    that would count real, ledger-recorded water again as an estimate, on a
+    device_class: water / total_increasing sensor the user has chosen to
+    expose on HA's own Water dashboard. Litres counted twice are worse than
+    litres missed (see test_metering_restart.py's own module docstring for
+    the same preference stated the other way round).
+
+    Same scenario as test_a_unit_lost_mid_cycle_freezes_litres_without_crashing
+    (10 L/min for ~2 minutes before the unit is lost): the ledger attributes
+    roughly 20 L of real litres to this zone before going blind. A
+    double-booked estimate would add 10 L/min * 10 min = 100 L on top --
+    easily distinguished from the real total, so the bound below is wide.
+    """
+    freezer.move_to(START)
+    park = MockValvePark(hass)
+    park.add("valve.a")
+    hass.states.async_set("sensor.flow", "10.0", {"unit_of_measurement": "L/min"})
+    mock_weather(hass)
+    entry = await setup_hub(
+        hass,
+        [
+            zone_data(
+                "Alpha", "valve.a", minutes=10, flow_sensor="sensor.flow", nominal_flow_lpm=10.0
+            )
+        ],
+    )
+    runtime = entry.runtime_data
+    zone_id = runtime.zone_ids[0]
+
+    await advance(hass, freezer, 31 * 60)
+    await advance(hass, freezer, 120)
+    # An upstream update drops the unit halfway through.
+    hass.states.async_set("sensor.flow", "10.0")
+    await advance(hass, freezer, 10 * 60)
+
+    outcome = runtime.state.last_outcome(zone_id)
+    assert outcome["result"] == "completed"
+
+    total = runtime.state.zone_water_total(zone_id)
+    assert 20 <= total < 40
 
 
 async def test_a_unit_that_returns_just_before_a_check_does_not_trip_the_guard(
@@ -760,18 +859,26 @@ async def test_volume_target_reached_on_the_read_that_loses_the_unit(
     300 L/min over those 6 s -- 30 L -- before the new, unit-less reading is
     even consulted, comfortably past the 20 L target.
 
-    Both reads must avoid the ledger's own tick, whose phase is fixed by hub
-    setup (empirically, not just by this arithmetic): ticks fall on
-    multiples of 30 s counted from setup, and since the fixture always
-    triggers on a clean half hour (START is :00, the trigger is :30),
-    started_at itself lands on that same 30 s grid. But started_at is not
-    when this test starts observing -- the initial 31 * 60 s advance is a
-    generous margin used throughout this file, and it lands ~50 s past
-    started_at on its own (queueing, the settle check and the open-confirm
-    wait all take a few seconds of simulated time), which is itself right on
-    the grid: started_at's nearest tick sits at +50 s. The two reads above
-    therefore land at +53 s and +59 s, inside the following tick-free
-    stretch (50 s, 80 s], with margin on both sides.
+    Both reads must avoid the ledger's own tick landing between them, which
+    would publish a competing sample and no longer pin the invariant on the
+    read that loses the unit specifically. Rather than trust that the two
+    checkpoints below avoid it by construction, a spy subscribed directly to
+    the zone's ledger asserts it: the sample count is unchanged across the
+    arm-to-lose window, and the crossing sample itself is checked for
+    lpm is None and total_l - baseline >= target. A tick landing where it
+    should not fails on that assertion, naming the broken assumption,
+    instead of failing later on a state assertion that does not say why.
+
+    For context, not as the correctness mechanism: ticks fall on multiples
+    of 30 s counted from hub setup. started_at does *not* land on that grid
+    -- empirically (right after the standard 31 * 60 s advance used
+    throughout this file, elapsed-since-started_at is exactly 50.0 s, and
+    31 * 60 - 50 = 1810 = 1800 + 10, where 1800 = 60 * 30 is a grid point) it
+    sits 10 s after one. So ticks fall at started_at - 10 s, +20 s, +50 s,
+    +80 s, ... -- and the standard 31 * 60 s advance happens to land exactly
+    on the +50 s one, purely as a coincidence of the two numbers. The two
+    reads below, at +53 s and +59 s, sit inside the following gap, (+50 s,
+    +80 s], with margin on both sides.
     """
     freezer.move_to(START)
     park = MockValvePark(hass)
@@ -808,6 +915,12 @@ async def test_volume_target_reached_on_the_read_that_loses_the_unit(
 
     runtime = entry.runtime_data
     zone_id = runtime.zone_ids[0]
+    zone = runtime.zones[zone_id]
+    ledger = runtime.accountant.ledger_for(zone)
+    assert ledger is not None
+    samples: list[MeterSample] = []
+    ledger.subscribe(samples.append)
+    baseline = ledger.total_l
     started_at = runtime.session.active_runs[zone_id].started_at
     assert started_at is not None
 
@@ -817,29 +930,39 @@ async def test_volume_target_reached_on_the_read_that_loses_the_unit(
         await advance(hass, freezer, remaining, step=1.0)
 
     # Zero flow, with a unit, the whole time so far: nothing to integrate.
-    # 53 s, not some smaller number: the initial 31 * 60 s advance already
-    # lands ~50 s past started_at on its own (the settle/open-confirm
-    # sequence takes a few seconds), which is itself right at a ledger tick
-    # (ticks fall on multiples of 30 s counted from hub setup, and the run
-    # starts on a multiple of 30 s after setup too, so started_at + 50 s is
-    # started_at's nearest tick). The window below is chosen to sit inside
-    # the following tick-free stretch, (50 s, 80 s], with margin on both
-    # sides -- verified empirically, not just by this arithmetic.
     await advance_to(53)
     assert hass.states.get("valve.a").state == "open"
 
     # Arms _last_lpm at a high rate; this sample integrates the prior
     # (zero-flow) interval, so nothing accrues from it.
     hass.states.async_set("sensor.flow", "300", {"unit_of_measurement": "L/min"})
+    await hass.async_block_till_done()
+    samples_after_arm = len(samples)
+
     await advance_to(59)
     # Merely waiting does not integrate anything: no sample has run since
     # the arm above, so nothing has accrued yet -- still watering.
     assert hass.states.get("valve.a").state == "open"
+    # Pin the precondition directly instead of narrating it: no ledger
+    # sample -- tick or otherwise -- arrived in the arm-to-lose window. If
+    # one did, the crossing below would not be attributable to the specific
+    # read that loses the unit, and this failure names that instead of the
+    # test failing later on a state assertion that does not say why.
+    assert len(samples) == samples_after_arm, (
+        "a ledger sample landed between the arm and the unit-losing read -- "
+        "the tick-free-window assumption this test relies on no longer holds"
+    )
 
     # The read that loses the unit: _integrate runs first, against the armed
     # 300 L/min over the 6 s since the previous read (30 L, past the 20 L
     # target) -- before the new, unit-less reading is even looked at.
     hass.states.async_set("sensor.flow", "300", {})
+    await hass.async_block_till_done()
+    assert len(samples) == samples_after_arm + 1
+    crossing = samples[-1]
+    assert crossing.lpm is None
+    assert crossing.total_l - baseline >= 20
+
     await advance_to(61)
 
     assert hass.states.get("valve.a").state == "closed"
