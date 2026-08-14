@@ -841,6 +841,10 @@
       "title": "Unità del flussometro sconosciuta",
       "description": "Il flussometro {entity_id} non dichiara un'unità di misura, o ne dichiara una non convertibile in litri al minuto. Le sue letture non vengono usate: per questo flussometro la modalità volume e il rilevamento delle anomalie di portata sono spenti, e il consumo ricade sulla portata nominale. Imposta l'unità esplicitamente sulla zona (o sul flussometro di linea) per riattivarli."
     },
+    "flow_unit_override_conflict": {
+      "title": "Conflitto sull'unità del flussometro",
+      "description": "Il flussometro {entity_id} è rivendicato sia dalla zona {first} sia dalla zona {second}, che dichiarano per esso un'unità diversa. Un solo flussometro può essere letto con una sola interpretazione: vince l'unità impostata da {first}, quella di {second} viene ignorata. Imposta la stessa unità su entrambe le zone, oppure impostala sul flussometro di linea invece che su una singola zona."
+    },
     "flow_unit_corrected": {
       "title": "Le letture di portata vengono convertite da un'altra unità",
       "description": "Questi flussometri riportano in un'unità diversa dai litri al minuto: {sensors}. Le loro letture vengono convertite in L/min, quindi litri misurati, target di volume e contatore dei consumi sono corretti. Se hai aggiornato da una versione precedente alla 3.2.0, i litri registrati allora da quei flussometri erano letti come se fossero già L/min e risultano sottostimati; quello storico non viene riscritto di proposito, perché il totale dei consumi mescola litri misurati e stime calcolate come portata nominale × minuti, che il difetto non toccava."

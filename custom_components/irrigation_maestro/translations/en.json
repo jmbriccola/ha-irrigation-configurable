@@ -841,6 +841,10 @@
       "title": "Flow sensor unit unknown",
       "description": "The sensor {entity_id} does not declare a unit of measurement, or declares one that cannot be converted to litres per minute. Its readings are not being used: volume mode and flow anomaly detection are off for it, and consumption falls back to the nominal flow rate. Set the unit explicitly on the zone (or on the line meter) to turn them back on."
     },
+    "flow_unit_override_conflict": {
+      "title": "Flow meter unit override conflict",
+      "description": "The flow meter {entity_id} is claimed by both zone {first} and zone {second}, with different unit overrides. One meter can only be read under one interpretation, so {first}'s override is being used and {second}'s is ignored. Give both zones the same override, or set the override on the line meter instead of on either zone."
+    },
     "flow_unit_corrected": {
       "title": "Flow readings are converted from another unit",
       "description": "These meters report in a unit other than litres per minute: {sensors}. Their readings are converted to L/min, so measured litres, volume targets and the consumption counter are correct. If you upgraded from a version before 3.2.0, the litres those meters recorded back then were read as if they were already L/min and are understated; that history is deliberately not rewritten, because the consumption total mixes measured litres with nominal flow × minutes estimates the defect never touched."

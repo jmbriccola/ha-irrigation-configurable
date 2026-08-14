@@ -213,13 +213,20 @@ async def test_add_water_records_a_gap_with_zero_litres(hass: HomeAssistant) -> 
 
 
 async def test_unattributed_tracks_closed_valves_separately(hass: HomeAssistant) -> None:
-    """Priming litres are unattributed; only the all-closed subset is suspect."""
+    """Priming litres are unattributed; only the all-closed subset is suspect.
+
+    Two separate closed-valve contributions (3.0, then 5.0), not one: a single
+    nonzero contribution cannot tell accumulation apart from overwrite, which
+    is exactly the defect this counter was shipped with once already (see the
+    daily-record test below, fixed one level down).
+    """
     state = RuntimeState(hass, "entry_water2")
     await state.async_load()
     day = date(2026, 8, 14)
 
     state.add_unattributed("z1", 2.0, day=day, valves_closed=False)  # master pre-open
-    state.add_unattributed("z1", 8.0, day=day, valves_closed=True)  # leak candidate
+    state.add_unattributed("z1", 3.0, day=day, valves_closed=True)  # leak candidate
+    state.add_unattributed("z1", 5.0, day=day, valves_closed=True)  # leak candidate
 
     assert state.unattributed_total("z1") == 10.0
     assert state.unattributed_closed("z1") == 8.0
