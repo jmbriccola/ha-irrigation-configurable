@@ -132,6 +132,40 @@ async def test_recovery_is_published_on_the_state_event(
         ledger.stop()
 
 
+async def test_retarget_publishes_recovery_on_the_next_sample(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    """A config edit that resolves an unknown unit is a recovery too.
+
+    MeterLedger.retarget assigns unit_known directly, with no MeterSample to
+    publish the edge on. Without latching it, the next _sample would compute
+    `reading.unit_known and not self.unit_known` against the value retarget
+    had already written -- True and not True -- and the recovery would be
+    swallowed, leaving FlowMonitor's periodic guard free to judge a window
+    that is part blind and part measured as if it were fully measured. Same
+    transition pin as test_recovery_is_published_on_the_state_event: exactly
+    one sample carries the edge, not every sample from here on.
+    """
+    freezer.move_to(START)
+    hass.states.async_set("sensor.flow", "10", {})  # unresolvable unit throughout
+    ledger, samples = await _ledger(hass)
+    try:
+        await advance(hass, freezer, 30, step=10.0)
+        assert ledger.unit_known is False
+        assert all(sample.unit_recovered is False for sample in samples)
+
+        ledger.retarget(FlowSensorReader(hass, "sensor.flow", "L/min"))
+        assert ledger.unit_known is True  # retarget itself resolves the unit
+
+        await advance(hass, freezer, 30, step=10.0)
+        assert samples[-1].unit_recovered is True
+
+        await advance(hass, freezer, 30, step=10.0)
+        assert samples[-1].unit_recovered is False
+    finally:
+        ledger.stop()
+
+
 async def test_the_total_never_decreases(
     hass: HomeAssistant, freezer: FrozenDateTimeFactory
 ) -> None:
