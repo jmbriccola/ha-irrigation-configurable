@@ -184,6 +184,13 @@ class WaterAccountant:
     which would diagnose a stuck-open valve as a system leak. A valve that
     reports open is watering; that is the physical truth, and it is the same
     predicate leak detection reads.
+
+    And it is read at the right end of the interval: each sample attributes
+    the interval it is *closing* using the valve state remembered from the
+    interval's own start, not the state at the sample's instant. A cycle's
+    tail -- up to one tick's worth, integrated after the valve has already
+    closed -- would otherwise find no claimant and land in the unattributed,
+    valves-closed bucket on every single run.
     """
 
     def __init__(self, runtime: IrrigationRuntime) -> None:
@@ -192,6 +199,12 @@ class WaterAccountant:
         self._unsubs: dict[str, CALLBACK_TYPE] = {}
         self._overrides: dict[str, str | None] = {}
         self._last_totals: dict[str, float] = {}
+        # Who was watering as of the start of the interval that is still
+        # open -- i.e. as of the previous sample. _on_sample attributes the
+        # interval it is closing using these, not the claimants at its own
+        # instant, and then refreshes them for the interval it is opening.
+        self._pending_claimants: dict[str, list[ZoneRuntime]] = {}
+        self._pending_valves_closed: dict[str, bool] = {}
 
     def start(self) -> None:
         self.rebuild()
@@ -205,6 +218,8 @@ class WaterAccountant:
         self._ledgers.clear()
         self._overrides.clear()
         self._last_totals.clear()
+        self._pending_claimants.clear()
+        self._pending_valves_closed.clear()
 
     def rebuild(self) -> None:
         """Rebuild the ledger set from the current configuration -- by diffing.
@@ -232,8 +247,13 @@ class WaterAccountant:
             self._overrides.pop(entity_id, None)
             # A stale entry here would make a recreated ledger's first sample
             # compute its delta against the old ledger's last known total,
-            # instead of the fresh ledger's own 0.0 starting point.
+            # instead of the fresh ledger's own 0.0 starting point. Same
+            # reasoning for the pending claimant/valves-closed state below --
+            # a recreated ledger's first interval must be judged against who
+            # is watering now, not who was watering under the dropped ledger.
             self._last_totals.pop(entity_id, None)
+            self._pending_claimants.pop(entity_id, None)
+            self._pending_valves_closed.pop(entity_id, None)
         for entity_id, override in resolved.items():
             if entity_id in self._ledgers:
                 continue  # already running, untouched above
@@ -242,6 +262,10 @@ class WaterAccountant:
             self._ledgers[entity_id] = ledger
             self._overrides[entity_id] = override
             self._unsubs[entity_id] = ledger.subscribe(partial(self._on_sample, entity_id))
+            # The interval about to open starts now, at whatever is watering
+            # this instant -- there is no earlier sample to have captured it.
+            self._pending_claimants[entity_id] = self._claimants(entity_id)
+            self._pending_valves_closed[entity_id] = self._all_valves_closed()
             ledger.start()
 
     def _resolved_meters(self) -> dict[str, str | None]:
@@ -333,17 +357,32 @@ class WaterAccountant:
     def _on_sample(self, entity_id: str, sample: MeterSample) -> None:
         liters = sample.total_l - self._last_totals.get(entity_id, 0.0)
         self._last_totals[entity_id] = sample.total_l
+        # Attribute the interval that just closed to who was watering at its
+        # START (captured by the previous sample), not at this sample's own
+        # instant: a run's tail -- up to one tick's worth, integrated after
+        # the valve has already closed -- would otherwise find no claimants
+        # right now and land in the unattributed bucket, a false contribution
+        # to closed_l on every single cycle. Rate and claimants both belong
+        # to the interval's beginning, matching the left-Riemann rate
+        # MeterLedger already charges from its own start.
+        claimants = self._pending_claimants.get(entity_id, [])
+        valves_closed = self._pending_valves_closed.get(entity_id, True)
+        # Refresh unconditionally, even when nothing accrues below: the
+        # interval opening now must be judged by who is watering as of THIS
+        # instant, not stranded on whoever was watering before a zero-litres
+        # gap (unit unknown, or simply no elapsed time).
+        self._pending_claimants[entity_id] = self._claimants(entity_id)
+        self._pending_valves_closed[entity_id] = self._all_valves_closed()
         if liters <= 0:
             return
         day = dt_util.as_local(sample.at).date()
-        claimants = self._claimants(entity_id)
         state = self._runtime.state
         if not claimants:
             state.add_unattributed(
                 self._scope_for(entity_id),
                 liters,
                 day=day,
-                valves_closed=self._all_valves_closed(),
+                valves_closed=valves_closed,
             )
         elif len(claimants) == 1:
             state.add_water(claimants[0].config.zone_id, liters, day=day, estimated=False)
