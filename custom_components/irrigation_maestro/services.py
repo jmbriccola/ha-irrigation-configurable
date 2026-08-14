@@ -1268,6 +1268,22 @@ async def _async_set_notifications(call: ServiceCall) -> None:
     _write_hub_options(hass, entry, options)
 
 
+#: Only the direct Developer Tools call reaches this: the panel already sends
+#: its own localized title and message. Any language not listed here falls
+#: back to English -- an explicit ``title``/``message`` in the call always
+#: wins over either default regardless of language.
+_TEST_NOTIFICATION_DEFAULTS: Final[dict[str, tuple[str, str]]] = {
+    "en": (
+        "Irrigation Maestro",
+        "Test notification. If you can read this, this recipient works.",
+    ),
+    "it": (
+        "Irrigation Maestro",
+        "Notifica di prova. Se riesci a leggere questo messaggio, il destinatario funziona.",
+    ),
+}
+
+
 async def _async_test_notification(call: ServiceCall) -> ServiceResponse:
     """Send a test message and report, per recipient, whether it arrived.
 
@@ -1278,11 +1294,12 @@ async def _async_test_notification(call: ServiceCall) -> ServiceResponse:
     hass = call.hass
     _loaded_entry(hass)
     event = call.data.get(ATTR_EVENT, EVENT_ANOMALY)
+    default_title, default_message = _TEST_NOTIFICATION_DEFAULTS.get(
+        hass.config.language, _TEST_NOTIFICATION_DEFAULTS["en"]
+    )
     data: dict[str, Any] = {
-        "title": call.data.get(ATTR_TITLE, "Irrigation Maestro"),
-        "message": call.data.get(
-            ATTR_MESSAGE, "Test notification. If you can read this, this recipient works."
-        ),
+        "title": call.data.get(ATTR_TITLE, default_title),
+        "message": call.data.get(ATTR_MESSAGE, default_message),
     }
     if default_priority(event) == PRIORITY_HIGH:
         data["data"] = {
@@ -1292,8 +1309,12 @@ async def _async_test_notification(call: ServiceCall) -> ServiceResponse:
             "ttl": 0,
         }
     results: dict[str, Any] = {}
-    for raw in call.data[ATTR_SERVICES]:
-        name = normalize_service(str(raw))
+    # Aliases of the same recipient ("notify.phone" and "phone") normalise to
+    # the same name; de-duplicating before the loop keeps one send and one
+    # result instead of sending twice and letting the second overwrite the
+    # first.
+    names = dict.fromkeys(normalize_service(str(raw)) for raw in call.data[ATTR_SERVICES])
+    for name in names:
         if not hass.services.has_service("notify", name):
             results[name] = {"sent": False, "error": "unknown_service"}
             continue
