@@ -132,9 +132,9 @@ export const it: Record<keyof typeof en, string> = {
 
   // Funzionalità degradate
   "degraded.switch_valve": "Valvola senza conferma di posizione",
-  "degraded.no_flow_meter": "Nessun contatore di flusso",
+  "degraded.no_flow_meter": "Nessun flussometro",
   "degraded.flow_unit_unknown": "Unità del flussometro sconosciuta",
-  "degraded.line_meter_shared": "Contatore di linea condiviso",
+  "degraded.line_meter_shared": "Flussometro di linea condiviso",
   "degraded.no_hourly_forecast": "Nessuna previsione oraria",
   "degraded.volume_mode_unavailable": "Modalità a volume non disponibile",
 
@@ -238,8 +238,8 @@ export const it: Record<keyof typeof en, string> = {
   "zone.field_valve": "Valvola",
   "zone.field_area": "Area (m²)",
   "zone.advanced": "Avanzate",
-  "zone.field_flow_sensor": "Sensore di portata",
-  "zone.field_flow_unit": "Unità del sensore di portata",
+  "zone.field_flow_sensor": "Flussometro",
+  "zone.field_flow_unit": "Unità del flussometro",
   "zone.flow_unit_auto": "Rilevata dall'entità",
   "zone.flow_unit_from_override": "Uso {unit} — l'hai impostata tu, e vince sull'entità",
   "zone.flow_unit_from_entity": "Uso {unit}, dichiarata dall'entità",
@@ -258,8 +258,8 @@ export const it: Record<keyof typeof en, string> = {
   "settings.weather_entity": "Entità meteo",
   "settings.rain": "Sensore pioggia",
   "settings.outdoor_temp": "Sensore temperatura esterna",
-  "settings.line_flow": "Sensore di portata di linea",
-  "settings.field_line_flow_unit": "Unità del sensore di portata di linea",
+  "settings.line_flow": "Flussometro di linea",
+  "settings.field_line_flow_unit": "Unità del flussometro di linea",
   "settings.master_valve": "Valvola principale",
   "settings.clear": "Rimuovi",
   "settings.budget": "Budget consumo",
@@ -361,6 +361,6 @@ export const it: Record<keyof typeof en, string> = {
   "program_editor.soak_pause": "Pausa di ammollo",
   "program_editor.soak_pause_hint": "Minuti di attesa fra una corsa e l'altra. Senza una durata massima per corsa non ha alcun effetto.",
   "program_editor.volume_safety_timeout": "Timeout di sicurezza volumetrico",
-  "program_editor.volume_safety_timeout_hint": "Minuti dopo i quali una corsa a volume si ferma anche se il contatore non ha raggiunto il target.",
+  "program_editor.volume_safety_timeout_hint": "Minuti dopo i quali una corsa a volume si ferma anche se il flussometro non ha raggiunto il target.",
   "settings.advanced_note": "Parametri avanzati (motore, sicurezza, notifiche) → Impostazioni",
 };

@@ -8,14 +8,14 @@
           "weather_entity": "Entità meteo",
           "rain_sensor": "Sensore pioggia (facoltativo)",
           "outdoor_temp_sensor": "Sensore temperatura esterna (facoltativo)",
-          "line_flow_sensor": "Sensore di portata di linea (facoltativo)",
+          "line_flow_sensor": "Flussometro di linea (facoltativo)",
           "master_valve": "Valvola master / pompa (facoltativa)"
         },
         "data_description": {
           "weather_entity": "Obbligatoria. Un'entità weather.* che fornisce previsioni di temperatura e precipitazioni (es. Met.no).",
           "rain_sensor": "Un sensore con la pioggia totale di oggi in mm. Se vuoto, la pioggia viene stimata dalle previsioni.",
           "outdoor_temp_sensor": "Usa un termometro reale al posto dell'entità meteo per le massime giornaliere.",
-          "line_flow_sensor": "Un unico contatore di portata (L/min) sul collettore, condiviso dalle zone che non ne hanno uno proprio.",
+          "line_flow_sensor": "Un unico flussometro (L/min) sul collettore, condiviso dalle zone che non ne hanno uno proprio.",
           "master_valve": "Una valvola o un interruttore (es. il relè di una pompa) aperto prima della prima zona e chiuso dopo l'ultima."
         }
       }
@@ -526,12 +526,12 @@
           "description": "Icona mostrata per il dispositivo di questa zona."
         },
         "flow_sensor": {
-          "name": "Sensore di portata",
-          "description": "Il flussometro proprio della zona (L/min). Se vuoto, si usa il contatore di linea condiviso, quando disponibile."
+          "name": "Flussometro",
+          "description": "Il flussometro proprio della zona (L/min). Se vuoto, si usa il flussometro di linea condiviso, quando disponibile."
         },
         "flow_sensor_unit": {
-          "name": "Unità del sensore di portata",
-          "description": "Serve solo se il sensore non dichiara un'unità, o ne dichiara una non convertibile. Lascia vuoto per usare quella dichiarata dall'entità. Se la imposti qui, vince sull'unità dell'entità."
+          "name": "Unità del flussometro",
+          "description": "Serve solo se il flussometro non dichiara un'unità, o ne dichiara una non convertibile. Lascia vuoto per usare quella dichiarata dall'entità. Se la imposti qui, vince sull'unità dell'entità."
         },
         "nominal_flow_lpm": {
           "name": "Portata nominale (L/min)",
@@ -582,11 +582,11 @@
           "description": "Usa un termometro reale al posto dell'entità meteo per le massime giornaliere. Lascia vuoto per rimuoverlo; ometti per lasciarlo invariato."
         },
         "line_flow_sensor": {
-          "name": "Sensore di portata di linea",
-          "description": "Un unico contatore di portata (L/min) sul collettore, condiviso dalle zone che non ne hanno uno proprio. Lascia vuoto per rimuoverlo; ometti per lasciarlo invariato."
+          "name": "Flussometro di linea",
+          "description": "Un unico flussometro (L/min) sul collettore, condiviso dalle zone che non ne hanno uno proprio. Lascia vuoto per rimuoverlo; ometti per lasciarlo invariato."
         },
         "line_flow_sensor_unit": {
-          "name": "Unità del sensore di portata di linea",
+          "name": "Unità del flussometro di linea",
           "description": "Serve solo se il flussometro di linea non dichiara un'unità, o ne dichiara una non convertibile. Lascia vuoto per usare quella dichiarata dall'entità."
         },
         "master_valve": {
@@ -839,7 +839,7 @@
     },
     "flow_unit_unknown": {
       "title": "Unità del flussometro sconosciuta",
-      "description": "Il sensore {entity_id} non dichiara un'unità di misura, o ne dichiara una non convertibile in litri al minuto. Le sue letture non vengono usate: per questo sensore la modalità volume e il rilevamento delle anomalie di portata sono spenti, e il consumo ricade sulla portata nominale. Imposta l'unità esplicitamente sulla zona (o sul flussometro di linea) per riattivarli."
+      "description": "Il flussometro {entity_id} non dichiara un'unità di misura, o ne dichiara una non convertibile in litri al minuto. Le sue letture non vengono usate: per questo flussometro la modalità volume e il rilevamento delle anomalie di portata sono spenti, e il consumo ricade sulla portata nominale. Imposta l'unità esplicitamente sulla zona (o sul flussometro di linea) per riattivarli."
     },
     "flow_unit_corrected": {
       "title": "Le letture di portata vengono convertite da un'altra unità",
@@ -866,7 +866,7 @@
       "message": "Il programma {cycle_id} irriga a volume: la sua curva imposta l'obiettivo in litri, quindi il controllo dei minuti non si applica. Modifica invece la sua curva."
     },
     "volume_requires_flow": {
-      "message": "Il programma {cycle_id} misura l'acqua in litri, il che richiede un misuratore di portata funzionante, e questa zona non ne ha uno. Assegna un sensore di portata alla zona, oppure modifica il programma perché irrighi per una durata in minuti."
+      "message": "Il programma {cycle_id} misura l'acqua in litri, il che richiede un flussometro funzionante, e questa zona non ne ha uno. Assegna un flussometro alla zona, oppure modifica il programma perché irrighi per una durata in minuti."
     },
     "duration_point_out_of_range": {
       "message": "Il programma {cycle_id} irriga per una durata in minuti, e un punto di durata non può superare un giorno (1440 minuti). Una curva a volume, in litri, non ha questo limite."
