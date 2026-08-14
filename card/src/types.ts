@@ -79,6 +79,11 @@ export type HubRole =
   | "hub_weighted_temp"
   | "hub_session"
   | "hub_consumption_left"
+  // Water accounting (docs/design/card-contract.md): hub-wide litres no
+  // zone claimed. Not yet surfaced by the card -- the role is registered
+  // here, same as zone_interval/zone_adjustment below, so it counts as a
+  // discovery hit ahead of whichever task first renders it.
+  | "hub_unattributed_water"
   | "hub_pause"
   | "hub_evaluate"
   | "hub_stop_all";
@@ -87,6 +92,9 @@ export type ZoneRole =
   | "zone_state"
   | "zone_next_run"
   | "zone_last_outcome"
+  // Water accounting (docs/design/card-contract.md): the zone's cumulative
+  // litres, `waterSummary()` in discovery.ts reads this role's entity.
+  | "zone_water_total"
   | "zone_enabled"
   | "cycle_enabled"
   | "zone_order"
@@ -149,6 +157,22 @@ export interface QueueItem {
   cycle_id?: string;
   duration_min?: number;
   state?: string;
+}
+
+/**
+ * A zone's water figures, derived from `zone_water_total`
+ * (docs/design/card-contract.md) by `waterSummary()` in discovery.ts.
+ */
+export interface WaterSummary {
+  total: number;
+  today: number;
+  month: number;
+  /** True when any of `total` came from the nominal-flow estimate rather
+   *  than a meter reading -- covers both `source: "nominal"` (all of it)
+   *  and `source: "mixed"` (some of it): the contract defines `estimated`
+   *  as true in either case, so badging on this one flag already covers
+   *  both sources without a separate check. */
+  estimated: boolean;
 }
 
 /* ------------------------------------------------------------------ */

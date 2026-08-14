@@ -70,6 +70,7 @@ export const en = {
   "header.global_pause": "Globally paused",
   "header.stale_weather": "Stale weather data",
   "header.consumption_left": "Water left",
+  "header.unattributed_water": "Unattributed water",
 
   // Session states
   "session.idle": "Idle",
@@ -146,6 +147,9 @@ export const en = {
   "zone.no_cycles": "No programs configured",
   "zone.cycle_enabled": "Enabled",
   "zone.cycle_disabled": "Disabled",
+  "zone.water_estimated": "estimated",
+  "zone.water_today": "today",
+  "zone.water_month": "this month",
 
   // Cycle triggers
   "trigger.sunrise": "Sunrise",

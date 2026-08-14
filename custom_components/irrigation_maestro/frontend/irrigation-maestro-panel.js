@@ -41,7 +41,7 @@ const Rt = (n) => new gt(typeof n == "string" ? n : n + "", void 0, De), O = (n,
   for (const i of e.cssRules) t += i.cssText;
   return Rt(t);
 })(n) : n;
-const { is: jt, defineProperty: Lt, getOwnPropertyDescriptor: Wt, getOwnPropertyNames: Vt, getOwnPropertySymbols: Bt, getPrototypeOf: Ht } = Object, ge = globalThis, tt = ge.trustedTypes, Zt = tt ? tt.emptyScript : "", Gt = ge.reactiveElementPolyfillSupport, se = (n, e) => n, _e = { toAttribute(n, e) {
+const { is: jt, defineProperty: Lt, getOwnPropertyDescriptor: Wt, getOwnPropertyNames: Vt, getOwnPropertySymbols: Bt, getPrototypeOf: Ht } = Object, ge = globalThis, tt = ge.trustedTypes, Zt = tt ? tt.emptyScript : "", qt = ge.reactiveElementPolyfillSupport, se = (n, e) => n, _e = { toAttribute(n, e) {
   switch (e) {
     case Boolean:
       n = n ? Zt : null;
@@ -252,10 +252,10 @@ let Y = class extends HTMLElement {
   firstUpdated(e) {
   }
 };
-Y.elementStyles = [], Y.shadowRootOptions = { mode: "open" }, Y[se("elementProperties")] = /* @__PURE__ */ new Map(), Y[se("finalized")] = /* @__PURE__ */ new Map(), Gt?.({ ReactiveElement: Y }), (ge.reactiveElementVersions ??= []).push("2.1.2");
-const Ue = globalThis, st = (n) => n, he = Ue.trustedTypes, nt = he ? he.createPolicy("lit-html", { createHTML: (n) => n }) : void 0, yt = "$lit$", W = `lit$${Math.random().toFixed(9).slice(2)}$`, bt = "?" + W, qt = `<${bt}>`, G = document, ne = () => G.createComment(""), oe = (n) => n === null || typeof n != "object" && typeof n != "function", je = Array.isArray, Kt = (n) => je(n) || typeof n?.[Symbol.iterator] == "function", ke = `[ 	
+Y.elementStyles = [], Y.shadowRootOptions = { mode: "open" }, Y[se("elementProperties")] = /* @__PURE__ */ new Map(), Y[se("finalized")] = /* @__PURE__ */ new Map(), qt?.({ ReactiveElement: Y }), (ge.reactiveElementVersions ??= []).push("2.1.2");
+const Ue = globalThis, st = (n) => n, he = Ue.trustedTypes, nt = he ? he.createPolicy("lit-html", { createHTML: (n) => n }) : void 0, yt = "$lit$", W = `lit$${Math.random().toFixed(9).slice(2)}$`, bt = "?" + W, Gt = `<${bt}>`, q = document, ne = () => q.createComment(""), oe = (n) => n === null || typeof n != "object" && typeof n != "function", je = Array.isArray, Kt = (n) => je(n) || typeof n?.[Symbol.iterator] == "function", ke = `[ 	
 \f\r]`, ee = /<(?:(!--|\/[^a-zA-Z])|(\/?[a-zA-Z][^>\s]*)|(\/?$))/g, ot = /-->/g, rt = />/g, V = RegExp(`>|${ke}(?:([^\\s"'>=/]+)(${ke}*=${ke}*(?:[^ 	
-\f\r"'\`<>=]|("|')|))|$)`, "g"), at = /'/g, dt = /"/g, $t = /^(?:script|style|textarea|title)$/i, xt = (n) => (e, ...t) => ({ _$litType$: n, strings: e, values: t }), d = xt(1), Se = xt(2), X = /* @__PURE__ */ Symbol.for("lit-noChange"), p = /* @__PURE__ */ Symbol.for("lit-nothing"), lt = /* @__PURE__ */ new WeakMap(), Z = G.createTreeWalker(G, 129);
+\f\r"'\`<>=]|("|')|))|$)`, "g"), at = /'/g, dt = /"/g, $t = /^(?:script|style|textarea|title)$/i, xt = (n) => (e, ...t) => ({ _$litType$: n, strings: e, values: t }), d = xt(1), Se = xt(2), X = /* @__PURE__ */ Symbol.for("lit-noChange"), p = /* @__PURE__ */ Symbol.for("lit-nothing"), lt = /* @__PURE__ */ new WeakMap(), Z = q.createTreeWalker(q, 129);
 function wt(n, e) {
   if (!je(n) || !n.hasOwnProperty("raw")) throw Error("invalid template strings array");
   return nt !== void 0 ? nt.createHTML(e) : e;
@@ -268,7 +268,7 @@ const Yt = (n, e) => {
     let _, g, m = -1, z = 0;
     for (; z < c.length && (a.lastIndex = z, g = a.exec(c), g !== null); ) z = a.lastIndex, a === ee ? g[1] === "!--" ? a = ot : g[1] !== void 0 ? a = rt : g[2] !== void 0 ? ($t.test(g[2]) && (s = RegExp("</" + g[2], "g")), a = V) : g[3] !== void 0 && (a = V) : a === V ? g[0] === ">" ? (a = s ?? ee, m = -1) : g[1] === void 0 ? m = -2 : (m = a.lastIndex - g[2].length, _ = g[1], a = g[3] === void 0 ? V : g[3] === '"' ? dt : at) : a === dt || a === at ? a = V : a === ot || a === rt ? a = ee : (a = V, s = void 0);
     const $ = a === V && n[l + 1].startsWith("/>") ? " " : "";
-    o += a === ee ? c + qt : m >= 0 ? (i.push(_), c.slice(0, m) + yt + c.slice(m) + W + $) : c + W + (m === -2 ? l : $);
+    o += a === ee ? c + Gt : m >= 0 ? (i.push(_), c.slice(0, m) + yt + c.slice(m) + W + $) : c + W + (m === -2 ? l : $);
   }
   return [wt(n, o + (n[t] || "<?>") + (e === 2 ? "</svg>" : e === 3 ? "</math>" : "")), i];
 };
@@ -305,7 +305,7 @@ class re {
     }
   }
   static createElement(e, t) {
-    const i = G.createElement("template");
+    const i = q.createElement("template");
     return i.innerHTML = e, i;
   }
 }
@@ -326,7 +326,7 @@ class Xt {
     return this._$AM._$AU;
   }
   u(e) {
-    const { el: { content: t }, parts: i } = this._$AD, s = (e?.creationScope ?? G).importNode(t, !0);
+    const { el: { content: t }, parts: i } = this._$AD, s = (e?.creationScope ?? q).importNode(t, !0);
     Z.currentNode = s;
     let o = Z.nextNode(), a = 0, l = 0, c = i[0];
     for (; c !== void 0; ) {
@@ -336,7 +336,7 @@ class Xt {
       }
       a !== c?.index && (o = Z.nextNode(), a++);
     }
-    return Z.currentNode = G, s;
+    return Z.currentNode = q, s;
   }
   p(e) {
     let t = 0;
@@ -371,7 +371,7 @@ class de {
     this._$AH !== e && (this._$AR(), this._$AH = this.O(e));
   }
   _(e) {
-    this._$AH !== p && oe(this._$AH) ? this._$AA.nextSibling.data = e : this.T(G.createTextNode(e)), this._$AH = e;
+    this._$AH !== p && oe(this._$AH) ? this._$AA.nextSibling.data = e : this.T(q.createTextNode(e)), this._$AH = e;
   }
   $(e) {
     const { values: t, _$litType$: i } = e, s = typeof i == "number" ? this._$AC(e) : (i.el === void 0 && (i.el = re.createElement(wt(i.h, i.h[0]), this.options)), i);
@@ -616,6 +616,7 @@ const ae = {
   "header.global_pause": "Globally paused",
   "header.stale_weather": "Stale weather data",
   "header.consumption_left": "Water left",
+  "header.unattributed_water": "Unattributed water",
   // Session states
   "session.idle": "Idle",
   "session.evaluating": "Evaluating",
@@ -686,6 +687,9 @@ const ae = {
   "zone.no_cycles": "No programs configured",
   "zone.cycle_enabled": "Enabled",
   "zone.cycle_disabled": "Disabled",
+  "zone.water_estimated": "estimated",
+  "zone.water_today": "today",
+  "zone.water_month": "this month",
   // Cycle triggers
   "trigger.sunrise": "Sunrise",
   "trigger.sunset": "Sunset",
@@ -950,6 +954,7 @@ const ae = {
   "header.global_pause": "In pausa globale",
   "header.stale_weather": "Dati meteo non aggiornati",
   "header.consumption_left": "Acqua residua",
+  "header.unattributed_water": "Acqua non attribuita",
   // Stati sessione
   "session.idle": "Inattiva",
   "session.evaluating": "In valutazione",
@@ -1020,6 +1025,9 @@ const ae = {
   "zone.no_cycles": "Nessun programma configurato",
   "zone.cycle_enabled": "Abilitato",
   "zone.cycle_disabled": "Disabilitato",
+  "zone.water_estimated": "stimato",
+  "zone.water_today": "oggi",
+  "zone.water_month": "questo mese",
   // Trigger dei cicli
   "trigger.sunrise": "Alba",
   "trigger.sunset": "Tramonto",
@@ -1279,6 +1287,7 @@ const _i = {
   zone_state: "state",
   zone_next_run: "nextRun",
   zone_last_outcome: "lastOutcome",
+  zone_water_total: "zone_water_total",
   zone_enabled: "enabledSwitch",
   zone_order: "orderNumber",
   zone_suspend_until: "suspendUntil"
@@ -2999,7 +3008,7 @@ var Bi = Object.defineProperty, N = (n, e, t, i) => {
     (a = n[o]) && (s = a(e, t, s) || s);
   return s && Bi(e, t, s), s;
 };
-const Oe = 15, Hi = 8, Zi = 1, Gi = 60, qi = {
+const Oe = 15, Hi = 8, Zi = 1, qi = 60, Gi = {
   curve: {
     points: [
       [12, 5],
@@ -3007,9 +3016,9 @@ const Oe = 15, Hi = 8, Zi = 1, Gi = 60, qi = {
       [35, Oe + Hi]
     ],
     min: Zi,
-    max: Gi
+    max: qi
   }
-}, Ki = 1, Yi = 1440, Xi = -360, Qi = 360, Ji = 5, Ge = class Ge extends C {
+}, Ki = 1, Yi = 1440, Xi = -360, Qi = 360, Ji = 5, qe = class qe extends C {
   constructor() {
     super(...arguments), this.zoneId = "", this.zoneAdjustmentPct = 100, this._step = 1, this._calendar = { mode: "weekdays", days: [...Te] }, this._startKind = "sun", this._startAt = "06:00", this._startEvent = "sunrise", this._startOffsetMin = 0, this._minutes = Oe;
   }
@@ -3114,7 +3123,7 @@ const Oe = 15, Hi = 8, Zi = 1, Gi = 60, qi = {
     if (t === void 0 || Number.isNaN(t)) return p;
     const i = (/* @__PURE__ */ new Date()).toLocaleDateString(e === "it" ? "it-IT" : "en-US", {
       weekday: "long"
-    }), s = Et(qi, this._minutes, t, this.zoneAdjustmentPct);
+    }), s = Et(Gi, this._minutes, t, this.zoneAdjustmentPct);
     return d`<div class="done">
       ${r(e, "wizard.done_prefix")}
       ${r(e, "panel.weather_line", { day: i, min: s })}
@@ -3170,7 +3179,7 @@ const Oe = 15, Hi = 8, Zi = 1, Gi = 60, qi = {
     );
   }
 };
-Ge.styles = O`
+qe.styles = O`
     :host {
       display: block;
       border: 1px solid var(--divider-color, rgba(127, 127, 127, 0.25));
@@ -3364,7 +3373,7 @@ Ge.styles = O`
       cursor: not-allowed;
     }
   `;
-let E = Ge;
+let E = qe;
 N([
   h({ attribute: !1 })
 ], E.prototype, "hass");
@@ -3404,7 +3413,7 @@ var es = Object.defineProperty, J = (n, e, t, i) => {
     (a = n[o]) && (s = a(e, t, s) || s);
   return s && es(e, t, s), s;
 };
-const qe = class qe extends C {
+const Ge = class Ge extends C {
   constructor() {
     super(...arguments), this.allZones = [], this._wizardOpen = !1;
   }
@@ -3552,7 +3561,7 @@ const qe = class qe extends C {
     return r(e, "panel.minutes_value", { min: s ?? "?" });
   }
 };
-qe.styles = O`
+Ge.styles = O`
     .prog {
       border: 1px solid var(--divider-color, #333);
       border-radius: 12px;
@@ -3669,7 +3678,7 @@ qe.styles = O`
       opacity: 0.85;
     }
   `;
-let R = qe;
+let R = Ge;
 J([
   h({ attribute: !1 })
 ], R.prototype, "hass");
@@ -3761,20 +3770,20 @@ Ke.styles = O`
       font-size: 13px;
     }
   `;
-let q = Ke;
+let G = Ke;
 ze([
   h({ attribute: !1 })
-], q.prototype, "hass");
+], G.prototype, "hass");
 ze([
   h({ attribute: !1 })
-], q.prototype, "selector");
+], G.prototype, "selector");
 ze([
   h()
-], q.prototype, "value");
+], G.prototype, "value");
 ze([
   h()
-], q.prototype, "label");
-U("imc-entity-picker", q);
+], G.prototype, "label");
+U("imc-entity-picker", G);
 var os = Object.defineProperty, M = (n, e, t, i) => {
   for (var s = void 0, o = n.length - 1, a; o >= 0; o--)
     (a = n[o]) && (s = a(e, t, s) || s);

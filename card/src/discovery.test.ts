@@ -1,5 +1,11 @@
 import { describe, it, expect } from "vitest";
-import { buildCopyCandidates, readCycles, zoneAdjustmentPct, zoneHasFlowMeter } from "./discovery";
+import {
+  buildCopyCandidates,
+  readCycles,
+  waterSummary,
+  zoneAdjustmentPct,
+  zoneHasFlowMeter,
+} from "./discovery";
 import type { ZoneBundle } from "./discovery";
 
 function zoneWithCycles(cycles: unknown): ZoneBundle {
@@ -204,5 +210,62 @@ describe("buildCopyCandidates", () => {
 
   it("returns [] with no zones", () => {
     expect(buildCopyCandidates([], "none", "none", true)).toEqual([]);
+  });
+});
+
+describe("waterSummary", () => {
+  it("returns null when the zone has no water sensor", () => {
+    expect(waterSummary({ zone_water_total: undefined } as never)).toBeNull();
+  });
+
+  it("reports measured litres with today and month", () => {
+    const summary = waterSummary({
+      zone_water_total: {
+        entity_id: "sensor.a_water",
+        state: "1284.6",
+        attributes: {
+          maestro_role: "zone_water_total",
+          estimated: false,
+          source: "measured",
+          today_l: 41.2,
+          month_l: 612.5,
+        },
+      },
+    } as never);
+    expect(summary).toEqual({
+      total: 1284.6,
+      today: 41.2,
+      month: 612.5,
+      estimated: false,
+    });
+  });
+
+  it("marks an estimated zone so the row can badge it", () => {
+    const summary = waterSummary({
+      zone_water_total: {
+        entity_id: "sensor.a_water",
+        state: "300",
+        attributes: {
+          maestro_role: "zone_water_total",
+          estimated: true,
+          source: "nominal",
+          today_l: 75,
+          month_l: 300,
+        },
+      },
+    } as never);
+    expect(summary?.estimated).toBe(true);
+  });
+
+  it("treats an unavailable sensor as no summary rather than zero", () => {
+    expect(
+      waterSummary({
+        zone_water_total: {
+          entity_id: "sensor.a_water",
+          state: "unavailable",
+          attributes: { maestro_role: "zone_water_total" },
+        },
+      } as never),
+    ).toBeNull();
   });
 });

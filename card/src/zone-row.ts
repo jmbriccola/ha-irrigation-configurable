@@ -1,7 +1,12 @@
 import { css, html, LitElement, nothing } from "lit";
 import type { TemplateResult } from "lit";
 import { property, state } from "lit/decorators.js";
-import { zoneAdjustmentPct, zoneHasFlowMeter, type ZoneBundle } from "./discovery";
+import {
+  waterSummary,
+  zoneAdjustmentPct,
+  zoneHasFlowMeter,
+  type ZoneBundle,
+} from "./discovery";
 import type { CycleInfo, ZoneAction, ZoneState } from "./types";
 import {
   asArray,
@@ -15,6 +20,7 @@ import {
   describeTrigger,
   formatDate,
   formatDateTime,
+  formatNumber,
   formatRelative,
 } from "./format";
 import { localize, localizeDynamic } from "./localize/localize";
@@ -380,6 +386,19 @@ export class ImcZoneRow extends LitElement {
         </span>
       `);
     }
+
+    // Redundant marking for a zone whose water is (partly) a nominal-flow
+    // estimate rather than a meter reading -- see waterSummary()'s doc and
+    // docs/design/card-contract.md's "Water accounting sensors" section.
+    if (waterSummary(zone)?.estimated) {
+      const label = localize(this.language, "zone.water_estimated");
+      badges.push(html`
+        <span class="badge" title=${label}>
+          <ha-icon icon="mdi:water-alert-outline" style="--mdc-icon-size:12px"></ha-icon>
+          ${this.compact ? nothing : label}
+        </span>
+      `);
+    }
     return badges;
   }
 
@@ -454,6 +473,25 @@ export class ImcZoneRow extends LitElement {
           ${localize(lang, "zone.last_outcome")}: ${outcomeLabel}${reason
             ? ` — ${reason}`
             : ""}${when ? html`<span class="abs"> · ${when}</span>` : nothing}
+        </span>
+      `);
+    }
+
+    // Cumulative water, with today/this-month as secondary figures. Absent
+    // entirely (rather than shown as zero) when waterSummary() has nothing
+    // trustworthy -- an unavailable sensor is not the same fact as "0 L".
+    const water = waterSummary(zone);
+    if (water) {
+      const unit = localize(lang, "curve.unit_volume");
+      lines.push(html`
+        <span>
+          ${formatNumber(water.total, 0)} ${unit}
+          <span class="abs">
+            · ${localize(lang, "zone.water_today")}
+            ${formatNumber(water.today, 0)} ${unit} ·
+            ${localize(lang, "zone.water_month")}
+            ${formatNumber(water.month, 0)} ${unit}
+          </span>
         </span>
       `);
     }
