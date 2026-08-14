@@ -339,15 +339,14 @@ class WaterAccountant:
 
     def ledger_for(self, zone: ZoneRuntime) -> MeterLedger | None:
         """The ledger of whichever meter serves this zone, or None."""
-        sensor = zone.config.flow_sensor or self._runtime.hub.line_flow_sensor
+        sensor = self._runtime.resolved_meter_entity(zone.config)
         return self._ledgers.get(sensor) if sensor else None
 
     def _claimants(self, entity_id: str) -> list[ZoneRuntime]:
         """Zones fed by this meter whose valve reports open."""
-        line = self._runtime.hub.line_flow_sensor
         claimants = []
         for zone in self._runtime.zones.values():
-            sensor = zone.config.flow_sensor or line
+            sensor = self._runtime.resolved_meter_entity(zone.config)
             if sensor == entity_id and zone.valve.is_open:
                 claimants.append(zone)
         return claimants
@@ -373,11 +372,10 @@ class WaterAccountant:
 
     def _scope_for(self, entity_id: str) -> str:
         """Whose leak this would be: the sole zone on this meter, or the hub."""
-        line = self._runtime.hub.line_flow_sensor
         owners = [
             zone.config.zone_id
             for zone in self._runtime.zones.values()
-            if (zone.config.flow_sensor or line) == entity_id
+            if self._runtime.resolved_meter_entity(zone.config) == entity_id
         ]
         return owners[0] if len(owners) == 1 else HUB_SCOPE
 
