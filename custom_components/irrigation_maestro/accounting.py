@@ -249,26 +249,50 @@ class WaterAccountant:
 
         One ledger per entity: keying by (entity, override) would integrate the
         same physical water twice. A zone that owns the meter and declares an
-        override wins over the hub's; two zones declaring different overrides
-        for one entity is a configuration fault, resolved deterministically by
-        zone order and reported.
+        override wins over the hub's -- including when the meter in question
+        is the shared line meter, so a zone that points its own flow_sensor at
+        it and declares its own override still wins over the hub's line
+        override. Two conflicting claims on one entity, zone-vs-zone or
+        zone-vs-hub, are a configuration fault, resolved deterministically
+        (zone order, then zone over hub) and reported.
+
+        This runs on every rebuild, i.e. every config change, so it is also
+        the natural place to retire a conflict warning once it no longer
+        applies: every entity that resolves here without conflicting has its
+        issue cleared before returning.
         """
         meters: dict[str, str | None] = {}
         claimed_by: dict[str, str] = {}
+        conflicted: set[str] = set()
         for zone in sorted(self._runtime.zones.values(), key=lambda z: z.config.order):
             sensor = zone.config.flow_sensor
             if not sensor:
                 continue
+            label = f"zone {zone.config.name}"
             if sensor in meters and meters[sensor] != zone.config.flow_sensor_unit:
-                self._runtime.report_flow_unit_override_conflict(
-                    sensor, claimed_by[sensor], zone.config.name
-                )
+                self._runtime.report_flow_unit_override_conflict(sensor, claimed_by[sensor], label)
+                conflicted.add(sensor)
                 continue
             meters[sensor] = zone.config.flow_sensor_unit
-            claimed_by[sensor] = zone.config.name
+            claimed_by[sensor] = label
         line = self._runtime.hub.line_flow_sensor
-        if line and line not in meters:
-            meters[line] = self._runtime.hub.line_flow_sensor_unit
+        if line:
+            if line in meters and meters[line] != self._runtime.hub.line_flow_sensor_unit:
+                # A zone already claims the line entity under its own
+                # override, and that override disagrees with the hub's own
+                # line_flow_sensor_unit. The zone still wins -- meters[line]
+                # is left untouched -- but the disagreement must not be
+                # silent, since flow_reader_for builds a reader under the
+                # hub's override for any zone that falls back to the line.
+                self._runtime.report_flow_unit_override_conflict(
+                    line, claimed_by[line], "the hub's line meter"
+                )
+                conflicted.add(line)
+            elif line not in meters:
+                meters[line] = self._runtime.hub.line_flow_sensor_unit
+        for entity_id in meters:
+            if entity_id not in conflicted:
+                self._runtime.clear_flow_unit_override_conflict(entity_id)
         return meters
 
     def ledger_for(self, zone: ZoneRuntime) -> MeterLedger | None:
