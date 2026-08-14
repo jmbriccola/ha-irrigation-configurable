@@ -734,13 +734,19 @@ async def test_volume_target_reached_on_the_read_that_loses_the_unit(
     """Litres already integrated finish the run even if that read kills the unit.
 
     The target check sits above the unit_known gate on purpose (session.py:228):
-    water certainly delivered is still delivered. Without this test a refactor
-    can move the check below the gate and hang the cycle on its safety timeout.
+    water certainly delivered is still delivered. The crossing must land on a
+    genuine _on_state call, before the first _periodic_check at
+    ZERO_FLOW_GRACE_S (120 s) -- _periodic_check runs the same above-the-gate
+    check independently (session.py:249), so a crossing left until after 120 s
+    would complete the run through that path regardless of whether _on_state's
+    own gate ordering is correct, and a refactor that broke only _on_state
+    would still pass. Without this test such a refactor can move the check
+    below the gate and hang the cycle on its safety timeout.
     """
     freezer.move_to(START)
     park = MockValvePark(hass)
     park.add("valve.a")
-    hass.states.async_set("sensor.flow", "60", {"unit_of_measurement": "L/min"})
+    hass.states.async_set("sensor.flow", "120", {"unit_of_measurement": "L/min"})
     mock_weather(hass)
     entry = await setup_hub(
         hass,
@@ -770,15 +776,29 @@ async def test_volume_target_reached_on_the_read_that_loses_the_unit(
     await advance(hass, freezer, 31 * 60)
     assert hass.states.get("valve.a").state == "open"
 
-    # 60 L/min for ~2 min crosses the 100 L target; the same read that carries
-    # it past the target also removes the unit.
-    await advance(hass, freezer, 120, step=1.0)
-    hass.states.async_set("sensor.flow", "60", {})  # unit gone
-    await advance(hass, freezer, 60, step=1.0)
+    runtime = entry.runtime_data
+    zone_id = runtime.zone_ids[0]
+    started_at = runtime.session.active_runs[zone_id].started_at
+    assert started_at is not None
+
+    async def advance_to(elapsed_s: float) -> None:
+        remaining = elapsed_s - (dt_util.utcnow() - started_at).total_seconds()
+        assert remaining > 0, "the checkpoint is already behind us"
+        await advance(hass, freezer, remaining, step=1.0)
+
+    # No state change since start(), so nothing has integrated yet -- _last_lpm
+    # is still the 120 L/min read taken at monitor.start(). This single event,
+    # well inside the 120 s periodic check, is the first integration: it adds
+    # ~120 L at that rate, crossing the 100 L target, on the very read that
+    # also removes the unit (no unit_of_measurement below).
+    await advance_to(60)
+    hass.states.async_set("sensor.flow", "120", {})  # unit gone
+    # Stay well short of the 120 s periodic check: closing must already be
+    # done by here, or the crossing did not happen on this _on_state call.
+    await advance_to(75)
 
     assert hass.states.get("valve.a").state == "closed"
-    runtime = entry.runtime_data
-    outcome = runtime.state.last_outcome(runtime.zone_ids[0])
+    outcome = runtime.state.last_outcome(zone_id)
     assert outcome["result"] == "completed"
 
 
@@ -787,8 +807,14 @@ async def test_flow_in_range_reports_nothing(
 ) -> None:
     """The positive path of _check_range: sustained in-range flow is silent.
 
-    Without this, a refactor that never calls report_flow_out_of_range at all
-    passes the whole suite.
+    _check_range is reachable only from _on_state, a state_changed listener
+    (session.py:222-236); re-asserting the identical state+attributes fires
+    EVENT_STATE_REPORTED, not EVENT_STATE_CHANGED, so it would never reach
+    it -- force_update is what keeps these state-changed events real. The
+    expected_flow_range spy proves _check_range's body actually ran (it is
+    the function's first statement): without it, "reported == []" alone
+    would also hold if the whole method were disabled, which is no test at
+    all.
     """
     freezer.move_to(START)
     park = MockValvePark(hass)
@@ -811,10 +837,25 @@ async def test_flow_in_range_reports_nothing(
     runtime = entry.runtime_data
     reported: list[tuple[float, float, float]] = []
     runtime.report_flow_out_of_range = lambda *args: reported.append(args)  # type: ignore[method-assign]
+    range_checks: list[None] = []
+    original_expected_flow_range = runtime.expected_flow_range
+
+    def _spy_expected_flow_range() -> tuple[float, float] | None:
+        range_checks.append(None)
+        return original_expected_flow_range()
+
+    runtime.expected_flow_range = _spy_expected_flow_range  # type: ignore[method-assign]
 
     await advance(hass, freezer, 31 * 60)
     assert hass.states.get("valve.a").state == "open"
-    # Well past RANGE_SUSTAIN_S (120 s) with flow inside 7.5-12.5 L/min.
-    await advance(hass, freezer, 300, step=1.0)
 
+    # Real state-changed events, well past RANGE_SUSTAIN_S (120 s), all
+    # inside the expected 7.5-12.5 L/min band.
+    for _ in range(5):
+        hass.states.async_set(
+            "sensor.flow", "10", {"unit_of_measurement": "L/min"}, force_update=True
+        )
+        await advance(hass, freezer, 60, step=1.0)
+
+    assert range_checks, "_check_range never ran -- the test observed nothing"
     assert reported == []
