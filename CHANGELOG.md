@@ -4,6 +4,69 @@ All notable changes to this project are documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/).
 
+## [3.2.1] - 2026-08-14
+
+### Fixed
+
+- **A notification wizard whose first status read fails no longer gets
+  stuck on "reading the notification status…" forever.** The failure now
+  shows in place of the hint, with a retry button, instead of only a toast
+  that disappears after six seconds and leaves no way back short of
+  leaving Settings and returning.
+- **A test send that fails now shows its result next to the recipient you
+  tested**, not only as a toast: every recipient you test gets a verdict,
+  a stale ✓ from an earlier attempt is replaced rather than left standing,
+  and the row shows a pending state while the send — which blocks — is
+  outstanding. The response behind that verdict is now validated rather
+  than trusted blindly, the same treatment the status read already had.
+- **The preset chips, priority chips and event-group headers in the
+  notification wizard are reachable by keyboard** (role, tabindex,
+  Enter/Space, `aria-pressed`/`aria-expanded`). They were click-only, so
+  the four events an irrigation system should never miss could not be
+  chosen without a mouse.
+- `test_notification`'s default title and message now follow the
+  instance's configured language instead of always being English; an
+  explicit title or message you pass still wins, as before.
+- Aliased recipients such as `["notify.phone", "phone"]`, which both
+  resolve to the same service, now produce one result instead of the
+  second silently overwriting the first.
+- The doubled ellipsis on a test send's in-progress row ("… Invio in
+  corso…") is gone.
+
+### Changed
+
+- **One Italian word for a flow meter: "flussometro."** The integration's
+  translations, the card and the Italian docs previously mixed six terms
+  for the same device — contatore di flusso, contatore di portata,
+  contatore di linea, sensore di portata, misuratore di portata —
+  depending on where you looked. They now all read "flussometro." The
+  consumption counter ("contatore dei consumi") and the cadence counter
+  are different concepts and were deliberately left as they were.
+- The README degradation matrix's "Out-of-range diagnosis per zone" row
+  now names the meter prerequisite it depends on, matching the row above
+  it.
+
+### Testing
+
+- `panel.ts` — the notification wizard — had no test file at all until
+  now. The most important property of the 3.1.0 notification work is
+  pinned: a failed save stops the loop instead of continuing on to switch
+  previously-enabled events off underneath a failed enable.
+- A handful of properties reviewers had verified by reading code, but that
+  nothing would have caught if a future change broke, are now guarded by
+  tests: `Notifier.async_notify` keeps going past a missing recipient
+  instead of aborting the whole send; `set_notifications` stays
+  all-or-nothing even when it's a *later* named event that fails, not just
+  a uniformly-failing one; `notification_status`'s response contains no
+  tuples or sets anywhere in it; and the two notification Repairs issues
+  fire independently of each other.
+- `en.ts` and `it.ts` are now checked for identical key sets *and*
+  identical key order, closing a gap two different review rounds had to
+  catch by eye.
+
+This release changes no decision the engine makes and migrates no
+configuration.
+
 ## [3.2.0] - 2026-08-14
 
 ### Flow sensors are read in the unit they declare
