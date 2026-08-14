@@ -9,6 +9,7 @@ from custom_components.irrigation_maestro.flow import FlowSensorReader
 from freezegun.api import FrozenDateTimeFactory
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import issue_registry as ir
+from homeassistant.util import dt as dt_util
 
 from .mocks import BEHAVIOR_STUCK, MockValvePark
 from .test_session import START, advance, mock_weather, setup_hub, zone_data
@@ -261,6 +262,63 @@ async def test_litres_with_every_valve_closed_are_unattributed_and_suspect(
     assert runtime.state.zone_water_total(zone_id) == 0.0
     assert runtime.state.unattributed_closed(zone_id) > 40
     assert runtime.state.unattributed_total(zone_id) == runtime.state.unattributed_closed(zone_id)
+
+
+async def test_a_cycles_tail_is_charged_to_the_zone_not_closed_l(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    """The interval spanning a valve's close is attributed to who was open at ITS START.
+
+    _on_sample attributes the interval it is closing using the claimant set
+    remembered from the previous sample, not the claimants at its own
+    instant -- symmetric with test_the_closed_interval_is_charged_at_the_old_rate,
+    which pins the same left-Riemann ordering for the rate. Without it, a
+    cycle's tail -- up to one 30 s tick's worth, integrated after
+    _close_valve has already completed -- would find no claimants right now
+    and land in add_unattributed(..., valves_closed=True): a false
+    contribution to closed_l, the only input the next PR's leak detection
+    reads, on every single cycle.
+    """
+    freezer.move_to(START)
+    park = MockValvePark(hass)
+    park.add("valve.a")
+    hass.states.async_set("sensor.flow", "0", {"unit_of_measurement": "L/min"})
+    mock_weather(hass)
+    entry = await setup_hub(
+        hass, [zone_data("Alpha", "valve.a", minutes=1, flow_sensor="sensor.flow")]
+    )
+    runtime = entry.runtime_data
+    zone_id = runtime.zone_ids[0]
+
+    await advance(hass, freezer, 31 * 60)
+    assert hass.states.get("valve.a").state == "open"
+    started_at = runtime.session.active_runs[zone_id].started_at
+    assert started_at is not None
+
+    async def advance_to(elapsed_s: float) -> None:
+        remaining = elapsed_s - (dt_util.utcnow() - started_at).total_seconds()
+        assert remaining > 0, "the checkpoint is already behind us"
+        await advance(hass, freezer, remaining, step=1.0)
+
+    # Flow stays at a steady, known rate straight through the 1-minute
+    # cycle's close, so the ledger's next sample integrates an interval that
+    # straddles it.
+    hass.states.async_set("sensor.flow", "10", {"unit_of_measurement": "L/min"})
+    await advance_to(61)  # 1 s past the duration -- close is near-instant in mocks
+    assert hass.states.get("valve.a").state == "closed"
+
+    # Nothing is watering from here: resetting the sensor immediately, at
+    # 1 s granularity, bounds how much of a genuinely-still-flowing artifact
+    # this test's own timing can introduce (at most ~1 s * 10 L/min = 0.17 L)
+    # to well under what even a single un-fixed 30 s tick would misattribute
+    # (up to 5 L). The reset itself publishes the sample that closes the tail
+    # interval spanning the valve's actual close -- still charged to the
+    # zone, per the fix, since that is who was watering at the tail's start.
+    hass.states.async_set("sensor.flow", "0", {"unit_of_measurement": "L/min"})
+    await advance(hass, freezer, 60, step=10.0)
+
+    assert runtime.state.unattributed_closed() < 1.0
+    assert runtime.state.zone_water_total(zone_id) > 0.0
 
 
 async def test_a_shared_line_meter_splits_by_nominal_flow(
