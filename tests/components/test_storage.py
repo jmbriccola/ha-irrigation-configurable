@@ -4,7 +4,10 @@ from datetime import UTC, date, datetime
 
 from custom_components.irrigation_maestro.engine.metering import UNATTRIBUTED_KEY
 from custom_components.irrigation_maestro.engine.model import EngineParams
-from custom_components.irrigation_maestro.migration import migrate_last_completed
+from custom_components.irrigation_maestro.migration import (
+    migrate_last_completed,
+    seed_carried_over_and_drop_consumption,
+)
 from custom_components.irrigation_maestro.storage import RuntimeState
 from homeassistant.core import HomeAssistant
 
@@ -139,7 +142,9 @@ async def test_persisted_key_set_round_trips(hass: HomeAssistant) -> None:
     """The stored dict keeps exactly the keys the defaults declare.
 
     Nothing else asserts the persisted shape, so a key added or removed by
-    accident is invisible until an install fails to load.
+    accident is invisible until an install fails to load. "consumption" is
+    gone: a fresh install never has it, and an upgraded one loses it the
+    first time the 3.3.0 migration runs (see the tests below).
     """
     state = RuntimeState(hass, "entry1")
     await state.async_load()
@@ -160,7 +165,6 @@ async def test_persisted_key_set_round_trips(hass: HomeAssistant) -> None:
         "zone_enabled",
         "cycle_enabled",
         "outcome_log",
-        "consumption",
         "water",
     }
 
@@ -330,3 +334,93 @@ async def test_carried_over_applies_only_to_its_own_period(hass: HomeAssistant) 
 
     assert state.carried_over_for(date(2026, 8, 1)) == 250.0
     assert state.carried_over_for(date(2026, 9, 1)) == 0.0
+
+
+def test_consumption_is_carried_over_then_removed() -> None:
+    data = {
+        "consumption": {"period_start": "2026-08-01", "liters": 250.0},
+        "water": {
+            "zones": {},
+            "unattributed": {},
+            "daily": {},
+            "carried_over": {"period_start": None, "liters": 0.0},
+        },
+    }
+    changed = seed_carried_over_and_drop_consumption(data, date(2026, 8, 14))
+
+    assert changed is True
+    assert "consumption" not in data
+    assert data["water"]["carried_over"] == {"period_start": "2026-08-01", "liters": 250.0}
+
+
+def test_the_carry_over_migration_is_idempotent() -> None:
+    data = {
+        "consumption": {"period_start": "2026-08-01", "liters": 250.0},
+        "water": {
+            "zones": {},
+            "unattributed": {},
+            "daily": {},
+            "carried_over": {"period_start": None, "liters": 0.0},
+        },
+    }
+    seed_carried_over_and_drop_consumption(data, date(2026, 8, 14))
+    before = dict(data["water"]["carried_over"])
+
+    assert seed_carried_over_and_drop_consumption(data, date(2026, 8, 14)) is False
+    assert data["water"]["carried_over"] == before
+
+
+def test_a_stale_period_is_not_carried_into_the_current_one() -> None:
+    """A counter from July must not become August's opening balance."""
+    data = {
+        "consumption": {"period_start": "2026-07-01", "liters": 900.0},
+        "water": {
+            "zones": {},
+            "unattributed": {},
+            "daily": {},
+            "carried_over": {"period_start": None, "liters": 0.0},
+        },
+    }
+    seed_carried_over_and_drop_consumption(data, date(2026, 8, 14))
+
+    assert "consumption" not in data
+    assert data["water"]["carried_over"]["liters"] == 0.0
+
+
+async def test_migrate_consumption_drops_the_key_from_the_persisted_store(
+    hass: HomeAssistant, hass_storage: dict
+) -> None:
+    """The key must vanish from the file on disk, not just from a bare dict.
+
+    Popping "consumption" from ``_default_data()`` would not be enough on its
+    own -- the defaults merge in ``async_load`` copies an unknown stored key
+    through verbatim -- so this seeds a store the way a pre-3.3.0 install
+    would have left it and proves the round trip through Store, not just the
+    pure function above.
+    """
+    hass_storage["irrigation_maestro.entry_water8"] = {
+        "version": 1,
+        "data": {"consumption": {"period_start": "2026-08-01", "liters": 250.0}},
+    }
+    state = RuntimeState(hass, "entry_water8")
+    await state.async_load()
+
+    assert state.migrate_consumption(date(2026, 8, 14)) is True
+    await state.async_save()
+
+    reloaded = RuntimeState(hass, "entry_water8")
+    await reloaded.async_load()
+
+    assert "consumption" not in reloaded.as_dict()
+    assert reloaded.carried_over_for(date(2026, 8, 1)) == 250.0
+    # Idempotent on the store too: a load that has nothing left to migrate
+    # reports no change, which is what gates the Repairs issue to fire once.
+    assert reloaded.migrate_consumption(date(2026, 8, 14)) is False
+
+
+async def test_migrate_consumption_is_a_no_op_on_a_fresh_install(hass: HomeAssistant) -> None:
+    """A fresh install never had a "consumption" key; nothing to report."""
+    state = RuntimeState(hass, "entry_water9")
+    await state.async_load()
+
+    assert state.migrate_consumption(date(2026, 8, 14)) is False

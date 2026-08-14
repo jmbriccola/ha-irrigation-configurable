@@ -132,6 +132,11 @@ class IrrigationRuntime:
                 for zone_id, zone in self.zones.items()
             }
         )
+        # 3.3.0: the standalone monthly counter becomes an opening balance,
+        # once. A migration that has already run returns False, so the
+        # notice is not re-raised on every later setup.
+        if self.state.migrate_consumption(dt_util.now().date()):
+            self.report_consumption_history_restarted()
         self._schedule_triggers()
         self._start_trackers()
         self.accountant.start()
@@ -965,6 +970,24 @@ class IrrigationRuntime:
                     f"{entity_id} ({unit})" for entity_id, unit in rescaled.items()
                 )
             },
+        )
+
+    def report_consumption_history_restarted(self) -> None:
+        """The monthly total now derives from per-zone daily litres (3.3.0).
+
+        Modelled on the 3.2.0 rescale notice: the carried balance mixes
+        litres measured through a meter with litres estimated as nominal x
+        minutes and has no daily breakdown, so this month's chart starts at
+        the upgrade while the budget total still includes the balance. Both
+        self-heal at the next period boundary.
+        """
+        ir.async_create_issue(
+            self.hass,
+            DOMAIN,
+            "consumption_history_restarted",
+            is_fixable=False,
+            severity=ir.IssueSeverity.WARNING,
+            translation_key="consumption_history_restarted",
         )
 
     def _report_weather_unavailable(self) -> None:
