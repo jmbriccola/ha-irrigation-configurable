@@ -16,9 +16,7 @@ from .mocks import MockValvePark
 from .test_session import START, mock_weather, setup_hub, zone_data
 
 
-async def _hub_over_budget(
-    hass: HomeAssistant, freezer: FrozenDateTimeFactory, action: str
-):
+async def _hub_over_budget(hass: HomeAssistant, freezer: FrozenDateTimeFactory, action: str):
     """A hub whose monthly counter already sits above a 100 L budget."""
     freezer.move_to(START)
     park = MockValvePark(hass)
@@ -27,8 +25,7 @@ async def _hub_over_budget(
     entry = await setup_hub(
         hass,
         [zone_data("Alpha", "valve.a", minutes=10, nominal_flow_lpm=5.0)],
-        {"consumption_budget": {"liters_per_month": 100, "action": action,
-                                "reduce_pct": 50}},
+        {"consumption_budget": {"liters_per_month": 100, "action": action, "reduce_pct": 50}},
     )
     runtime = entry.runtime_data
     runtime.state.add_consumption(150.0, period_start=date(2026, 7, 1))
@@ -40,9 +37,7 @@ async def test_budget_notify_fires_once_per_period(
 ) -> None:
     _entry, runtime, _park = await _hub_over_budget(hass, freezer, "notify")
     events: list[dict] = []
-    hass.bus.async_listen(
-        "irrigation_maestro_consumption_budget", lambda e: events.append(e.data)
-    )
+    hass.bus.async_listen("irrigation_maestro_consumption_budget", lambda e: events.append(e.data))
 
     runtime._consumption_factor()
     runtime._consumption_factor()
