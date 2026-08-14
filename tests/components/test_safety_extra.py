@@ -733,20 +733,50 @@ async def test_volume_target_reached_on_the_read_that_loses_the_unit(
 ) -> None:
     """Litres already integrated finish the run even if that read kills the unit.
 
-    The target check sits above the unit_known gate on purpose (session.py:228):
-    water certainly delivered is still delivered. The crossing must land on a
-    genuine _on_state call, before the first _periodic_check at
-    ZERO_FLOW_GRACE_S (120 s) -- _periodic_check runs the same above-the-gate
-    check independently (session.py:249), so a crossing left until after 120 s
-    would complete the run through that path regardless of whether _on_state's
-    own gate ordering is correct, and a refactor that broke only _on_state
-    would still pass. Without this test such a refactor can move the check
-    below the gate and hang the cycle on its safety timeout.
+    The target check sits above the unit_known gate on purpose (session.py:227):
+    water certainly delivered still finishes the run, even when the very
+    sample that lost the unit is the one whose litres cross it.
+
+    Under the ledger (Task 9) a state change and the ledger's own 30 s
+    gap-detection tick both arrive through the same _on_sample, so there is
+    no longer a separate "periodic check" path that could reach the same
+    conclusion independently and mask a broken gate the way there was when
+    FlowMonitor integrated on its own -- that negative control is gone with
+    the second integrator. What survives is MeterLedger._integrate's own
+    order of operations: a sample integrates the *previous* reading over the
+    interval since the last one, and only afterwards looks at its own new
+    lpm. So the read that removes the unit can still be the read whose
+    litres cross the target, because those litres were earned by the reading
+    before it, not by itself.
+
+    The meter holds a genuine, unit-bearing 0 L/min through the whole opening
+    sequence, so nothing accrues regardless of where the ledger's own tick
+    happens to land -- its phase is anchored to when the ledger started (hub
+    setup), not to this run, and is not under this test's control. Once
+    open: one read arms _last_lpm at a high rate WITH a unit (that sample
+    integrates the prior, zero-flow interval, so nothing accrues from it);
+    6 s later, a second read holds the same rate but WITHOUT a unit. That
+    second read is where MeterLedger._integrate runs against the *armed*
+    300 L/min over those 6 s -- 30 L -- before the new, unit-less reading is
+    even consulted, comfortably past the 20 L target.
+
+    Both reads must avoid the ledger's own tick, whose phase is fixed by hub
+    setup (empirically, not just by this arithmetic): ticks fall on
+    multiples of 30 s counted from setup, and since the fixture always
+    triggers on a clean half hour (START is :00, the trigger is :30),
+    started_at itself lands on that same 30 s grid. But started_at is not
+    when this test starts observing -- the initial 31 * 60 s advance is a
+    generous margin used throughout this file, and it lands ~50 s past
+    started_at on its own (queueing, the settle check and the open-confirm
+    wait all take a few seconds of simulated time), which is itself right on
+    the grid: started_at's nearest tick sits at +50 s. The two reads above
+    therefore land at +53 s and +59 s, inside the following tick-free
+    stretch (50 s, 80 s], with margin on both sides.
     """
     freezer.move_to(START)
     park = MockValvePark(hass)
     park.add("valve.a")
-    hass.states.async_set("sensor.flow", "120", {"unit_of_measurement": "L/min"})
+    hass.states.async_set("sensor.flow", "0", {"unit_of_measurement": "L/min"})
     mock_weather(hass)
     entry = await setup_hub(
         hass,
@@ -762,12 +792,12 @@ async def test_volume_target_reached_on_the_read_that_loses_the_unit(
                         "enabled": True,
                         "trigger": {"kind": "time", "at": "05:30"},
                         "curve": {
-                            "points": [[20.0, 100.0]],
+                            "points": [[20.0, 20.0]],
                             "min_value": 1.0,
                             "max_value": 500.0,
                             "kind": "volume",
                         },
-                        "volume_safety_timeout_min": 60,
+                        "volume_safety_timeout_min": 30,
                     }
                 ],
             )
@@ -786,16 +816,31 @@ async def test_volume_target_reached_on_the_read_that_loses_the_unit(
         assert remaining > 0, "the checkpoint is already behind us"
         await advance(hass, freezer, remaining, step=1.0)
 
-    # No state change since start(), so nothing has integrated yet -- _last_lpm
-    # is still the 120 L/min read taken at monitor.start(). This single event,
-    # well inside the 120 s periodic check, is the first integration: it adds
-    # ~120 L at that rate, crossing the 100 L target, on the very read that
-    # also removes the unit (no unit_of_measurement below).
-    await advance_to(60)
-    hass.states.async_set("sensor.flow", "120", {})  # unit gone
-    # Stay well short of the 120 s periodic check: closing must already be
-    # done by here, or the crossing did not happen on this _on_state call.
-    await advance_to(75)
+    # Zero flow, with a unit, the whole time so far: nothing to integrate.
+    # 53 s, not some smaller number: the initial 31 * 60 s advance already
+    # lands ~50 s past started_at on its own (the settle/open-confirm
+    # sequence takes a few seconds), which is itself right at a ledger tick
+    # (ticks fall on multiples of 30 s counted from hub setup, and the run
+    # starts on a multiple of 30 s after setup too, so started_at + 50 s is
+    # started_at's nearest tick). The window below is chosen to sit inside
+    # the following tick-free stretch, (50 s, 80 s], with margin on both
+    # sides -- verified empirically, not just by this arithmetic.
+    await advance_to(53)
+    assert hass.states.get("valve.a").state == "open"
+
+    # Arms _last_lpm at a high rate; this sample integrates the prior
+    # (zero-flow) interval, so nothing accrues from it.
+    hass.states.async_set("sensor.flow", "300", {"unit_of_measurement": "L/min"})
+    await advance_to(59)
+    # Merely waiting does not integrate anything: no sample has run since
+    # the arm above, so nothing has accrued yet -- still watering.
+    assert hass.states.get("valve.a").state == "open"
+
+    # The read that loses the unit: _integrate runs first, against the armed
+    # 300 L/min over the 6 s since the previous read (30 L, past the 20 L
+    # target) -- before the new, unit-less reading is even looked at.
+    hass.states.async_set("sensor.flow", "300", {})
+    await advance_to(61)
 
     assert hass.states.get("valve.a").state == "closed"
     outcome = runtime.state.last_outcome(zone_id)
