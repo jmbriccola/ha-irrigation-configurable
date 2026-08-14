@@ -293,7 +293,7 @@ export const en = {
   "notify.recipient_gone_hint":
     "A recipient marked as no longer existing is still stored and is still written back on every save. Uncheck it to remove it.",
   "notify.send_test": "Send a test",
-  "notify.test_sending": "Sending…",
+  "notify.test_sending": "Sending",
   // "Sent", not "Delivered": the service learns only that notify.<service>
   // accepted the call without raising — a push can still die downstream.
   "notify.test_ok": "Sent",
