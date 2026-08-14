@@ -242,31 +242,40 @@ class IrrigationRuntime:
             controllers.append(self.master_controller)
         return controllers
 
+    def resolved_meter_entity(self, zone: ZoneConfig) -> str | None:
+        """The entity id that feeds this zone's water, or None if none does.
+
+        The zone's own meter if it has one, else the hub's shared line meter,
+        else no meter at all. The single definition of "which meter serves
+        this zone" -- every caller that needs the entity id, or just needs to
+        know whether one resolves, goes through this instead of repeating the
+        fallback rule.
+
+        Truthiness, not ``is not None``: update_zone writes flow_sensor
+        unconditionally, so an empty string is a reachable way of saying "no
+        meter". Reading it as one would suppress the fallback to the line
+        meter for a zone whose meter was cleared.
+        """
+        return zone.flow_sensor or self.hub.line_flow_sensor or None
+
     def flow_reader_for(self, zone: ZoneRuntime) -> FlowSensorReader | None:
         """A reader for whichever meter serves this zone, with its own override.
 
         The override that applies belongs to the sensor being read: a zone
         falling back to the shared line meter takes the hub's override, not its
-        own — its own describes a sensor it does not have.
-
-        Truthiness, not ``is not None``: update_zone writes flow_sensor
-        unconditionally, so an empty string is a reachable way of saying "no
-        meter". Reading it as one would bind a monitor to a nonexistent entity
-        and suppress the fallback to the line meter. This has to agree with
-        zone_has_flow_meter, which is truthiness too.
+        own — its own describes a sensor it does not have. Which entity that is
+        resolves through resolved_meter_entity; this only has to pick the
+        matching override once that entity is known.
         """
+        entity_id = self.resolved_meter_entity(zone.config)
+        if entity_id is None:
+            return None
         if zone.config.flow_sensor:
-            return FlowSensorReader(
-                self.hass, zone.config.flow_sensor, zone.config.flow_sensor_unit
-            )
-        if self.hub.line_flow_sensor:
-            return FlowSensorReader(
-                self.hass, self.hub.line_flow_sensor, self.hub.line_flow_sensor_unit
-            )
-        return None
+            return FlowSensorReader(self.hass, entity_id, zone.config.flow_sensor_unit)
+        return FlowSensorReader(self.hass, entity_id, self.hub.line_flow_sensor_unit)
 
     def zone_has_flow_meter(self, zone: ZoneConfig) -> bool:
-        return bool(zone.flow_sensor or self.hub.line_flow_sensor)
+        return self.resolved_meter_entity(zone) is not None
 
     def zone_flow_meter_usable(self, zone: ZoneRuntime) -> bool:
         """Is there a meter AND can its unit be determined right now?

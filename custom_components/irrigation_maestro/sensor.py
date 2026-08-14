@@ -291,7 +291,7 @@ class ZoneStateSensor(MaestroZoneEntity, SensorEntity):
             # not usable. Distinct from no_flow_meter: the fix is different --
             # set the unit, do not buy a meter.
             degraded.append("flow_unit_unknown")
-        elif not config.flow_sensor and runtime.hub.line_flow_sensor:
+        elif not config.flow_sensor and runtime.resolved_meter_entity(config) is not None:
             degraded.append("line_meter_shared")
         # A volume-target cycle needs a usable meter; without one it silently
         # degrades to a timed run (see the degradation matrix).
@@ -461,9 +461,7 @@ class ZoneWaterTotalSensor(MaestroZoneEntity, SensorEntity):
             "source": source,
             "today_l": round(state.water_for_day(self._zone_id, today), 1),
             "month_l": round(state.water_for_period(today.replace(day=1), today), 1),
-            "meter_entity": (
-                (config.flow_sensor or runtime.hub.line_flow_sensor) if config else None
-            ),
+            "meter_entity": runtime.resolved_meter_entity(config) if config else None,
         }
 
 

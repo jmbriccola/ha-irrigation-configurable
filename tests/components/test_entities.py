@@ -803,3 +803,137 @@ async def test_a_zone_on_the_line_meter_is_declared_shared_even_when_cleared(
     runtime = entry.runtime_data
     state = role_state(hass, "zone_state", zone_id=runtime.zone_ids[0])
     assert "line_meter_shared" in state.attributes["degraded"]
+
+
+async def test_a_zone_with_a_usable_meter_is_reported_as_measured(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    """A zone whose litres all came off a usable meter is `source: measured`,
+    never `nominal`/`mixed` -- the counterpart to the fully-estimated case."""
+    freezer.move_to(START)
+    park = MockValvePark(hass)
+    park.add("valve.a")
+    hass.states.async_set("sensor.flow", "0.45", {"unit_of_measurement": "m³/h"})
+    mock_weather(hass)
+    entry = await setup_hub(
+        hass, [zone_data("Alpha", "valve.a", minutes=10, flow_sensor="sensor.flow")]
+    )
+    runtime = entry.runtime_data
+    zone_id = runtime.zone_ids[0]
+
+    await advance(hass, freezer, 31 * 60)  # trigger fires at 05:30
+    await advance(hass, freezer, 11 * 60)  # 10-minute cycle completes
+
+    state = role_state(hass, "zone_water_total", zone_id=zone_id)
+    assert state.attributes["estimated"] is False
+    assert state.attributes["source"] == "measured"
+
+
+async def test_a_zone_with_measured_and_estimated_runs_is_reported_as_mixed(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    """One run measured off a usable meter, one run with the meter blind
+    (falling back to the nominal estimate) -- neither `measured` nor
+    `nominal` alone describes the zone's history, so it must read `mixed`."""
+    freezer.move_to(START)
+    park = MockValvePark(hass)
+    park.add("valve.a")
+    hass.states.async_set("sensor.flow", "0.45", {"unit_of_measurement": "m³/h"})
+    mock_weather(hass)
+    entry = await setup_hub(
+        hass,
+        [
+            zone_data(
+                "Alpha",
+                "valve.a",
+                flow_sensor="sensor.flow",
+                nominal_flow_lpm=7.5,
+                cycles=[
+                    {
+                        "id": "cy_morning",
+                        "name": "Morning",
+                        "enabled": True,
+                        "trigger": {"kind": "time", "at": "05:30"},
+                        "curve": {"points": [[20.0, 10.0]], "min_value": 1.0, "max_value": 60.0},
+                    },
+                    {
+                        "id": "cy_evening",
+                        "name": "Evening",
+                        "enabled": True,
+                        "trigger": {"kind": "time", "at": "06:30"},
+                        "curve": {"points": [[20.0, 10.0]], "min_value": 1.0, "max_value": 60.0},
+                    },
+                ],
+            )
+        ],
+    )
+    runtime = entry.runtime_data
+    zone_id = runtime.zone_ids[0]
+
+    # Morning cycle: the meter is usable throughout -- measured litres only.
+    await advance(hass, freezer, 31 * 60)  # trigger fires at 05:30
+    await advance(hass, freezer, 11 * 60)  # 10-minute cycle completes
+
+    state = role_state(hass, "zone_water_total", zone_id=zone_id)
+    assert state.attributes["source"] == "measured"
+
+    # The meter goes blind (unit no longer declared) before the evening
+    # cycle, and stays blind for its whole run -- had_usable_unit is False
+    # for that run's own accounting, so it falls back to the nominal
+    # estimate on top of the morning's measured litres.
+    hass.states.async_set("sensor.flow", "0", {})
+    await advance(hass, freezer, 49 * 60)  # trigger fires at 06:30
+    await advance(hass, freezer, 11 * 60)  # 10-minute cycle completes
+
+    state = role_state(hass, "zone_water_total", zone_id=zone_id)
+    assert state.attributes["estimated"] is True
+    assert state.attributes["source"] == "mixed"
+
+
+async def test_meter_entity_reflects_the_resolved_meter(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    """`meter_entity` is the entity actually feeding this zone: its own
+    meter if it has one, else the hub's shared line meter -- pinned since
+    the card reads it directly. A hub-wide line meter, once configured,
+    resolves for every zone that lacks its own -- so the "no meter
+    anywhere" case needs a hub with no line meter at all, covered by
+    test_meter_entity_is_none_when_no_meter_resolves below."""
+    freezer.move_to(START)
+    park = MockValvePark(hass)
+    park.add("valve.a")
+    park.add("valve.b")
+    hass.states.async_set("sensor.line", "0", {"unit_of_measurement": "L/min"})
+    mock_weather(hass)
+    entry = await setup_hub(
+        hass,
+        [
+            zone_data("Own", "valve.a", minutes=10, flow_sensor="sensor.own"),
+            zone_data("Shared", "valve.b", minutes=10, flow_sensor=""),
+        ],
+        {"line_flow_sensor": "sensor.line"},
+    )
+    runtime = entry.runtime_data
+    own_id, shared_id = runtime.zone_ids
+
+    own = role_state(hass, "zone_water_total", zone_id=own_id)
+    shared = role_state(hass, "zone_water_total", zone_id=shared_id)
+
+    assert own.attributes["meter_entity"] == "sensor.own"
+    assert shared.attributes["meter_entity"] == "sensor.line"
+
+
+async def test_meter_entity_is_none_when_no_meter_resolves(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    """No own meter and no hub line meter: `meter_entity` is None, not the
+    empty string `zone.flow_sensor` defaults to."""
+    freezer.move_to(START)
+    park = MockValvePark(hass)
+    park.add("valve.a")
+    mock_weather(hass)
+    entry = await setup_hub(hass, [zone_data("Meterless", "valve.a", minutes=10)])
+    runtime = entry.runtime_data
+
+    state = role_state(hass, "zone_water_total", zone_id=runtime.zone_ids[0])
+    assert state.attributes["meter_entity"] is None
