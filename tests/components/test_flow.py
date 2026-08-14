@@ -29,7 +29,7 @@ def test_the_canonical_unit_is_litres_per_minute() -> None:
 
 def test_the_supported_units_are_exactly_what_the_converter_handles() -> None:
     # A hand-maintained list would drift the moment HA adds a unit.
-    assert frozenset(VolumeFlowRateConverter.VALID_UNITS) == SUPPORTED_FLOW_UNITS
+    assert SUPPORTED_FLOW_UNITS == frozenset(VolumeFlowRateConverter.VALID_UNITS)  # noqa: SIM300
 
 
 async def test_a_cubic_metres_per_hour_sensor_is_converted(hass: HomeAssistant) -> None:
