@@ -160,6 +160,7 @@ async def test_persisted_key_set_round_trips(hass: HomeAssistant) -> None:
         "cycle_enabled",
         "outcome_log",
         "consumption",
+        "water",
     }
 
 
@@ -176,3 +177,105 @@ def test_marker_migration_is_idempotent() -> None:
 
 def test_marker_migration_drops_markers_of_removed_zones() -> None:
     assert migrate_last_completed({"gone": "2026-07-01"}, {}) == {}
+
+
+async def test_water_totals_accumulate_and_split_by_provenance(hass: HomeAssistant) -> None:
+    state = RuntimeState(hass, "entry_water")
+    await state.async_load()
+    day = date(2026, 8, 14)
+
+    state.add_water("z1", 10.0, day=day, estimated=False)
+    state.add_water("z1", 5.0, day=day, estimated=True)
+
+    assert state.zone_water_total("z1") == 15.0
+    assert state.zone_water_estimated("z1") == 5.0
+    assert state.water_for_day("z1", day) == 15.0
+
+
+async def test_unattributed_tracks_closed_valves_separately(hass: HomeAssistant) -> None:
+    """Priming litres are unattributed; only the all-closed subset is suspect."""
+    state = RuntimeState(hass, "entry_water2")
+    await state.async_load()
+    day = date(2026, 8, 14)
+
+    state.add_unattributed("z1", 2.0, day=day, valves_closed=False)  # master pre-open
+    state.add_unattributed("z1", 8.0, day=day, valves_closed=True)  # leak candidate
+
+    assert state.unattributed_total("z1") == 10.0
+    assert state.unattributed_closed("z1") == 8.0
+    assert state.unattributed_total() == 10.0
+
+
+async def test_water_survives_a_reload_without_going_backwards(hass: HomeAssistant) -> None:
+    state = RuntimeState(hass, "entry_water3")
+    await state.async_load()
+    state.add_water("z1", 42.0, day=date(2026, 8, 14), estimated=False)
+    await state.async_save()
+
+    reloaded = RuntimeState(hass, "entry_water3")
+    await reloaded.async_load()
+    assert reloaded.zone_water_total("z1") == 42.0
+
+
+async def test_a_partial_stored_water_section_is_filled_with_defaults(
+    hass: HomeAssistant, hass_storage: dict
+) -> None:
+    """The defaults merge is shallow, so the sub-dict must be merged explicitly.
+
+    A store written by an earlier build of this feature, or hand-edited, must
+    not make every accessor raise KeyError.
+    """
+    hass_storage["irrigation_maestro.entry_water4"] = {
+        "version": 1,
+        "data": {"water": {"zones": {"z1": {"total_l": 3.0, "estimated_l": 0.0}}}},
+    }
+    state = RuntimeState(hass, "entry_water4")
+    await state.async_load()
+
+    assert state.zone_water_total("z1") == 3.0
+    assert state.unattributed_total() == 0.0
+    assert state.daily_water() == {}
+    assert state.carried_over_for(date(2026, 8, 1)) == 0.0
+
+
+async def test_daily_water_is_pruned_to_the_retention_window(hass: HomeAssistant) -> None:
+    state = RuntimeState(hass, "entry_water5")
+    await state.async_load()
+    today = date(2026, 8, 14)
+    state.add_water("z1", 1.0, day=date.fromordinal(today.toordinal() - 731), estimated=False)
+    state.add_water("z1", 1.0, day=date.fromordinal(today.toordinal() - 729), estimated=False)
+    state.add_water("z1", 1.0, day=today, estimated=False)
+
+    state.prune_water(today)
+
+    assert len(state.daily_water()) == 2
+
+
+async def test_dropping_a_zone_keeps_its_history_and_drops_its_counters(
+    hass: HomeAssistant,
+) -> None:
+    """Water that flowed, flowed: deleting the history would rewrite past months.
+
+    The cumulative counters back entities that no longer exist, so they go.
+    """
+    state = RuntimeState(hass, "entry_water6")
+    await state.async_load()
+    day = date(2026, 8, 14)
+    state.add_water("z1", 10.0, day=day, estimated=False)
+    state.add_unattributed("z1", 4.0, day=day, valves_closed=True)
+
+    state.drop_zone("z1")
+
+    assert state.zone_water_total("z1") == 0.0
+    assert state.unattributed_total("z1") == 0.0
+    assert state.water_for_day("z1", day) == 10.0
+    assert state.water_for_period(day, day) == 10.0
+
+
+async def test_carried_over_applies_only_to_its_own_period(hass: HomeAssistant) -> None:
+    state = RuntimeState(hass, "entry_water7")
+    await state.async_load()
+    state.set_carried_over(date(2026, 8, 1), 250.0)
+
+    assert state.carried_over_for(date(2026, 8, 1)) == 250.0
+    assert state.carried_over_for(date(2026, 9, 1)) == 0.0
