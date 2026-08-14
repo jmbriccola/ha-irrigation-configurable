@@ -3,6 +3,7 @@
 from datetime import UTC, date, datetime
 
 from custom_components.irrigation_maestro.engine.model import EngineParams
+from custom_components.irrigation_maestro.migration import migrate_last_completed
 from custom_components.irrigation_maestro.storage import RuntimeState
 from homeassistant.core import HomeAssistant
 
@@ -131,3 +132,47 @@ async def test_global_pause_key(hass: HomeAssistant) -> None:
     assert state.paused_until("zone1") == NOW
     state.clear_pause("zone1")
     assert state.paused_until("zone1") is None
+
+
+async def test_persisted_key_set_round_trips(hass: HomeAssistant) -> None:
+    """The stored dict keeps exactly the keys the defaults declare.
+
+    Nothing else asserts the persisted shape, so a key added or removed by
+    accident is invisible until an install fails to load.
+    """
+    state = RuntimeState(hass, "entry1")
+    await state.async_load()
+    await state.async_save()
+
+    reloaded = RuntimeState(hass, "entry1")
+    await reloaded.async_load()
+    assert set(reloaded.as_dict()) == {
+        "temp_history",
+        "rain_history",
+        "rain_staging_mm",
+        "last_completed",
+        "manual_stop_at",
+        "suspended_until",
+        "paused_until",
+        "skip_today",
+        "last_outcome",
+        "zone_enabled",
+        "cycle_enabled",
+        "outcome_log",
+        "consumption",
+    }
+
+
+def test_marker_migration_is_idempotent() -> None:
+    """migrate_last_completed re-keys zone -> zone:program, once.
+
+    The precedent every later storage migration copies, shipped untested.
+    """
+    zone_programs = {"z1": ["p1", "p2"]}
+    once = migrate_last_completed({"z1": "2026-07-01"}, zone_programs)
+    assert once == {"z1:p1": "2026-07-01", "z1:p2": "2026-07-01"}
+    assert migrate_last_completed(once, zone_programs) == once
+
+
+def test_marker_migration_drops_markers_of_removed_zones() -> None:
+    assert migrate_last_completed({"gone": "2026-07-01"}, {}) == {}
