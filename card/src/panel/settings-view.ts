@@ -272,7 +272,11 @@ export class ImcSettingsView extends LitElement {
   // verdict, the recommendation and per-event reachability are derived
   // state with exactly one implementation, in notify.py.
   @property({ attribute: false }) notifyStatus?: NotificationStatusResponse;
+  /** The status read failed. Only shown when there is no status to show. */
+  @property({ attribute: false }) notifyStatusFailed = false;
   @property({ attribute: false }) testResults: Record<string, NotifyTestResult> = {};
+  /** Recipients whose test send has not answered yet. */
+  @property({ attribute: false }) testPending: string[] = [];
   @state() private _wizardStep = 0;
   @state() private _selection: WizardSelection = { recipients: [], events: [], priorities: {} };
   @state() private _collapsedGroups: string[] = [];
@@ -533,6 +537,10 @@ export class ImcSettingsView extends LitElement {
     }
     .notify-banner .link-btn {
       margin-top: 6px;
+    }
+    .link-btn:disabled {
+      opacity: 0.5;
+      cursor: default;
     }
     .recipient-gone {
       font-size: 12px;
@@ -1036,10 +1044,21 @@ export class ImcSettingsView extends LitElement {
   private _renderNotificationsSection(lang: string): TemplateResult {
     const status = this.notifyStatus;
     if (!status) {
+      // Nothing to configure yet: either the read is in flight, or it failed
+      // with nothing to fall back on. A failure has to say so HERE and offer
+      // the retry — the reading line on its own is a dead end whose only exit
+      // is leaving settings and coming back.
       return html`
         <div class="sec">
           <div class="header">🔔 ${localize(lang, "settings.notifications")}</div>
-          <div class="notify-hint">${localize(lang, "notify.loading")}</div>
+          ${this.notifyStatusFailed
+            ? html`
+                <div class="notify-error">${localize(lang, "notify.load_failed")}</div>
+                <button class="link-btn" type="button" @click=${this._retryNotifyStatus}>
+                  ${localize(lang, "notify.retry")}
+                </button>
+              `
+            : html`<div class="notify-hint">${localize(lang, "notify.loading")}</div>`}
         </div>
       `;
     }
@@ -1106,6 +1125,10 @@ export class ImcSettingsView extends LitElement {
     return html`
       <div class="section-label">${localize(lang, "notify.step_recipients")}</div>
       ${recipients.map((recipient) => {
+        // The send blocks on the notify integration, so a slow one would
+        // otherwise leave the click with no feedback at all: while a test is
+        // outstanding the row says so, and its button cannot be pressed again.
+        const pending = this.testPending.includes(recipient.service);
         const result = this.testResults[recipient.service];
         return html`
           <div class="notify-row">
@@ -1123,18 +1146,21 @@ export class ImcSettingsView extends LitElement {
                   <button
                     class="link-btn"
                     type="button"
+                    ?disabled=${pending}
                     @click=${() => this._sendTest(recipient.service)}
                   >
                     ${localize(lang, "notify.send_test")}
                   </button>
                 `}
-            ${result === undefined
-              ? nothing
-              : html`<span class="test-result ${result.sent ? "ok" : "fail"}"
-                  >${result.sent
-                    ? `✓ ${localize(lang, "notify.test_ok")}`
-                    : `✗ ${localize(lang, "notify.test_failed", { error: result.error ?? "" })}`}</span
-                >`}
+            ${pending
+              ? html`<span class="test-result">… ${localize(lang, "notify.test_sending")}</span>`
+              : result === undefined
+                ? nothing
+                : html`<span class="test-result ${result.sent ? "ok" : "fail"}"
+                    >${result.sent
+                      ? `✓ ${localize(lang, "notify.test_ok")}`
+                      : `✗ ${localize(lang, "notify.test_failed", { error: result.error ?? "" })}`}</span
+                  >`}
           </div>
         `;
       })}
@@ -1300,6 +1326,16 @@ export class ImcSettingsView extends LitElement {
       ...this._selection,
       priorities: { ...this._selection.priorities, [event]: priority },
     };
+  }
+
+  /** Ask the panel to read `notification_status` again after a failed read. */
+  private _retryNotifyStatus(): void {
+    this.dispatchEvent(
+      new CustomEvent<void>("imc-settings-retry-notifications", {
+        bubbles: true,
+        composed: true,
+      }),
+    );
   }
 
   private _sendTest(service: string): void {
