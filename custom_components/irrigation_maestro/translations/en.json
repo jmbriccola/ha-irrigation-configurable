@@ -843,7 +843,11 @@
     },
     "flow_unit_override_conflict": {
       "title": "Flow meter unit override conflict",
-      "description": "The flow meter {entity_id} is claimed under two different unit overrides, one from {first} and one from {second}. Only one interpretation can apply: the one from {first} is used, the one from {second} is ignored. Make the two agree to resolve this."
+      "description": "The flow meter {entity_id} is claimed by both zone {first} and zone {second}, with different unit overrides. One meter can only be read under one interpretation, so {first}'s override is being used and {second}'s is ignored. Give both zones the same override, or set the override on the line meter instead of on either zone."
+    },
+    "flow_unit_override_conflict_line": {
+      "title": "Zone override disagrees with the line meter's unit",
+      "description": "The flow meter {entity_id} is the shared line meter, but zone {zone} claims it under its own unit override, which disagrees with the hub's own setting for it. The zone's override is being used; set the hub's line meter unit to match, or remove the zone's own override."
     },
     "flow_unit_corrected": {
       "title": "Flow readings are converted from another unit",

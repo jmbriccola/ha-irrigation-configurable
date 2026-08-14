@@ -517,6 +517,16 @@ async def test_a_shared_line_meter_without_nominals_splits_equally(
 async def test_a_zone_vs_zone_override_conflict_is_reported_then_cleared(
     hass: HomeAssistant,
 ) -> None:
+    """The placeholders must stay bare zone names, not pre-formatted labels.
+
+    A prior round replaced these with labels like "zone Alpha" and dropped
+    "zone"/"zona" from both locale templates to make room for a hub label --
+    which silently broke the Italian wording for this, the common case,
+    which had been correct. Asserting the placeholders are bare data is what
+    would have caught that regression: a template can only supply its own
+    word for "zone" in each locale if the placeholder does not already carry
+    one.
+    """
     park = MockValvePark(hass)
     park.add("valve.a")
     park.add("valve.b")
@@ -545,8 +555,8 @@ async def test_a_zone_vs_zone_override_conflict_is_reported_then_cleared(
     assert issue is not None
     assert issue.translation_placeholders == {
         "entity_id": "sensor.shared",
-        "first": "zone Alpha",
-        "second": "zone Beta",
+        "first": "Alpha",
+        "second": "Beta",
     }
 
     # Align the two zones' overrides; the next rebuild retires the warning.
@@ -569,7 +579,11 @@ async def test_a_zone_vs_hub_override_conflict_on_the_line_meter_is_reported(
     flow_reader_for builds a reader under the hub's override for any zone
     that falls back to the line meter, while the ledger (via _resolved_meters)
     reads it under the winning zone's override -- the zone-wins precedence is
-    correct and stays, but the disagreement must be visible.
+    correct and stays, but the disagreement must be visible. This is its own
+    issue id and translation key (flow_unit_override_conflict_line), not the
+    zone-vs-zone one: the claimant here is the hub, not a second zone, and a
+    single static template cannot correctly say "zone" in one case and "the
+    hub" in another across two languages via a placeholder alone.
     """
     park = MockValvePark(hass)
     park.add("valve.a")
@@ -587,13 +601,9 @@ async def test_a_zone_vs_hub_override_conflict_on_the_line_meter_is_reported(
         {"line_flow_sensor": "sensor.line", "line_flow_sensor_unit": "L/min"},
     )
     registry = ir.async_get(hass)
-    issue = registry.async_get_issue(DOMAIN, "flow_unit_override_conflict_sensor.line")
+    issue = registry.async_get_issue(DOMAIN, "flow_unit_override_conflict_line_sensor.line")
     assert issue is not None
-    assert issue.translation_placeholders == {
-        "entity_id": "sensor.line",
-        "first": "zone Alpha",
-        "second": "the hub's line meter",
-    }
+    assert issue.translation_placeholders == {"entity_id": "sensor.line", "zone": "Alpha"}
 
     # Align the hub's override with the zone's; the next rebuild clears it.
     hass.config_entries.async_update_entry(
@@ -601,4 +611,61 @@ async def test_a_zone_vs_hub_override_conflict_on_the_line_meter_is_reported(
     )
     await hass.async_block_till_done()
 
-    assert registry.async_get_issue(DOMAIN, "flow_unit_override_conflict_sensor.line") is None
+    assert registry.async_get_issue(DOMAIN, "flow_unit_override_conflict_line_sensor.line") is None
+
+
+async def test_zone_vs_zone_and_zone_vs_hub_conflicts_on_one_entity_clear_independently(
+    hass: HomeAssistant,
+) -> None:
+    """Both conflict shapes can fire on the same entity at once.
+
+    Two zones both point at the hub's own line meter, with three different
+    overrides between them (Alpha vs Beta, and the winning zone, Alpha, vs
+    the hub): a zone-vs-zone conflict and a zone-vs-hub conflict on the very
+    same entity, simultaneously. Distinct issue ids for the two shapes exist
+    precisely so that resolving one can never clear the other; this proves it
+    by resolving only the zone-vs-zone side and asserting the zone-vs-hub
+    issue is untouched.
+    """
+    park = MockValvePark(hass)
+    park.add("valve.a")
+    park.add("valve.b")
+    mock_weather(hass)
+    entry = await setup_hub(
+        hass,
+        [
+            zone_data(
+                "Alpha",
+                "valve.a",
+                flow_sensor="sensor.line",
+                flow_sensor_unit="m³/h",
+                order=1,
+            ),
+            zone_data(
+                "Beta",
+                "valve.b",
+                flow_sensor="sensor.line",
+                flow_sensor_unit="L/min",
+                order=2,
+            ),
+        ],
+        {"line_flow_sensor": "sensor.line", "line_flow_sensor_unit": "L/min"},
+    )
+    registry = ir.async_get(hass)
+    zone_issue_id = "flow_unit_override_conflict_sensor.line"
+    line_issue_id = "flow_unit_override_conflict_line_sensor.line"
+    assert registry.async_get_issue(DOMAIN, zone_issue_id) is not None
+    assert registry.async_get_issue(DOMAIN, line_issue_id) is not None
+
+    # Resolve only the zone-vs-zone conflict: align Beta with Alpha, who
+    # wins the line meter (order=1). The hub's own override (L/min) still
+    # disagrees with Alpha's (m³/h) -- that conflict must remain.
+    beta_id = entry.runtime_data.zone_ids[1]
+    subentry = entry.subentries[beta_id]
+    hass.config_entries.async_update_subentry(
+        entry, subentry, data={**subentry.data, "flow_sensor_unit": "m³/h"}
+    )
+    await hass.async_block_till_done()
+
+    assert registry.async_get_issue(DOMAIN, zone_issue_id) is None
+    assert registry.async_get_issue(DOMAIN, line_issue_id) is not None

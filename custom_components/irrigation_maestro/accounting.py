@@ -252,14 +252,19 @@ class WaterAccountant:
         override wins over the hub's -- including when the meter in question
         is the shared line meter, so a zone that points its own flow_sensor at
         it and declares its own override still wins over the hub's line
-        override. Two conflicting claims on one entity, zone-vs-zone or
-        zone-vs-hub, are a configuration fault, resolved deterministically
-        (zone order, then zone over hub) and reported.
+        override. Two conflicting claims on one entity are a configuration
+        fault, resolved deterministically (zone order, then zone over hub) and
+        reported -- zone-vs-zone and zone-vs-hub are different claimant
+        shapes, each with its own issue id and translation key (see
+        ``report_flow_unit_override_conflict`` and
+        ``report_flow_line_override_conflict``), so a fix to one can never
+        clear the other.
 
         This runs on every rebuild, i.e. every config change, so it is also
         the natural place to retire a conflict warning once it no longer
-        applies: every entity that resolves here without conflicting has its
-        issue cleared before returning.
+        applies: every entity that resolves here without a zone-vs-zone
+        conflict has that issue cleared, and the line entity's zone-vs-hub
+        issue is cleared whenever it no longer conflicts, before returning.
         """
         meters: dict[str, str | None] = {}
         claimed_by: dict[str, str] = {}
@@ -268,13 +273,14 @@ class WaterAccountant:
             sensor = zone.config.flow_sensor
             if not sensor:
                 continue
-            label = f"zone {zone.config.name}"
             if sensor in meters and meters[sensor] != zone.config.flow_sensor_unit:
-                self._runtime.report_flow_unit_override_conflict(sensor, claimed_by[sensor], label)
+                self._runtime.report_flow_unit_override_conflict(
+                    sensor, claimed_by[sensor], zone.config.name
+                )
                 conflicted.add(sensor)
                 continue
             meters[sensor] = zone.config.flow_sensor_unit
-            claimed_by[sensor] = label
+            claimed_by[sensor] = zone.config.name
         line = self._runtime.hub.line_flow_sensor
         if line:
             if line in meters and meters[line] != self._runtime.hub.line_flow_sensor_unit:
@@ -284,12 +290,11 @@ class WaterAccountant:
                 # is left untouched -- but the disagreement must not be
                 # silent, since flow_reader_for builds a reader under the
                 # hub's override for any zone that falls back to the line.
-                self._runtime.report_flow_unit_override_conflict(
-                    line, claimed_by[line], "the hub's line meter"
-                )
-                conflicted.add(line)
-            elif line not in meters:
-                meters[line] = self._runtime.hub.line_flow_sensor_unit
+                self._runtime.report_flow_line_override_conflict(line, claimed_by[line])
+            else:
+                self._runtime.clear_flow_line_override_conflict(line)
+                if line not in meters:
+                    meters[line] = self._runtime.hub.line_flow_sensor_unit
         for entity_id in meters:
             if entity_id not in conflicted:
                 self._runtime.clear_flow_unit_override_conflict(entity_id)
