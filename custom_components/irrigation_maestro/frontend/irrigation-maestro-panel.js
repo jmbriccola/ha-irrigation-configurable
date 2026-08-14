@@ -4,18 +4,18 @@
  * Copyright (c) Jacopo Maria Briccola
  * @license MIT
  */
-const ce = globalThis, Oe = ce.ShadowRoot && (ce.ShadyCSS === void 0 || ce.ShadyCSS.nativeShadow) && "adoptedStyleSheets" in Document.prototype && "replace" in CSSStyleSheet.prototype, Fe = /* @__PURE__ */ Symbol(), Qe = /* @__PURE__ */ new WeakMap();
-let ft = class {
+const ue = globalThis, Fe = ue.ShadowRoot && (ue.ShadyCSS === void 0 || ue.ShadyCSS.nativeShadow) && "adoptedStyleSheets" in Document.prototype && "replace" in CSSStyleSheet.prototype, De = /* @__PURE__ */ Symbol(), Je = /* @__PURE__ */ new WeakMap();
+let gt = class {
   constructor(e, t, i) {
-    if (this._$cssResult$ = !0, i !== Fe) throw Error("CSSResult is not constructable. Use `unsafeCSS` or `css` instead.");
+    if (this._$cssResult$ = !0, i !== De) throw Error("CSSResult is not constructable. Use `unsafeCSS` or `css` instead.");
     this.cssText = e, this.t = t;
   }
   get styleSheet() {
     let e = this.o;
     const t = this.t;
-    if (Oe && e === void 0) {
+    if (Fe && e === void 0) {
       const i = t !== void 0 && t.length === 1;
-      i && (e = Qe.get(t)), e === void 0 && ((this.o = e = new CSSStyleSheet()).replaceSync(this.cssText), i && Qe.set(t, e));
+      i && (e = Je.get(t)), e === void 0 && ((this.o = e = new CSSStyleSheet()).replaceSync(this.cssText), i && Je.set(t, e));
     }
     return e;
   }
@@ -23,28 +23,28 @@ let ft = class {
     return this.cssText;
   }
 };
-const Dt = (n) => new ft(typeof n == "string" ? n : n + "", void 0, Fe), O = (n, ...e) => {
+const Rt = (n) => new gt(typeof n == "string" ? n : n + "", void 0, De), O = (n, ...e) => {
   const t = n.length === 1 ? n[0] : e.reduce((i, s, o) => i + ((a) => {
     if (a._$cssResult$ === !0) return a.cssText;
     if (typeof a == "number") return a;
     throw Error("Value passed to 'css' function must be a 'css' function result: " + a + ". Use 'unsafeCSS' to pass non-literal values, but take care to ensure page security.");
   })(s) + n[o + 1], n[0]);
-  return new ft(t, n, Fe);
-}, Rt = (n, e) => {
-  if (Oe) n.adoptedStyleSheets = e.map((t) => t instanceof CSSStyleSheet ? t : t.styleSheet);
+  return new gt(t, n, De);
+}, Ut = (n, e) => {
+  if (Fe) n.adoptedStyleSheets = e.map((t) => t instanceof CSSStyleSheet ? t : t.styleSheet);
   else for (const t of e) {
-    const i = document.createElement("style"), s = ce.litNonce;
+    const i = document.createElement("style"), s = ue.litNonce;
     s !== void 0 && i.setAttribute("nonce", s), i.textContent = t.cssText, n.appendChild(i);
   }
-}, Je = Oe ? (n) => n : (n) => n instanceof CSSStyleSheet ? ((e) => {
+}, et = Fe ? (n) => n : (n) => n instanceof CSSStyleSheet ? ((e) => {
   let t = "";
   for (const i of e.cssRules) t += i.cssText;
-  return Dt(t);
+  return Rt(t);
 })(n) : n;
-const { is: Ut, defineProperty: jt, getOwnPropertyDescriptor: Lt, getOwnPropertyNames: Wt, getOwnPropertySymbols: Vt, getPrototypeOf: Bt } = Object, fe = globalThis, et = fe.trustedTypes, Ht = et ? et.emptyScript : "", Zt = fe.reactiveElementPolyfillSupport, ie = (n, e) => n, ue = { toAttribute(n, e) {
+const { is: jt, defineProperty: Lt, getOwnPropertyDescriptor: Wt, getOwnPropertyNames: Vt, getOwnPropertySymbols: Bt, getPrototypeOf: Ht } = Object, ge = globalThis, tt = ge.trustedTypes, Zt = tt ? tt.emptyScript : "", Gt = ge.reactiveElementPolyfillSupport, se = (n, e) => n, _e = { toAttribute(n, e) {
   switch (e) {
     case Boolean:
-      n = n ? Ht : null;
+      n = n ? Zt : null;
       break;
     case Object:
     case Array:
@@ -69,8 +69,8 @@ const { is: Ut, defineProperty: jt, getOwnPropertyDescriptor: Lt, getOwnProperty
       }
   }
   return t;
-} }, De = (n, e) => !Ut(n, e), tt = { attribute: !0, type: String, converter: ue, reflect: !1, useDefault: !1, hasChanged: De };
-Symbol.metadata ??= /* @__PURE__ */ Symbol("metadata"), fe.litPropertyMetadata ??= /* @__PURE__ */ new WeakMap();
+} }, Re = (n, e) => !jt(n, e), it = { attribute: !0, type: String, converter: _e, reflect: !1, useDefault: !1, hasChanged: Re };
+Symbol.metadata ??= /* @__PURE__ */ Symbol("metadata"), ge.litPropertyMetadata ??= /* @__PURE__ */ new WeakMap();
 let Y = class extends HTMLElement {
   static addInitializer(e) {
     this._$Ei(), (this.l ??= []).push(e);
@@ -78,14 +78,14 @@ let Y = class extends HTMLElement {
   static get observedAttributes() {
     return this.finalize(), this._$Eh && [...this._$Eh.keys()];
   }
-  static createProperty(e, t = tt) {
+  static createProperty(e, t = it) {
     if (t.state && (t.attribute = !1), this._$Ei(), this.prototype.hasOwnProperty(e) && ((t = Object.create(t)).wrapped = !0), this.elementProperties.set(e, t), !t.noAccessor) {
       const i = /* @__PURE__ */ Symbol(), s = this.getPropertyDescriptor(e, i, t);
-      s !== void 0 && jt(this.prototype, e, s);
+      s !== void 0 && Lt(this.prototype, e, s);
     }
   }
   static getPropertyDescriptor(e, t, i) {
-    const { get: s, set: o } = Lt(this.prototype, e) ?? { get() {
+    const { get: s, set: o } = Wt(this.prototype, e) ?? { get() {
       return this[t];
     }, set(a) {
       this[t] = a;
@@ -96,17 +96,17 @@ let Y = class extends HTMLElement {
     }, configurable: !0, enumerable: !0 };
   }
   static getPropertyOptions(e) {
-    return this.elementProperties.get(e) ?? tt;
+    return this.elementProperties.get(e) ?? it;
   }
   static _$Ei() {
-    if (this.hasOwnProperty(ie("elementProperties"))) return;
-    const e = Bt(this);
+    if (this.hasOwnProperty(se("elementProperties"))) return;
+    const e = Ht(this);
     e.finalize(), e.l !== void 0 && (this.l = [...e.l]), this.elementProperties = new Map(e.elementProperties);
   }
   static finalize() {
-    if (this.hasOwnProperty(ie("finalized"))) return;
-    if (this.finalized = !0, this._$Ei(), this.hasOwnProperty(ie("properties"))) {
-      const t = this.properties, i = [...Wt(t), ...Vt(t)];
+    if (this.hasOwnProperty(se("finalized"))) return;
+    if (this.finalized = !0, this._$Ei(), this.hasOwnProperty(se("properties"))) {
+      const t = this.properties, i = [...Vt(t), ...Bt(t)];
       for (const s of i) this.createProperty(s, t[s]);
     }
     const e = this[Symbol.metadata];
@@ -125,8 +125,8 @@ let Y = class extends HTMLElement {
     const t = [];
     if (Array.isArray(e)) {
       const i = new Set(e.flat(1 / 0).reverse());
-      for (const s of i) t.unshift(Je(s));
-    } else e !== void 0 && t.push(Je(e));
+      for (const s of i) t.unshift(et(s));
+    } else e !== void 0 && t.push(et(e));
     return t;
   }
   static _$Eu(e, t) {
@@ -152,7 +152,7 @@ let Y = class extends HTMLElement {
   }
   createRenderRoot() {
     const e = this.shadowRoot ?? this.attachShadow(this.constructor.shadowRootOptions);
-    return Rt(e, this.constructor.elementStyles), e;
+    return Ut(e, this.constructor.elementStyles), e;
   }
   connectedCallback() {
     this.renderRoot ??= this.createRenderRoot(), this.enableUpdating(!0), this._$EO?.forEach((e) => e.hostConnected?.());
@@ -168,14 +168,14 @@ let Y = class extends HTMLElement {
   _$ET(e, t) {
     const i = this.constructor.elementProperties.get(e), s = this.constructor._$Eu(e, i);
     if (s !== void 0 && i.reflect === !0) {
-      const o = (i.converter?.toAttribute !== void 0 ? i.converter : ue).toAttribute(t, i.type);
+      const o = (i.converter?.toAttribute !== void 0 ? i.converter : _e).toAttribute(t, i.type);
       this._$Em = e, o == null ? this.removeAttribute(s) : this.setAttribute(s, o), this._$Em = null;
     }
   }
   _$AK(e, t) {
     const i = this.constructor, s = i._$Eh.get(e);
     if (s !== void 0 && this._$Em !== s) {
-      const o = i.getPropertyOptions(s), a = typeof o.converter == "function" ? { fromAttribute: o.converter } : o.converter?.fromAttribute !== void 0 ? o.converter : ue;
+      const o = i.getPropertyOptions(s), a = typeof o.converter == "function" ? { fromAttribute: o.converter } : o.converter?.fromAttribute !== void 0 ? o.converter : _e;
       this._$Em = s;
       const l = a.fromAttribute(t, o.type);
       this[s] = l ?? this._$Ej?.get(s) ?? l, this._$Em = null;
@@ -184,7 +184,7 @@ let Y = class extends HTMLElement {
   requestUpdate(e, t, i, s = !1, o) {
     if (e !== void 0) {
       const a = this.constructor;
-      if (s === !1 && (o = this[e]), i ??= a.getPropertyOptions(e), !((i.hasChanged ?? De)(o, t) || i.useDefault && i.reflect && o === this._$Ej?.get(e) && !this.hasAttribute(a._$Eu(e, i)))) return;
+      if (s === !1 && (o = this[e]), i ??= a.getPropertyOptions(e), !((i.hasChanged ?? Re)(o, t) || i.useDefault && i.reflect && o === this._$Ej?.get(e) && !this.hasAttribute(a._$Eu(e, i)))) return;
       this.C(e, t, i);
     }
     this.isUpdatePending === !1 && (this._$ES = this._$EP());
@@ -252,51 +252,51 @@ let Y = class extends HTMLElement {
   firstUpdated(e) {
   }
 };
-Y.elementStyles = [], Y.shadowRootOptions = { mode: "open" }, Y[ie("elementProperties")] = /* @__PURE__ */ new Map(), Y[ie("finalized")] = /* @__PURE__ */ new Map(), Zt?.({ ReactiveElement: Y }), (fe.reactiveElementVersions ??= []).push("2.1.2");
-const Re = globalThis, it = (n) => n, _e = Re.trustedTypes, st = _e ? _e.createPolicy("lit-html", { createHTML: (n) => n }) : void 0, gt = "$lit$", W = `lit$${Math.random().toFixed(9).slice(2)}$`, yt = "?" + W, qt = `<${yt}>`, q = document, se = () => q.createComment(""), ne = (n) => n === null || typeof n != "object" && typeof n != "function", Ue = Array.isArray, Gt = (n) => Ue(n) || typeof n?.[Symbol.iterator] == "function", ze = `[ 	
-\f\r]`, ee = /<(?:(!--|\/[^a-zA-Z])|(\/?[a-zA-Z][^>\s]*)|(\/?$))/g, nt = /-->/g, ot = />/g, V = RegExp(`>|${ze}(?:([^\\s"'>=/]+)(${ze}*=${ze}*(?:[^ 	
-\f\r"'\`<>=]|("|')|))|$)`, "g"), rt = /'/g, at = /"/g, bt = /^(?:script|style|textarea|title)$/i, xt = (n) => (e, ...t) => ({ _$litType$: n, strings: e, values: t }), d = xt(1), ke = xt(2), X = /* @__PURE__ */ Symbol.for("lit-noChange"), u = /* @__PURE__ */ Symbol.for("lit-nothing"), dt = /* @__PURE__ */ new WeakMap(), Z = q.createTreeWalker(q, 129);
-function $t(n, e) {
-  if (!Ue(n) || !n.hasOwnProperty("raw")) throw Error("invalid template strings array");
-  return st !== void 0 ? st.createHTML(e) : e;
+Y.elementStyles = [], Y.shadowRootOptions = { mode: "open" }, Y[se("elementProperties")] = /* @__PURE__ */ new Map(), Y[se("finalized")] = /* @__PURE__ */ new Map(), Gt?.({ ReactiveElement: Y }), (ge.reactiveElementVersions ??= []).push("2.1.2");
+const Ue = globalThis, st = (n) => n, he = Ue.trustedTypes, nt = he ? he.createPolicy("lit-html", { createHTML: (n) => n }) : void 0, yt = "$lit$", W = `lit$${Math.random().toFixed(9).slice(2)}$`, bt = "?" + W, qt = `<${bt}>`, G = document, ne = () => G.createComment(""), oe = (n) => n === null || typeof n != "object" && typeof n != "function", je = Array.isArray, Kt = (n) => je(n) || typeof n?.[Symbol.iterator] == "function", ke = `[ 	
+\f\r]`, ee = /<(?:(!--|\/[^a-zA-Z])|(\/?[a-zA-Z][^>\s]*)|(\/?$))/g, ot = /-->/g, rt = />/g, V = RegExp(`>|${ke}(?:([^\\s"'>=/]+)(${ke}*=${ke}*(?:[^ 	
+\f\r"'\`<>=]|("|')|))|$)`, "g"), at = /'/g, dt = /"/g, $t = /^(?:script|style|textarea|title)$/i, xt = (n) => (e, ...t) => ({ _$litType$: n, strings: e, values: t }), d = xt(1), Se = xt(2), X = /* @__PURE__ */ Symbol.for("lit-noChange"), p = /* @__PURE__ */ Symbol.for("lit-nothing"), lt = /* @__PURE__ */ new WeakMap(), Z = G.createTreeWalker(G, 129);
+function wt(n, e) {
+  if (!je(n) || !n.hasOwnProperty("raw")) throw Error("invalid template strings array");
+  return nt !== void 0 ? nt.createHTML(e) : e;
 }
-const Kt = (n, e) => {
+const Yt = (n, e) => {
   const t = n.length - 1, i = [];
   let s, o = e === 2 ? "<svg>" : e === 3 ? "<math>" : "", a = ee;
   for (let l = 0; l < t; l++) {
     const c = n[l];
     let _, g, m = -1, z = 0;
-    for (; z < c.length && (a.lastIndex = z, g = a.exec(c), g !== null); ) z = a.lastIndex, a === ee ? g[1] === "!--" ? a = nt : g[1] !== void 0 ? a = ot : g[2] !== void 0 ? (bt.test(g[2]) && (s = RegExp("</" + g[2], "g")), a = V) : g[3] !== void 0 && (a = V) : a === V ? g[0] === ">" ? (a = s ?? ee, m = -1) : g[1] === void 0 ? m = -2 : (m = a.lastIndex - g[2].length, _ = g[1], a = g[3] === void 0 ? V : g[3] === '"' ? at : rt) : a === at || a === rt ? a = V : a === nt || a === ot ? a = ee : (a = V, s = void 0);
-    const x = a === V && n[l + 1].startsWith("/>") ? " " : "";
-    o += a === ee ? c + qt : m >= 0 ? (i.push(_), c.slice(0, m) + gt + c.slice(m) + W + x) : c + W + (m === -2 ? l : x);
+    for (; z < c.length && (a.lastIndex = z, g = a.exec(c), g !== null); ) z = a.lastIndex, a === ee ? g[1] === "!--" ? a = ot : g[1] !== void 0 ? a = rt : g[2] !== void 0 ? ($t.test(g[2]) && (s = RegExp("</" + g[2], "g")), a = V) : g[3] !== void 0 && (a = V) : a === V ? g[0] === ">" ? (a = s ?? ee, m = -1) : g[1] === void 0 ? m = -2 : (m = a.lastIndex - g[2].length, _ = g[1], a = g[3] === void 0 ? V : g[3] === '"' ? dt : at) : a === dt || a === at ? a = V : a === ot || a === rt ? a = ee : (a = V, s = void 0);
+    const $ = a === V && n[l + 1].startsWith("/>") ? " " : "";
+    o += a === ee ? c + qt : m >= 0 ? (i.push(_), c.slice(0, m) + yt + c.slice(m) + W + $) : c + W + (m === -2 ? l : $);
   }
-  return [$t(n, o + (n[t] || "<?>") + (e === 2 ? "</svg>" : e === 3 ? "</math>" : "")), i];
+  return [wt(n, o + (n[t] || "<?>") + (e === 2 ? "</svg>" : e === 3 ? "</math>" : "")), i];
 };
-class oe {
+class re {
   constructor({ strings: e, _$litType$: t }, i) {
     let s;
     this.parts = [];
     let o = 0, a = 0;
-    const l = e.length - 1, c = this.parts, [_, g] = Kt(e, t);
-    if (this.el = oe.createElement(_, i), Z.currentNode = this.el.content, t === 2 || t === 3) {
+    const l = e.length - 1, c = this.parts, [_, g] = Yt(e, t);
+    if (this.el = re.createElement(_, i), Z.currentNode = this.el.content, t === 2 || t === 3) {
       const m = this.el.content.firstChild;
       m.replaceWith(...m.childNodes);
     }
     for (; (s = Z.nextNode()) !== null && c.length < l; ) {
       if (s.nodeType === 1) {
-        if (s.hasAttributes()) for (const m of s.getAttributeNames()) if (m.endsWith(gt)) {
-          const z = g[a++], x = s.getAttribute(m).split(W), j = /([.?@])?(.*)/.exec(z);
-          c.push({ type: 1, index: o, name: j[2], strings: x, ctor: j[1] === "." ? Xt : j[1] === "?" ? Qt : j[1] === "@" ? Jt : ge }), s.removeAttribute(m);
+        if (s.hasAttributes()) for (const m of s.getAttributeNames()) if (m.endsWith(yt)) {
+          const z = g[a++], $ = s.getAttribute(m).split(W), j = /([.?@])?(.*)/.exec(z);
+          c.push({ type: 1, index: o, name: j[2], strings: $, ctor: j[1] === "." ? Qt : j[1] === "?" ? Jt : j[1] === "@" ? ei : ye }), s.removeAttribute(m);
         } else m.startsWith(W) && (c.push({ type: 6, index: o }), s.removeAttribute(m));
-        if (bt.test(s.tagName)) {
+        if ($t.test(s.tagName)) {
           const m = s.textContent.split(W), z = m.length - 1;
           if (z > 0) {
-            s.textContent = _e ? _e.emptyScript : "";
-            for (let x = 0; x < z; x++) s.append(m[x], se()), Z.nextNode(), c.push({ type: 2, index: ++o });
-            s.append(m[z], se());
+            s.textContent = he ? he.emptyScript : "";
+            for (let $ = 0; $ < z; $++) s.append(m[$], ne()), Z.nextNode(), c.push({ type: 2, index: ++o });
+            s.append(m[z], ne());
           }
         }
-      } else if (s.nodeType === 8) if (s.data === yt) c.push({ type: 2, index: o });
+      } else if (s.nodeType === 8) if (s.data === bt) c.push({ type: 2, index: o });
       else {
         let m = -1;
         for (; (m = s.data.indexOf(W, m + 1)) !== -1; ) c.push({ type: 7, index: o }), m += W.length - 1;
@@ -305,17 +305,17 @@ class oe {
     }
   }
   static createElement(e, t) {
-    const i = q.createElement("template");
+    const i = G.createElement("template");
     return i.innerHTML = e, i;
   }
 }
 function Q(n, e, t = n, i) {
   if (e === X) return e;
   let s = i !== void 0 ? t._$Co?.[i] : t._$Cl;
-  const o = ne(e) ? void 0 : e._$litDirective$;
+  const o = oe(e) ? void 0 : e._$litDirective$;
   return s?.constructor !== o && (s?._$AO?.(!1), o === void 0 ? s = void 0 : (s = new o(n), s._$AT(n, t, i)), i !== void 0 ? (t._$Co ??= [])[i] = s : t._$Cl = s), s !== void 0 && (e = Q(n, s._$AS(n, e.values), s, i)), e;
 }
-class Yt {
+class Xt {
   constructor(e, t) {
     this._$AV = [], this._$AN = void 0, this._$AD = e, this._$AM = t;
   }
@@ -326,29 +326,29 @@ class Yt {
     return this._$AM._$AU;
   }
   u(e) {
-    const { el: { content: t }, parts: i } = this._$AD, s = (e?.creationScope ?? q).importNode(t, !0);
+    const { el: { content: t }, parts: i } = this._$AD, s = (e?.creationScope ?? G).importNode(t, !0);
     Z.currentNode = s;
     let o = Z.nextNode(), a = 0, l = 0, c = i[0];
     for (; c !== void 0; ) {
       if (a === c.index) {
         let _;
-        c.type === 2 ? _ = new ae(o, o.nextSibling, this, e) : c.type === 1 ? _ = new c.ctor(o, c.name, c.strings, this, e) : c.type === 6 && (_ = new ei(o, this, e)), this._$AV.push(_), c = i[++l];
+        c.type === 2 ? _ = new de(o, o.nextSibling, this, e) : c.type === 1 ? _ = new c.ctor(o, c.name, c.strings, this, e) : c.type === 6 && (_ = new ti(o, this, e)), this._$AV.push(_), c = i[++l];
       }
       a !== c?.index && (o = Z.nextNode(), a++);
     }
-    return Z.currentNode = q, s;
+    return Z.currentNode = G, s;
   }
   p(e) {
     let t = 0;
     for (const i of this._$AV) i !== void 0 && (i.strings !== void 0 ? (i._$AI(e, i, t), t += i.strings.length - 2) : i._$AI(e[t])), t++;
   }
 }
-class ae {
+class de {
   get _$AU() {
     return this._$AM?._$AU ?? this._$Cv;
   }
   constructor(e, t, i, s) {
-    this.type = 2, this._$AH = u, this._$AN = void 0, this._$AA = e, this._$AB = t, this._$AM = i, this.options = s, this._$Cv = s?.isConnected ?? !0;
+    this.type = 2, this._$AH = p, this._$AN = void 0, this._$AA = e, this._$AB = t, this._$AM = i, this.options = s, this._$Cv = s?.isConnected ?? !0;
   }
   get parentNode() {
     let e = this._$AA.parentNode;
@@ -362,7 +362,7 @@ class ae {
     return this._$AB;
   }
   _$AI(e, t = this) {
-    e = Q(this, e, t), ne(e) ? e === u || e == null || e === "" ? (this._$AH !== u && this._$AR(), this._$AH = u) : e !== this._$AH && e !== X && this._(e) : e._$litType$ !== void 0 ? this.$(e) : e.nodeType !== void 0 ? this.T(e) : Gt(e) ? this.k(e) : this._(e);
+    e = Q(this, e, t), oe(e) ? e === p || e == null || e === "" ? (this._$AH !== p && this._$AR(), this._$AH = p) : e !== this._$AH && e !== X && this._(e) : e._$litType$ !== void 0 ? this.$(e) : e.nodeType !== void 0 ? this.T(e) : Kt(e) ? this.k(e) : this._(e);
   }
   O(e) {
     return this._$AA.parentNode.insertBefore(e, this._$AB);
@@ -371,38 +371,38 @@ class ae {
     this._$AH !== e && (this._$AR(), this._$AH = this.O(e));
   }
   _(e) {
-    this._$AH !== u && ne(this._$AH) ? this._$AA.nextSibling.data = e : this.T(q.createTextNode(e)), this._$AH = e;
+    this._$AH !== p && oe(this._$AH) ? this._$AA.nextSibling.data = e : this.T(G.createTextNode(e)), this._$AH = e;
   }
   $(e) {
-    const { values: t, _$litType$: i } = e, s = typeof i == "number" ? this._$AC(e) : (i.el === void 0 && (i.el = oe.createElement($t(i.h, i.h[0]), this.options)), i);
+    const { values: t, _$litType$: i } = e, s = typeof i == "number" ? this._$AC(e) : (i.el === void 0 && (i.el = re.createElement(wt(i.h, i.h[0]), this.options)), i);
     if (this._$AH?._$AD === s) this._$AH.p(t);
     else {
-      const o = new Yt(s, this), a = o.u(this.options);
+      const o = new Xt(s, this), a = o.u(this.options);
       o.p(t), this.T(a), this._$AH = o;
     }
   }
   _$AC(e) {
-    let t = dt.get(e.strings);
-    return t === void 0 && dt.set(e.strings, t = new oe(e)), t;
+    let t = lt.get(e.strings);
+    return t === void 0 && lt.set(e.strings, t = new re(e)), t;
   }
   k(e) {
-    Ue(this._$AH) || (this._$AH = [], this._$AR());
+    je(this._$AH) || (this._$AH = [], this._$AR());
     const t = this._$AH;
     let i, s = 0;
-    for (const o of e) s === t.length ? t.push(i = new ae(this.O(se()), this.O(se()), this, this.options)) : i = t[s], i._$AI(o), s++;
+    for (const o of e) s === t.length ? t.push(i = new de(this.O(ne()), this.O(ne()), this, this.options)) : i = t[s], i._$AI(o), s++;
     s < t.length && (this._$AR(i && i._$AB.nextSibling, s), t.length = s);
   }
   _$AR(e = this._$AA.nextSibling, t) {
     for (this._$AP?.(!1, !0, t); e !== this._$AB; ) {
-      const i = it(e).nextSibling;
-      it(e).remove(), e = i;
+      const i = st(e).nextSibling;
+      st(e).remove(), e = i;
     }
   }
   setConnected(e) {
     this._$AM === void 0 && (this._$Cv = e, this._$AP?.(e));
   }
 }
-class ge {
+class ye {
   get tagName() {
     return this.element.tagName;
   }
@@ -410,53 +410,53 @@ class ge {
     return this._$AM._$AU;
   }
   constructor(e, t, i, s, o) {
-    this.type = 1, this._$AH = u, this._$AN = void 0, this.element = e, this.name = t, this._$AM = s, this.options = o, i.length > 2 || i[0] !== "" || i[1] !== "" ? (this._$AH = Array(i.length - 1).fill(new String()), this.strings = i) : this._$AH = u;
+    this.type = 1, this._$AH = p, this._$AN = void 0, this.element = e, this.name = t, this._$AM = s, this.options = o, i.length > 2 || i[0] !== "" || i[1] !== "" ? (this._$AH = Array(i.length - 1).fill(new String()), this.strings = i) : this._$AH = p;
   }
   _$AI(e, t = this, i, s) {
     const o = this.strings;
     let a = !1;
-    if (o === void 0) e = Q(this, e, t, 0), a = !ne(e) || e !== this._$AH && e !== X, a && (this._$AH = e);
+    if (o === void 0) e = Q(this, e, t, 0), a = !oe(e) || e !== this._$AH && e !== X, a && (this._$AH = e);
     else {
       const l = e;
       let c, _;
-      for (e = o[0], c = 0; c < o.length - 1; c++) _ = Q(this, l[i + c], t, c), _ === X && (_ = this._$AH[c]), a ||= !ne(_) || _ !== this._$AH[c], _ === u ? e = u : e !== u && (e += (_ ?? "") + o[c + 1]), this._$AH[c] = _;
+      for (e = o[0], c = 0; c < o.length - 1; c++) _ = Q(this, l[i + c], t, c), _ === X && (_ = this._$AH[c]), a ||= !oe(_) || _ !== this._$AH[c], _ === p ? e = p : e !== p && (e += (_ ?? "") + o[c + 1]), this._$AH[c] = _;
     }
     a && !s && this.j(e);
   }
   j(e) {
-    e === u ? this.element.removeAttribute(this.name) : this.element.setAttribute(this.name, e ?? "");
+    e === p ? this.element.removeAttribute(this.name) : this.element.setAttribute(this.name, e ?? "");
   }
 }
-class Xt extends ge {
+class Qt extends ye {
   constructor() {
     super(...arguments), this.type = 3;
   }
   j(e) {
-    this.element[this.name] = e === u ? void 0 : e;
+    this.element[this.name] = e === p ? void 0 : e;
   }
 }
-class Qt extends ge {
+class Jt extends ye {
   constructor() {
     super(...arguments), this.type = 4;
   }
   j(e) {
-    this.element.toggleAttribute(this.name, !!e && e !== u);
+    this.element.toggleAttribute(this.name, !!e && e !== p);
   }
 }
-class Jt extends ge {
+class ei extends ye {
   constructor(e, t, i, s, o) {
     super(e, t, i, s, o), this.type = 5;
   }
   _$AI(e, t = this) {
-    if ((e = Q(this, e, t, 0) ?? u) === X) return;
-    const i = this._$AH, s = e === u && i !== u || e.capture !== i.capture || e.once !== i.once || e.passive !== i.passive, o = e !== u && (i === u || s);
+    if ((e = Q(this, e, t, 0) ?? p) === X) return;
+    const i = this._$AH, s = e === p && i !== p || e.capture !== i.capture || e.once !== i.once || e.passive !== i.passive, o = e !== p && (i === p || s);
     s && this.element.removeEventListener(this.name, this, i), o && this.element.addEventListener(this.name, this, e), this._$AH = e;
   }
   handleEvent(e) {
     typeof this._$AH == "function" ? this._$AH.call(this.options?.host ?? this.element, e) : this._$AH.handleEvent(e);
   }
 }
-class ei {
+class ti {
   constructor(e, t, i) {
     this.element = e, this.type = 6, this._$AN = void 0, this._$AM = t, this.options = i;
   }
@@ -467,18 +467,18 @@ class ei {
     Q(this, e);
   }
 }
-const ti = Re.litHtmlPolyfillSupport;
-ti?.(oe, ae), (Re.litHtmlVersions ??= []).push("3.3.3");
-const ii = (n, e, t) => {
+const ii = Ue.litHtmlPolyfillSupport;
+ii?.(re, de), (Ue.litHtmlVersions ??= []).push("3.3.3");
+const si = (n, e, t) => {
   const i = t?.renderBefore ?? e;
   let s = i._$litPart$;
   if (s === void 0) {
     const o = t?.renderBefore ?? null;
-    i._$litPart$ = s = new ae(e.insertBefore(se(), o), o, void 0, t ?? {});
+    i._$litPart$ = s = new de(e.insertBefore(ne(), o), o, void 0, t ?? {});
   }
   return s._$AI(n), s;
 };
-const je = globalThis;
+const Le = globalThis;
 class C extends Y {
   constructor() {
     super(...arguments), this.renderOptions = { host: this }, this._$Do = void 0;
@@ -489,7 +489,7 @@ class C extends Y {
   }
   update(e) {
     const t = this.render();
-    this.hasUpdated || (this.renderOptions.isConnected = this.isConnected), super.update(e), this._$Do = ii(t, this.renderRoot, this.renderOptions);
+    this.hasUpdated || (this.renderOptions.isConnected = this.isConnected), super.update(e), this._$Do = si(t, this.renderRoot, this.renderOptions);
   }
   connectedCallback() {
     super.connectedCallback(), this._$Do?.setConnected(!0);
@@ -501,11 +501,11 @@ class C extends Y {
     return X;
   }
 }
-C._$litElement$ = !0, C.finalized = !0, je.litElementHydrateSupport?.({ LitElement: C });
-const si = je.litElementPolyfillSupport;
-si?.({ LitElement: C });
-(je.litElementVersions ??= []).push("4.2.2");
-const ni = { attribute: !0, type: String, converter: ue, reflect: !1, hasChanged: De }, oi = (n = ni, e, t) => {
+C._$litElement$ = !0, C.finalized = !0, Le.litElementHydrateSupport?.({ LitElement: C });
+const ni = Le.litElementPolyfillSupport;
+ni?.({ LitElement: C });
+(Le.litElementVersions ??= []).push("4.2.2");
+const oi = { attribute: !0, type: String, converter: _e, reflect: !1, hasChanged: Re }, ri = (n = oi, e, t) => {
   const { kind: i, metadata: s } = t;
   let o = globalThis.litPropertyMetadata.get(s);
   if (o === void 0 && globalThis.litPropertyMetadata.set(s, o = /* @__PURE__ */ new Map()), i === "setter" && ((n = Object.create(n)).wrapped = !0), o.set(t.name, n), i === "accessor") {
@@ -527,12 +527,12 @@ const ni = { attribute: !0, type: String, converter: ue, reflect: !1, hasChanged
   throw Error("Unsupported decorator location: " + i);
 };
 function h(n) {
-  return (e, t) => typeof t == "object" ? oi(n, e, t) : ((i, s, o) => {
+  return (e, t) => typeof t == "object" ? ri(n, e, t) : ((i, s, o) => {
     const a = s.hasOwnProperty(o);
     return s.constructor.createProperty(o, i), a ? Object.getOwnPropertyDescriptor(s, o) : void 0;
   })(n, e, t);
 }
-function p(n) {
+function u(n) {
   return h({ ...n, state: !0, attribute: !1 });
 }
 function v(n) {
@@ -542,22 +542,22 @@ function v(n) {
     if (Number.isFinite(e)) return e;
   }
 }
-function T(n) {
+function I(n) {
   return typeof n == "string" && n !== "" ? n : void 0;
 }
-function wt(n) {
+function zt(n) {
   return Array.isArray(n) ? n : [];
 }
 function pe(n) {
   return !n || n.state === "unavailable" || n.state === "unknown";
 }
-function he(n, e, t) {
+function me(n, e, t) {
   return Math.min(t, Math.max(e, n));
 }
 function U(n, e) {
   customElements.get(n) || customElements.define(n, e);
 }
-const re = {
+const ae = {
   // Card-level messages
   "card.name": "Irrigation Maestro Card",
   "card.description": "Overview and control of the Irrigation Maestro integration: water budget, zones, queue and curves.",
@@ -808,6 +808,8 @@ const re = {
   "settings.notifications": "Notifications",
   // Notification wizard (panel)
   "notify.loading": "Reading the notification status…",
+  "notify.load_failed": "The notification status could not be read.",
+  "notify.retry": "Try again",
   "notify.mute_title": "You will not receive any notification",
   "notify.mute_body": "No essential event reaches anyone: a forced valve closure, an anomaly, an interrupted run or a missed program would pass unnoticed.",
   "notify.partial_body": "These essential events will not reach you: {events}.",
@@ -819,10 +821,14 @@ const re = {
   "notify.recipient_gone": "no longer exists",
   "notify.recipient_gone_hint": "A recipient marked as no longer existing is still stored and is still written back on every save. Uncheck it to remove it.",
   "notify.send_test": "Send a test",
+  "notify.test_sending": "Sending",
   // "Sent", not "Delivered": the service learns only that notify.<service>
   // accepted the call without raising — a push can still die downstream.
   "notify.test_ok": "Sent",
   "notify.test_failed": "Not delivered: {error}",
+  // The reason shown when the test send itself never came back with a
+  // verdict — the call failed, or answered with something unusable.
+  "notify.test_no_result": "no result came back",
   "notify.preset_recommended": "Recommended",
   "notify.preset_critical": "Critical only",
   "notify.preset_all": "Everything",
@@ -885,7 +891,7 @@ const re = {
   "program_editor.volume_safety_timeout": "Volume safety timeout",
   "program_editor.volume_safety_timeout_hint": "Minutes after which a volume-target run stops even if the meter has not reached the target.",
   "settings.advanced_note": "Advanced parameters (engine, safety, notifications) live in Settings"
-}, ri = {
+}, ai = {
   // Messaggi a livello di scheda
   "card.name": "Scheda Irrigation Maestro",
   "card.description": "Panoramica e controllo dell'integrazione Irrigation Maestro: bilancio idrico, zone, coda e curve.",
@@ -999,9 +1005,9 @@ const re = {
   "reason.cancelled": "Annullato",
   // Funzionalità degradate
   "degraded.switch_valve": "Valvola senza conferma di posizione",
-  "degraded.no_flow_meter": "Nessun contatore di flusso",
+  "degraded.no_flow_meter": "Nessun flussometro",
   "degraded.flow_unit_unknown": "Unità del flussometro sconosciuta",
-  "degraded.line_meter_shared": "Contatore di linea condiviso",
+  "degraded.line_meter_shared": "Flussometro di linea condiviso",
   "degraded.no_hourly_forecast": "Nessuna previsione oraria",
   "degraded.volume_mode_unavailable": "Modalità a volume non disponibile",
   // Righe zona
@@ -1096,8 +1102,8 @@ const re = {
   "zone.field_valve": "Valvola",
   "zone.field_area": "Area (m²)",
   "zone.advanced": "Avanzate",
-  "zone.field_flow_sensor": "Sensore di portata",
-  "zone.field_flow_unit": "Unità del sensore di portata",
+  "zone.field_flow_sensor": "Flussometro",
+  "zone.field_flow_unit": "Unità del flussometro",
   "zone.flow_unit_auto": "Rilevata dall'entità",
   "zone.flow_unit_from_override": "Uso {unit} — l'hai impostata tu, e vince sull'entità",
   "zone.flow_unit_from_entity": "Uso {unit}, dichiarata dall'entità",
@@ -1115,8 +1121,8 @@ const re = {
   "settings.weather_entity": "Entità meteo",
   "settings.rain": "Sensore pioggia",
   "settings.outdoor_temp": "Sensore temperatura esterna",
-  "settings.line_flow": "Sensore di portata di linea",
-  "settings.field_line_flow_unit": "Unità del sensore di portata di linea",
+  "settings.line_flow": "Flussometro di linea",
+  "settings.field_line_flow_unit": "Unità del flussometro di linea",
   "settings.master_valve": "Valvola principale",
   "settings.clear": "Rimuovi",
   "settings.budget": "Budget consumo",
@@ -1136,6 +1142,8 @@ const re = {
   "settings.notifications": "Notifiche",
   // Procedura guidata notifiche (pannello)
   "notify.loading": "Lettura dello stato delle notifiche…",
+  "notify.load_failed": "Non è stato possibile leggere lo stato delle notifiche.",
+  "notify.retry": "Riprova",
   "notify.mute_title": "Non riceverai nessuna notifica",
   "notify.mute_body": "Nessun evento essenziale arriva a qualcuno: una chiusura forzata, un'anomalia, un'irrigazione interrotta o un programma mancato passerebbero inosservati.",
   "notify.partial_body": "Questi eventi essenziali non ti arriveranno: {events}.",
@@ -1147,8 +1155,10 @@ const re = {
   "notify.recipient_gone": "non esiste più",
   "notify.recipient_gone_hint": "Un destinatario indicato come non più esistente resta memorizzato e viene riscritto a ogni salvataggio. Deselezionalo per rimuoverlo.",
   "notify.send_test": "Invia prova",
+  "notify.test_sending": "Invio in corso",
   "notify.test_ok": "Inviata",
   "notify.test_failed": "Non consegnata: {error}",
+  "notify.test_no_result": "nessun risultato ricevuto",
   "notify.preset_recommended": "Consigliato",
   "notify.preset_critical": "Solo critici",
   "notify.preset_all": "Tutto",
@@ -1209,36 +1219,36 @@ const re = {
   "program_editor.soak_pause": "Pausa di ammollo",
   "program_editor.soak_pause_hint": "Minuti di attesa fra una corsa e l'altra. Senza una durata massima per corsa non ha alcun effetto.",
   "program_editor.volume_safety_timeout": "Timeout di sicurezza volumetrico",
-  "program_editor.volume_safety_timeout_hint": "Minuti dopo i quali una corsa a volume si ferma anche se il contatore non ha raggiunto il target.",
+  "program_editor.volume_safety_timeout_hint": "Minuti dopo i quali una corsa a volume si ferma anche se il flussometro non ha raggiunto il target.",
   "settings.advanced_note": "Parametri avanzati (motore, sicurezza, notifiche) → Impostazioni"
-}, Le = {
-  en: re,
-  it: ri
+}, We = {
+  en: ae,
+  it: ai
 };
-function $(n) {
+function x(n) {
   const t = (n?.locale?.language ?? n?.language ?? "en").toLowerCase().split(/[-_]/)[0] ?? "en";
-  return t in Le ? t : "en";
+  return t in We ? t : "en";
 }
-function ai(n, e) {
+function di(n, e) {
   return e ? n.replace(/\{(\w+)\}/g, (t, i) => {
     const s = e[i];
     return s === void 0 ? t : String(s);
   }) : n;
 }
 function r(n, e, t) {
-  const i = Le[n] ?? re;
-  return ai(i[e] ?? re[e], t);
+  const i = We[n] ?? ae;
+  return di(i[e] ?? ae[e], t);
 }
-function di(n, e, t) {
-  const i = `${e}.${t}`, s = Le[n] ?? re, o = re;
+function li(n, e, t) {
+  const i = `${e}.${t}`, s = We[n] ?? ae, o = ae;
   return s[i] ?? o[i] ?? t;
 }
-function li(n, e = 1) {
+function ci(n, e = 1) {
   const t = v(n);
   if (t !== void 0)
     return t.toFixed(e).replace(/\.0+$/, (i) => e > 0 ? "" : i);
 }
-function ci(n) {
+function ui(n) {
   const e = Math.abs(Math.round(n)), t = Math.floor(e / 3600), i = Math.round(e % 3600 / 60), s = [];
   return t > 0 && s.push(`${t} h`), i > 0 && s.push(`${i} min`), s.length === 0 && s.push(`${e} s`), s.join(" ");
 }
@@ -1251,12 +1261,12 @@ function pi(n, e) {
     ), s = v(n.offset_s) ?? 0;
     if (s === 0) return i;
     const o = s < 0 ? "−" : "+";
-    return `${i} ${o} ${ci(s)}`;
+    return `${i} ${o} ${ui(s)}`;
   }
-  const t = T(n.at) ?? T(n.time);
-  return t ? r(e, "trigger.at", { time: t }) : T(n.kind) ?? "";
+  const t = I(n.at) ?? I(n.time);
+  return t ? r(e, "trigger.at", { time: t }) : I(n.kind) ?? "";
 }
-const ui = {
+const _i = {
   hub_water_budget: "waterBudget",
   hub_skip_threshold: "skipThreshold",
   hub_weighted_temp: "weightedTemp",
@@ -1265,7 +1275,7 @@ const ui = {
   hub_pause: "pauseSwitch",
   hub_evaluate: "evaluateButton",
   hub_stop_all: "stopAllButton"
-}, _i = {
+}, hi = {
   zone_state: "state",
   zone_next_run: "nextRun",
   zone_last_outcome: "lastOutcome",
@@ -1273,13 +1283,13 @@ const ui = {
   zone_order: "orderNumber",
   zone_suspend_until: "suspendUntil"
 };
-function hi(n) {
+function mi(n) {
   const e = {}, t = /* @__PURE__ */ new Map(), i = [];
   for (const o of Object.values(n.states)) {
-    const a = T(o.attributes.maestro_role);
+    const a = I(o.attributes.maestro_role);
     if (!a) continue;
     i.push(o.entity_id);
-    const l = T(o.attributes.zone_id);
+    const l = I(o.attributes.zone_id);
     if (l) {
       let c = t.get(l);
       if (c || (c = {
@@ -1290,33 +1300,33 @@ function hi(n) {
       }, t.set(l, c)), a === "cycle_enabled")
         c.cycleSwitches.push(o);
       else {
-        const _ = _i[a];
+        const _ = hi[a];
         _ && (c[_] = o);
       }
     } else {
-      const c = ui[a];
+      const c = _i[a];
       c && (e[c] = o);
     }
   }
   const s = [...t.values()];
   for (const o of s) {
     const a = o.state?.attributes ?? {};
-    o.name = T(a.zone_name) ?? T(o.state?.attributes.friendly_name) ?? o.zoneId, o.order = v(a.order) ?? v(o.orderNumber?.state) ?? Number.MAX_SAFE_INTEGER;
+    o.name = I(a.zone_name) ?? I(o.state?.attributes.friendly_name) ?? o.zoneId, o.order = v(a.order) ?? v(o.orderNumber?.state) ?? Number.MAX_SAFE_INTEGER;
   }
   return s.sort(
     (o, a) => o.order - a.order || o.name.localeCompare(a.name)
   ), { found: i.length > 0, hub: e, zones: s, entityIds: i };
 }
-function mi(n) {
-  return pe(n.state) ? !1 : !wt(n.state?.attributes?.degraded).some((t) => T(t) === "no_flow_meter");
+function vi(n) {
+  return pe(n.state) ? !1 : !zt(n.state?.attributes?.degraded).some((t) => I(t) === "no_flow_meter");
 }
-function Se(n) {
+function Ae(n) {
   return v(n.state?.attributes?.adjustment_pct) ?? 100;
 }
-function vi(n, e, t, i) {
+function fi(n, e, t, i) {
   const s = [];
   for (const o of n)
-    for (const a of zt(o))
+    for (const a of kt(o))
       a.cycle_id && (o.zoneId === e && a.cycle_id === t || !i && a.curve?.kind === "volume" || s.push({
         value: `${o.zoneId}:${a.cycle_id}`,
         zoneId: o.zoneId,
@@ -1325,13 +1335,13 @@ function vi(n, e, t, i) {
       }));
   return s;
 }
-function zt(n) {
-  const e = wt(n.state?.attributes?.cycles), t = [];
+function kt(n) {
+  const e = zt(n.state?.attributes?.cycles), t = [];
   for (const i of e) {
     if (typeof i != "object" || i === null) continue;
     const s = i, o = {
-      cycle_id: T(s.cycle_id),
-      name: T(s.name),
+      cycle_id: I(s.cycle_id),
+      name: I(s.name),
       enabled: typeof s.enabled == "boolean" ? s.enabled : void 0,
       trigger: s.trigger ?? void 0,
       curve: s.curve ?? void 0
@@ -1352,11 +1362,11 @@ function zt(n) {
   }
   return t;
 }
-function de(n) {
+function le(n) {
   const e = Math.floor(n), t = n - e;
   return t < 0.5 ? e : t > 0.5 ? e + 1 : e % 2 === 0 ? e : e + 1;
 }
-function ye(n) {
+function be(n) {
   if (!Array.isArray(n)) return [];
   const e = [];
   for (const t of n) {
@@ -1366,8 +1376,8 @@ function ye(n) {
   }
   return [...e].sort((t, i) => t[0] - i[0]);
 }
-const be = 25, fi = [5, 12, 20, 25, 30, 35, 40];
-function We(n, e) {
+const $e = 25, gi = [5, 12, 20, 25, 30, 35, 40];
+function Ve(n, e) {
   const t = n[0], i = n[n.length - 1];
   if (!t || !i) return 0;
   if (e <= t[0]) return t[1];
@@ -1381,16 +1391,16 @@ function We(n, e) {
   return i[1];
 }
 function xe(n, e, t = 100, i, s) {
-  let o = We(n, e) * t / 100;
+  let o = Ve(n, e) * t / 100;
   return i !== void 0 && (o = Math.max(o, i)), s !== void 0 && (o = Math.min(o, s)), o;
 }
-function gi(n, e, t, i, s, o = 100) {
-  const a = We(n, be);
+function yi(n, e, t, i, s, o = 100) {
+  const a = Ve(n, $e);
   if (a <= 0) return 0;
   const c = 100 * e / a * o / 100;
-  return de(xe(n, t, c, i, s));
+  return le(xe(n, t, c, i, s));
 }
-function yi(n) {
+function bi(n) {
   if (n.length === 0) return "curve_empty";
   for (const e of n)
     if (e[1] < 0) return "curve_negative_value";
@@ -1401,32 +1411,32 @@ function yi(n) {
   }
   return null;
 }
-const Pe = [0, 1, 2, 3, 4, 5, 6], lt = {
+const Te = [0, 1, 2, 3, 4, 5, 6], ct = {
   en: ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
   it: ["Lun", "Mar", "Mer", "Gio", "Ven", "Sab", "Dom"]
 };
-function bi(n) {
-  return lt[n] ?? lt.en;
+function $i(n) {
+  return ct[n] ?? ct.en;
 }
-function kt(n) {
+function St(n) {
   return !n || Object.keys(n).length === 0;
 }
-function St(n, e) {
+function At(n, e) {
   return n.day_intensity_pct?.[String(e)] ?? n.intensity_pct ?? 100;
 }
-function le(n, e) {
-  const t = ye(n.curve?.points);
-  return de(
-    xe(t, be, St(n, e), n.curve?.min, n.curve?.max)
+function ce(n, e) {
+  const t = be(n.curve?.points);
+  return le(
+    xe(t, $e, At(n, e), n.curve?.min, n.curve?.max)
   );
 }
 function xi(n, e, t) {
-  const i = ye(n.curve?.points), s = St(n, e) * t / 100;
-  return de(xe(i, be, s, n.curve?.min, n.curve?.max));
+  const i = be(n.curve?.points), s = At(n, e) * t / 100;
+  return le(xe(i, $e, s, n.curve?.min, n.curve?.max));
 }
-function At(n, e, t, i = 100) {
-  const s = ye(n.curve?.points);
-  return gi(
+function Et(n, e, t, i = 100) {
+  const s = be(n.curve?.points);
+  return yi(
     s,
     e,
     t,
@@ -1435,7 +1445,7 @@ function At(n, e, t, i = 100) {
     i
   );
 }
-function $i(n, e, t, i, s, o) {
+function wi(n, e, t, i, s, o) {
   if (n !== e) return !0;
   if (n) return i !== t;
   const a = /* @__PURE__ */ new Set([...Object.keys(s), ...Object.keys(o)]);
@@ -1443,20 +1453,20 @@ function $i(n, e, t, i, s, o) {
     if (s[l] !== o[l]) return !0;
   return !1;
 }
-var wi = Object.defineProperty, zi = (n, e, t, i) => {
+var zi = Object.defineProperty, ki = (n, e, t, i) => {
   for (var s = void 0, o = n.length - 1, a; o >= 0; o--)
     (a = n[o]) && (s = a(e, t, s) || s);
-  return s && wi(e, t, s), s;
+  return s && zi(e, t, s), s;
 };
-const Te = [0, 1, 2, 3, 4, 5, 6], Et = ["Lun", "Mar", "Mer", "Gio", "Ven", "Sab", "Dom"], Ie = 1, Mt = 60;
-function me(n) {
-  const e = { mode: "weekdays", days: [...Te] };
+const Ie = [0, 1, 2, 3, 4, 5, 6], Mt = ["Lun", "Mar", "Mer", "Gio", "Ven", "Sab", "Dom"], Ne = 1, Ct = 60;
+function ve(n) {
+  const e = { mode: "weekdays", days: [...Ie] };
   if (!n) return e;
   if (n.mode === "interval") {
-    const t = Number(n.interval_days) || Ie;
+    const t = Number(n.interval_days) || Ne;
     return {
       mode: "interval",
-      interval_days: Math.min(Math.max(Math.round(t), Ie), Mt)
+      interval_days: Math.min(Math.max(Math.round(t), Ne), Ct)
     };
   }
   if (n.mode === "parity")
@@ -1467,13 +1477,13 @@ function me(n) {
   }
   return e;
 }
-function ki(n) {
-  const e = me(n);
-  return e.mode === "interval" ? e.interval_days === 1 ? "Ogni giorno" : `Ogni ${e.interval_days} giorni` : e.mode === "parity" ? e.parity === "odd" ? "Giorni dispari" : "Giorni pari" : e.days.length >= 7 ? "Ogni giorno" : e.days.map((t) => Et[t]).join(", ");
+function Si(n) {
+  const e = ve(n);
+  return e.mode === "interval" ? e.interval_days === 1 ? "Ogni giorno" : `Ogni ${e.interval_days} giorni` : e.mode === "parity" ? e.parity === "odd" ? "Giorni dispari" : "Giorni pari" : e.days.length >= 7 ? "Ogni giorno" : e.days.map((t) => Mt[t]).join(", ");
 }
-const Ve = class Ve extends C {
+const Be = class Be extends C {
   get _value() {
-    return me(this.calendar);
+    return ve(this.calendar);
   }
   _emit(e) {
     this.dispatchEvent(
@@ -1486,7 +1496,7 @@ const Ve = class Ve extends C {
   }
   /** Switching mode replaces the object; nothing carries over. */
   _selectMode(e) {
-    this._value.mode !== e && (e === "interval" ? this._emit({ mode: "interval", interval_days: 3 }) : e === "parity" ? this._emit({ mode: "parity", parity: "odd" }) : this._emit({ mode: "weekdays", days: [...Te] }));
+    this._value.mode !== e && (e === "interval" ? this._emit({ mode: "interval", interval_days: 3 }) : e === "parity" ? this._emit({ mode: "parity", parity: "odd" }) : this._emit({ mode: "weekdays", days: [...Ie] }));
   }
   _toggleDay(e) {
     const t = this._value;
@@ -1495,7 +1505,7 @@ const Ve = class Ve extends C {
     i.length !== 0 && this._emit({ mode: "weekdays", days: i });
   }
   _setInterval(e) {
-    this._emit(me({ mode: "interval", interval_days: Number(e) }));
+    this._emit(ve({ mode: "interval", interval_days: Number(e) }));
   }
   _renderBody(e) {
     return e.mode === "interval" ? d`
@@ -1504,8 +1514,8 @@ const Ve = class Ve extends C {
           <input
             id="imc-interval"
             type="number"
-            min="${Ie}"
-            max="${Mt}"
+            min="${Ne}"
+            max="${Ct}"
             .value=${String(e.interval_days)}
             @change=${(t) => this._setInterval(t.target.value)}
           />
@@ -1530,7 +1540,7 @@ const Ve = class Ve extends C {
         <div class="hint">Segue il giorno del mese, come le ordinanze comunali pari/dispari.</div>
       ` : d`
       <div class="chips">
-        ${Te.map(
+        ${Ie.map(
       (t) => d`
             <button
               type="button"
@@ -1538,7 +1548,7 @@ const Ve = class Ve extends C {
               aria-pressed=${e.days.includes(t)}
               @click=${() => this._toggleDay(t)}
             >
-              ${Et[t]}
+              ${Mt[t]}
             </button>
           `
     )}
@@ -1569,7 +1579,7 @@ const Ve = class Ve extends C {
     `;
   }
 };
-Ve.styles = O`
+Be.styles = O`
     :host {
       display: block;
     }
@@ -1636,16 +1646,16 @@ Ve.styles = O`
       color: var(--secondary-text-color, #666);
     }
   `;
-let ve = Ve;
-zi([
+let fe = Be;
+ki([
   h({ attribute: !1 })
-], ve.prototype, "calendar");
-U("imc-calendar-editor", ve);
-const Si = /* @__PURE__ */ new Set(["unavailable", "unknown"]);
-function Ai(n) {
-  return !n || Si.has(n.state) ? { on: !1, available: !1 } : { on: n.state === "on", available: !0 };
+], fe.prototype, "calendar");
+U("imc-calendar-editor", fe);
+const Ai = /* @__PURE__ */ new Set(["unavailable", "unknown"]);
+function Ei(n) {
+  return !n || Ai.has(n.state) ? { on: !1, available: !1 } : { on: n.state === "on", available: !0 };
 }
-const Ei = O`
+const Mi = O`
   .toggle-row {
     display: flex;
     align-items: center;
@@ -1692,8 +1702,8 @@ const Ei = O`
     transform: translateX(14px);
   }
 `;
-function Ct(n, e, t) {
-  const { on: i, available: s } = Ai(e), o = s ? r(n, i ? "zone.cycle_enabled" : "zone.cycle_disabled") : r(n, "program.toggle_unavailable"), a = () => {
+function Pt(n, e, t) {
+  const { on: i, available: s } = Ei(e), o = s ? r(n, i ? "zone.cycle_enabled" : "zone.cycle_disabled") : r(n, "program.toggle_unavailable"), a = () => {
     s && t();
   };
   return d`<div
@@ -1711,46 +1721,46 @@ function Ct(n, e, t) {
     <span>${o}</span>
   </div>`;
 }
-function Pt(n) {
+function Tt(n) {
   return [...n].sort((e, t) => e[0] - t[0]);
 }
-function Mi(n, e) {
+function Ci(n, e) {
   const t = n[e];
   if (!t) return n;
   const i = n[e + 1], s = i ? [(t[0] + i[0]) / 2, (t[1] + i[1]) / 2] : [t[0] + 5, t[1]];
-  return Pt([...n, s]);
+  return Tt([...n, s]);
 }
-function Ci(n, e) {
+function Pi(n, e) {
   return n.length <= 1 ? n : n.filter((t, i) => i !== e);
 }
-function Ae(n, e, t, i) {
+function Ee(n, e, t, i) {
   const s = [...n];
   return s[e] ? (s[e] = [t, Math.max(0, i)], s) : n;
 }
-function Pi(n, e) {
+function Ti(n, e) {
   return e ? n : void 0;
 }
-function Ti(n) {
+function Ii(n) {
   return n.intensity_pct !== void 0 && n.intensity_pct !== 100 ? !0 : Object.keys(n.day_intensity_pct ?? {}).length > 0;
 }
-function Ii(n, e, t) {
-  return e === 0 ? n : Math.max(0, de(n - e * t));
+function Ni(n, e, t) {
+  return e === 0 ? n : Math.max(0, le(n - e * t));
 }
-function Ni(n, e, t, i, s, o) {
+function Oi(n, e, t, i, s, o) {
   const a = [...n.map((_) => _[1]), e, t], l = Math.max(12, ...a) + 4, c = i - s - o;
   return {
     top: l,
     y: (_) => i - o - _ / l * c
   };
 }
-var Oi = Object.defineProperty, F = (n, e, t, i) => {
+var Fi = Object.defineProperty, F = (n, e, t, i) => {
   for (var s = void 0, o = n.length - 1, a; o >= 0; o--)
     (a = n[o]) && (s = a(e, t, s) || s);
-  return s && Oi(e, t, s), s;
+  return s && Fi(e, t, s), s;
 };
-const L = 320, B = 170, D = 34, H = 12, te = 16, K = 24, ct = 5, pt = 40, ut = 2, Be = class Be extends C {
+const L = 320, B = 170, D = 34, H = 12, te = 16, K = 24, ut = 5, pt = 40, _t = 2, He = class He extends C {
   constructor() {
-    super(...arguments), this.language = "en", this.zoneHasFlowMeter = !1, this.zoneAdjustmentPct = 100, this._points = [[be, 15]], this._min = 1, this._max = 120, this._kind = "duration", this._error = null;
+    super(...arguments), this.language = "en", this.zoneHasFlowMeter = !1, this.zoneAdjustmentPct = 100, this._points = [[$e, 15]], this._min = 1, this._max = 120, this._kind = "duration", this._error = null;
   }
   willUpdate(e) {
     if (e.has("cycle")) {
@@ -1759,7 +1769,7 @@ const L = 320, B = 170, D = 34, H = 12, te = 16, K = 24, ct = 5, pt = 40, ut = 2
     }
   }
   _seedFromCycle() {
-    const e = this.cycle?.curve, t = ye(e?.points);
+    const e = this.cycle?.curve, t = be(e?.points);
     t.length !== 0 && (this._points = t, this._min = v(e?.min) ?? 1, this._max = v(e?.max) ?? 120, this._kind = e?.kind === "volume" ? "volume" : "duration", this._error = null);
   }
   /** What this curve actually delivers IN THIS ZONE: the raw shape times
@@ -1770,17 +1780,17 @@ const L = 320, B = 170, D = 34, H = 12, te = 16, K = 24, ct = 5, pt = 40, ut = 2
    *  draw". Saving resets the program's own intensity to 100%, so the only
    *  per-zone factor left to fold in here is the adjustment. */
   _deliveryValue(e) {
-    return de(xe(this._points, e, this.zoneAdjustmentPct, this._min, this._max));
+    return le(xe(this._points, e, this.zoneAdjustmentPct, this._min, this._max));
   }
   _unit() {
     return r(this.language, this._kind === "volume" ? "curve.unit_volume" : "curve.unit_duration");
   }
   _axisMin() {
-    return Math.min(this._points[0]?.[0] ?? ct, ct) - ut;
+    return Math.min(this._points[0]?.[0] ?? ut, ut) - _t;
   }
   _axisMax() {
     const e = this._points[this._points.length - 1];
-    return Math.max(e?.[0] ?? pt, pt) + ut;
+    return Math.max(e?.[0] ?? pt, pt) + _t;
   }
   _sx(e) {
     const t = this._axisMin(), i = this._axisMax();
@@ -1789,7 +1799,7 @@ const L = 320, B = 170, D = 34, H = 12, te = 16, K = 24, ct = 5, pt = 40, ut = 2
   /** The graph's vertical axis, scaled to contain every raw point AND both
    *  clamp lines — see `graphAxis`'s doc comment for why both matter. */
   _axis() {
-    return Ni(this._points, this._min, this._max, B, te, K);
+    return Oi(this._points, this._min, this._max, B, te, K);
   }
   _sy(e) {
     return this._axis().y(e);
@@ -1821,12 +1831,12 @@ const L = 320, B = 170, D = 34, H = 12, te = 16, K = 24, ct = 5, pt = 40, ut = 2
     const l = this._pointerViewY(i, a, t), c = this._axis().top / (B - te - K), _ = (m) => {
       const z = i.getScreenCTM();
       if (!z) return;
-      const x = this._pointerViewY(i, z, m) - l;
-      this._points = Ae(
+      const $ = this._pointerViewY(i, z, m) - l;
+      this._points = Ee(
         this._points,
         e,
         s[0],
-        Ii(o, x, c)
+        Ni(o, $, c)
       ), this._error = null;
     }, g = () => {
       window.removeEventListener("pointermove", _), window.removeEventListener("pointerup", g);
@@ -1834,13 +1844,13 @@ const L = 320, B = 170, D = 34, H = 12, te = 16, K = 24, ct = 5, pt = 40, ut = 2
     window.addEventListener("pointermove", _), window.addEventListener("pointerup", g);
   }
   _save() {
-    const e = yi(this._points) ?? (this._min > this._max ? "min_above_max" : null) ?? (this._min < 0 ? "negative_clamp" : null);
+    const e = bi(this._points) ?? (this._min > this._max ? "min_above_max" : null) ?? (this._min < 0 ? "negative_clamp" : null);
     if (e) {
       this._error = e;
       return;
     }
     this._error = null;
-    const t = Pi(this._kind, this.zoneHasFlowMeter);
+    const t = Ti(this._kind, this.zoneHasFlowMeter);
     this.dispatchEvent(
       new CustomEvent("imc-curve-save", {
         detail: {
@@ -1876,7 +1886,7 @@ const L = 320, B = 170, D = 34, H = 12, te = 16, K = 24, ct = 5, pt = 40, ut = 2
 
       <div class="caption">${r(e, "editor.preview_title")}</div>
       <div class="examples">
-        ${fi.map((t) => this._exampleTile(`${t}°`, this._deliveryValue(t)))}
+        ${gi.map((t) => this._exampleTile(`${t}°`, this._deliveryValue(t)))}
       </div>
 
       ${this._renderToday(e)}
@@ -1884,7 +1894,7 @@ const L = 320, B = 170, D = 34, H = 12, te = 16, K = 24, ct = 5, pt = 40, ut = 2
       <div class="points-title">${r(e, "editor.points_title")}</div>
       ${this._points.map((t, i) => this._renderPointRow(t, i, e))}
 
-      ${this.zoneHasFlowMeter ? this._renderKind(e) : u}
+      ${this.zoneHasFlowMeter ? this._renderKind(e) : p}
 
       <div class="limits">
         <div class="limit">
@@ -1907,7 +1917,7 @@ const L = 320, B = 170, D = 34, H = 12, te = 16, K = 24, ct = 5, pt = 40, ut = 2
         </div>
       </div>
 
-      ${this._error ? d`<div class="error">${di(e, "editor", this._error)}</div>` : u}
+      ${this._error ? d`<div class="error">${li(e, "editor", this._error)}</div>` : p}
 
       <div class="buttons">
         <button class="primary" @click=${this._save}>${r(e, "editor.save")}</button>
@@ -1916,9 +1926,9 @@ const L = 320, B = 170, D = 34, H = 12, te = 16, K = 24, ct = 5, pt = 40, ut = 2
     `;
   }
   _renderIntensityNotice(e) {
-    return Ti(this.cycle ?? {}) ? d`<div class="intensity-notice">
+    return Ii(this.cycle ?? {}) ? d`<div class="intensity-notice">
       ${r(e, "editor.intensity_reset")}
-    </div>` : u;
+    </div>` : p;
   }
   /**
    * Explains the split this editor otherwise leaves implicit: the graph
@@ -1933,7 +1943,7 @@ const L = 320, B = 170, D = 34, H = 12, te = 16, K = 24, ct = 5, pt = 40, ut = 2
    * nothing to explain.
    */
   _renderAdjustmentNote(e) {
-    return this.zoneAdjustmentPct === 100 ? u : d`<div class="graph-note">
+    return this.zoneAdjustmentPct === 100 ? p : d`<div class="graph-note">
       ${r(e, "editor.graph.adjustment_note", { pct: this.zoneAdjustmentPct })}
     </div>`;
   }
@@ -1958,7 +1968,7 @@ const L = 320, B = 170, D = 34, H = 12, te = 16, K = 24, ct = 5, pt = 40, ut = 2
   }
   _renderToday(e) {
     const t = this.weightedTemp;
-    if (t === void 0 || Number.isNaN(t)) return u;
+    if (t === void 0 || Number.isNaN(t)) return p;
     const i = this._deliveryValue(t);
     return d`<div class="today-banner">${r(e, "editor.today", {
       temp: Math.round(t),
@@ -1987,14 +1997,14 @@ const L = 320, B = 170, D = 34, H = 12, te = 16, K = 24, ct = 5, pt = 40, ut = 2
         type="button"
         ?disabled=${this._points.length <= 1}
         title=${r(i, "editor.point_remove")}
-        @click=${() => this._points = Ci(this._points, t)}
+        @click=${() => this._points = Pi(this._points, t)}
       >
         ✕
       </button>
       <button
         type="button"
         title=${r(i, "editor.point_add")}
-        @click=${() => this._points = Mi(this._points, t)}
+        @click=${() => this._points = Ci(this._points, t)}
       >
         ＋
       </button>
@@ -2005,8 +2015,8 @@ const L = 320, B = 170, D = 34, H = 12, te = 16, K = 24, ct = 5, pt = 40, ut = 2
     if (Number.isNaN(s)) return;
     const o = this._points[e];
     if (!o) return;
-    const a = i === "temp" ? Ae(this._points, e, s, o[1]) : Ae(this._points, e, o[0], s);
-    this._points = Pt(a), this._error = null;
+    const a = i === "temp" ? Ee(this._points, e, s, o[1]) : Ee(this._points, e, o[0], s);
+    this._points = Tt(a), this._error = null;
   }
   /**
    * The graph draws the curve's RAW shape — `rawValue`, no intensity, no
@@ -2020,10 +2030,10 @@ const L = 320, B = 170, D = 34, H = 12, te = 16, K = 24, ct = 5, pt = 40, ut = 2
    */
   _renderGraph(e) {
     const t = this._axisMin(), i = this._axisMax(), s = [];
-    for (let x = t; x <= i; x += 1)
-      s.push([this._sx(x), this._sy(We(this._points, x))]);
-    const o = s.map((x, j) => `${j === 0 ? "M" : "L"}${x[0].toFixed(1)},${x[1].toFixed(1)}`).join(" "), a = this.weightedTemp, l = a !== void 0 && !Number.isNaN(a) && a >= t && a <= i, c = this._sy(this._min), _ = this._sy(this._max), g = Math.min(c, _), m = Math.abs(_ - c), z = this._unit();
-    return ke`
+    for (let $ = t; $ <= i; $ += 1)
+      s.push([this._sx($), this._sy(Ve(this._points, $))]);
+    const o = s.map(($, j) => `${j === 0 ? "M" : "L"}${$[0].toFixed(1)},${$[1].toFixed(1)}`).join(" "), a = this.weightedTemp, l = a !== void 0 && !Number.isNaN(a) && a >= t && a <= i, c = this._sy(this._min), _ = this._sy(this._max), g = Math.min(c, _), m = Math.abs(_ - c), z = this._unit();
+    return Se`
       <svg viewBox="0 0 ${L} ${B}">
         <rect class="clamp-band" x=${D} y=${g.toFixed(1)}
           width=${(L - D - H).toFixed(1)} height=${m.toFixed(1)}></rect>
@@ -2033,19 +2043,19 @@ const L = 320, B = 170, D = 34, H = 12, te = 16, K = 24, ct = 5, pt = 40, ut = 2
         <text class="clamp-text" x=${L - H} y=${(_ - 3).toFixed(1)} text-anchor="end">${r(e, "curve.clamp_max")} ${this._max} ${z}</text>
         <line class="axis" x1=${D} y1=${te} x2=${D} y2=${B - K}></line>
         <line class="axis" x1=${D} y1=${B - K} x2=${L - H} y2=${B - K}></line>
-        ${l ? ke`<line class="today" x1=${this._sx(a)} y1=${te} x2=${this._sx(a)} y2=${B - K}></line>
-              <text class="today-text" x=${this._sx(a)} y=${te - 4} text-anchor="middle">${r(e, "editor.graph.today", { temp: Math.round(a) })}</text>` : u}
+        ${l ? Se`<line class="today" x1=${this._sx(a)} y1=${te} x2=${this._sx(a)} y2=${B - K}></line>
+              <text class="today-text" x=${this._sx(a)} y=${te - 4} text-anchor="middle">${r(e, "editor.graph.today", { temp: Math.round(a) })}</text>` : p}
         <path class="curve" d=${o}></path>
         ${this._points.map(
-      (x, j) => ke`<circle class="handle" r="7"
-            cx=${this._sx(x[0]).toFixed(1)} cy=${this._sy(x[1]).toFixed(1)}
-            @pointerdown=${(Ft) => this._startDrag(j, Ft)}></circle>`
+      ($, j) => Se`<circle class="handle" r="7"
+            cx=${this._sx($[0]).toFixed(1)} cy=${this._sy($[1]).toFixed(1)}
+            @pointerdown=${(Dt) => this._startDrag(j, Dt)}></circle>`
     )}
       </svg>
     `;
   }
 };
-Be.styles = O`
+He.styles = O`
     :host {
       display: block;
       border: 1px solid var(--divider-color, rgba(127, 127, 127, 0.25));
@@ -2241,7 +2251,7 @@ Be.styles = O`
       color: inherit;
     }
   `;
-let P = Be;
+let P = He;
 F([
   h()
 ], P.prototype, "language");
@@ -2258,27 +2268,27 @@ F([
   h({ type: Number })
 ], P.prototype, "zoneAdjustmentPct");
 F([
-  p()
+  u()
 ], P.prototype, "_points");
 F([
-  p()
+  u()
 ], P.prototype, "_min");
 F([
-  p()
+  u()
 ], P.prototype, "_max");
 F([
-  p()
+  u()
 ], P.prototype, "_kind");
 F([
-  p()
+  u()
 ], P.prototype, "_error");
 U("imc-curve-editor", P);
-var Fi = Object.defineProperty, w = (n, e, t, i) => {
+var Di = Object.defineProperty, w = (n, e, t, i) => {
   for (var s = void 0, o = n.length - 1, a; o >= 0; o--)
     (a = n[o]) && (s = a(e, t, s) || s);
-  return s && Fi(e, t, s), s;
+  return s && Di(e, t, s), s;
 };
-const Di = [
+const Ri = [
   "Gen",
   "Feb",
   "Mar",
@@ -2292,16 +2302,16 @@ const Di = [
   "Nov",
   "Dic"
 ];
-function Ri(n, e) {
+function Ui(n, e) {
   return n.includes(e) ? n.filter((t) => t !== e) : [...n, e].sort((t, i) => t - i);
 }
-function Ui(n) {
+function ji(n) {
   const e = {};
   return n.soakMaxRunMin !== void 0 && (e.soak_max_run_min = n.soakMaxRunMin), n.soakPauseMin !== void 0 && (e.soak_pause_min = n.soakPauseMin), n.volumeSafetyTimeoutMin !== void 0 && (e.volume_safety_timeout_min = n.volumeSafetyTimeoutMin), e;
 }
-const Ee = 15, _t = 1, ht = 1440, ji = -360, Li = 360, Wi = 5, He = class He extends C {
+const Me = 15, ht = 1, mt = 1440, Li = -360, Wi = 360, Vi = 5, Ze = class Ze extends C {
   constructor() {
-    super(...arguments), this.zoneId = "", this.zoneHasFlowMeter = !1, this.zoneAdjustmentPct = 100, this.allZones = [], this._calendar = { mode: "weekdays", days: [...Pe] }, this._seasonMonths = [], this._startKind = "time", this._startAt = "06:00", this._startEvent = "sunrise", this._startOffsetMin = 0, this._uniformMinutes = Ee, this._dayMinutes = {}, this._sameForAll = !0, this._advancedOpen = !1, this._advanced = {}, this._seededUniformMinutes = Ee, this._seededDayMinutes = {}, this._seededSameForAll = !0;
+    super(...arguments), this.zoneId = "", this.zoneHasFlowMeter = !1, this.zoneAdjustmentPct = 100, this.allZones = [], this._calendar = { mode: "weekdays", days: [...Te] }, this._seasonMonths = [], this._startKind = "time", this._startAt = "06:00", this._startEvent = "sunrise", this._startOffsetMin = 0, this._uniformMinutes = Me, this._dayMinutes = {}, this._sameForAll = !0, this._advancedOpen = !1, this._advanced = {}, this._seededUniformMinutes = Me, this._seededDayMinutes = {}, this._seededSameForAll = !0;
   }
   /**
    * Volume-mode programs (liters, edited via the curve editor's
@@ -2315,7 +2325,7 @@ const Ee = 15, _t = 1, ht = 1440, ji = -360, Li = 360, Wi = 5, He = class He ext
      * parity program can land on any of them.
      */
   get _activeDays() {
-    return this._calendar.mode === "weekdays" ? this._calendar.days : [...Pe];
+    return this._calendar.mode === "weekdays" ? this._calendar.days : [...Te];
   }
   get _isVolume() {
     return this.cycle?.curve?.kind === "volume";
@@ -2343,7 +2353,7 @@ const Ee = 15, _t = 1, ht = 1440, ji = -360, Li = 360, Wi = 5, He = class He ext
   _seedFromCycle() {
     const e = this.cycle;
     if (!e) return;
-    this._calendar = me(e.calendar), this._advanced = {
+    this._calendar = ve(e.calendar), this._advanced = {
       soakMaxRunMin: e.soak_max_run_min,
       soakPauseMin: e.soak_pause_min,
       volumeSafetyTimeoutMin: e.volume_safety_timeout_min
@@ -2360,16 +2370,16 @@ const Ee = 15, _t = 1, ht = 1440, ji = -360, Li = 360, Wi = 5, He = class He ext
    */
   _seedMinutesFromCycle() {
     const e = this.cycle;
-    e && (this._seededCurveSignature = this._curveSignature(e), this._uniformMinutes = e.curve ? le({ curve: e.curve, intensity_pct: e.intensity_pct }, 0) : Ee, this._dayMinutes = e.day_intensity_pct ? Object.fromEntries(
-      Object.keys(e.day_intensity_pct).map((t) => [t, le(e, Number(t))])
-    ) : {}, this._sameForAll = kt(e.day_intensity_pct), this._seededUniformMinutes = this._uniformMinutes, this._seededDayMinutes = this._buildDayMinutes(), this._seededSameForAll = this._sameForAll);
+    e && (this._seededCurveSignature = this._curveSignature(e), this._uniformMinutes = e.curve ? ce({ curve: e.curve, intensity_pct: e.intensity_pct }, 0) : Me, this._dayMinutes = e.day_intensity_pct ? Object.fromEntries(
+      Object.keys(e.day_intensity_pct).map((t) => [t, ce(e, Number(t))])
+    ) : {}, this._sameForAll = St(e.day_intensity_pct), this._seededUniformMinutes = this._uniformMinutes, this._seededDayMinutes = this._buildDayMinutes(), this._seededSameForAll = this._sameForAll);
   }
   render() {
     const e = this.cycle;
     if (!e) return d``;
-    const t = $(this.hass), i = bi(t);
+    const t = x(this.hass), i = $i(t);
     return d`
-      ${Ct(t, this.cycleSwitch, () => this._onToggleEnabled())}
+      ${Pt(t, this.cycleSwitch, () => this._onToggleEnabled())}
 
       <div class="section-label">${r(t, "program_editor.calendar")}</div>
       <imc-calendar-editor
@@ -2379,11 +2389,11 @@ const Ee = 15, _t = 1, ht = 1440, ji = -360, Li = 360, Wi = 5, He = class He ext
 
       <div class="section-label">${r(t, "program_editor.season")}</div>
       <div class="days">
-        ${Di.map(
+        ${Ri.map(
       (s, o) => d`
             <div
               class="day ${this._seasonMonths.includes(o + 1) ? "on" : ""}"
-              @click=${() => this._seasonMonths = Ri(this._seasonMonths, o + 1)}
+              @click=${() => this._seasonMonths = Ui(this._seasonMonths, o + 1)}
             >
               ${s}
             </div>
@@ -2416,9 +2426,9 @@ const Ee = 15, _t = 1, ht = 1440, ji = -360, Li = 360, Wi = 5, He = class He ext
               .value=${this._startAt}
               @input=${(s) => this._startAt = s.target.value}
             />` : this._stepper(this._startOffsetMin, (s) => this._startOffsetMin = s, {
-      min: ji,
-      max: Li,
-      step: Wi,
+      min: Li,
+      max: Wi,
+      step: Vi,
       suffix: "min",
       signed: !0
     })}
@@ -2442,7 +2452,7 @@ const Ee = 15, _t = 1, ht = 1440, ji = -360, Li = 360, Wi = 5, He = class He ext
       >
         ${this._advancedOpen ? "▾" : "▸"} ${r(t, "panel.advanced")}
       </div>
-      ${this._advancedOpen ? this._renderAdvanced(t) : u}
+      ${this._advancedOpen ? this._renderAdvanced(t) : p}
 
       <div class="buttons">
         <button class="primary" @click=${this._save}>
@@ -2500,14 +2510,14 @@ const Ee = 15, _t = 1, ht = 1440, ji = -360, Li = 360, Wi = 5, He = class He ext
             <div class="hint">
               ${r(e, "program_editor.volume_safety_timeout_hint")}
             </div>
-          ` : u}
+          ` : p}
 
       <div class="section-label">${r(e, "panel.heat_response")}</div>
       ${this._renderCopyCurve(e)}
       <imc-curve-editor
         .cycle=${this.cycle}
         .weightedTemp=${this.weightedTemp}
-        .language=${$(this.hass)}
+        .language=${x(this.hass)}
         .zoneHasFlowMeter=${this.zoneHasFlowMeter}
         .zoneAdjustmentPct=${this.zoneAdjustmentPct}
         @imc-curve-save=${this._onCurveSave}
@@ -2525,7 +2535,7 @@ const Ee = 15, _t = 1, ht = 1440, ji = -360, Li = 360, Wi = 5, He = class He ext
    * picked again (e.g. after tweaking something and wanting a fresh copy).
    */
   _renderCopyCurve(e) {
-    const t = this.cycle?.cycle_id ?? "", i = vi(
+    const t = this.cycle?.cycle_id ?? "", i = fi(
       this.allZones,
       this.zoneId,
       t,
@@ -2580,19 +2590,19 @@ const Ee = 15, _t = 1, ht = 1440, ji = -360, Li = 360, Wi = 5, He = class He ext
     const i = r(e, "curve.unit_duration");
     return this._sameForAll ? d`<div class="duration-row">
         ${this._stepper(this._uniformMinutes, (s) => this._uniformMinutes = s, {
-      min: _t,
-      max: ht,
+      min: ht,
+      max: mt,
       step: 1,
       suffix: i
     })}
       </div>` : d`${this._activeDays.map((s) => {
-      const o = this._dayMinutes[String(s)] ?? le(this.cycle ?? {}, s);
+      const o = this._dayMinutes[String(s)] ?? ce(this.cycle ?? {}, s);
       return d`<div class="duration-row">
         <span class="dname">${t[s] ?? ""}</span>
         ${this._stepper(
         o,
         (a) => this._dayMinutes = { ...this._dayMinutes, [String(s)]: a },
-        { min: _t, max: ht, step: 1, suffix: i }
+        { min: ht, max: mt, step: 1, suffix: i }
       )}
       </div>`;
     })}`;
@@ -2603,14 +2613,14 @@ const Ee = 15, _t = 1, ht = 1440, ji = -360, Li = 360, Wi = 5, He = class He ext
       <span class="stepper">
         <button
           type="button"
-          @click=${() => t(he(e - i.step, i.min, i.max))}
+          @click=${() => t(me(e - i.step, i.min, i.max))}
         >
           –
         </button>
         <span class="val">${s}${e} ${i.suffix}</span>
         <button
           type="button"
-          @click=${() => t(he(e + i.step, i.min, i.max))}
+          @click=${() => t(me(e + i.step, i.min, i.max))}
         >
           +
         </button>
@@ -2619,11 +2629,11 @@ const Ee = 15, _t = 1, ht = 1440, ji = -360, Li = 360, Wi = 5, He = class He ext
   }
   _renderWeatherLine(e, t) {
     const i = this.weightedTemp;
-    if (i === void 0 || Number.isNaN(i)) return u;
+    if (i === void 0 || Number.isNaN(i)) return p;
     const s = ((/* @__PURE__ */ new Date()).getDay() + 6) % 7;
     if (!this._activeDays.includes(s))
       return d`<div class="weather">${r(e, "reason.calendar_not_today")}</div>`;
-    const o = this._sameForAll ? this._uniformMinutes : this._dayMinutes[String(s)] ?? this._uniformMinutes, a = At(t, o, i, this.zoneAdjustmentPct), l = (/* @__PURE__ */ new Date()).toLocaleDateString(e === "it" ? "it-IT" : "en-US", {
+    const o = this._sameForAll ? this._uniformMinutes : this._dayMinutes[String(s)] ?? this._uniformMinutes, a = Et(t, o, i, this.zoneAdjustmentPct), l = (/* @__PURE__ */ new Date()).toLocaleDateString(e === "it" ? "it-IT" : "en-US", {
       weekday: "long"
     });
     return d`<div class="weather">
@@ -2639,14 +2649,14 @@ const Ee = 15, _t = 1, ht = 1440, ji = -360, Li = 360, Wi = 5, He = class He ext
    * visible together, so it is where the split gets explained.
    */
   _renderAdjustmentNote(e) {
-    return this.zoneAdjustmentPct === 100 ? u : d`<div class="adjustment-note">
+    return this.zoneAdjustmentPct === 100 ? p : d`<div class="adjustment-note">
       ${r(e, "program_editor.zone_adjustment_note", { pct: this.zoneAdjustmentPct })}
     </div>`;
   }
   _buildDayMinutes() {
     const e = {};
     for (const t of this._activeDays)
-      e[String(t)] = this._dayMinutes[String(t)] ?? le(this.cycle ?? {}, t);
+      e[String(t)] = this._dayMinutes[String(t)] ?? ce(this.cycle ?? {}, t);
     return e;
   }
   /** Reuses `imc-program-toggle`, so the panel needs no new plumbing. */
@@ -2680,7 +2690,7 @@ const Ee = 15, _t = 1, ht = 1440, ji = -360, Li = 360, Wi = 5, He = class He ext
         composed: !0
       })
     );
-    const s = Ui(this._advanced);
+    const s = ji(this._advanced);
     if (Object.keys(s).length > 0 && this.dispatchEvent(
       new CustomEvent("imc-program-save-advanced", {
         detail: { zoneId: e, programId: t, patch: s },
@@ -2689,7 +2699,7 @@ const Ee = 15, _t = 1, ht = 1440, ji = -360, Li = 360, Wi = 5, He = class He ext
       })
     ), this._isVolume) return;
     const o = this._buildDayMinutes();
-    if (!$i(
+    if (!wi(
       this._sameForAll,
       this._seededSameForAll,
       this._seededUniformMinutes,
@@ -2713,8 +2723,8 @@ const Ee = 15, _t = 1, ht = 1440, ji = -360, Li = 360, Wi = 5, He = class He ext
     );
   }
 };
-He.styles = O`
-    ${Ei}
+Ze.styles = O`
+    ${Mi}
     :host {
       display: block;
       border: 1px solid var(--divider-color, rgba(127, 127, 127, 0.25));
@@ -2925,7 +2935,7 @@ He.styles = O`
       cursor: not-allowed;
     }
   `;
-let b = He;
+let b = Ze;
 w([
   h({ attribute: !1 })
 ], b.prototype, "hass");
@@ -2951,60 +2961,60 @@ w([
   h({ attribute: !1 })
 ], b.prototype, "allZones");
 w([
-  p()
+  u()
 ], b.prototype, "_calendar");
 w([
-  p()
+  u()
 ], b.prototype, "_seasonMonths");
 w([
-  p()
+  u()
 ], b.prototype, "_startKind");
 w([
-  p()
+  u()
 ], b.prototype, "_startAt");
 w([
-  p()
+  u()
 ], b.prototype, "_startEvent");
 w([
-  p()
+  u()
 ], b.prototype, "_startOffsetMin");
 w([
-  p()
+  u()
 ], b.prototype, "_uniformMinutes");
 w([
-  p()
+  u()
 ], b.prototype, "_dayMinutes");
 w([
-  p()
+  u()
 ], b.prototype, "_sameForAll");
 w([
-  p()
+  u()
 ], b.prototype, "_advancedOpen");
 w([
-  p()
+  u()
 ], b.prototype, "_advanced");
 U("imc-program-editor", b);
-var Vi = Object.defineProperty, I = (n, e, t, i) => {
+var Bi = Object.defineProperty, N = (n, e, t, i) => {
   for (var s = void 0, o = n.length - 1, a; o >= 0; o--)
     (a = n[o]) && (s = a(e, t, s) || s);
-  return s && Vi(e, t, s), s;
+  return s && Bi(e, t, s), s;
 };
-const Ne = 15, Bi = 8, Hi = 1, Zi = 60, qi = {
+const Oe = 15, Hi = 8, Zi = 1, Gi = 60, qi = {
   curve: {
     points: [
       [12, 5],
-      [25, Ne],
-      [35, Ne + Bi]
+      [25, Oe],
+      [35, Oe + Hi]
     ],
-    min: Hi,
-    max: Zi
+    min: Zi,
+    max: Gi
   }
-}, Gi = 1, Ki = 1440, Yi = -360, Xi = 360, Qi = 5, Ze = class Ze extends C {
+}, Ki = 1, Yi = 1440, Xi = -360, Qi = 360, Ji = 5, Ge = class Ge extends C {
   constructor() {
-    super(...arguments), this.zoneId = "", this.zoneAdjustmentPct = 100, this._step = 1, this._calendar = { mode: "weekdays", days: [...Pe] }, this._startKind = "sun", this._startAt = "06:00", this._startEvent = "sunrise", this._startOffsetMin = 0, this._minutes = Ne;
+    super(...arguments), this.zoneId = "", this.zoneAdjustmentPct = 100, this._step = 1, this._calendar = { mode: "weekdays", days: [...Te] }, this._startKind = "sun", this._startAt = "06:00", this._startEvent = "sunrise", this._startOffsetMin = 0, this._minutes = Oe;
   }
   render() {
-    const e = $(this.hass);
+    const e = x(this.hass);
     return d`
       <div class="head">
         <span class="title">${this._stepTitle(e)}</span>
@@ -3017,9 +3027,9 @@ const Ne = 15, Bi = 8, Hi = 1, Zi = 60, qi = {
       (t) => d`<span class="dot ${this._step === t ? "on" : ""}"></span>`
     )}
       </div>
-      ${this._step === 1 ? this._renderStep1(e) : u}
-      ${this._step === 2 ? this._renderStep2(e) : u}
-      ${this._step === 3 ? this._renderStep3(e) : u}
+      ${this._step === 1 ? this._renderStep1(e) : p}
+      ${this._step === 2 ? this._renderStep2(e) : p}
+      ${this._step === 3 ? this._renderStep3(e) : p}
       <div class="buttons">
         ${this._step > 1 ? d`<button @click=${this._back}>${r(e, "wizard.back")}</button>` : d`<button @click=${this._cancel}>${r(e, "editor.cancel")}</button>`}
         ${this._step < 3 ? d`<button
@@ -3076,9 +3086,9 @@ const Ne = 15, Bi = 8, Hi = 1, Zi = 60, qi = {
             @input=${(t) => this._startAt = t.target.value}
           />` : d`<div class="offset-row">
             ${this._stepper(this._startOffsetMin, (t) => this._startOffsetMin = t, {
-      min: Yi,
-      max: Xi,
-      step: Qi,
+      min: Xi,
+      max: Qi,
+      step: Ji,
       suffix: "min",
       signed: !0
     })}
@@ -3090,8 +3100,8 @@ const Ne = 15, Bi = 8, Hi = 1, Zi = 60, qi = {
     return d`
       <div class="stepper-row">
         ${this._stepper(this._minutes, (i) => this._minutes = i, {
-      min: Gi,
-      max: Ki,
+      min: Ki,
+      max: Yi,
       step: 1,
       suffix: t
     })}
@@ -3101,10 +3111,10 @@ const Ne = 15, Bi = 8, Hi = 1, Zi = 60, qi = {
   }
   _renderPreview(e) {
     const t = this.weightedTemp;
-    if (t === void 0 || Number.isNaN(t)) return u;
+    if (t === void 0 || Number.isNaN(t)) return p;
     const i = (/* @__PURE__ */ new Date()).toLocaleDateString(e === "it" ? "it-IT" : "en-US", {
       weekday: "long"
-    }), s = At(qi, this._minutes, t, this.zoneAdjustmentPct);
+    }), s = Et(qi, this._minutes, t, this.zoneAdjustmentPct);
     return d`<div class="done">
       ${r(e, "wizard.done_prefix")}
       ${r(e, "panel.weather_line", { day: i, min: s })}
@@ -3116,14 +3126,14 @@ const Ne = 15, Bi = 8, Hi = 1, Zi = 60, qi = {
       <span class="stepper">
         <button
           type="button"
-          @click=${() => t(he(e - i.step, i.min, i.max))}
+          @click=${() => t(me(e - i.step, i.min, i.max))}
         >
           –
         </button>
         <span class="val">${s}${e} ${i.suffix}</span>
         <button
           type="button"
-          @click=${() => t(he(e + i.step, i.min, i.max))}
+          @click=${() => t(me(e + i.step, i.min, i.max))}
         >
           +
         </button>
@@ -3160,7 +3170,7 @@ const Ne = 15, Bi = 8, Hi = 1, Zi = 60, qi = {
     );
   }
 };
-Ze.styles = O`
+Ge.styles = O`
     :host {
       display: block;
       border: 1px solid var(--divider-color, rgba(127, 127, 127, 0.25));
@@ -3354,45 +3364,45 @@ Ze.styles = O`
       cursor: not-allowed;
     }
   `;
-let A = Ze;
-I([
+let E = Ge;
+N([
   h({ attribute: !1 })
-], A.prototype, "hass");
-I([
+], E.prototype, "hass");
+N([
   h()
-], A.prototype, "zoneId");
-I([
+], E.prototype, "zoneId");
+N([
   h({ attribute: !1 })
-], A.prototype, "weightedTemp");
-I([
+], E.prototype, "weightedTemp");
+N([
   h({ type: Number })
-], A.prototype, "zoneAdjustmentPct");
-I([
-  p()
-], A.prototype, "_step");
-I([
-  p()
-], A.prototype, "_calendar");
-I([
-  p()
-], A.prototype, "_startKind");
-I([
-  p()
-], A.prototype, "_startAt");
-I([
-  p()
-], A.prototype, "_startEvent");
-I([
-  p()
-], A.prototype, "_startOffsetMin");
-I([
-  p()
-], A.prototype, "_minutes");
-U("imc-program-wizard", A);
-var Ji = Object.defineProperty, J = (n, e, t, i) => {
+], E.prototype, "zoneAdjustmentPct");
+N([
+  u()
+], E.prototype, "_step");
+N([
+  u()
+], E.prototype, "_calendar");
+N([
+  u()
+], E.prototype, "_startKind");
+N([
+  u()
+], E.prototype, "_startAt");
+N([
+  u()
+], E.prototype, "_startEvent");
+N([
+  u()
+], E.prototype, "_startOffsetMin");
+N([
+  u()
+], E.prototype, "_minutes");
+U("imc-program-wizard", E);
+var es = Object.defineProperty, J = (n, e, t, i) => {
   for (var s = void 0, o = n.length - 1, a; o >= 0; o--)
     (a = n[o]) && (s = a(e, t, s) || s);
-  return s && Ji(e, t, s), s;
+  return s && es(e, t, s), s;
 };
 const qe = class qe extends C {
   constructor() {
@@ -3417,7 +3427,7 @@ const qe = class qe extends C {
   render() {
     const e = this.hass, t = this.zone;
     if (!e || !t) return d``;
-    const i = $(e), s = zt(t);
+    const i = x(e), s = kt(t);
     return d`
       ${s.length === 0 ? d`<div class="meta">${r(i, "panel.no_programs")}</div>` : this._renderCycles(i, e, t, s)}
       ${this._renderAddProgram(i, e, t)}
@@ -3430,7 +3440,7 @@ const qe = class qe extends C {
               .hass=${t}
               .zoneId=${i.zoneId}
               .weightedTemp=${this.weightedTemp}
-              .zoneAdjustmentPct=${Se(i)}
+              .zoneAdjustmentPct=${Ae(i)}
               @imc-wizard-finish=${() => this._wizardOpen = !1}
               @imc-wizard-cancel=${() => this._wizardOpen = !1}
             ></imc-program-wizard>` : d`<button class="add-btn" @click=${() => this._wizardOpen = !0}>
@@ -3445,11 +3455,11 @@ const qe = class qe extends C {
       return l?.state, d`
         <div class="prog">
           <div class="name">${o.name ?? o.cycle_id}</div>
-          <div class="days">${ki(o.calendar)}</div>
+          <div class="days">${Si(o.calendar)}</div>
           <div class="meta">
             ${pi(o.trigger, e)} · ${this._minutesSummary(e, i, o)}
           </div>
-          ${Ct(e, l, () => {
+          ${Pt(e, l, () => {
         l && this._onToggle(i.zoneId, o, l);
       })}
           ${o.cycle_id ? d`<div class="actions">
@@ -3471,20 +3481,20 @@ const qe = class qe extends C {
                 >
                   ${r(e, "panel.delete_program")}
                 </button>
-              </div>` : u}
+              </div>` : p}
           ${a ? d`<imc-program-editor
                 .hass=${t}
                 .zoneId=${i.zoneId}
                 .cycle=${o}
                 .cycleSwitch=${l}
                 .weightedTemp=${this.weightedTemp}
-                .zoneHasFlowMeter=${mi(i)}
-                .zoneAdjustmentPct=${Se(i)}
+                .zoneHasFlowMeter=${vi(i)}
+                .zoneAdjustmentPct=${Ae(i)}
                 .allZones=${this.allZones}
                 @imc-program-save-schedule=${() => this._editingId = void 0}
                 @imc-program-save-minutes=${() => this._editingId = void 0}
                 @imc-program-cancel=${() => this._editingId = void 0}
-              ></imc-program-editor>` : u}
+              ></imc-program-editor>` : p}
         </div>
       `;
     })}`;
@@ -3492,7 +3502,7 @@ const qe = class qe extends C {
   /** Find the `cycle_enabled` switch entity for a program, matched by the
    *  discovery-assigned `cycle_id` attribute (see docs/design/card-contract.md). */
   _findCycleSwitch(e, t) {
-    return e.cycleSwitches.find((i) => T(i.attributes.cycle_id) === t);
+    return e.cycleSwitches.find((i) => I(i.attributes.cycle_id) === t);
   }
   _dispatch(e, t) {
     this.dispatchEvent(new CustomEvent(e, { detail: t, bubbles: !0, composed: !0 }));
@@ -3536,9 +3546,9 @@ const qe = class qe extends C {
    * `dayBase` there).
    */
   _minutesSummary(e, t, i) {
-    if (!kt(i.day_intensity_pct))
+    if (!St(i.day_intensity_pct))
       return r(e, "panel.per_day_minutes");
-    const s = i.curve?.kind === "volume" ? void 0 : xi(i, 0, Se(t));
+    const s = i.curve?.kind === "volume" ? void 0 : xi(i, 0, Ae(t));
     return r(e, "panel.minutes_value", { min: s ?? "?" });
   }
 };
@@ -3673,13 +3683,13 @@ J([
   h({ attribute: !1 })
 ], R.prototype, "allZones");
 J([
-  p()
+  u()
 ], R.prototype, "_editingId");
 J([
-  p()
+  u()
 ], R.prototype, "_wizardOpen");
 U("imc-program-list", R);
-const $e = [
+const we = [
   "L/min",
   "L/h",
   "L/s",
@@ -3692,31 +3702,31 @@ const $e = [
   "gal/min",
   "gal/d"
 ];
-function Tt(n, e) {
-  const t = T(n.states?.[e]?.attributes.unit_of_measurement);
-  return t && $e.includes(t) ? t : void 0;
+function It(n, e) {
+  const t = I(n.states?.[e]?.attributes.unit_of_measurement);
+  return t && we.includes(t) ? t : void 0;
 }
-function es(n, e) {
-  return n && $e.includes(n) ? { unit: n, source: "override" } : e ? { unit: e, source: "detected" } : { unit: void 0, source: "unknown" };
+function ts(n, e) {
+  return n && we.includes(n) ? { unit: n, source: "override" } : e ? { unit: e, source: "detected" } : { unit: void 0, source: "unknown" };
 }
-const ts = {
+const is = {
   override: "zone.flow_unit_from_override",
   detected: "zone.flow_unit_from_entity",
   unknown: "zone.flow_unit_unknown"
 };
-function It(n, e, t) {
-  const { unit: i, source: s } = es(e, t);
-  return r(n, ts[s], i ? { unit: i } : void 0);
+function Nt(n, e, t) {
+  const { unit: i, source: s } = ts(e, t);
+  return r(n, is[s], i ? { unit: i } : void 0);
 }
-var is = Object.defineProperty, we = (n, e, t, i) => {
+var ss = Object.defineProperty, ze = (n, e, t, i) => {
   for (var s = void 0, o = n.length - 1, a; o >= 0; o--)
     (a = n[o]) && (s = a(e, t, s) || s);
-  return s && is(e, t, s), s;
+  return s && ss(e, t, s), s;
 };
-function ss() {
+function ns() {
   return typeof customElements < "u" && !!customElements.get("ha-selector");
 }
-const Ge = class Ge extends C {
+const Ke = class Ke extends C {
   constructor() {
     super(...arguments), this.selector = { entity: {} }, this.value = "", this.label = "";
   }
@@ -3726,7 +3736,7 @@ const Ge = class Ge extends C {
     );
   }
   render() {
-    return ss() ? d`<ha-selector
+    return ns() ? d`<ha-selector
         .hass=${this.hass}
         .selector=${this.selector}
         .value=${this.value || void 0}
@@ -3739,7 +3749,7 @@ const Ge = class Ge extends C {
     />`;
   }
 };
-Ge.styles = O`
+Ke.styles = O`
     input {
       width: 100%;
       box-sizing: border-box;
@@ -3751,26 +3761,26 @@ Ge.styles = O`
       font-size: 13px;
     }
   `;
-let G = Ge;
-we([
+let q = Ke;
+ze([
   h({ attribute: !1 })
-], G.prototype, "hass");
-we([
+], q.prototype, "hass");
+ze([
   h({ attribute: !1 })
-], G.prototype, "selector");
-we([
+], q.prototype, "selector");
+ze([
   h()
-], G.prototype, "value");
-we([
+], q.prototype, "value");
+ze([
   h()
-], G.prototype, "label");
-U("imc-entity-picker", G);
-var ns = Object.defineProperty, M = (n, e, t, i) => {
+], q.prototype, "label");
+U("imc-entity-picker", q);
+var os = Object.defineProperty, M = (n, e, t, i) => {
   for (var s = void 0, o = n.length - 1, a; o >= 0; o--)
     (a = n[o]) && (s = a(e, t, s) || s);
-  return s && ns(e, t, s), s;
+  return s && os(e, t, s), s;
 };
-const Ke = class Ke extends C {
+const Ye = class Ye extends C {
   constructor() {
     super(...arguments), this._name = "", this._valve = "", this._flowSensor = "", this._flowSensorUnit = "", this._compatibilityGroup = "", this._advancedOpen = !1;
   }
@@ -3785,7 +3795,7 @@ const Ke = class Ke extends C {
     return this._name.trim() !== "" && this._valve.trim() !== "";
   }
   render() {
-    const e = $(this.hass), t = !!this.zone;
+    const e = x(this.hass), t = !!this.zone;
     return d`
       <div class="header">${r(e, t ? "zone.edit" : "zone.add")}</div>
 
@@ -3822,13 +3832,13 @@ const Ke = class Ke extends C {
             >
               ${this._advancedOpen ? "▾" : "▸"} ${r(e, "zone.advanced")}
             </div>
-            ${this._advancedOpen ? this._renderAdvanced(e) : u}
-          ` : u}
+            ${this._advancedOpen ? this._renderAdvanced(e) : p}
+          ` : p}
 
       <div class="buttons">
         ${t ? d`<button class="danger" type="button" @click=${this._remove}>
               🗑 ${r(e, "zone.delete")}
-            </button>` : u}
+            </button>` : p}
         <button type="button" @click=${this._cancel}>${r(e, "editor.cancel")}</button>
         <button
           class="primary"
@@ -3859,8 +3869,8 @@ const Ke = class Ke extends C {
    */
   _renderFlowUnit(e) {
     const t = this._flowSensor.trim();
-    if (t === "") return u;
-    const i = this.hass ? Tt(this.hass, t) : void 0, s = r(e, "zone.field_flow_unit"), o = this._flowSensorUnit;
+    if (t === "") return p;
+    const i = this.hass ? It(this.hass, t) : void 0, s = r(e, "zone.field_flow_unit"), o = this._flowSensorUnit;
     return d`
       <div class="section-label">${s}</div>
       <select
@@ -3871,11 +3881,11 @@ const Ke = class Ke extends C {
         <option value="" ?selected=${o === ""}>
           ${r(e, "zone.flow_unit_auto")}
         </option>
-        ${$e.map(
+        ${we.map(
       (a) => d`<option value=${a} ?selected=${o === a}>${a}</option>`
     )}
       </select>
-      <div class="field-note">${It(e, this._flowSensorUnit, i)}</div>
+      <div class="field-note">${Nt(e, this._flowSensorUnit, i)}</div>
     `;
   }
   _renderAdvanced(e) {
@@ -3959,7 +3969,7 @@ const Ke = class Ke extends C {
   _remove() {
     const e = this.zoneId;
     if (!e) return;
-    const t = $(this.hass);
+    const t = x(this.hass);
     window.confirm(`${r(t, "zone.delete")}?`) && this.dispatchEvent(
       new CustomEvent("imc-zone-remove", {
         detail: { zoneId: e },
@@ -3974,7 +3984,7 @@ const Ke = class Ke extends C {
     );
   }
 };
-Ke.styles = O`
+Ye.styles = O`
     :host {
       display: block;
       border: 1px solid var(--divider-color, rgba(127, 127, 127, 0.25));
@@ -4067,7 +4077,7 @@ Ke.styles = O`
       cursor: not-allowed;
     }
   `;
-let k = Ke;
+let k = Ye;
 M([
   h({ attribute: !1 })
 ], k.prototype, "hass");
@@ -4078,40 +4088,40 @@ M([
   h()
 ], k.prototype, "zoneId");
 M([
-  p()
+  u()
 ], k.prototype, "_name");
 M([
-  p()
+  u()
 ], k.prototype, "_valve");
 M([
-  p()
+  u()
 ], k.prototype, "_areaM2");
 M([
-  p()
+  u()
 ], k.prototype, "_flowSensor");
 M([
-  p()
+  u()
 ], k.prototype, "_flowSensorUnit");
 M([
-  p()
+  u()
 ], k.prototype, "_nominalFlowLpm");
 M([
-  p()
+  u()
 ], k.prototype, "_flowTolerancePct");
 M([
-  p()
+  u()
 ], k.prototype, "_adjustmentPct");
 M([
-  p()
+  u()
 ], k.prototype, "_order");
 M([
-  p()
+  u()
 ], k.prototype, "_compatibilityGroup");
 M([
-  p()
+  u()
 ], k.prototype, "_advancedOpen");
 U("imc-zone-editor", k);
-const os = ["critical", "operational", "informational"], Nt = [
+const rs = ["critical", "operational", "informational"], Ot = [
   "watchdog",
   "anomaly",
   "skipped",
@@ -4121,19 +4131,19 @@ const os = ["critical", "operational", "informational"], Nt = [
   "sentinel",
   "session_overrun",
   "consumption_budget"
-], rs = /* @__PURE__ */ new Set(["send_message"]);
-function Ot(n) {
+], as = /* @__PURE__ */ new Set(["send_message"]);
+function Ft(n) {
   const e = n.services?.notify;
-  return e ? Object.keys(e).filter((t) => !rs.has(t)).sort().map((t) => ({ service: t, label: e[t]?.name || t })) : [];
+  return e ? Object.keys(e).filter((t) => !as.has(t)).sort().map((t) => ({ service: t, label: e[t]?.name || t })) : [];
 }
-function as(n, e) {
-  const t = Ot(n), i = new Set(t.map((o) => o.service)), s = [...new Set(e)].filter((o) => !i.has(o)).sort().map((o) => ({ service: o, label: o, missing: !0 }));
+function ds(n, e) {
+  const t = Ft(n), i = new Set(t.map((o) => o.service)), s = [...new Set(e)].filter((o) => !i.has(o)).sort().map((o) => ({ service: o, label: o, missing: !0 }));
   return [...t, ...s];
 }
-function mt(n, e) {
+function vt(n, e) {
   return n === "recommended" ? [...e.recommended] : n === "critical" ? [...e.groups.critical ?? []] : e.events.map((t) => t.event);
 }
-function ds(n) {
+function ls(n) {
   const e = n.events.filter((s) => s.enabled), t = [...new Set(e.flatMap((s) => s.services))], i = {};
   for (const s of e)
     s.stored_priority && (i[s.event] = s.stored_priority === "high" ? "high" : "normal");
@@ -4143,12 +4153,12 @@ function ds(n) {
     priorities: i
   };
 }
-function ls(n) {
+function cs(n) {
   const e = new Set(n.events);
   if (e.size > 0 && n.recipients.length === 0)
     throw new Error("Choose at least one recipient before enabling an event.");
   const t = [], i = /* @__PURE__ */ new Map();
-  for (const o of n.events) {
+  for (const o of e) {
     const a = n.priorities[o];
     i.set(a, [...i.get(a) ?? [], o]);
   }
@@ -4160,30 +4170,30 @@ function ls(n) {
     };
     o !== void 0 && (l.priority = o), t.push(l);
   }
-  const s = Nt.filter((o) => !e.has(o));
+  const s = Ot.filter((o) => !e.has(o));
   return s.length && t.push({ events: s, enabled: !1 }), t;
 }
-var cs = Object.defineProperty, y = (n, e, t, i) => {
+var us = Object.defineProperty, y = (n, e, t, i) => {
   for (var s = void 0, o = n.length - 1, a; o >= 0; o--)
     (a = n[o]) && (s = a(e, t, s) || s);
-  return s && cs(e, t, s), s;
+  return s && us(e, t, s), s;
 };
-function S(n, e, t) {
+function A(n, e, t) {
   t !== void 0 && (typeof t == "string" && t.trim() === "" || (n[e] = t));
 }
 function ps(n) {
   const e = {};
-  return S(e, "session_max_min", n.sessionMaxMin), S(e, "must_finish_by", n.mustFinishBy), S(e, "wait_free_min", n.waitFreeMin), S(e, "manual_block_min", n.manualBlockMin), S(e, "settle_pause_s", n.settlePauseS), S(e, "sentinel_time", n.sentinelTime), e;
-}
-function us(n) {
-  const e = {};
-  return S(e, "open_confirm_s", n.openConfirmS), S(e, "close_confirm_s", n.closeConfirmS), S(e, "switch_confirm_s", n.switchConfirmS), S(e, "startup_valve_timeout_s", n.startupValveTimeoutS), S(e, "watchdog_max_min", n.watchdogMaxMin), e;
+  return A(e, "session_max_min", n.sessionMaxMin), A(e, "must_finish_by", n.mustFinishBy), A(e, "wait_free_min", n.waitFreeMin), A(e, "manual_block_min", n.manualBlockMin), A(e, "settle_pause_s", n.settlePauseS), A(e, "sentinel_time", n.sentinelTime), e;
 }
 function _s(n) {
   const e = {};
-  return S(e, "max_concurrent", n.maxConcurrent), S(e, "compatibility_groups", n.compatibilityGroups?.trim()), S(e, "master_pre_open_s", n.masterPreOpenS), S(e, "master_post_close_s", n.masterPostCloseS), e;
+  return A(e, "open_confirm_s", n.openConfirmS), A(e, "close_confirm_s", n.closeConfirmS), A(e, "switch_confirm_s", n.switchConfirmS), A(e, "startup_valve_timeout_s", n.startupValveTimeoutS), A(e, "watchdog_max_min", n.watchdogMaxMin), e;
 }
-const hs = {
+function hs(n) {
+  const e = {};
+  return A(e, "max_concurrent", n.maxConcurrent), A(e, "compatibility_groups", n.compatibilityGroups?.trim()), A(e, "master_pre_open_s", n.masterPreOpenS), A(e, "master_post_close_s", n.masterPostCloseS), e;
+}
+const ms = {
   watchdog: "notify.event_watchdog",
   anomaly: "notify.event_anomaly",
   skipped: "notify.event_skipped",
@@ -4193,50 +4203,55 @@ const hs = {
   sentinel: "notify.event_sentinel",
   session_overrun: "notify.event_session_overrun",
   consumption_budget: "notify.event_consumption_budget"
-}, ms = {
+}, vs = {
   critical: "notify.group_critical",
   operational: "notify.group_operational",
   informational: "notify.group_informational"
-}, vs = {
+}, fs = {
   recommended: "notify.preset_recommended",
   critical: "notify.preset_critical",
   all: "notify.preset_all"
-}, fs = ["recommended", "critical", "all"], Me = [
+}, gs = ["recommended", "critical", "all"], Ce = [
   "notify.step_recipients",
   "notify.step_events",
   "notify.step_summary"
 ];
-function Ce(n, e) {
-  const t = hs[e];
+function ie(n) {
+  return (e) => {
+    (e.key === "Enter" || e.key === " ") && (e.preventDefault(), n());
+  };
+}
+function Pe(n, e) {
+  const t = ms[e];
   return t === void 0 ? e : r(n, t);
 }
-function gs(n, e, t) {
+function ys(n, e, t) {
   const i = n.priorities[t];
   return i !== void 0 ? i : e.events.find((o) => o.event === t)?.priority === "high" ? "high" : "normal";
 }
-function ys(n) {
+function bs(n) {
   return n.events.filter((e) => e.essential && !e.reachable).map((e) => e.event);
 }
-function bs(n, e) {
+function $s(n, e) {
   const t = new Set(n), i = new Set(e);
   return t.size === i.size && [...t].every((s) => i.has(s));
 }
 const xs = { start: "22:00", end: "06:00" };
-function $s(n) {
+function ws(n) {
   return n === "reduce" || n === "suspend" ? n : "notify";
 }
-const Ye = class Ye extends C {
+const Xe = class Xe extends C {
   constructor() {
-    super(...arguments), this.options = {}, this._weatherEntity = "", this._rainSensor = "", this._outdoorTempSensor = "", this._lineFlowSensor = "", this._lineFlowSensorUnit = "", this._masterValve = "", this._action = "notify", this._forbiddenWindows = [], this._sessionOpen = !1, this._valvesOpen = !1, this._session = {}, this._valves = {}, this._concurrency = {}, this.testResults = {}, this._wizardStep = 0, this._selection = { recipients: [], events: [], priorities: {} }, this._collapsedGroups = [];
+    super(...arguments), this.options = {}, this._weatherEntity = "", this._rainSensor = "", this._outdoorTempSensor = "", this._lineFlowSensor = "", this._lineFlowSensorUnit = "", this._masterValve = "", this._action = "notify", this._forbiddenWindows = [], this._sessionOpen = !1, this._valvesOpen = !1, this._session = {}, this._valves = {}, this._concurrency = {}, this.notifyStatusFailed = !1, this.testResults = {}, this.testPending = [], this._wizardStep = 0, this._selection = { recipients: [], events: [], priorities: {} }, this._collapsedGroups = [];
   }
   willUpdate(e) {
-    e.has("options") && this._seedFromOptions(), e.has("notifyStatus") && this.notifyStatus && (this._selection = ds(this.notifyStatus), this._saveError = void 0);
+    e.has("options") && this._seedFromOptions(), e.has("notifyStatus") && this.notifyStatus && (this._selection = ls(this.notifyStatus), this._saveError = void 0);
   }
   _seedFromOptions() {
     const e = this.options ?? {};
     this._weatherEntity = e.weather_entity ?? "", this._rainSensor = e.rain_sensor ?? "", this._outdoorTempSensor = e.outdoor_temp_sensor ?? "", this._lineFlowSensor = e.line_flow_sensor ?? "", this._lineFlowSensorUnit = e.line_flow_sensor_unit ?? "", this._masterValve = e.master_valve ?? "";
     const t = e.consumption_budget;
-    this._litersPerMonth = t?.liters_per_month, this._action = $s(t?.action), this._reducePct = t?.reduce_pct;
+    this._litersPerMonth = t?.liters_per_month, this._action = ws(t?.action), this._reducePct = t?.reduce_pct;
     const i = e.restrictions, s = this.options ?? {};
     this._session = {
       sessionMaxMin: s.session_max_min,
@@ -4278,11 +4293,9 @@ const Ye = class Ye extends C {
               role="button"
               tabindex="0"
               @click=${() => o("")}
-              @keydown=${(l) => {
-      (l.key === "Enter" || l.key === " ") && (l.preventDefault(), o(""));
-    }}
+              @keydown=${ie(() => o(""))}
               >✕ ${r(e, "settings.clear")}</span
-            >` : u}
+            >` : p}
       </div>
       <imc-entity-picker
         .hass=${this.hass}
@@ -4310,8 +4323,8 @@ const Ye = class Ye extends C {
    */
   _renderLineFlowUnit(e) {
     const t = this._lineFlowSensor.trim();
-    if (t === "") return u;
-    const i = this.hass ? Tt(this.hass, t) : void 0, s = r(e, "settings.field_line_flow_unit"), o = this._lineFlowSensorUnit;
+    if (t === "") return p;
+    const i = this.hass ? It(this.hass, t) : void 0, s = r(e, "settings.field_line_flow_unit"), o = this._lineFlowSensorUnit;
     return d`
       <div class="section-label">${s}</div>
       <select
@@ -4322,15 +4335,15 @@ const Ye = class Ye extends C {
         <option value="" ?selected=${o === ""}>
           ${r(e, "zone.flow_unit_auto")}
         </option>
-        ${$e.map(
+        ${we.map(
       (a) => d`<option value=${a} ?selected=${o === a}>${a}</option>`
     )}
       </select>
-      <div class="field-note">${It(e, this._lineFlowSensorUnit, i)}</div>
+      <div class="field-note">${Nt(e, this._lineFlowSensorUnit, i)}</div>
     `;
   }
   render() {
-    const e = $(this.hass);
+    const e = x(this.hass);
     return d`
       <div class="topbar">
         <span class="back" @click=${this._back}>‹ ${r(e, "wizard.back")}</span>
@@ -4464,7 +4477,7 @@ const Ye = class Ye extends C {
                 .value=${this._reducePct ?? ""}
                 @input=${(t) => this._reducePct = v(t.target.value)}
               />
-            ` : u}
+            ` : p}
 
         <div class="buttons">
           <button class="primary" type="button" @click=${this._saveBudget}>
@@ -4616,23 +4629,28 @@ const Ye = class Ye extends C {
     return t ? d`
       <div class="sec">
         <div class="header">🔔 ${r(e, "settings.notifications")}</div>
-        ${t.verdict === "ok" ? u : this._renderMuteBanner(e, t)}
+        ${t.verdict === "ok" ? p : this._renderMuteBanner(e, t)}
         <div class="steps">
-          ${Me.map(
+          ${Ce.map(
       (i, s) => d`<span class="step ${s === this._wizardStep ? "on" : ""}"
                 >${s + 1}. ${r(e, i)}</span
               >`
     )}
         </div>
-        ${this._wizardStep === 0 ? this._renderRecipients(e) : u}
-        ${this._wizardStep === 1 ? this._renderEvents(e, t) : u}
-        ${this._wizardStep === 2 ? this._renderSummary(e) : u}
+        ${this._wizardStep === 0 ? this._renderRecipients(e) : p}
+        ${this._wizardStep === 1 ? this._renderEvents(e, t) : p}
+        ${this._wizardStep === 2 ? this._renderSummary(e) : p}
         ${this._renderWizardNav(e)}
       </div>
     ` : d`
         <div class="sec">
           <div class="header">🔔 ${r(e, "settings.notifications")}</div>
-          <div class="notify-hint">${r(e, "notify.loading")}</div>
+          ${this.notifyStatusFailed ? d`
+                <div class="notify-error">${r(e, "notify.load_failed")}</div>
+                <button class="link-btn" type="button" @click=${this._retryNotifyStatus}>
+                  ${r(e, "notify.retry")}
+                </button>
+              ` : d`<div class="notify-hint">${r(e, "notify.loading")}</div>`}
         </div>
       `;
   }
@@ -4642,7 +4660,7 @@ const Ye = class Ye extends C {
    * `partial` means some of them do and the banner names the rest.
    */
   _renderMuteBanner(e, t) {
-    const i = ys(t).map((s) => Ce(e, s)).join(", ");
+    const i = bs(t).map((s) => Pe(e, s)).join(", ");
     return d`
       <div class="notify-banner">
         ${t.verdict === "silent" ? d`
@@ -4667,11 +4685,11 @@ const Ye = class Ye extends C {
    * it back and its ERROR repair from re-raising.
    */
   _renderRecipients(e) {
-    const t = this.hass ? as(this.hass, this._selection.recipients) : [];
+    const t = this.hass ? ds(this.hass, this._selection.recipients) : [];
     return t.length === 0 ? d`<div class="notify-hint">${r(e, "notify.no_recipients")}</div>` : d`
       <div class="section-label">${r(e, "notify.step_recipients")}</div>
       ${t.map((i) => {
-      const s = this.testResults[i.service];
+      const s = this.testPending.includes(i.service), o = this.testResults[i.service];
       return d`
           <div class="notify-row">
             <label class="check-row">
@@ -4686,18 +4704,19 @@ const Ye = class Ye extends C {
                   <button
                     class="link-btn"
                     type="button"
+                    ?disabled=${s}
                     @click=${() => this._sendTest(i.service)}
                   >
                     ${r(e, "notify.send_test")}
                   </button>
                 `}
-            ${s === void 0 ? u : d`<span class="test-result ${s.sent ? "ok" : "fail"}"
-                  >${s.sent ? `✓ ${r(e, "notify.test_ok")}` : `✗ ${r(e, "notify.test_failed", { error: s.error ?? "" })}`}</span
-                >`}
+            ${s ? d`<span class="test-result">… ${r(e, "notify.test_sending")}</span>` : o === void 0 ? p : d`<span class="test-result ${o.sent ? "ok" : "fail"}"
+                    >${o.sent ? `✓ ${r(e, "notify.test_ok")}` : `✗ ${r(e, "notify.test_failed", { error: o.error ?? "" })}`}</span
+                  >`}
           </div>
         `;
     })}
-      ${t.some((i) => i.missing) ? d`<div class="notify-hint">${r(e, "notify.recipient_gone_hint")}</div>` : u}
+      ${t.some((i) => i.missing) ? d`<div class="notify-hint">${r(e, "notify.recipient_gone_hint")}</div>` : p}
     `;
   }
   /** Step 2: a preset in one click, or the three groups browsed by hand. */
@@ -4705,29 +4724,40 @@ const Ye = class Ye extends C {
     return d`
       <div class="section-label">${r(e, "notify.step_events")}</div>
       <span class="seg">
-        ${fs.map((i) => {
-      const s = bs(this._selection.events, mt(i, t));
+        ${gs.map((i) => {
+      const s = $s(this._selection.events, vt(i, t));
       return d`<span
             class="${s ? "sel" : ""}"
+            role="button"
+            tabindex="0"
+            aria-pressed=${s ? "true" : "false"}
             @click=${() => this._applyPreset(i, t)}
-            >${r(e, vs[i])}</span
+            @keydown=${ie(() => this._applyPreset(i, t))}
+            >${r(e, fs[i])}</span
           >`;
     })}
       </span>
-      ${os.map((i) => this._renderEventGroup(e, i, t))}
+      ${rs.map((i) => this._renderEventGroup(e, i, t))}
     `;
   }
   _renderEventGroup(e, t, i) {
     const s = !this._collapsedGroups.includes(t), o = i.groups[t] ?? [];
     return d`
-      <div class="group-header" @click=${() => this._toggleGroup(t)}>
-        ${s ? "▾" : "▸"} ${r(e, ms[t])}
+      <div
+        class="group-header"
+        role="button"
+        tabindex="0"
+        aria-expanded=${s ? "true" : "false"}
+        @click=${() => this._toggleGroup(t)}
+        @keydown=${ie(() => this._toggleGroup(t))}
+      >
+        ${s ? "▾" : "▸"} ${r(e, vs[t])}
       </div>
-      ${s ? o.map((a) => this._renderEventRow(e, a, i)) : u}
+      ${s ? o.map((a) => this._renderEventRow(e, a, i)) : p}
     `;
   }
   _renderEventRow(e, t, i) {
-    const s = gs(this._selection, i, t);
+    const s = ys(this._selection, i, t);
     return d`
       <div class="notify-row">
         <label class="check-row">
@@ -4736,17 +4766,25 @@ const Ye = class Ye extends C {
             .checked=${this._selection.events.includes(t)}
             @change=${() => this._toggleEvent(t)}
           />
-          <span>${Ce(e, t)}</span>
+          <span>${Pe(e, t)}</span>
         </label>
         <span class="seg small">
           <span
             class="${s === "high" ? "sel" : ""}"
+            role="button"
+            tabindex="0"
+            aria-pressed=${s === "high" ? "true" : "false"}
             @click=${() => this._setPriority(t, "high")}
+            @keydown=${ie(() => this._setPriority(t, "high"))}
             >${r(e, "notify.priority_high")}</span
           >
           <span
             class="${s === "normal" ? "sel" : ""}"
+            role="button"
+            tabindex="0"
+            aria-pressed=${s === "normal" ? "true" : "false"}
             @click=${() => this._setPriority(t, "normal")}
+            @keydown=${ie(() => this._setPriority(t, "normal"))}
             >${r(e, "notify.priority_normal")}</span
           >
         </span>
@@ -4756,8 +4794,8 @@ const Ye = class Ye extends C {
   /** Step 3: exactly what Save will write, in the backend's own event order. */
   _renderSummary(e) {
     const t = new Map(
-      (this.hass ? Ot(this.hass) : []).map((s) => [s.service, s.label])
-    ), i = Nt.filter((s) => this._selection.events.includes(s));
+      (this.hass ? Ft(this.hass) : []).map((s) => [s.service, s.label])
+    ), i = Ot.filter((s) => this._selection.events.includes(s));
     return d`
       <div class="section-label">${r(e, "notify.step_recipients")}</div>
       <div class="summary">
@@ -4765,9 +4803,9 @@ const Ye = class Ye extends C {
       </div>
       <div class="section-label">${r(e, "notify.step_events")}</div>
       <div class="summary">
-        ${i.length === 0 ? "—" : i.map((s) => Ce(e, s)).join(", ")}
+        ${i.length === 0 ? "—" : i.map((s) => Pe(e, s)).join(", ")}
       </div>
-      ${this._saveError ? d`<div class="notify-error">${this._saveError}</div>` : u}
+      ${this._saveError ? d`<div class="notify-error">${this._saveError}</div>` : p}
     `;
   }
   _renderWizardNav(e) {
@@ -4775,8 +4813,8 @@ const Ye = class Ye extends C {
       <div class="buttons">
         ${this._wizardStep > 0 ? d`<button type="button" @click=${() => this._goToStep(this._wizardStep - 1)}>
               ${r(e, "notify.back")}
-            </button>` : u}
-        ${this._wizardStep < Me.length - 1 ? d`<button
+            </button>` : p}
+        ${this._wizardStep < Ce.length - 1 ? d`<button
               class="primary"
               type="button"
               @click=${() => this._goToStep(this._wizardStep + 1)}
@@ -4789,7 +4827,7 @@ const Ye = class Ye extends C {
     `;
   }
   _goToStep(e) {
-    this._wizardStep = Math.min(Me.length - 1, Math.max(0, e)), this._saveError = void 0;
+    this._wizardStep = Math.min(Ce.length - 1, Math.max(0, e)), this._saveError = void 0;
   }
   _toggleRecipient(e) {
     const t = this._selection.recipients;
@@ -4809,7 +4847,7 @@ const Ye = class Ye extends C {
     this._collapsedGroups = this._collapsedGroups.includes(e) ? this._collapsedGroups.filter((t) => t !== e) : [...this._collapsedGroups, e];
   }
   _applyPreset(e, t) {
-    this._selection = { ...this._selection, events: mt(e, t) };
+    this._selection = { ...this._selection, events: vt(e, t) };
   }
   /**
    * The ONLY writer of `priorities` — see `effectiveNotifyPriority` above
@@ -4820,6 +4858,15 @@ const Ye = class Ye extends C {
       ...this._selection,
       priorities: { ...this._selection.priorities, [e]: t }
     };
+  }
+  /** Ask the panel to read `notification_status` again after a failed read. */
+  _retryNotifyStatus() {
+    this.dispatchEvent(
+      new CustomEvent("imc-settings-retry-notifications", {
+        bubbles: !0,
+        composed: !0
+      })
+    );
   }
   _sendTest(e) {
     this.dispatchEvent(
@@ -4839,7 +4886,7 @@ const Ye = class Ye extends C {
   _saveNotifications(e) {
     let t;
     try {
-      t = ls(this._selection);
+      t = cs(this._selection);
     } catch {
       this._saveError = r(e, "notify.needs_recipient");
       return;
@@ -4909,7 +4956,7 @@ const Ye = class Ye extends C {
               <button class="primary" @click=${this._saveSessionLimits}>
                 ${r(e, "editor.save")}
               </button>
-            ` : u}
+            ` : p}
       </div>
     `;
   }
@@ -4982,7 +5029,7 @@ const Ye = class Ye extends C {
               <button class="primary" @click=${this._saveValveSafety}>
                 ${r(e, "editor.save")}
               </button>
-            ` : u}
+            ` : p}
       </div>
     `;
   }
@@ -4998,13 +5045,13 @@ const Ye = class Ye extends C {
   _saveValveSafety() {
     this.dispatchEvent(
       new CustomEvent("imc-settings-save-valve-safety", {
-        detail: us(this._valves),
+        detail: _s(this._valves),
         bubbles: !0,
         composed: !0
       })
     ), this.dispatchEvent(
       new CustomEvent("imc-settings-save-concurrency", {
-        detail: _s(this._concurrency),
+        detail: hs(this._concurrency),
         bubbles: !0,
         composed: !0
       })
@@ -5014,7 +5061,7 @@ const Ye = class Ye extends C {
     this.dispatchEvent(new CustomEvent("imc-settings-back", { bubbles: !0, composed: !0 }));
   }
 };
-Ye.styles = O`
+Xe.styles = O`
     :host {
       display: block;
     }
@@ -5270,6 +5317,10 @@ Ye.styles = O`
     .notify-banner .link-btn {
       margin-top: 6px;
     }
+    .link-btn:disabled {
+      opacity: 0.5;
+      cursor: default;
+    }
     .recipient-gone {
       font-size: 12px;
       color: var(--error-color, #db4437);
@@ -5300,7 +5351,7 @@ Ye.styles = O`
       overflow-wrap: anywhere;
     }
   `;
-let f = Ye;
+let f = Xe;
 y([
   h({ attribute: !1 })
 ], f.prototype, "hass");
@@ -5308,84 +5359,101 @@ y([
   h({ attribute: !1 })
 ], f.prototype, "options");
 y([
-  p()
+  u()
 ], f.prototype, "_weatherEntity");
 y([
-  p()
+  u()
 ], f.prototype, "_rainSensor");
 y([
-  p()
+  u()
 ], f.prototype, "_outdoorTempSensor");
 y([
-  p()
+  u()
 ], f.prototype, "_lineFlowSensor");
 y([
-  p()
+  u()
 ], f.prototype, "_lineFlowSensorUnit");
 y([
-  p()
+  u()
 ], f.prototype, "_masterValve");
 y([
-  p()
+  u()
 ], f.prototype, "_litersPerMonth");
 y([
-  p()
+  u()
 ], f.prototype, "_action");
 y([
-  p()
+  u()
 ], f.prototype, "_reducePct");
 y([
-  p()
+  u()
 ], f.prototype, "_forbiddenWindows");
 y([
-  p()
+  u()
 ], f.prototype, "_sessionOpen");
 y([
-  p()
+  u()
 ], f.prototype, "_valvesOpen");
 y([
-  p()
+  u()
 ], f.prototype, "_session");
 y([
-  p()
+  u()
 ], f.prototype, "_valves");
 y([
-  p()
+  u()
 ], f.prototype, "_concurrency");
 y([
   h({ attribute: !1 })
 ], f.prototype, "notifyStatus");
 y([
   h({ attribute: !1 })
+], f.prototype, "notifyStatusFailed");
+y([
+  h({ attribute: !1 })
 ], f.prototype, "testResults");
 y([
-  p()
+  h({ attribute: !1 })
+], f.prototype, "testPending");
+y([
+  u()
 ], f.prototype, "_wizardStep");
 y([
-  p()
+  u()
 ], f.prototype, "_selection");
 y([
-  p()
+  u()
 ], f.prototype, "_collapsedGroups");
 y([
-  p()
+  u()
 ], f.prototype, "_saveError");
 U("imc-settings-view", f);
-function ws(n) {
+function zs(n) {
   const e = JSON.parse(n);
   return { options: e.options ?? {}, zones: e.zones ?? {} };
 }
-var zs = Object.defineProperty, N = (n, e, t, i) => {
+var ks = Object.defineProperty, T = (n, e, t, i) => {
   for (var s = void 0, o = n.length - 1, a; o >= 0; o--)
     (a = n[o]) && (s = a(e, t, s) || s);
-  return s && zs(e, t, s), s;
+  return s && ks(e, t, s), s;
 };
-function vt(n) {
+function ft(n) {
   return n.mode === "interval" ? { calendar_mode: "interval", interval_days: n.interval_days } : n.mode === "parity" ? { calendar_mode: "parity", parity: n.parity } : { calendar_mode: "weekdays", days: n.days };
 }
-const Xe = class Xe extends C {
+function Ss(n) {
+  if (typeof n != "object" || n === null || Array.isArray(n)) return;
+  const e = {};
+  for (const [t, i] of Object.entries(n)) {
+    if (typeof i != "object" || i === null) return;
+    const { sent: s, error: o } = i;
+    if (typeof s != "boolean") return;
+    e[t] = { sent: s, error: typeof o == "string" ? o : null };
+  }
+  return e;
+}
+const Qe = class Qe extends C {
   constructor() {
-    super(...arguments), this.narrow = !1, this._view = "zones", this._testResults = {}, this._relevantIds = [], this._statesCount = 0;
+    super(...arguments), this.narrow = !1, this._view = "zones", this._notifyStatusFailed = !1, this._testResults = {}, this._testPending = [], this._relevantIds = [], this._statesCount = 0;
   }
   disconnectedCallback() {
     super.disconnectedCallback(), this._errorTimer !== void 0 && (window.clearTimeout(this._errorTimer), this._errorTimer = void 0), this._noticeTimer !== void 0 && (window.clearTimeout(this._noticeTimer), this._noticeTimer = void 0);
@@ -5431,14 +5499,14 @@ const Xe = class Xe extends C {
     const t = (await this._call("irrigation_maestro", "export_config", {}, !0))?.response?.payload;
     if (typeof t == "string")
       try {
-        return ws(t);
+        return zs(t);
       } catch {
         return;
       }
   }
   async _onEditZone(e) {
     const t = await this._readConfig();
-    t ? (this._editingZoneId = e, this._editingZone = t.zones[e] ?? {}) : this._showError(r($(this.hass), "panel.config_read_failed"));
+    t ? (this._editingZoneId = e, this._editingZone = t.zones[e] ?? {}) : this._showError(r(x(this.hass), "panel.config_read_failed"));
   }
   /**
    * ⚙️ header button: opens the everyday-settings view (spec §1.3), seeded
@@ -5447,9 +5515,9 @@ const Xe = class Xe extends C {
    * path when the read fails or the payload is unusable.
    */
   async _onOpenSettings() {
-    this._testResults = {};
+    this._testResults = {}, this._testPending = [];
     const [e] = await Promise.all([this._readConfig(), this._loadNotificationStatus()]);
-    e ? (this._options = e.options, this._view = "settings") : this._showError(r($(this.hass), "panel.config_read_failed"));
+    e ? (this._options = e.options, this._view = "settings") : this._showError(r(x(this.hass), "panel.config_read_failed"));
   }
   /**
    * The notification wizard's whole state: what is configured, where it
@@ -5459,8 +5527,13 @@ const Xe = class Xe extends C {
    * place that derives them.
    */
   async _loadNotificationStatus() {
+    this._notifyStatusFailed = !1;
     const t = (await this._call("irrigation_maestro", "notification_status", {}, !0))?.response;
-    Array.isArray(t?.events) && (this._notifyStatus = t);
+    if (Array.isArray(t?.events)) {
+      this._notifyStatus = t;
+      return;
+    }
+    this._notifyStatusFailed = !0;
   }
   /**
    * `set_notifications` grouped by priority, issued in sequence: each call
@@ -5482,26 +5555,46 @@ const Xe = class Xe extends C {
     await this._loadNotificationStatus();
   }
   /**
-   * A test send in the user's own language — the service's own defaults are
-   * English. Results are MERGED, not replaced: the wizard tests one
-   * recipient at a time, and replacing would erase the previous
-   * recipient's verdict the moment the next one is proved.
+   * A test send in the user's own language. `test_notification`'s own
+   * defaults follow `hass.config.language` (English fallback), so this is no
+   * longer what saves an Italian instance from an English test message — but
+   * the panel keeps sending its own strings, because the card's language is
+   * the frontend locale of whoever is logged in, which is not necessarily the
+   * language the instance is configured in.
+   *
+   * Results are MERGED, not replaced: the wizard tests one recipient at a
+   * time, and replacing would erase the previous recipient's verdict the
+   * moment the next one is proved.
+   *
+   * EVERY tested recipient gets a verdict, including when the call itself
+   * failed or answered with something unusable. The inline ✓/✗ is the whole
+   * point of the feature: leaving the row the user just clicked blank answers
+   * the one question they asked with silence, and the 6s toast is gone before
+   * they look away from it.
    */
   async _onTestNotification(e) {
-    const t = $(this.hass), s = (await this._call(
-      "irrigation_maestro",
-      "test_notification",
-      {
-        services: e.detail.services,
-        title: r(t, "notify.test_title"),
-        message: r(t, "notify.test_message")
-      },
-      !0
-    ))?.response?.results;
-    s !== void 0 && (this._testResults = {
-      ...this._testResults,
-      ...s
-    });
+    const t = x(this.hass), i = e.detail.services;
+    this._testPending = [.../* @__PURE__ */ new Set([...this._testPending, ...i])];
+    try {
+      const s = await this._call(
+        "irrigation_maestro",
+        "test_notification",
+        {
+          services: i,
+          title: r(t, "notify.test_title"),
+          message: r(t, "notify.test_message")
+        },
+        !0
+      ), o = Ss(s?.response?.results) ?? {}, a = { ...this._testResults, ...o };
+      for (const l of i)
+        a[l] = o[l] ?? {
+          sent: !1,
+          error: r(t, "notify.test_no_result")
+        };
+      this._testResults = a;
+    } finally {
+      this._testPending = this._testPending.filter((s) => !i.includes(s));
+    }
   }
   /**
    * `imc-zone-save`: `add_zone` accepts ONLY `name`/`valve_entity`/
@@ -5533,13 +5626,13 @@ const Xe = class Xe extends C {
         zone_id: t.zoneId,
         ...t.patch
       });
-    i && (this._editingZone = void 0, this._editingZoneId = void 0, this._showNotice(r($(this.hass), "panel.saved_zone")));
+    i && (this._editingZone = void 0, this._editingZoneId = void 0, this._showNotice(r(x(this.hass), "panel.saved_zone")));
   }
   async _onZoneRemove(e) {
     const t = await this._call("irrigation_maestro", "remove_zone", {
       zone_id: e.detail.zoneId
     });
-    this._editingZone = void 0, this._editingZoneId = void 0, this._selectedZoneId = void 0, t && this._showNotice(r($(this.hass), "panel.removed_zone"));
+    this._editingZone = void 0, this._editingZoneId = void 0, this._selectedZoneId = void 0, t && this._showNotice(r(x(this.hass), "panel.removed_zone"));
   }
   _onZoneCancel() {
     this._editingZone = void 0, this._editingZoneId = void 0;
@@ -5554,15 +5647,15 @@ const Xe = class Xe extends C {
   async _onSaveWeather(e) {
     await this._call("irrigation_maestro", "set_weather_sources", {
       ...e.detail
-    }) !== void 0 && this._showNotice(r($(this.hass), "panel.saved_settings"));
+    }) !== void 0 && this._showNotice(r(x(this.hass), "panel.saved_settings"));
   }
   async _onSaveBudget(e) {
     await this._call("irrigation_maestro", "set_consumption_budget", {
       ...e.detail
-    }) !== void 0 && this._showNotice(r($(this.hass), "panel.saved_settings"));
+    }) !== void 0 && this._showNotice(r(x(this.hass), "panel.saved_settings"));
   }
   async _onSaveRestrictions(e) {
-    await this._call("irrigation_maestro", "set_restrictions", { ...e.detail }) !== void 0 && this._showNotice(r($(this.hass), "panel.saved_settings"));
+    await this._call("irrigation_maestro", "set_restrictions", { ...e.detail }) !== void 0 && this._showNotice(r(x(this.hass), "panel.saved_settings"));
   }
   _onSettingsBack() {
     this._view = "zones";
@@ -5574,14 +5667,14 @@ const Xe = class Xe extends C {
    * rather than run the rest of the sequence against a half-written state.
    */
   async _saveSettings(e, t) {
-    return Object.keys(t).length === 0 ? !0 : await this._call("irrigation_maestro", e, t) === void 0 ? !1 : (this._showNotice(r($(this.hass), "panel.saved_settings")), !0);
+    return Object.keys(t).length === 0 ? !0 : await this._call("irrigation_maestro", e, t) === void 0 ? !1 : (this._showNotice(r(x(this.hass), "panel.saved_settings")), !0);
   }
   _onSaveSchedule(e) {
     const t = e.detail;
     this._call("irrigation_maestro", "set_program_schedule", {
       zone_id: t.zoneId,
       program_id: t.programId,
-      ...vt(t.calendar),
+      ...ft(t.calendar),
       ...t.seasonMonths ? { season_months: t.seasonMonths } : {},
       start_kind: t.start.kind,
       ...t.start.kind === "time" ? { start_time: t.start.at } : { start_event: t.start.event, start_offset_min: t.start.offset_min ?? 0 }
@@ -5635,7 +5728,7 @@ const Xe = class Xe extends C {
     typeof s != "string" || !s || (await this._call("irrigation_maestro", "set_program_schedule", {
       zone_id: t.zoneId,
       program_id: s,
-      ...vt(t.calendar),
+      ...ft(t.calendar),
       start_kind: t.start.kind,
       ...t.start.kind === "time" ? { start_time: t.start.at } : { start_event: t.start.event, start_offset_min: t.start.offset_min ?? 0 }
     }), await this._call("irrigation_maestro", "set_program_minutes", {
@@ -5676,7 +5769,7 @@ const Xe = class Xe extends C {
     await this._call("irrigation_maestro", "duplicate_program", {
       zone_id: t.zoneId,
       program_id: t.programId
-    }) && this._showNotice(r($(this.hass), "program.duplicate_done"));
+    }) && this._showNotice(r(x(this.hass), "program.duplicate_done"));
   }
   /**
    * `copy_curve` replaces only `zoneId`/`programId`'s curve shape with
@@ -5692,7 +5785,7 @@ const Xe = class Xe extends C {
       source_program_id: t.sourceProgramId,
       zone_id: t.zoneId,
       program_id: t.programId
-    }) && this._showNotice(r($(this.hass), "editor.saved"));
+    }) && this._showNotice(r(x(this.hass), "editor.saved"));
   }
   /* ------------------------------------------------------------ */
   /* Update gating: only re-render when a maestro entity changed   */
@@ -5711,14 +5804,14 @@ const Xe = class Xe extends C {
    *  render branch below — see `_showError`/`_showNotice`. */
   _renderToasts() {
     return d`
-      ${this._error ? d`<div class="error">${this._error}</div>` : u}
-      ${this._notice ? d`<div class="notice">${this._notice}</div>` : u}
+      ${this._error ? d`<div class="error">${this._error}</div>` : p}
+      ${this._notice ? d`<div class="notice">${this._notice}</div>` : p}
     `;
   }
   render() {
     const e = this.hass;
     if (!e) return d``;
-    const t = $(e), i = hi(e);
+    const t = x(e), i = mi(e);
     if (this._relevantIds = i.entityIds, this._statesCount = Object.keys(e.states).length, this._editingZone !== void 0)
       return d`
         <div
@@ -5748,6 +5841,9 @@ const Xe = class Xe extends C {
         @imc-settings-save-concurrency=${(a) => this._saveSettings("set_concurrency", a.detail)}
         @imc-settings-save-notifications=${this._onSaveNotifications}
         @imc-settings-test-notification=${this._onTestNotification}
+        @imc-settings-retry-notifications=${() => {
+        this._loadNotificationStatus();
+      }}
         @imc-settings-back=${this._onSettingsBack}
         >
           <header><h1>${r(t, "panel.title")}</h1></header>
@@ -5756,7 +5852,9 @@ const Xe = class Xe extends C {
             .hass=${e}
             .options=${this._options ?? {}}
             .notifyStatus=${this._notifyStatus}
+            .notifyStatusFailed=${this._notifyStatusFailed}
             .testResults=${this._testResults}
+            .testPending=${this._testPending}
           ></imc-settings-view>
         </div>
       `;
@@ -5861,17 +5959,17 @@ const Xe = class Xe extends C {
    * `_renderHeader` budget meter (`budget >= threshold`).
    */
   _renderWeatherContext(e, t, i) {
-    if (i === void 0) return u;
+    if (i === void 0) return p;
     const s = pe(e.hub.waterBudget) ? void 0 : v(e.hub.waterBudget?.state), o = pe(e.hub.skipThreshold) ? void 0 : v(e.hub.skipThreshold?.state), a = s !== void 0 && o !== void 0 ? s >= o ? "panel.budget_ok" : "panel.budget_low" : void 0;
     return d`
       <div class="meteo">
-        ${r(t, "panel.weather_temp", { temp: li(i, 1) ?? "" })}
-        ${a ? d` · ${r(t, a)}` : u}
+        ${r(t, "panel.weather_temp", { temp: ci(i, 1) ?? "" })}
+        ${a ? d` · ${r(t, a)}` : p}
       </div>
     `;
   }
 };
-Xe.styles = O`
+Qe.styles = O`
     :host {
       display: block;
       height: 100%;
@@ -5976,38 +6074,44 @@ Xe.styles = O`
       overflow-wrap: anywhere;
     }
   `;
-let E = Xe;
-N([
+let S = Qe;
+T([
   h({ attribute: !1 })
-], E.prototype, "hass");
-N([
+], S.prototype, "hass");
+T([
   h({ type: Boolean })
-], E.prototype, "narrow");
-N([
-  p()
-], E.prototype, "_selectedZoneId");
-N([
-  p()
-], E.prototype, "_error");
-N([
-  p()
-], E.prototype, "_notice");
-N([
-  p()
-], E.prototype, "_editingZone");
-N([
-  p()
-], E.prototype, "_editingZoneId");
-N([
-  p()
-], E.prototype, "_view");
-N([
-  p()
-], E.prototype, "_options");
-N([
-  p()
-], E.prototype, "_notifyStatus");
-N([
-  p()
-], E.prototype, "_testResults");
-U("irrigation-maestro-panel", E);
+], S.prototype, "narrow");
+T([
+  u()
+], S.prototype, "_selectedZoneId");
+T([
+  u()
+], S.prototype, "_error");
+T([
+  u()
+], S.prototype, "_notice");
+T([
+  u()
+], S.prototype, "_editingZone");
+T([
+  u()
+], S.prototype, "_editingZoneId");
+T([
+  u()
+], S.prototype, "_view");
+T([
+  u()
+], S.prototype, "_options");
+T([
+  u()
+], S.prototype, "_notifyStatus");
+T([
+  u()
+], S.prototype, "_notifyStatusFailed");
+T([
+  u()
+], S.prototype, "_testResults");
+T([
+  u()
+], S.prototype, "_testPending");
+U("irrigation-maestro-panel", S);

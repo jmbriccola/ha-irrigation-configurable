@@ -22,7 +22,7 @@ e la [guida rapida](guida-rapida.md).
    - **Flussometro di linea** (opzionale) — un flussometro condiviso sul
      collettore, usato da ogni zona senza flussometro proprio. L'unità che
      dichiara (m³/h, L/h, gal/min, …) viene rilevata e convertita
-     automaticamente in L/min; a un sensore che non dichiara nulla di
+     automaticamente in L/min; a un flussometro che non dichiara nulla di
      utilizzabile si può assegnare un'unità esplicita nelle impostazioni
      **Meteo e sensori** del pannello (§6) — svuotarla riprende il
      rilevamento. Finché l'unità non è nota, il flussometro conta come
@@ -161,7 +161,7 @@ e le impostazioni quotidiane dell'hub, tutto in un unico posto.
    predefinito sensato, pronto da rifinire. **✎ Modifica zona** (sopra
    l'elenco programmi, per la zona selezionata) apre lo stesso modulo
    precompilato, più un cassetto **Avanzate** per flussometro (con la
-   sua unità — rilevata automaticamente, o sovrascritta per un sensore che
+   sua unità — rilevata automaticamente, o sovrascritta per un flussometro che
    non dichiara nulla di utilizzabile; svuotare la sovrascrittura riprende
    il rilevamento), portata nominale/tolleranza, correzione %, ordine,
    intervallo di irrigazione, deroga ai mesi di stagione e gruppo di

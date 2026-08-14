@@ -255,6 +255,13 @@ details harvested from it (kept as engine behaviour):
   touched. Applying one factor to the whole total would be exactly the
   plausible-but-false number this feature removes. A Repairs notice states the
   scale change instead.
+- **Italian terminology: "flussometro" is the only word for a flow meter
+  (3.2.1).** A branch review found six variants in use across it.json, it.ts
+  and the docs (contatore di flusso/di portata/di linea, sensore di portata,
+  misuratore di portata); all were swept to "flussometro". "Contatore" stays
+  reserved for an actual counter — the consumption total (contatore dei
+  consumi) and the cadence counter — never for the device. Do not reintroduce
+  a synonym for the meter itself.
 
 ## Progress log
 
