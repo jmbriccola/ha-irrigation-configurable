@@ -1,4 +1,4 @@
-import type { CycleInfo, HassEntity, HomeAssistant } from "./types";
+import type { CycleInfo, HassEntity, HomeAssistant, WaterSummary } from "./types";
 import { asArray, asNumber, asString, isUnavailable } from "./types";
 
 /**
@@ -18,7 +18,18 @@ export interface HubBundle {
   stopAllButton?: HassEntity;
 }
 
-export interface ZoneBundle {
+/**
+ * The slice of a zone's entities `waterSummary()` needs, keyed by role name
+ * (not translated to a slot-style name like `ZoneBundle`'s other fields) so
+ * the helper's own tests can pass bare literals shaped like the card
+ * contract, without constructing a full `ZoneBundle`. `ZoneBundle` below
+ * extends this, so every real zone bundle satisfies it too.
+ */
+export interface ZoneEntities {
+  zone_water_total?: HassEntity;
+}
+
+export interface ZoneBundle extends ZoneEntities {
   zoneId: string;
   name: string;
   order: number;
@@ -41,6 +52,11 @@ export interface MaestroModel {
   entityIds: string[];
 }
 
+// hub_unattributed_water (docs/design/card-contract.md) is a registered
+// role -- see types.ts's HubRole -- but has no card consumer yet, so it is
+// deliberately absent here, same as zone_interval/zone_adjustment below:
+// unmapped roles still count as discovery hits, they just have nowhere to
+// land on the bundle until something reads them.
 const HUB_ROLE_TO_SLOT: Record<string, keyof HubBundle> = {
   hub_water_budget: "waterBudget",
   hub_skip_threshold: "skipThreshold",
@@ -59,6 +75,7 @@ const ZONE_ROLE_TO_SLOT: Record<
   zone_state: "state",
   zone_next_run: "nextRun",
   zone_last_outcome: "lastOutcome",
+  zone_water_total: "zone_water_total",
   zone_enabled: "enabledSwitch",
   zone_order: "orderNumber",
   zone_suspend_until: "suspendUntil",
@@ -135,6 +152,26 @@ export function zoneHasFlowMeter(zone: ZoneBundle): boolean {
   if (isUnavailable(zone.state)) return false;
   const degraded = asArray(zone.state?.attributes?.["degraded"]);
   return !degraded.some((item) => asString(item) === "no_flow_meter");
+}
+
+/** The zone's water figures, or null when there is nothing trustworthy to
+ *  show (docs/design/card-contract.md's `zone_water_total` role).
+ *
+ *  An unavailable sensor yields null rather than zero: zero would claim no
+ *  water passed, which is a different statement from "we do not know" --
+ *  the same distinction the ledger this figure comes from is built on.
+ */
+export function waterSummary(zone: ZoneEntities): WaterSummary | null {
+  const entity = zone.zone_water_total;
+  if (!entity) return null;
+  const total = asNumber(entity.state);
+  if (total === undefined) return null;
+  return {
+    total,
+    today: asNumber(entity.attributes["today_l"]) ?? 0,
+    month: asNumber(entity.attributes["month_l"]) ?? 0,
+    estimated: Boolean(entity.attributes["estimated"]),
+  };
 }
 
 /**

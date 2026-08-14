@@ -72,6 +72,7 @@ export const it: Record<keyof typeof en, string> = {
   "header.global_pause": "In pausa globale",
   "header.stale_weather": "Dati meteo non aggiornati",
   "header.consumption_left": "Acqua residua",
+  "header.unattributed_water": "Acqua non attribuita",
 
   // Stati sessione
   "session.idle": "Inattiva",
@@ -148,6 +149,9 @@ export const it: Record<keyof typeof en, string> = {
   "zone.no_cycles": "Nessun programma configurato",
   "zone.cycle_enabled": "Abilitato",
   "zone.cycle_disabled": "Disabilitato",
+  "zone.water_estimated": "stimato",
+  "zone.water_today": "oggi",
+  "zone.water_month": "questo mese",
 
   // Trigger dei cicli
   "trigger.sunrise": "Alba",
