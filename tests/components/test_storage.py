@@ -30,7 +30,7 @@ async def test_fresh_state_defaults(hass: HomeAssistant) -> None:
     assert state.last_completed("zone1", "c1") is None
     assert state.manual_stop_at is None
     assert state.suspended_until("zone1") is None
-    assert state.consumption_liters == 0.0
+    assert state.carried_over_for(TODAY) == 0.0
 
 
 async def test_temp_and_rain_tracking(hass: HomeAssistant) -> None:
@@ -59,7 +59,7 @@ async def test_persistence_roundtrip(hass: HomeAssistant) -> None:
     state.set_last_completed("zone1", "c1", TODAY)
     state.set_manual_stop(NOW)
     state.set_suspended_until("zone1", NOW)
-    state.add_consumption(120.5, period_start=TODAY)
+    state.set_carried_over(TODAY, 120.5)
     state.set_last_outcome("zone1", {"result": "completed", "at": NOW.isoformat()})
     await state.async_save()
 
@@ -69,7 +69,7 @@ async def test_persistence_roundtrip(hass: HomeAssistant) -> None:
     assert reloaded.last_completed("zone1", "c1") == TODAY
     assert reloaded.manual_stop_at == NOW
     assert reloaded.suspended_until("zone1") == NOW
-    assert reloaded.consumption_liters == 120.5
+    assert reloaded.carried_over_for(TODAY) == 120.5
     assert reloaded.last_outcome("zone1") == {"result": "completed", "at": NOW.isoformat()}
 
 
@@ -90,16 +90,6 @@ async def test_old_days_pruned_on_save(hass: HomeAssistant) -> None:
     assert state.temps_for(TODAY) == (None, None, None, 30.0)
     d3, _, _, _ = state.temps_for(date(2026, 7, 13))
     assert d3 == 25.0 or d3 is None  # pruned: no key older than the window
-
-
-async def test_consumption_period_reset(hass: HomeAssistant) -> None:
-    state = await make_state(hass)
-    state.add_consumption(100.0, period_start=date(2026, 6, 1))
-    assert state.consumption_liters == 100.0
-    # New period: counter restarts.
-    state.add_consumption(10.0, period_start=date(2026, 7, 1))
-    assert state.consumption_liters == 10.0
-    assert state.consumption_period_start == date(2026, 7, 1)
 
 
 async def test_enable_flags_default_true_and_persist(hass: HomeAssistant) -> None:

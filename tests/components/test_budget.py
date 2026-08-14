@@ -13,7 +13,7 @@ from freezegun.api import FrozenDateTimeFactory
 from homeassistant.core import HomeAssistant
 
 from .mocks import MockValvePark
-from .test_session import START, mock_weather, setup_hub, zone_data
+from .test_session import START, advance, mock_weather, setup_hub, zone_data
 
 
 async def _hub_over_budget(hass: HomeAssistant, freezer: FrozenDateTimeFactory, action: str):
@@ -28,7 +28,7 @@ async def _hub_over_budget(hass: HomeAssistant, freezer: FrozenDateTimeFactory, 
         {"consumption_budget": {"liters_per_month": 100, "action": action, "reduce_pct": 50}},
     )
     runtime = entry.runtime_data
-    runtime.state.add_consumption(150.0, period_start=date(2026, 7, 1))
+    runtime.state.set_carried_over(date(2026, 7, 1), 150.0)
     return entry, runtime, park
 
 
@@ -78,5 +78,64 @@ async def test_budget_under_the_limit_does_nothing(
         {"consumption_budget": {"liters_per_month": 1000, "action": "suspend"}},
     )
     runtime = entry.runtime_data
-    runtime.state.add_consumption(10.0, period_start=date(2026, 7, 1))
+    runtime.state.set_carried_over(date(2026, 7, 1), 10.0)
+    assert runtime._consumption_factor() == (1.0, False)
+
+
+async def test_the_budget_total_is_the_sum_of_the_zones(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    """One number, derived, so a zone total and the budget cannot diverge."""
+    freezer.move_to(START)
+    park = MockValvePark(hass)
+    park.add("valve.a")
+    mock_weather(hass)
+    entry = await setup_hub(
+        hass,
+        [zone_data("Alpha", "valve.a", minutes=10, nominal_flow_lpm=7.5)],
+        {"consumption_budget": {"liters_per_month": 1000, "action": "notify"}},
+    )
+    runtime = entry.runtime_data
+    zone_id = runtime.zone_ids[0]
+
+    await advance(hass, freezer, 31 * 60)
+    await advance(hass, freezer, 11 * 60)
+
+    assert runtime.consumption_used_liters() == runtime.state.zone_water_total(zone_id)
+
+
+async def test_the_carried_balance_is_included_then_expires(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    freezer.move_to(START)  # July 2026
+    park = MockValvePark(hass)
+    park.add("valve.a")
+    mock_weather(hass)
+    entry = await setup_hub(hass, [zone_data("Alpha", "valve.a", minutes=10)])
+    runtime = entry.runtime_data
+    runtime.state.set_carried_over(date(2026, 7, 1), 250.0)
+
+    assert runtime.consumption_used_liters() == 250.0
+
+    freezer.move_to("2026-08-02 05:00:00+00:00")
+    assert runtime.consumption_used_liters() == 0.0
+
+
+async def test_unattributed_water_stays_out_of_the_budget(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    """A leak must not suspend irrigation through the budget action."""
+    freezer.move_to(START)
+    park = MockValvePark(hass)
+    park.add("valve.a")
+    mock_weather(hass)
+    entry = await setup_hub(
+        hass,
+        [zone_data("Alpha", "valve.a", minutes=10)],
+        {"consumption_budget": {"liters_per_month": 100, "action": "suspend"}},
+    )
+    runtime = entry.runtime_data
+    runtime.state.add_unattributed("__hub__", 5000.0, day=date(2026, 7, 17), valves_closed=True)
+
+    assert runtime.consumption_used_liters() == 0.0
     assert runtime._consumption_factor() == (1.0, False)

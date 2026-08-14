@@ -190,16 +190,17 @@ class HubConsumptionLeftSensor(MaestroHubEntity, SensorEntity):
         budget = self._runtime.hub.consumption_budget_liters
         if budget is None:
             return None
-        return round(budget - self._runtime.state.consumption_liters, 1)
+        return round(budget - self._runtime.consumption_used_liters(), 1)
 
     def _role_attributes(self) -> dict[str, Any]:
-        state = self._runtime.state
-        period_start = state.consumption_period_start
+        runtime = self._runtime
+        period_start = dt_util.now().date().replace(day=1)
         return {
-            "budget_liters": self._runtime.hub.consumption_budget_liters,
-            "used_liters": round(state.consumption_liters, 1),
-            "period_start": period_start.isoformat() if period_start else None,
-            "action": self._runtime.hub.consumption_action,
+            "budget_liters": runtime.hub.consumption_budget_liters,
+            "used_liters": round(runtime.consumption_used_liters(), 1),
+            "unattributed_liters": round(runtime.state.unattributed_total(), 1),
+            "period_start": period_start.isoformat(),
+            "action": runtime.hub.consumption_action,
         }
 
 
