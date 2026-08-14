@@ -96,6 +96,7 @@ class MeterLedger:
         self._tick_s = tick_s
         self.total_l = 0.0
         self.unit_known = True
+        self._pending_unit_recovery = False
         self._last_at: datetime | None = None
         self._last_lpm = 0.0
         self._last_available = False
@@ -155,11 +156,19 @@ class MeterLedger:
         everywhere else. Those litres are published on the next sample rather
         than here, so they are attributed to whoever the interval started
         with, exactly as an untouched ledger would have attributed them.
+
+        A retarget that resolves a previously-unknown unit is itself a
+        recovery, but this method has no MeterSample to publish it on. The
+        edge is latched in _pending_unit_recovery and OR'd into the next
+        _sample's ``unit_recovered`` instead of being reported here, so a
+        subscriber never learns of the recovery before it can act on it.
         """
         self._integrate(dt_util.utcnow())
         self._reader = reader
         reading = reader.read()
+        was_unit_known = self.unit_known
         self.unit_known = reading.unit_known
+        self._pending_unit_recovery = reading.unit_known and not was_unit_known
         self._last_lpm = reading.lpm or 0.0
         self._last_available = reading.available
 
@@ -200,7 +209,8 @@ class MeterLedger:
         now = dt_util.utcnow()
         measured_s = self._integrate(now)
         reading = self._reader.read()
-        recovered = reading.unit_known and not self.unit_known
+        recovered = (reading.unit_known and not self.unit_known) or self._pending_unit_recovery
+        self._pending_unit_recovery = False
         self.unit_known = reading.unit_known
         self._last_lpm = reading.lpm or 0.0
         self._last_available = reading.available
