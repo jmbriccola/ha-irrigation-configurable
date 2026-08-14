@@ -80,8 +80,12 @@ class RuntimeState:
             self._data["last_completed"], zone_programs
         )
 
-    def migrate_consumption(self, today: date) -> bool:
-        """Carry the old monthly counter into an opening balance (3.3.0)."""
+    def migrate_consumption(self, today: date) -> migrate.ConsumptionMigration:
+        """Carry the old monthly counter into an opening balance (3.3.0).
+
+        Returns both facts, because they gate different things: see
+        ``ConsumptionMigration``.
+        """
         return migrate.seed_carried_over_and_drop_consumption(self._data, today)
 
     async def async_save(self) -> None:
