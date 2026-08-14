@@ -424,3 +424,43 @@ async def test_migrate_consumption_is_a_no_op_on_a_fresh_install(hass: HomeAssis
     await state.async_load()
 
     assert state.migrate_consumption(date(2026, 8, 14)) is False
+
+
+async def test_migrate_consumption_is_durable_without_a_later_writer(
+    hass: HomeAssistant, hass_storage: dict
+) -> None:
+    """The migration must survive a restart on its own, not by luck.
+
+    async_setup schedules a save after a successful migration; nothing else
+    in this test writes to the store. Forcing the *scheduled* write (rather
+    than calling async_save ourselves, as the test above does) is what
+    proves the production path saves -- a missing ``schedule_save()`` in
+    runtime.py would leave "consumption" right where it started.
+    """
+    from custom_components.irrigation_maestro.const import DOMAIN
+    from pytest_homeassistant_custom_component.common import MockConfigEntry, flush_store
+
+    await hass.config.async_set_time_zone("UTC")
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        entry_id="consumption_durability_entry",
+        version=3,
+        title="Irrigation Maestro",
+        data={},
+        options={"weather_entity": "weather.test"},
+        subentries_data=[],
+    )
+    key = f"{DOMAIN}.{entry.entry_id}"
+    hass_storage[key] = {
+        "version": 1,
+        "minor_version": 1,
+        "key": key,
+        "data": {"consumption": {"period_start": "2026-07-01", "liters": 42.0}},
+    }
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    await flush_store(entry.runtime_data.state._store)
+
+    assert "consumption" not in hass_storage[key]["data"]
