@@ -412,8 +412,19 @@ class WaterAccountant:
         ]
 
     def _all_valves_closed(self) -> bool:
-        """Every managed valve, master included, reports closed."""
-        return not any(controller.is_open for controller in self._runtime.all_valve_controllers())
+        """Every managed valve, master included, reports closed.
+
+        ``all(is_closed)``, never ``not any(is_open)``: valves.py separates
+        the two on purpose, and is_closed's own docstring says an uncertain
+        state is NOT closed. A ``valve.`` entity publishes opening/closing
+        while it travels and a battery Zigbee valve publishes unavailable
+        mid-run; in either window nothing is open, so the weaker test would
+        call the system idle and book the litres into closed_l -- the sole
+        input to leak detection, persisted from 3.3.0 onward. An uncertain
+        valve claims nothing and contributes no leak evidence either, which
+        is the only honest reading of "we do not know".
+        """
+        return all(controller.is_closed for controller in self._runtime.all_valve_controllers())
 
     def _scope_for(self, entity_id: str) -> str:
         """Whose leak this would be: the sole zone on this meter, or the hub."""
@@ -464,10 +475,16 @@ class WaterAccountant:
             state.add_water(claimants[0][0], liters, day=day, estimated=False)
         else:
             weights = [nominal for _, nominal in claimants]
-            total_weight = sum(weights)
-            if total_weight <= 0:
+            # Equal shares as soon as ANY claimant lacks a nominal, not only
+            # when all of them do. A partial set of nominals cannot yield a
+            # trustworthy proportion, and the alternative -- weight 0 -- would
+            # credit exactly zero litres to a zone that was demonstrably
+            # watering, which is plainly false. Water is conserved either way;
+            # this only decides which of two wrong-in-detail splits to publish,
+            # and an even one tells no zone it used nothing.
+            if any(weight <= 0 for weight in weights):
                 weights = [1.0] * len(claimants)
-                total_weight = float(len(claimants))
+            total_weight = sum(weights)
             for (zone_id, _), weight in zip(claimants, weights, strict=True):
                 state.add_water(
                     zone_id,
