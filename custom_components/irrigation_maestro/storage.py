@@ -2,12 +2,15 @@
 
 Everything that is *state*, not *intent*, lives here — never in the config
 entry: daily temperature maxima, rain counters and staging, last completed day
-per zone, manual-stop timestamp, suspensions/pauses, last outcomes and
-per-zone water accounting. Temp/rain histories are keyed by ISO date (see
-engine.history), so midnight needs no rotation step and restarts cannot
-corrupt the window. The water section's own daily history follows the same
-keyed-by-day, no-rotation shape (see engine.metering instead), alongside
-cumulative per-zone and unattributed totals that are not date-keyed at all.
+per zone, manual-stop timestamp, suspensions/pauses, last outcomes and water
+accounting. Temp/rain histories are keyed by ISO date (see engine.history), so
+midnight needs no rotation step and restarts cannot corrupt the window. The
+water section's own daily history follows the same keyed-by-day, no-rotation
+shape (see engine.metering instead), alongside totals that are not date-keyed
+at all -- and those are not all per zone: ``water["zones"]`` is, but
+``water["unattributed"]`` is keyed by *scope* (a zone id, or ``__hub__``) and
+backs a hub entity, and ``water["carried_over"]`` is one account-level opening
+balance for the current budget period.
 """
 
 from __future__ import annotations
@@ -240,11 +243,29 @@ class RuntimeState:
                 for item, value in self._data[key].items()
                 if not item.startswith(prefix)
             }
-        # Live counters back entities that no longer exist, so they go. The
-        # daily history stays: deleting it would rewrite past months and make
-        # the derived budget total jump. It ages out at 730 days like the rest.
+        # The per-zone counter backs an entity that no longer exists, so it
+        # goes. The daily history stays: deleting it would rewrite past months
+        # and make the derived budget total jump. It ages out at 730 days like
+        # the rest.
         self._water["zones"].pop(zone_id, None)
-        self._water["unattributed"].pop(zone_id, None)
+        # One line down, the same reasoning, and the opposite conclusion. This
+        # bucket is keyed by zone id (_scope_for names the sole zone on a
+        # meter) but it backs a *hub* entity: hub_unattributed_water sums every
+        # scope. Popping it would drop that total_increasing sensor from
+        # 1000 L to 200 L, and HA's recorder reads a drop below 90% as a meter
+        # reset -- it re-adds the post-drop value to the long-term sum and
+        # inflates the Water dashboard permanently, with nothing the user can
+        # do to correct it. So the scope is merged into HUB_SCOPE instead: the
+        # water flowed, and it now belongs to no zone, which is exactly what
+        # __hub__ means. Further unattributed water on that meter lands in the
+        # same bucket, since _scope_for finds no owner for it either.
+        departing = self._water["unattributed"].pop(zone_id, None)
+        if departing is not None:
+            hub = self._water["unattributed"].setdefault(
+                metering.HUB_SCOPE, {"total_l": 0.0, "closed_l": 0.0}
+            )
+            hub["total_l"] = float(hub["total_l"]) + float(departing.get("total_l", 0.0))
+            hub["closed_l"] = float(hub["closed_l"]) + float(departing.get("closed_l", 0.0))
 
     # Manual stop -----------------------------------------------------------
 
