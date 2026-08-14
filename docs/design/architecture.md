@@ -146,6 +146,18 @@ water:                # 3.3.0: replaced the standalone monthly counter
   carried_over: {period_start: date_iso, liters: float}      # one-period opening balance
 ```
 
+`gap_s` is **reserved and always 0.0 in 3.3.0.** The field is written and
+accumulated (`engine.metering.roll_into_day`), but nothing feeds it: its only
+possible source, `MeterSample.measured_s`, has no consumer, and every
+production `add_water` / `add_unattributed` call passes zero. Do **not** ask
+the daily history "how much of this window was unobserved?" — it will answer
+zero for a six-hour outage, and a blind window would read as evidence of no
+leak. Wiring it is 3.4.0 work and is more than an added argument:
+`WaterAccountant._on_sample` returns early on non-positive litres, which is
+exactly what a gap produces. The `last_gap_at` attribute the design spec
+(§1.4) asks for on `zone_water_total` is **not implemented** either, and is
+deferred to 3.4.0 with it.
+
 Date-keyed dicts make midnight rotation trivial and restart-safe (no rotation
 automation: values are keyed by the day they belong to; old keys are pruned).
 

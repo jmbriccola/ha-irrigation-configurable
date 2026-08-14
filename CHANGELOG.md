@@ -64,6 +64,15 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
   monthly total — the same water counted twice. Litres measured while more
   than one zone on the same meter is open are now split between the open
   zones in proportion to their `nominal_flow_lpm`.
+- **A zone whose meter measures zero no longer books the nominal estimate.**
+  The old guard was "this cycle tallied no litres *and* a nominal rate
+  exists", which conflates "nothing flowed" with "there is nothing to
+  measure with". A zone whose meter is perfectly readable and whose cycle
+  was interrupted by the zero-flow guard measures a real, true zero — and
+  the nominal estimate was booked on top of it, onto a `device_class:
+  water` sensor on the Water dashboard. The guard is now "is there a usable
+  meter", so such a cycle records nothing. Monthly totals on existing
+  installs will be lower than 3.2.x reported wherever this happened.
 - **`line_meter_shared` now catches a meter cleared to an empty string.**
   The check used to test a zone's own meter with `is None`, while the rest
   of the runtime resolves "does this zone have its own meter" by truthiness.

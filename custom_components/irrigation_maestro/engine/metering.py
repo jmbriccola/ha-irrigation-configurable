@@ -52,6 +52,14 @@ def roll_into_day(
     reported closed. It is the only part leak detection reads, so it is an
     explicit parameter accumulated exactly like ``l`` and ``gap_s`` -- never a
     field callers patch onto the returned dict after the fact.
+
+    ``gap_s`` accumulates the same way, clamped at zero: seconds of that day
+    that were NOT observed, summed across every call for the key. It is
+    reserved, not live -- as of 3.3.0 every production caller passes 0.0 (see
+    MeterSample.measured_s, which has no consumer), so the stored value is
+    always 0.0 and must not be read as evidence that a day was fully
+    observed. Feeding it is deferred to 3.4.0 along with the ``last_gap_at``
+    the spec asks for.
     """
     updated: DailyLitres = {existing_day: dict(keys) for existing_day, keys in daily.items()}
     day_record = updated.setdefault(day, {})

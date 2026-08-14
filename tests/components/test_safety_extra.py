@@ -238,7 +238,8 @@ async def test_a_meter_that_goes_unavailable_still_interrupts_the_cycle(
     README.md). The guard's blind condition is `not unit_known or
     unit_recovered`, nothing else: it must not also read
     MeterSample.measured_s, because accounting.py reports measured_s=0.0 for
-    exactly this case (available=False; accounting.py:149-152). Gating on it
+    exactly this case (see MeterLedger._integrate's availability guard).
+    Gating on it
     would leave the guard re-arming forever without ever judging a window --
     watering blind to the run's duration or safety timeout with no
     diagnosis, instead of interrupting at roughly the grace period like a
@@ -832,7 +833,8 @@ async def test_volume_target_reached_on_the_read_that_loses_the_unit(
 ) -> None:
     """Litres already integrated finish the run even if that read kills the unit.
 
-    The target check sits above the unit_known gate on purpose (session.py:237):
+    The target check sits above the unit_known gate on purpose (see
+    FlowMonitor._on_sample):
     water certainly delivered still finishes the run, even when the very
     sample that lost the unit is the one whose litres cross it.
 
@@ -976,7 +978,7 @@ async def test_flow_in_range_reports_nothing(
     """The positive path of _check_range: sustained in-range flow is silent.
 
     _check_range is reachable only from _on_sample, the ledger's sample
-    listener (session.py:212-242); re-asserting the identical state and
+    listener (FlowMonitor._on_sample); re-asserting the identical state and
     attributes fires EVENT_STATE_REPORTED, not EVENT_STATE_CHANGED, so it
     would never reach the ledger's own state-change listener and never
     publish a sample at all -- force_update is what keeps these

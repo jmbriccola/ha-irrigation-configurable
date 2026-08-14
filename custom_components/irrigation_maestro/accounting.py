@@ -57,7 +57,17 @@ class MeterSample:
     #: Seconds of the interval just closed that were actually measured. Zero
     #: across a gap (unit unknown, or the meter unavailable) rather than
     #: interpolated, so accounting can report a gap instead of silently
-    #: treating it as zero flow. For accounting only -- the zero-flow guard
+    #: treating it as zero flow.
+    #:
+    #: Computed and published, but as of 3.3.0 it has NO consumer: nothing
+    #: forwards it into the daily history's gap_s, which is therefore
+    #: permanently 0.0 (see roll_into_day). Wiring it up is 3.4.0 work and is
+    #: more than passing an argument -- _on_sample returns early on
+    #: non-positive litres, which is exactly the case a gap produces. Until
+    #: then, do not read the daily history's gap_s as "how much of this window
+    #: was unobserved": it will answer zero for a six-hour outage.
+    #:
+    #: For accounting only in any case -- the zero-flow guard
     #: (FlowMonitor) does NOT read this field: its blind condition is
     #: `not unit_known or unit_recovered` alone, because a meter reporting a
     #: known zero while unavailable (flow.py's unavailable/unknown case:
