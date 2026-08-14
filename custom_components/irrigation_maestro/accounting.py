@@ -90,6 +90,10 @@ class MeterLedger:
         return _unsub
 
     def start(self) -> None:
+        if self._unsubs:
+            # Already running. Task 8 rebuilds ledgers on config change; a
+            # second start() must not double-subscribe and double-publish.
+            return
         self._last_at = dt_util.utcnow()
         reading = self._reader.read()
         self._last_lpm = reading.lpm or 0.0
@@ -132,6 +136,11 @@ class MeterLedger:
             return 0.0
         elapsed_s = max((now - self._last_at).total_seconds(), 0.0)
         self._last_at = now
+        # `not self.unit_known` is redundant today -- flow.py already forces
+        # `available=False` whenever the unit is unknown, so the second half
+        # of this guard alone would already catch it. Kept as defense in
+        # depth so this guard does not quietly depend on that flow.py
+        # invariant holding forever.
         if not self.unit_known or not self._last_available:
             return 0.0
         self.total_l += accumulate(self._last_lpm, elapsed_s)
@@ -156,5 +165,5 @@ class MeterLedger:
         for listener in list(self._listeners):
             try:
                 listener(sample)
-            except Exception:  # pragma: no cover - a listener must not stop the ledger
+            except Exception:  # a listener must not stop the ledger or starve its peers
                 _LOGGER.exception("Meter ledger listener failed for %s", self.entity_id)
