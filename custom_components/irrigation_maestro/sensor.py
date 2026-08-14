@@ -460,7 +460,13 @@ class ZoneWaterTotalSensor(MaestroZoneEntity, SensorEntity):
             "estimated": estimated > 0,
             "source": source,
             "today_l": round(state.water_for_day(self._zone_id, today), 1),
-            "month_l": round(state.water_for_period(today.replace(day=1), today), 1),
+            # zone_water_for_period, not water_for_period: the latter is the
+            # whole account, which the budget spends and this sensor does not
+            # report. Both are on RuntimeState and only the zone-scoped one
+            # belongs beside a today_l that is already zone-scoped.
+            "month_l": round(
+                state.zone_water_for_period(self._zone_id, today.replace(day=1), today), 1
+            ),
             "meter_entity": runtime.resolved_meter_entity(config) if config else None,
         }
 
