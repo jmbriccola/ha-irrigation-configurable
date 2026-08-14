@@ -313,7 +313,7 @@ export const it: Record<keyof typeof en, string> = {
   "notify.next": "Avanti",
   "notify.save": "Salva",
   "notify.test_title": "Irrigation Maestro",
-  "notify.test_message": "Notifica di prova. Se riesci a leggerla, questo destinatario funziona.",
+  "notify.test_message": "Notifica di prova. Se riesci a leggere questo messaggio, il destinatario funziona.",
   "notify.event_watchdog": "Watchdog",
   "notify.event_anomaly": "Anomalia",
   "notify.event_skipped": "Ciclo saltato",

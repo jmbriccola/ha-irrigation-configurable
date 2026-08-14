@@ -258,10 +258,13 @@ details harvested from it (kept as engine behaviour):
 - **Italian terminology: "flussometro" is the only word for a flow meter
   (3.2.1).** A branch review found six variants in use across it.json, it.ts
   and the docs (contatore di flusso/di portata/di linea, sensore di portata,
-  misuratore di portata); all were swept to "flussometro". "Contatore" stays
-  reserved for an actual counter — the consumption total (contatore dei
-  consumi) and the cadence counter — never for the device. Do not reintroduce
-  a synonym for the meter itself.
+  sensore di portata di linea, misuratore di portata); all were swept to
+  "flussometro". "Contatore" stays reserved for an actual counter — the
+  consumption total (contatore dei consumi) and the cadence counter — never
+  for the device. Do not reintroduce a synonym for the meter itself.
+  User-visible Italian now also lives in `services.py`
+  (`_TEST_NOTIFICATION_DEFAULTS`, the localized `test_notification` title and
+  message) — check there too, not just it.json, it.ts and the docs.
 
 ## Progress log
 

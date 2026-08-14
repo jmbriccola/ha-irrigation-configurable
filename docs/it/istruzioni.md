@@ -160,17 +160,17 @@ e le impostazioni quotidiane dell'hub, tutto in un unico posto.
    nome, entità valvola (o switch), area — e crea la zona con un programma
    predefinito sensato, pronto da rifinire. **✎ Modifica zona** (sopra
    l'elenco programmi, per la zona selezionata) apre lo stesso modulo
-   precompilato, più un cassetto **Avanzate** per flussometro (con la
-   sua unità — rilevata automaticamente, o sovrascritta per un flussometro che
-   non dichiara nulla di utilizzabile; svuotare la sovrascrittura riprende
-   il rilevamento), portata nominale/tolleranza, correzione %, ordine,
+   precompilato, più un cassetto **Avanzate** per il flussometro (con la
+   sua unità — rilevata automaticamente, o sovrascritta quando non
+   dichiara nulla di utilizzabile; svuotare la sovrascrittura riprende il
+   rilevamento), portata nominale/tolleranza, correzione %, ordine,
    intervallo di irrigazione, deroga ai mesi di stagione e gruppo di
    compatibilità — si aggiornano solo i campi che modifichi. Il pulsante
    **🗑 Elimina zona** (con richiesta di conferma) rimuove la zona.
 6. **⚙️ Impostazioni**, nell'intestazione, contiene le impostazioni
    quotidiane dell'hub, ciascuna salvata per conto proprio: **Meteo e
-   sensori** (entità meteo, sensori pioggia/temperatura esterna/portata di
-   linea e la sovrascrittura dell'unità del flussometro di linea, valvola
+   sensori** (entità meteo, sensori pioggia/temperatura esterna/
+   flussometro di linea e la sovrascrittura della sua unità, valvola
    principale), **Budget di consumo** (litri al mese e
    azione al superamento — notifica, riduci, sospendi), **Restrizioni
    calendario** (giorni consentiti, parità pari/dispari, finestre orarie

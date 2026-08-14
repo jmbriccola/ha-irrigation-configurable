@@ -51,6 +51,9 @@ jobs:
         run: |
           npm ci
           npm run build
+      - name: Typecheck card
+        working-directory: card
+        run: npm run typecheck
       - name: Card unit tests
         working-directory: card
         run: npm run test
