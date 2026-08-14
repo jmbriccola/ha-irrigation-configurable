@@ -9,7 +9,7 @@ from __future__ import annotations
 from datetime import date, datetime, timedelta
 from typing import Any
 
-from homeassistant.components.sensor import SensorDeviceClass, SensorEntity
+from homeassistant.components.sensor import SensorDeviceClass, SensorEntity, SensorStateClass
 from homeassistant.const import UnitOfPrecipitationDepth, UnitOfTemperature, UnitOfVolume
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import sun
@@ -52,6 +52,7 @@ async def async_setup_entry(
     # Always created: it reports "unavailable" until a budget is configured,
     # so enabling the budget later via options needs no reload.
     hub_entities.append(HubConsumptionLeftSensor(runtime))
+    hub_entities.append(HubUnattributedWaterSensor(runtime))
     async_add_entities(hub_entities)
 
     def _zone_sensors(zone_id: str) -> list[Entity]:
@@ -59,6 +60,7 @@ async def async_setup_entry(
             ZoneStateSensor(runtime, zone_id),
             ZoneNextRunSensor(runtime, zone_id),
             ZoneLastOutcomeSensor(runtime, zone_id),
+            ZoneWaterTotalSensor(runtime, zone_id),
         ]
 
     async_add_zone_entities(hass, entry, async_add_entities, _zone_sensors)
@@ -289,7 +291,7 @@ class ZoneStateSensor(MaestroZoneEntity, SensorEntity):
             # not usable. Distinct from no_flow_meter: the fix is different --
             # set the unit, do not buy a meter.
             degraded.append("flow_unit_unknown")
-        elif config.flow_sensor is None and runtime.hub.line_flow_sensor is not None:
+        elif not config.flow_sensor and runtime.hub.line_flow_sensor:
             degraded.append("line_meter_shared")
         # A volume-target cycle needs a usable meter; without one it silently
         # degrades to a timed run (see the degradation matrix).
@@ -410,4 +412,89 @@ class ZoneLastOutcomeSensor(MaestroZoneEntity, SensorEntity):
             "cycle_id": outcome.get("cycle_id"),
             "duration_min": outcome.get("duration_min"),
             "volume_l": outcome.get("volume_l"),
+        }
+
+
+class ZoneWaterTotalSensor(MaestroZoneEntity, SensorEntity):
+    """Cumulative water for one zone, in litres.
+
+    device_class water + state_class total_increasing is not decoration: it is
+    what makes Home Assistant record the sensor in long-term statistics and
+    offer it to the Water dashboard, which is where daily, monthly and yearly
+    totals come from. That is why no "today" or "this month" entity exists --
+    the statistics engine already produces them, and a second entity holding
+    the same fact is a second thing that can be wrong.
+
+    today_l and month_l are attributes, projected from the same daily history
+    that add_water writes in the same call that increments this total, so the
+    card can render a number without querying the recorder and without a value
+    that can drift from the total it is a slice of.
+    """
+
+    _attr_device_class = SensorDeviceClass.WATER
+    _attr_native_unit_of_measurement = UnitOfVolume.LITERS
+    _attr_state_class = SensorStateClass.TOTAL_INCREASING
+    _attr_suggested_display_precision = 1
+
+    def __init__(self, runtime: IrrigationRuntime, zone_id: str) -> None:
+        super().__init__(runtime, zone_id, "zone_water_total")
+
+    @property
+    def native_value(self) -> float:
+        return round(self._runtime.state.zone_water_total(self._zone_id), 3)
+
+    def _role_attributes(self) -> dict[str, Any]:
+        runtime = self._runtime
+        state = runtime.state
+        total = state.zone_water_total(self._zone_id)
+        estimated = state.zone_water_estimated(self._zone_id)
+        today = dt_util.now().date()
+        config = self.zone_config
+        if estimated <= 0:
+            source = "measured"
+        elif estimated >= total:
+            source = "nominal"
+        else:
+            source = "mixed"
+        return {
+            "estimated": estimated > 0,
+            "source": source,
+            "today_l": round(state.water_for_day(self._zone_id, today), 1),
+            "month_l": round(state.water_for_period(today.replace(day=1), today), 1),
+            "meter_entity": (
+                (config.flow_sensor or runtime.hub.line_flow_sensor) if config else None
+            ),
+        }
+
+
+class HubUnattributedWaterSensor(MaestroHubEntity, SensorEntity):
+    """Water no zone claimed.
+
+    total_l includes the line priming that happens during master_pre_open_s on
+    every cycle, which is real water belonging to no zone and is not a leak.
+    closed_l is the subset measured while every managed valve reported closed,
+    and it is the only part leak detection reads.
+    """
+
+    _attr_device_class = SensorDeviceClass.WATER
+    _attr_native_unit_of_measurement = UnitOfVolume.LITERS
+    _attr_state_class = SensorStateClass.TOTAL_INCREASING
+    _attr_suggested_display_precision = 1
+
+    def __init__(self, runtime: IrrigationRuntime) -> None:
+        super().__init__(runtime, "hub_unattributed_water")
+
+    @property
+    def native_value(self) -> float:
+        return round(self._runtime.state.unattributed_total(), 3)
+
+    def _role_attributes(self) -> dict[str, Any]:
+        state = self._runtime.state
+        return {
+            "closed_l": round(state.unattributed_closed(), 3),
+            "per_scope": {
+                scope: round(state.unattributed_total(scope), 1)
+                for scope in (*self._runtime.zone_ids, "__hub__")
+                if state.unattributed_total(scope) > 0
+            },
         }
