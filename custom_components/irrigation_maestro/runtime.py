@@ -1063,17 +1063,17 @@ class IrrigationRuntime:
         ir.async_delete_issue(self.hass, DOMAIN, f"flow_unit_unknown_{entity_id}")
 
     def report_flow_unit_override_conflict(self, entity_id: str, first: str, second: str) -> None:
-        """Two claimants read one meter under different unit overrides.
+        """Two zones read one meter under different unit overrides.
 
-        Zone-vs-zone (two zones set flow_sensor to the same entity with
-        different flow_sensor_unit) and zone-vs-hub (a zone's flow_sensor is
-        the shared line meter, and its override disagrees with the hub's own
-        line_flow_sensor_unit) both fire this one repair. One ledger per
-        meter means one interpretation; this names both claimants rather than
-        silently applying whichever was resolved first. ``first``/``second``
-        are pre-formatted labels ("zone Alpha", "the hub's line meter"), not
-        raw values, since a repair placeholder has no other way to say which
-        kind of claimant each one is.
+        One ledger per meter means one interpretation; this names both zones
+        rather than silently applying whichever was resolved first. ``first``/
+        ``second`` are bare zone names -- proper nouns, not English prose --
+        so each locale template supplies its own word for "zone" around them.
+        Placeholders are plain string substitution with no per-locale
+        conditional, so anything that describes the *kind* of claimant, not
+        just its name, cannot live here; see
+        ``report_flow_line_override_conflict`` for the other claimant shape
+        this fact forces into its own translation key.
         """
         ir.async_create_issue(
             self.hass,
@@ -1091,6 +1091,36 @@ class IrrigationRuntime:
 
     def clear_flow_unit_override_conflict(self, entity_id: str) -> None:
         ir.async_delete_issue(self.hass, DOMAIN, f"flow_unit_override_conflict_{entity_id}")
+
+    def report_flow_line_override_conflict(self, entity_id: str, zone: str) -> None:
+        """A zone's own override on the shared line meter disagrees with the hub's.
+
+        A zone that points its own flow_sensor at the hub's line meter, with
+        its own flow_sensor_unit, wins the ledger (mandated, unchanged) --
+        but flow_reader_for builds a reader under the hub's own
+        line_flow_sensor_unit for any zone that falls back to the line, so
+        the disagreement must not be silent. A distinct issue id and
+        translation key from ``report_flow_unit_override_conflict``, on
+        purpose: that repair's template says "zone X and zone Y" in each
+        locale, and this claimant is the hub, not a second zone -- a
+        placeholder cannot make one static template correctly say "zone" in
+        one case and "the hub" in another across languages, so this shape
+        gets its own template, authored in full, per locale. Keyed
+        separately from the zone-vs-zone issue on the same entity so
+        resolving one conflict cannot clear the other.
+        """
+        ir.async_create_issue(
+            self.hass,
+            DOMAIN,
+            f"flow_unit_override_conflict_line_{entity_id}",
+            is_fixable=False,
+            severity=ir.IssueSeverity.WARNING,
+            translation_key="flow_unit_override_conflict_line",
+            translation_placeholders={"entity_id": entity_id, "zone": zone},
+        )
+
+    def clear_flow_line_override_conflict(self, entity_id: str) -> None:
+        ir.async_delete_issue(self.hass, DOMAIN, f"flow_unit_override_conflict_line_{entity_id}")
 
     def report_flow_unit_lost(self, entity_id: str) -> None:
         """A meter that was readable stopped being so during a cycle.
