@@ -173,6 +173,20 @@ async def test_a_vanished_recipient_on_an_essential_event_raises_a_repair(
     assert registry.async_get_issue(DOMAIN, "notify_target_missing_gone") is not None
 
 
+async def test_a_missing_recipient_does_not_stop_the_rest_of_the_list(
+    hass: HomeAssistant,
+) -> None:
+    # One bad recipient must not shadow the others configured on the same
+    # event -- the loop has to keep going past it, not return early.
+    calls = _record_notify(hass, "phone")
+    notifier = _notifier(hass, {EVENT_WATCHDOG: {"enabled": True, "services": ["gone", "phone"]}})
+    await notifier.async_notify(EVENT_WATCHDOG, title="t", message="m")
+    await hass.async_block_till_done()
+    assert len(calls) == 1
+    registry = ir.async_get(hass)
+    assert registry.async_get_issue(DOMAIN, "notify_target_missing_gone") is not None
+
+
 async def test_a_vanished_recipient_on_an_informational_event_only_warns(
     hass: HomeAssistant,
 ) -> None:
@@ -265,3 +279,40 @@ async def test_covering_only_some_essential_events_is_not_reported_as_mute(
     )
     registry = ir.async_get(hass)
     assert registry.async_get_issue(DOMAIN, "notifications_silent") is None
+
+
+async def test_the_two_repair_issues_can_both_be_true_at_once(hass: HomeAssistant) -> None:
+    # One event enabled with no recipients is at once "configured-looking but
+    # mute" (enabled_without_target) AND, since it is the only essential event
+    # touched, covers zero of the essentials (silent). The two issues are
+    # raised from separate conditions in evaluate_notifications, not an
+    # if/elif of each other, so both must be able to stand at the same time.
+    await setup_hub(
+        hass,
+        [zone_data("Pots", "valve.pots")],
+        {"notifications": {"interrupted": {"enabled": True, "services": []}}},
+    )
+    registry = ir.async_get(hass)
+    assert registry.async_get_issue(DOMAIN, "notifications_enabled_without_target") is not None
+    assert registry.async_get_issue(DOMAIN, "notifications_silent") is not None
+
+
+async def test_fixing_one_repair_condition_leaves_the_other_standing(hass: HomeAssistant) -> None:
+    entry = await setup_hub(
+        hass,
+        [zone_data("Pots", "valve.pots")],
+        {"notifications": {"interrupted": {"enabled": True, "services": []}}},
+    )
+    registry = ir.async_get(hass)
+    assert registry.async_get_issue(DOMAIN, "notifications_enabled_without_target") is not None
+    assert registry.async_get_issue(DOMAIN, "notifications_silent") is not None
+
+    # Disabling the event fixes the "configured-looking but mute" shape, but
+    # the install is still silent: nothing else was ever turned on.
+    await hass.services.async_call(
+        DOMAIN, "set_notifications", {"event": "interrupted", "enabled": False}, blocking=True
+    )
+    await hass.async_block_till_done()
+    assert registry.async_get_issue(DOMAIN, "notifications_enabled_without_target") is None
+    assert registry.async_get_issue(DOMAIN, "notifications_silent") is not None
+    assert entry.options["notifications"]["interrupted"]["enabled"] is False
