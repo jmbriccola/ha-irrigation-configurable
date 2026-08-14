@@ -725,3 +725,81 @@ async def test_a_zone_with_an_empty_flow_sensor_falls_through_to_the_line_meter(
     state = role_state(hass, "zone_state", zone_id)
     assert state is not None
     assert "no_flow_meter" not in state.attributes["degraded"]
+
+
+async def test_the_zone_water_sensor_is_a_statistics_grade_total(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    """device_class water + total_increasing is what feeds long-term statistics."""
+    freezer.move_to(START)
+    park = MockValvePark(hass)
+    park.add("valve.a")
+    mock_weather(hass)
+    entry = await setup_hub(hass, [zone_data("Alpha", "valve.a", minutes=10, nominal_flow_lpm=7.5)])
+    runtime = entry.runtime_data
+    state = role_state(hass, "zone_water_total", zone_id=runtime.zone_ids[0])
+
+    assert state.attributes["device_class"] == "water"
+    assert state.attributes["state_class"] == "total_increasing"
+    assert state.attributes["unit_of_measurement"] == "L"
+
+
+async def test_an_estimated_zone_is_marked_estimated(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    freezer.move_to(START)
+    park = MockValvePark(hass)
+    park.add("valve.a")
+    mock_weather(hass)
+    entry = await setup_hub(hass, [zone_data("Alpha", "valve.a", minutes=10, nominal_flow_lpm=7.5)])
+    runtime = entry.runtime_data
+    await advance(hass, freezer, 31 * 60)
+    await advance(hass, freezer, 11 * 60)
+
+    state = role_state(hass, "zone_water_total", zone_id=runtime.zone_ids[0])
+    assert state.attributes["estimated"] is True
+    assert state.attributes["source"] == "nominal"
+
+
+async def test_the_unattributed_sensor_separates_priming_from_suspect_water(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    freezer.move_to(START)
+    park = MockValvePark(hass)
+    park.add("valve.a")
+    mock_weather(hass)
+    entry = await setup_hub(hass, [zone_data("Alpha", "valve.a", minutes=10)])
+    runtime = entry.runtime_data
+    day = dt_util.now().date()
+    runtime.state.add_unattributed("__hub__", 3.0, day=day, valves_closed=False)
+    runtime.state.add_unattributed("__hub__", 7.0, day=day, valves_closed=True)
+    runtime.dispatch_update()
+    await hass.async_block_till_done()
+
+    state = role_state(hass, "hub_unattributed_water")
+    assert float(state.state) == 10.0
+    assert state.attributes["closed_l"] == 7.0
+
+
+async def test_a_zone_on_the_line_meter_is_declared_shared_even_when_cleared(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    """Empty string is a reachable way of saying "no meter" (runtime.py:240).
+
+    sensor.py used `is None` here, so a zone whose meter was cleared fed from
+    the line meter without being labelled -- and the label is the set the
+    attribution index must reproduce.
+    """
+    freezer.move_to(START)
+    park = MockValvePark(hass)
+    park.add("valve.a")
+    hass.states.async_set("sensor.line", "0", {"unit_of_measurement": "L/min"})
+    mock_weather(hass)
+    entry = await setup_hub(
+        hass,
+        [zone_data("Alpha", "valve.a", minutes=10, flow_sensor="")],
+        {"line_flow_sensor": "sensor.line"},
+    )
+    runtime = entry.runtime_data
+    state = role_state(hass, "zone_state", zone_id=runtime.zone_ids[0])
+    assert "line_meter_shared" in state.attributes["degraded"]

@@ -21,6 +21,7 @@ config entry).
 | `hub_weighted_temp` | sensor   | °C (float) or unavailable      | `temp_d3`, `temp_d2`, `temp_d1`, `temp_today_eff`, `temp_tomorrow`, `stale_weather` (bool) |
 | `hub_session`       | sensor   | `idle` \| `evaluating` \| `running` | `queue`: ordered list of `{zone_id, zone_name, cycle_id, duration_min, state}`; `started_at` (ISO); `active_zone_id` |
 | `hub_consumption_left` | sensor | liters left (float) or unavailable | `budget_liters`, `used_liters`, `unattributed_liters`, `period_start`, `action` — entity always exists; unavailable when no budget is configured |
+| `hub_unattributed_water` | sensor | liters (float), `device_class: water`, `state_class: total_increasing` | `closed_l` (float), `per_scope` (`{scope: liters}`, only scopes with water > 0; scope is a `zone_id` or `"__hub__"`) — see "Water accounting sensors" below |
 | `hub_pause`         | switch   | on = globally paused           | — |
 | `hub_evaluate`      | button   | press = evaluate now           | — |
 | `hub_stop_all`      | button   | press = stop everything        | — |
@@ -32,6 +33,7 @@ config entry).
 | `zone_state`        | sensor   | `idle` \| `queued` \| `watering` \| `soaking` \| `paused` \| `suspended` \| `disabled` | `zone_name`, `order`, `adjustment_pct` (float, 10–300), `degraded` (list of keys, see below), `run_started_at` (ISO, while watering), `run_duration_min` (frozen total), `run_planned_runs` (soak split list), `active_cycle_id`, `suspended_until` (ISO or null), `cycles` (list, see below) |
 | `zone_next_run`     | sensor   | ISO timestamp or unavailable | `cycle_id`, `cycle_name` |
 | `zone_last_outcome` | sensor   | `completed` \| `skipped` \| `interrupted` \| `cancelled` \| `none` | `reason_key` (see keys), `finished_at` (ISO), `cycle_id`, `duration_min`, `volume_l` |
+| `zone_water_total`  | sensor   | liters (float), `device_class: water`, `state_class: total_increasing` | `estimated` (bool), `source` (`measured` \| `nominal` \| `mixed`), `today_l` (float), `month_l` (float), `meter_entity` (entity id or null) — see "Water accounting sensors" below |
 | `zone_enabled`      | switch   | on/off | — |
 | `cycle_enabled`     | switch   | on/off (one per cycle) | `cycle_id`, `cycle_name` |
 | `zone_order`        | number   | int | — |
@@ -119,6 +121,60 @@ call the same value `program_id` in their fields, for the user-facing name):
 `degraded` keys: `switch_valve` (no position feedback), `no_flow_meter`,
 `flow_unit_unknown` (a meter is configured but its unit cannot be resolved),
 `line_meter_shared`, `no_hourly_forecast`, `volume_mode_unavailable`.
+
+### Water accounting sensors (`zone_water_total`, `hub_unattributed_water`)
+
+Both carry `device_class: water` + `state_class: total_increasing` on
+purpose, including `zone_water_total` for a zone whose litres are entirely
+an estimate (`nominal_flow_lpm × minutes`, no usable meter) — this was an
+explicit product decision, not an oversight: excluding estimated zones was
+considered and rejected, because a zone's Water dashboard trend is more
+useful with an estimated contribution than with a silent gap. What
+compensates instead is redundant marking, not exclusion: the `estimated` /
+`source` attributes here, a badge in the card, and a row in the
+degradation matrix. **Do not add a condition that withholds
+`device_class`/`state_class` for estimated or meterless zones.**
+
+That same device-class pairing is what makes both entities eligible for
+Home Assistant's long-term statistics and the Water dashboard, which is
+where daily/monthly/yearly totals come from — this is also why **neither
+sensor has a "today" or "this month" sibling entity**: the statistics
+engine already derives those from the recorded total, and a second entity
+holding the same fact would be a second thing that could drift from it.
+
+- **`zone_water_total`** — the zone's all-time cumulative litres.
+  - `estimated` (bool): `true` if any of the zone's accrued litres came
+    from the nominal-flow estimate rather than a meter reading.
+  - `source`: `measured` when none of the total is estimated,
+    `nominal` when *all* of it is (the zone has never had a usable meter
+    reading), `mixed` when the zone has some of each — e.g. a meter that
+    only became usable partway through the zone's history, or that drops
+    out intermittently.
+  - `today_l` / `month_l` (float): the same-zone total sliced to today and
+    to the calendar month-to-date. Both are read from the daily history
+    that `add_water` writes in the same call that increments the
+    cumulative total — never recomputed independently — so they cannot
+    diverge from the total they are a slice of, and both roll over at
+    local midnight the same way the daily history itself does (no
+    separate "reset" logic).
+  - `meter_entity`: the entity id actually feeding this zone's litres —
+    its own `flow_sensor` if it has one, else the hub's `line_flow_sensor`,
+    else `null` (nominal-only). Matches the meter identified by the
+    `no_flow_meter` / `line_meter_shared` `degraded` keys on `zone_state`.
+- **`hub_unattributed_water`** — litres a meter measured that no zone
+  claimed; the entity's state is the grand total across every scope.
+  - `closed_l` (float): the subset of the total measured while every
+    managed valve (zone valves + master) reported closed. **This is the
+    only figure leak detection reads.** The entity's `state` (the grand
+    total) is not: it includes the line priming that happens during
+    `master_pre_open_s` on every single cycle, which is real water
+    belonging to no zone and is not a leak, so treating the whole total as
+    suspect would false-positive on every run.
+  - `per_scope` (`{scope: liters}`): the same total broken out by who
+    would have been the claimant — a `zone_id` when the unattributed water
+    was measured on a meter that serves exactly one zone, `"__hub__"` when
+    it was measured on a meter serving more than one zone (or none).
+    Scopes with zero litres are omitted.
 
 ## Services (domain `irrigation_maestro`)
 

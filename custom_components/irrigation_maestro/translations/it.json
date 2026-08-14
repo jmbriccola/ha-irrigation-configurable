@@ -117,6 +117,9 @@
       "hub_consumption_left": {
         "name": "Budget di consumo residuo"
       },
+      "hub_unattributed_water": {
+        "name": "Acqua non attribuita"
+      },
       "zone_state": {
         "name": "Stato",
         "state": {
@@ -145,6 +148,9 @@
           "cancelled": "Annullato",
           "none": "Nessuno"
         }
+      },
+      "zone_water_total": {
+        "name": "Acqua totale"
       }
     },
     "switch": {

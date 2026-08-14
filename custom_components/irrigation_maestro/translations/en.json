@@ -117,6 +117,9 @@
       "hub_consumption_left": {
         "name": "Consumption budget left"
       },
+      "hub_unattributed_water": {
+        "name": "Unattributed water"
+      },
       "zone_state": {
         "name": "State",
         "state": {
@@ -145,6 +148,9 @@
           "cancelled": "Cancelled",
           "none": "None"
         }
+      },
+      "zone_water_total": {
+        "name": "Total water"
       }
     },
     "switch": {
