@@ -125,6 +125,29 @@ class MeterLedger:
         self._unsubs.clear()
         self._listeners.clear()
 
+    def retarget(self, reader: FlowSensorReader) -> None:
+        """Read the same entity under a new unit override, from here forward.
+
+        Replacing the ledger object instead would restart total_l at zero and
+        take every subscription down with it -- including a running
+        FlowMonitor's, which holds this object, never re-resolves it, and
+        computes both its live litres and its final volume against a baseline
+        taken from this total. Same physical meter, same monotonic total, same
+        subscribers: only the interpretation of the number changes.
+
+        The interval still open is closed first, at the rate that was believed
+        while it ran -- the same left-Riemann rule _integrate applies
+        everywhere else. Those litres are published on the next sample rather
+        than here, so they are attributed to whoever the interval started
+        with, exactly as an untouched ledger would have attributed them.
+        """
+        self._integrate(dt_util.utcnow())
+        self._reader = reader
+        reading = reader.read()
+        self.unit_known = reading.unit_known
+        self._last_lpm = reading.lpm or 0.0
+        self._last_available = reading.available
+
     @callback
     def _on_state(self, _event: Event[EventStateChangedData]) -> None:
         self._sample()
@@ -246,24 +269,46 @@ class WaterAccountant:
         healthy, unrelated run. Its zero-flow guard would then see zero litres
         accrue and interrupt a cycle that was never at fault.
 
-        Only a ledger whose entity disappeared from the configuration, or whose
-        resolved unit override changed, is stopped and dropped. Everything
-        else -- the ledger, its running total, and every subscription on it --
-        is left exactly as it was.
+        The same reasoning covers a meter this change *does* touch, as long as
+        the entity itself survives. Editing a running meter's unit override is
+        applied in place by design -- a reload would abort the cycle -- so
+        stopping its ledger would deafen precisely the monitor watching that
+        meter: stop() clears the listeners, and the monitor has no way to
+        re-establish its own. Its litres would freeze while unit_known stayed
+        True, so the guard would not judge itself blind, and within
+        ZERO_FLOW_GRACE_S a healthy run would be interrupted as no_flow. Such
+        a ledger is retargeted instead (see MeterLedger.retarget): same
+        object, same monotonic total, same subscribers.
+
+        Only a ledger whose entity disappeared from the configuration is
+        stopped and dropped. Everything else -- the ledger, its running total,
+        and every subscription on it -- is left exactly as it was.
         """
         resolved = self._resolved_meters()
         for entity_id in list(self._ledgers):
-            if entity_id in resolved and resolved[entity_id] == self._overrides.get(entity_id):
-                continue  # unaffected: leave the ledger and its subscribers running
+            if entity_id in resolved:
+                if resolved[entity_id] != self._overrides.get(entity_id):
+                    self._ledgers[entity_id].retarget(
+                        FlowSensorReader(self._runtime.hass, entity_id, resolved[entity_id])
+                    )
+                    self._overrides[entity_id] = resolved[entity_id]
+                    # _last_totals and the pending claimant/valves-closed
+                    # state deliberately stay: the ledger's total carries on
+                    # and so does its open interval, so clearing them would
+                    # credit the whole cumulative total as one delta on the
+                    # next sample and judge that interval by the wrong
+                    # claimants.
+                continue  # unaffected or retargeted: subscribers keep running
             self._unsubs.pop(entity_id)()
             self._ledgers.pop(entity_id).stop()
             self._overrides.pop(entity_id, None)
-            # A stale entry here would make a recreated ledger's first sample
-            # compute its delta against the old ledger's last known total,
-            # instead of the fresh ledger's own 0.0 starting point. Same
-            # reasoning for the pending claimant/valves-closed state below --
-            # a recreated ledger's first interval must be judged against who
-            # is watering now, not who was watering under the dropped ledger.
+            # A stale entry here would make a later ledger on the same entity
+            # -- one built after the meter returns to the configuration --
+            # compute its first delta against the dropped ledger's last known
+            # total, instead of the fresh ledger's own 0.0 starting point.
+            # Same reasoning for the pending claimant/valves-closed state
+            # below: that ledger's first interval must be judged against who
+            # is watering then, not who was watering under the dropped one.
             self._last_totals.pop(entity_id, None)
             self._pending_claimants.pop(entity_id, None)
             self._pending_valves_closed.pop(entity_id, None)
