@@ -2,7 +2,7 @@
 
 from datetime import UTC, date, datetime
 
-from custom_components.irrigation_maestro.engine.metering import UNATTRIBUTED_KEY
+from custom_components.irrigation_maestro.engine.metering import HUB_SCOPE, UNATTRIBUTED_KEY
 from custom_components.irrigation_maestro.engine.model import EngineParams
 from custom_components.irrigation_maestro.migration import (
     migrate_last_completed,
@@ -296,25 +296,59 @@ async def test_daily_water_is_pruned_to_the_retention_window(hass: HomeAssistant
     assert len(state.daily_water()) == 2
 
 
-async def test_dropping_a_zone_keeps_its_history_and_drops_its_counters(
+async def test_dropping_a_zone_keeps_its_history_and_moves_its_unattributed_to_the_hub(
     hass: HomeAssistant,
 ) -> None:
     """Water that flowed, flowed: deleting the history would rewrite past months.
 
-    The cumulative counters back entities that no longer exist, so they go.
+    The per-zone cumulative counter backs an entity that no longer exists, so
+    it goes. The unattributed bucket does not, even though it is keyed by zone
+    id: _scope_for names the sole zone on a meter, but the bucket backs the
+    *hub* sensor, which sums every scope. Popping it would make a
+    total_increasing sensor go backwards -- and HA's recorder reads a drop
+    below 90% as a meter reset, re-adding the post-drop value to the long-term
+    sum and inflating the Water dashboard permanently, with nothing the user
+    can do about it. Merged into __hub__ instead: the water flowed, and it now
+    belongs to no zone, which is what __hub__ means.
     """
     state = RuntimeState(hass, "entry_water6")
     await state.async_load()
     day = date(2026, 8, 14)
     state.add_water("z1", 10.0, day=day, estimated=False)
     state.add_unattributed("z1", 4.0, day=day, valves_closed=True)
+    state.add_unattributed(HUB_SCOPE, 6.0, day=day, valves_closed=False)
+    before = state.unattributed_total()
 
     state.drop_zone("z1")
 
     assert state.zone_water_total("z1") == 0.0
     assert state.unattributed_total("z1") == 0.0
+    # The hub sensor's own reading never dips, and the leak evidence travels
+    # with the litres rather than being silently forgiven.
+    assert state.unattributed_total() == before
+    assert state.unattributed_total(HUB_SCOPE) == 10.0
+    assert state.unattributed_closed(HUB_SCOPE) == 4.0
     assert state.water_for_day("z1", day) == 10.0
     assert state.water_for_period(day, day) == 10.0
+
+
+async def test_dropping_a_zone_with_no_unattributed_water_creates_no_hub_bucket(
+    hass: HomeAssistant,
+) -> None:
+    """The merge must not conjure an empty scope for every zone ever deleted.
+
+    per_scope on hub_unattributed_water hides zero scopes, so an empty bucket
+    is invisible rather than wrong -- but writing one on every deletion would
+    grow the store forever with rows that describe nothing.
+    """
+    state = RuntimeState(hass, "entry_water10")
+    await state.async_load()
+    state.add_water("z1", 10.0, day=date(2026, 8, 14), estimated=False)
+
+    state.drop_zone("z1")
+
+    assert state.unattributed_total(HUB_SCOPE) == 0.0
+    assert state.as_dict()["water"]["unattributed"] == {}
 
 
 async def test_carried_over_applies_only_to_its_own_period(hass: HomeAssistant) -> None:

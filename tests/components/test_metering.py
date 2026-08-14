@@ -5,6 +5,7 @@ from datetime import timedelta
 import pytest
 from custom_components.irrigation_maestro.accounting import MeterLedger, MeterSample
 from custom_components.irrigation_maestro.const import DOMAIN
+from custom_components.irrigation_maestro.engine.metering import HUB_SCOPE
 from custom_components.irrigation_maestro.flow import FlowSensorReader
 from freezegun.api import FrozenDateTimeFactory
 from homeassistant.core import HomeAssistant
@@ -501,6 +502,63 @@ async def test_water_accrued_outside_a_session_refreshes_its_entity(
 
     assert runtime.state.unattributed_total() > 0.0
     assert float(hass.states.get(sensor_id).state) > 0.0
+
+
+async def test_deleting_the_sole_zone_on_a_meter_keeps_the_hub_sensor_monotonic(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    """A zone deletion must not walk hub_unattributed_water backwards.
+
+    _scope_for keys the unattributed bucket by zone id whenever exactly one
+    zone resolves to that meter, and hub_unattributed_water sums every scope --
+    so popping the departing zone's bucket dropped a total_increasing sensor's
+    state. HA's recorder reads a drop below 90% as a meter reset and re-adds
+    the post-drop value to the long-term sum, permanently inflating the Water
+    dashboard with no way for the user to correct it.
+
+    This also walks _scope_for's own HUB_SCOPE branch on the deletion path: no
+    zone resolves to the line meter afterwards, so the water that keeps
+    flowing lands in exactly the bucket the merge went to.
+    """
+    freezer.move_to(START)
+    park = MockValvePark(hass)
+    park.add("valve.a")
+    hass.states.async_set("sensor.line", "5", {"unit_of_measurement": "L/min"})
+    mock_weather(hass)
+    entry = await setup_hub(
+        hass,
+        [zone_data("Alpha", "valve.a", minutes=10)],
+        {"line_flow_sensor": "sensor.line"},
+    )
+    runtime = entry.runtime_data
+    zone_id = runtime.zone_ids[0]
+    sensor_id = next(
+        state.entity_id
+        for state in hass.states.async_all()
+        if state.attributes.get("maestro_role") == "hub_unattributed_water"
+    )
+
+    # Well before the 05:30 trigger, so nothing is watering. Exactly one zone
+    # resolves to the line meter, so _scope_for books the litres under its id.
+    await advance(hass, freezer, 300, step=10.0)
+    scoped = runtime.state.unattributed_total(zone_id)
+    assert scoped > 0.0
+    assert runtime.state.unattributed_total() == scoped
+    published = float(hass.states.get(sensor_id).state)
+    assert published > 0.0
+
+    hass.config_entries.async_remove_subentry(entry, zone_id)
+    await hass.async_block_till_done()
+
+    assert zone_id not in runtime.zone_ids
+    assert runtime.state.unattributed_total(zone_id) == 0.0
+    assert runtime.state.unattributed_total(HUB_SCOPE) == pytest.approx(scoped)
+    assert float(hass.states.get(sensor_id).state) >= published
+
+    await advance(hass, freezer, 300, step=10.0)
+
+    assert runtime.state.unattributed_total(HUB_SCOPE) > scoped
+    assert float(hass.states.get(sensor_id).state) >= published
 
 
 async def test_rebuild_keeps_a_live_subscription_when_the_meter_is_unaffected(
