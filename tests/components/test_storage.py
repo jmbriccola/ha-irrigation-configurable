@@ -370,9 +370,10 @@ def test_consumption_is_carried_over_then_removed() -> None:
             "carried_over": {"period_start": None, "liters": 0.0},
         },
     }
-    changed = seed_carried_over_and_drop_consumption(data, date(2026, 8, 14))
+    result = seed_carried_over_and_drop_consumption(data, date(2026, 8, 14))
 
-    assert changed is True
+    assert result.dropped is True
+    assert result.seeded is True
     assert "consumption" not in data
     assert data["water"]["carried_over"] == {"period_start": "2026-08-01", "liters": 250.0}
 
@@ -390,7 +391,10 @@ def test_the_carry_over_migration_is_idempotent() -> None:
     seed_carried_over_and_drop_consumption(data, date(2026, 8, 14))
     before = dict(data["water"]["carried_over"])
 
-    assert seed_carried_over_and_drop_consumption(data, date(2026, 8, 14)) is False
+    again = seed_carried_over_and_drop_consumption(data, date(2026, 8, 14))
+
+    assert again.dropped is False
+    assert again.seeded is False
     assert data["water"]["carried_over"] == before
 
 
@@ -405,10 +409,15 @@ def test_a_stale_period_is_not_carried_into_the_current_one() -> None:
             "carried_over": {"period_start": None, "liters": 0.0},
         },
     }
-    seed_carried_over_and_drop_consumption(data, date(2026, 8, 14))
+    result = seed_carried_over_and_drop_consumption(data, date(2026, 8, 14))
 
     assert "consumption" not in data
     assert data["water"]["carried_over"]["liters"] == 0.0
+    # Dropped, but nothing was carried: the repair notice must stay silent,
+    # or it would tell this user their total was carried forward when it was
+    # deliberately discarded as belonging to a past period.
+    assert result.dropped is True
+    assert result.seeded is False
 
 
 async def test_migrate_consumption_drops_the_key_from_the_persisted_store(
@@ -429,7 +438,7 @@ async def test_migrate_consumption_drops_the_key_from_the_persisted_store(
     state = RuntimeState(hass, "entry_water8")
     await state.async_load()
 
-    assert state.migrate_consumption(date(2026, 8, 14)) is True
+    assert state.migrate_consumption(date(2026, 8, 14)).seeded is True
     await state.async_save()
 
     reloaded = RuntimeState(hass, "entry_water8")
@@ -439,7 +448,7 @@ async def test_migrate_consumption_drops_the_key_from_the_persisted_store(
     assert reloaded.carried_over_for(date(2026, 8, 1)) == 250.0
     # Idempotent on the store too: a load that has nothing left to migrate
     # reports no change, which is what gates the Repairs issue to fire once.
-    assert reloaded.migrate_consumption(date(2026, 8, 14)) is False
+    assert reloaded.migrate_consumption(date(2026, 8, 14)).dropped is False
 
 
 async def test_migrate_consumption_is_a_no_op_on_a_fresh_install(hass: HomeAssistant) -> None:
@@ -447,7 +456,9 @@ async def test_migrate_consumption_is_a_no_op_on_a_fresh_install(hass: HomeAssis
     state = RuntimeState(hass, "entry_water9")
     await state.async_load()
 
-    assert state.migrate_consumption(date(2026, 8, 14)) is False
+    migrated = state.migrate_consumption(date(2026, 8, 14))
+    assert migrated.dropped is False
+    assert migrated.seeded is False
 
 
 async def test_migrate_consumption_is_durable_without_a_later_writer(

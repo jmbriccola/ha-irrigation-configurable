@@ -133,13 +133,19 @@ class IrrigationRuntime:
             }
         )
         # 3.3.0: the standalone monthly counter becomes an opening balance,
-        # once. A migration that has already run returns False, so the
-        # notice is not re-raised on every later setup. Scheduled so the
-        # fact of having migrated survives a restart on its own, rather than
-        # by luck of some unrelated write landing first.
-        if self.state.migrate_consumption(dt_util.now().date()):
-            self.report_consumption_history_restarted()
+        # once. A migration that has already run reports nothing dropped and
+        # nothing seeded, so neither the write nor the notice repeats on a
+        # later setup. The save is scheduled on the removal alone -- the fact
+        # of having migrated must survive a restart on its own, rather than by
+        # luck of some unrelated write landing first -- while the notice is
+        # gated on a balance actually having been carried: every 3.2.x install
+        # has the key, and telling a user who never had a budget that their
+        # total was carried forward would state a fact that did not happen.
+        migrated = self.state.migrate_consumption(dt_util.now().date())
+        if migrated.dropped:
             self.state.schedule_save()
+        if migrated.seeded:
+            self.report_consumption_history_restarted()
         self._schedule_triggers()
         self._start_trackers()
         self.accountant.start()

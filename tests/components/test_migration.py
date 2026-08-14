@@ -422,3 +422,100 @@ class TestPerDayMinutesConversion:
         assert "day_minutes" not in cycle
         assert "day_intensity_pct" not in cycle
         assert {note.kind for note in notes} == {"curve_template_missing", "day_minutes_dropped"}
+
+
+class TestConsumptionCarryOverNotice:
+    """3.3.0's upgrade notice must fire only when a carry actually happened.
+
+    seed_carried_over_and_drop_consumption used to report the mere presence of
+    the legacy key, and 3.2.x's _default_data always created it -- empty. So
+    every upgrading install raised a Repairs issue stating, in both locales
+    and as fact, that its monthly total "has been carried forward once as this
+    period's opening balance" and "mixes measured with estimated litres",
+    while the derived total was 0.0. The carry itself was always gated on a
+    matching period and positive litres; the report now follows it.
+
+    The key is dropped in all three cases, and the save that persists that
+    removal is scheduled in all three -- only the notice is narrower.
+    """
+
+    ISSUE = "consumption_history_restarted"
+
+    @staticmethod
+    async def _setup(hass, hass_storage, freezer, consumption):
+        from custom_components.irrigation_maestro.const import DOMAIN
+        from pytest_homeassistant_custom_component.common import MockConfigEntry
+
+        freezer.move_to("2026-08-14 09:00:00+00:00")
+        await hass.config.async_set_time_zone("UTC")
+        hass.states.async_set(
+            "weather.test",
+            "sunny",
+            {"temperature": 25.0, "wind_speed": 5.0, "wind_speed_unit": "km/h"},
+        )
+        entry = MockConfigEntry(
+            domain=DOMAIN,
+            version=3,
+            title="Irrigation Maestro",
+            data={},
+            options={"weather_entity": "weather.test"},
+            subentries_data=[],
+        )
+        key = f"{DOMAIN}.{entry.entry_id}"
+        hass_storage[key] = {
+            "version": 1,
+            "minor_version": 1,
+            "key": key,
+            "data": {} if consumption is None else {"consumption": consumption},
+        }
+        entry.add_to_hass(hass)
+        assert await hass.config_entries.async_setup(entry.entry_id)
+        await hass.async_block_till_done()
+        return entry
+
+    async def test_a_counter_from_this_period_is_carried_and_reported(
+        self, hass, hass_storage, freezer
+    ):
+        from custom_components.irrigation_maestro.const import DOMAIN
+        from homeassistant.helpers import issue_registry as ir
+
+        entry = await self._setup(
+            hass, hass_storage, freezer, {"period_start": "2026-08-01", "liters": 250.0}
+        )
+        state = entry.runtime_data.state
+
+        assert state.carried_over_for(date(2026, 8, 1)) == 250.0
+        assert "consumption" not in state.as_dict()
+        assert ir.async_get(hass).async_get_issue(DOMAIN, self.ISSUE) is not None
+
+    async def test_a_counter_from_a_past_period_is_dropped_in_silence(
+        self, hass, hass_storage, freezer
+    ):
+        """It is deliberately not carried, so nothing was carried forward."""
+        from custom_components.irrigation_maestro.const import DOMAIN
+        from homeassistant.helpers import issue_registry as ir
+
+        entry = await self._setup(
+            hass, hass_storage, freezer, {"period_start": "2026-07-01", "liters": 900.0}
+        )
+        state = entry.runtime_data.state
+
+        assert state.carried_over_for(date(2026, 8, 1)) == 0.0
+        assert "consumption" not in state.as_dict()
+        assert ir.async_get(hass).async_get_issue(DOMAIN, self.ISSUE) is None
+
+    async def test_an_install_that_never_had_a_budget_is_dropped_in_silence(
+        self, hass, hass_storage, freezer
+    ):
+        """3.2.x's own default, verbatim: the key exists and holds nothing."""
+        from custom_components.irrigation_maestro.const import DOMAIN
+        from homeassistant.helpers import issue_registry as ir
+
+        entry = await self._setup(
+            hass, hass_storage, freezer, {"period_start": None, "liters": 0.0}
+        )
+        state = entry.runtime_data.state
+
+        assert state.carried_over_for(date(2026, 8, 1)) == 0.0
+        assert "consumption" not in state.as_dict()
+        assert ir.async_get(hass).async_get_issue(DOMAIN, self.ISSUE) is None

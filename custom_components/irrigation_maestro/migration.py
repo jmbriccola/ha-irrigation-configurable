@@ -144,7 +144,26 @@ def migrate_last_completed(
     return migrated
 
 
-def seed_carried_over_and_drop_consumption(data: dict[str, Any], today: date) -> bool:
+@dataclass(frozen=True, slots=True)
+class ConsumptionMigration:
+    """What seed_carried_over_and_drop_consumption did -- two separate facts.
+
+    They are not the same question and only one caller wants each. Whether
+    the legacy key was there decides whether the store needs writing; whether
+    a balance was actually seeded decides whether the user is told a carry
+    happened. Collapsing them into one bool is precisely the defect this type
+    exists to prevent.
+    """
+
+    #: The 3.2.x "consumption" key was present and has been removed.
+    dropped: bool
+    #: ...and its value became this period's opening balance.
+    seeded: bool
+
+
+def seed_carried_over_and_drop_consumption(
+    data: dict[str, Any], today: date
+) -> ConsumptionMigration:
     """Turn the standalone monthly counter into an opening balance, then drop it.
 
     The monthly total is not merely displayed: _consumption_factor drives
@@ -157,6 +176,15 @@ def seed_carried_over_and_drop_consumption(data: dict[str, Any], today: date) ->
     A counter from an earlier period is dropped rather than carried: it is
     not this period's water.
 
+    ``seeded`` is deliberately narrower than ``dropped``. The 3.2.x
+    _default_data always created {"period_start": None, "liters": 0.0}, so
+    every install upgrading from it has the key -- including one that never
+    configured a budget and one whose counter belongs to a past period and is
+    dropped on purpose. Reporting mere presence as a carry would have those
+    users read, in both locales, that a value "has been carried forward once
+    as this period's opening balance" and "mixes measured with estimated
+    litres" while the derived total is 0.0.
+
     Idempotent: the key is removed on the first pass, and a data set without
     it is left exactly as found. Removing it from _default_data would not be
     enough -- the defaults merge copies unknown stored keys through verbatim
@@ -164,16 +192,17 @@ def seed_carried_over_and_drop_consumption(data: dict[str, Any], today: date) ->
     """
     consumption = data.pop("consumption", None)
     if consumption is None:
-        return False
+        return ConsumptionMigration(dropped=False, seeded=False)
     period_start = today.replace(day=1)
     stored_start = consumption.get("period_start")
     liters = float(consumption.get("liters", 0.0))
-    if stored_start == period_start.isoformat() and liters > 0:
-        data.setdefault("water", {})["carried_over"] = {
-            "period_start": period_start.isoformat(),
-            "liters": liters,
-        }
-    return True
+    if stored_start != period_start.isoformat() or liters <= 0:
+        return ConsumptionMigration(dropped=True, seeded=False)
+    data.setdefault("water", {})["carried_over"] = {
+        "period_start": period_start.isoformat(),
+        "liters": liters,
+    }
+    return ConsumptionMigration(dropped=True, seeded=True)
 
 
 def migrate_zone_v2_to_v3(
