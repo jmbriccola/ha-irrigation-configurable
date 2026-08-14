@@ -1233,7 +1233,9 @@ class IrrigationRuntime:
 
     @callback
     def _midnight(self, _now: Any) -> None:
-        self.state.prune(dt_util.now().date())
+        today = dt_util.now().date()
+        self.state.prune(today)
+        self.state.prune_water(today)
         self.state.schedule_save()
         self.dispatch_update()
 

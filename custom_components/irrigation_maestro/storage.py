@@ -10,13 +10,13 @@ midnight needs no rotation step and restarts cannot corrupt the window.
 from __future__ import annotations
 
 from datetime import date, datetime, timedelta
-from typing import Any
+from typing import Any, cast
 
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.storage import Store
 
 from .const import DOMAIN, STORAGE_VERSION
-from .engine import history
+from .engine import history, metering
 from .engine.model import EngineParams
 from .migration import migrate_last_completed
 
@@ -47,6 +47,12 @@ class RuntimeState:
             "cycle_enabled": {},
             "outcome_log": {},
             "consumption": {"period_start": None, "liters": 0.0},
+            "water": {
+                "zones": {},
+                "unattributed": {},
+                "daily": {},
+                "carried_over": {"period_start": None, "liters": 0.0},
+            },
         }
 
     async def async_load(self) -> None:
@@ -54,6 +60,12 @@ class RuntimeState:
         if stored is not None:
             data = self._default_data()
             data.update(stored)
+            # The top-level merge is shallow. "water" is the one nested section
+            # whose sub-keys are read unconditionally, so it is merged one level
+            # deeper rather than teaching fifteen accessors to tolerate absence.
+            water = self._default_data()["water"]
+            water.update(data.get("water") or {})
+            data["water"] = water
             self._data = data
 
     def migrate_markers(self, zone_programs: dict[str, list[str]]) -> None:
@@ -118,6 +130,16 @@ class RuntimeState:
         self._data["outcome_log"] = {
             day: log for day, log in self._data["outcome_log"].items() if day >= cutoff
         }
+
+    def prune_water(self, today: date) -> None:
+        """Sweep the 730-day daily-water history.
+
+        Kept off ``prune()`` on purpose: that method also runs on every
+        evaluate (roughly every two minutes) without a save afterwards, and a
+        730-day x N-zone sweep does not belong on that path. This one is only
+        ever called from the once-a-day midnight callback, which does save.
+        """
+        self._data["water"]["daily"] = metering.prune_daily(self._data["water"]["daily"], today)
 
     # Per-zone state --------------------------------------------------------
 
@@ -211,6 +233,11 @@ class RuntimeState:
                 for item, value in self._data[key].items()
                 if not item.startswith(prefix)
             }
+        # Live counters back entities that no longer exist, so they go. The
+        # daily history stays: deleting it would rewrite past months and make
+        # the derived budget total jump. It ages out at 730 days like the rest.
+        self._water["zones"].pop(zone_id, None)
+        self._water["unattributed"].pop(zone_id, None)
 
     # Manual stop -----------------------------------------------------------
 
@@ -241,6 +268,110 @@ class RuntimeState:
                 "liters": 0.0,
             }
         self._data["consumption"]["liters"] += max(liters, 0.0)
+
+    # Water accounting ------------------------------------------------------
+
+    @property
+    def _water(self) -> dict[str, Any]:
+        return cast(dict[str, Any], self._data["water"])
+
+    def add_water(
+        self,
+        zone_id: str,
+        liters: float,
+        *,
+        day: date,
+        estimated: bool,
+        gap_s: float = 0.0,
+    ) -> None:
+        """Credit litres to a zone: cumulative and daily, in one transaction.
+
+        One writer for both, so the cumulative and the "today"/"this month"
+        projections derived from the daily history cannot diverge.
+        """
+        if liters <= 0 and gap_s <= 0:
+            return
+        zones = self._water["zones"]
+        entry = zones.setdefault(zone_id, {"total_l": 0.0, "estimated_l": 0.0})
+        entry["total_l"] = float(entry["total_l"]) + max(liters, 0.0)
+        if estimated:
+            entry["estimated_l"] = float(entry["estimated_l"]) + max(liters, 0.0)
+        self._water["daily"] = metering.roll_into_day(
+            self._water["daily"],
+            day.isoformat(),
+            zone_id,
+            liters,
+            estimated=estimated,
+            gap_s=gap_s,
+        )
+
+    def add_unattributed(
+        self, scope: str, liters: float, *, day: date, valves_closed: bool
+    ) -> None:
+        """Credit litres no zone claimed, splitting off the all-closed subset.
+
+        total_l includes line priming during master pre-open, which happens
+        every cycle and is not a leak. closed_l is the subset seen with every
+        managed valve closed, and is the only part leak detection reads.
+        """
+        if liters <= 0:
+            return
+        entry = self._water["unattributed"].setdefault(scope, {"total_l": 0.0, "closed_l": 0.0})
+        entry["total_l"] = float(entry["total_l"]) + liters
+        if valves_closed:
+            entry["closed_l"] = float(entry["closed_l"]) + liters
+        daily = metering.roll_into_day(
+            self._water["daily"],
+            day.isoformat(),
+            metering.UNATTRIBUTED_KEY,
+            liters,
+            estimated=False,
+            gap_s=0.0,
+        )
+        record = daily[day.isoformat()][metering.UNATTRIBUTED_KEY]
+        record["closed_l"] = float(record.get("closed_l", 0.0)) + (liters if valves_closed else 0.0)
+        self._water["daily"] = daily
+
+    def zone_water_total(self, zone_id: str) -> float:
+        return float(self._water["zones"].get(zone_id, {}).get("total_l", 0.0))
+
+    def zone_water_estimated(self, zone_id: str) -> float:
+        return float(self._water["zones"].get(zone_id, {}).get("estimated_l", 0.0))
+
+    def unattributed_total(self, scope: str | None = None) -> float:
+        buckets = self._water["unattributed"]
+        if scope is not None:
+            return float(buckets.get(scope, {}).get("total_l", 0.0))
+        return sum(float(entry.get("total_l", 0.0)) for entry in buckets.values())
+
+    def unattributed_closed(self, scope: str | None = None) -> float:
+        buckets = self._water["unattributed"]
+        if scope is not None:
+            return float(buckets.get(scope, {}).get("closed_l", 0.0))
+        return sum(float(entry.get("closed_l", 0.0)) for entry in buckets.values())
+
+    def water_for_day(self, zone_id: str, day: date) -> float:
+        return float(self._water["daily"].get(day.isoformat(), {}).get(zone_id, {}).get("l", 0.0))
+
+    def water_for_period(self, start: date, end: date) -> float:
+        return metering.sum_period(self._water["daily"], start, end)
+
+    def daily_water(self) -> metering.DailyLitres:
+        """Read-only snapshot of the daily series (diagnostics, card)."""
+        return {day: dict(keys) for day, keys in self._water["daily"].items()}
+
+    def carried_over_for(self, period_start: date) -> float:
+        """The opening balance, but only for the period it was stamped with."""
+        carried = self._water["carried_over"]
+        if carried.get("period_start") != period_start.isoformat():
+            return 0.0
+        return float(carried.get("liters", 0.0))
+
+    def set_carried_over(self, period_start: date, liters: float) -> None:
+        self._water["carried_over"] = {
+            "period_start": period_start.isoformat(),
+            "liters": max(liters, 0.0),
+        }
 
     def as_dict(self) -> dict[str, Any]:
         """Snapshot for diagnostics."""
