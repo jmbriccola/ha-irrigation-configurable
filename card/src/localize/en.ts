@@ -70,7 +70,6 @@ export const en = {
   "header.global_pause": "Globally paused",
   "header.stale_weather": "Stale weather data",
   "header.consumption_left": "Water left",
-  "header.unattributed_water": "Unattributed water",
 
   // Session states
   "session.idle": "Idle",

@@ -616,7 +616,6 @@ const ae = {
   "header.global_pause": "Globally paused",
   "header.stale_weather": "Stale weather data",
   "header.consumption_left": "Water left",
-  "header.unattributed_water": "Unattributed water",
   // Session states
   "session.idle": "Idle",
   "session.evaluating": "Evaluating",
@@ -954,7 +953,6 @@ const ae = {
   "header.global_pause": "In pausa globale",
   "header.stale_weather": "Dati meteo non aggiornati",
   "header.consumption_left": "Acqua residua",
-  "header.unattributed_water": "Acqua non attribuita",
   // Stati sessione
   "session.idle": "Inattiva",
   "session.evaluating": "In valutazione",
