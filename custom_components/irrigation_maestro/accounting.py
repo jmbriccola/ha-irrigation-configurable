@@ -50,8 +50,15 @@ class MeterSample:
     #: The meter's cumulative litres after this step. Monotonic.
     total_l: float
     #: Seconds of the interval just closed that were actually measured. Zero
-    #: across a gap. Consumers judging a window (the zero-flow guard) compare
-    #: this against the window length instead of trusting wall-clock time.
+    #: across a gap (unit unknown, or the meter unavailable) rather than
+    #: interpolated, so accounting can report a gap instead of silently
+    #: treating it as zero flow. For accounting only -- the zero-flow guard
+    #: (FlowMonitor) does NOT read this field: its blind condition is
+    #: `not unit_known or unit_recovered` alone, because a meter reporting a
+    #: known zero while unavailable (flow.py's unavailable/unknown case:
+    #: unit known, lpm 0.0, available False, hence measured_s 0.0 here) is a
+    #: genuine zero the guard must still act on. Gating the guard on this
+    #: field would leave it blind for as long as such an outage lasts.
     measured_s: float
     #: True when this sample carries a unit that had been lost. Published
     #: synchronously on the state event, because a consumer that learned of
@@ -203,7 +210,13 @@ class WaterAccountant:
         # open -- i.e. as of the previous sample. _on_sample attributes the
         # interval it is closing using these, not the claimants at its own
         # instant, and then refreshes them for the interval it is opening.
-        self._pending_claimants: dict[str, list[ZoneRuntime]] = {}
+        # (zone_id, nominal_flow_lpm) pairs, not ZoneRuntime objects: pending
+        # state can outlive a config change by up to one sample interval, and
+        # a zone can be deleted in that window while its meter survives
+        # (another zone, or the line, still points at it) -- holding onto the
+        # object itself would credit that interval's litres to a zone that no
+        # longer exists. Ids and nominal flow are all _on_sample needs.
+        self._pending_claimants: dict[str, list[tuple[str, float]]] = {}
         self._pending_valves_closed: dict[str, bool] = {}
 
     def start(self) -> None:
@@ -264,7 +277,7 @@ class WaterAccountant:
             self._unsubs[entity_id] = ledger.subscribe(partial(self._on_sample, entity_id))
             # The interval about to open starts now, at whatever is watering
             # this instant -- there is no earlier sample to have captured it.
-            self._pending_claimants[entity_id] = self._claimants(entity_id)
+            self._pending_claimants[entity_id] = self._claimant_snapshot(entity_id)
             self._pending_valves_closed[entity_id] = self._all_valves_closed()
             ledger.start()
 
@@ -339,6 +352,21 @@ class WaterAccountant:
                 claimants.append(zone)
         return claimants
 
+    def _claimant_snapshot(self, entity_id: str) -> list[tuple[str, float]]:
+        """(zone_id, nominal_flow_lpm) for each open claimant, right now.
+
+        What goes into ``_pending_claimants`` -- ids and their nominal flow,
+        not the ``ZoneRuntime`` objects themselves, so a zone deleted while
+        its interval is still pending cannot be credited water under an id
+        that no longer exists. This is also exactly what a claimant looked
+        like at the interval's own start, consistent with attributing the
+        interval to who (and at what weight) it started with.
+        """
+        return [
+            (zone.config.zone_id, zone.config.nominal_flow_lpm or 0.0)
+            for zone in self._claimants(entity_id)
+        ]
+
     def _all_valves_closed(self) -> bool:
         """Every managed valve, master included, reports closed."""
         return not any(controller.is_open for controller in self._runtime.all_valve_controllers())
@@ -366,12 +394,17 @@ class WaterAccountant:
         # to the interval's beginning, matching the left-Riemann rate
         # MeterLedger already charges from its own start.
         claimants = self._pending_claimants.get(entity_id, [])
-        valves_closed = self._pending_valves_closed.get(entity_id, True)
+        # Defaults to False, not True: this fallback is unreachable today --
+        # rebuild() seeds both pending dicts before a ledger's first sample
+        # can ever fire -- but with no actual knowledge of the valve state,
+        # "unattributed" is the honest default and "leak" (valves_closed=True)
+        # is not something to assert without evidence.
+        valves_closed = self._pending_valves_closed.get(entity_id, False)
         # Refresh unconditionally, even when nothing accrues below: the
         # interval opening now must be judged by who is watering as of THIS
         # instant, not stranded on whoever was watering before a zero-litres
         # gap (unit unknown, or simply no elapsed time).
-        self._pending_claimants[entity_id] = self._claimants(entity_id)
+        self._pending_claimants[entity_id] = self._claimant_snapshot(entity_id)
         self._pending_valves_closed[entity_id] = self._all_valves_closed()
         if liters <= 0:
             return
@@ -385,16 +418,16 @@ class WaterAccountant:
                 valves_closed=valves_closed,
             )
         elif len(claimants) == 1:
-            state.add_water(claimants[0].config.zone_id, liters, day=day, estimated=False)
+            state.add_water(claimants[0][0], liters, day=day, estimated=False)
         else:
-            weights = [zone.config.nominal_flow_lpm or 0.0 for zone in claimants]
+            weights = [nominal for _, nominal in claimants]
             total_weight = sum(weights)
             if total_weight <= 0:
                 weights = [1.0] * len(claimants)
                 total_weight = float(len(claimants))
-            for zone, weight in zip(claimants, weights, strict=True):
+            for (zone_id, _), weight in zip(claimants, weights, strict=True):
                 state.add_water(
-                    zone.config.zone_id,
+                    zone_id,
                     liters * weight / total_weight,
                     day=day,
                     estimated=False,

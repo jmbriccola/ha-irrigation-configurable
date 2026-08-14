@@ -832,7 +832,7 @@ async def test_volume_target_reached_on_the_read_that_loses_the_unit(
 ) -> None:
     """Litres already integrated finish the run even if that read kills the unit.
 
-    The target check sits above the unit_known gate on purpose (session.py:227):
+    The target check sits above the unit_known gate on purpose (session.py:237):
     water certainly delivered still finishes the run, even when the very
     sample that lost the unit is the one whose litres cross it.
 
@@ -975,14 +975,15 @@ async def test_flow_in_range_reports_nothing(
 ) -> None:
     """The positive path of _check_range: sustained in-range flow is silent.
 
-    _check_range is reachable only from _on_state, a state_changed listener
-    (session.py:222-236); re-asserting the identical state+attributes fires
-    EVENT_STATE_REPORTED, not EVENT_STATE_CHANGED, so it would never reach
-    it -- force_update is what keeps these state-changed events real. The
-    expected_flow_range spy proves _check_range's body actually ran (it is
-    the function's first statement): without it, "reported == []" alone
-    would also hold if the whole method were disabled, which is no test at
-    all.
+    _check_range is reachable only from _on_sample, the ledger's sample
+    listener (session.py:212-242); re-asserting the identical state and
+    attributes fires EVENT_STATE_REPORTED, not EVENT_STATE_CHANGED, so it
+    would never reach the ledger's own state-change listener and never
+    publish a sample at all -- force_update is what keeps these
+    state-changed events real. The expected_flow_range spy proves
+    _check_range's body actually ran (it is the function's first
+    statement): without it, "reported == []" alone would also hold if the
+    whole method were disabled, which is no test at all.
     """
     freezer.move_to(START)
     park = MockValvePark(hass)
