@@ -201,7 +201,7 @@ and the UI (zone attributes + card badges) declares it:
 | Position feedback, open/close confirmation | `valve` entity | `switch` zones run **optimistically**: commands are assumed to actuate after a short configurable delay; surveillance still reacts to state changes, but a stuck-open head cannot be detected — the watchdog and (if present) flow meter are the remaining guards |
 | Hourly rain staging, hourly forecast precision | Weather provider with hourly forecast | Falls back to `daily` forecast with a conservative prorated estimate; stage-and-commit disabled |
 | Measured consumption | Flow meter whose unit can be determined | Consumption estimated as nominal flow × minutes (needs nominal flow; otherwise not tracked) |
-| Continuous water accounting | A flow meter (zone or line) whose unit can be determined | Litres are estimated once per cycle as nominal flow × minutes and marked `estimated`; water outside cycles is not seen at all, so unattributed-water detection is unavailable for that zone |
+| Continuous water accounting | A flow meter (zone or line) whose unit can be determined, **or** a per-zone nominal flow rate | Litres are estimated once per cycle as nominal flow × minutes and marked `estimated`; water outside cycles is not seen at all, so unattributed-water detection is unavailable for that zone. With **neither** a meter nor a nominal rate nothing is recorded at all, and `zone_water_total` says so with `source: "none"` rather than claiming a measurement |
 | Unattributed-water detection | Same | Unavailable for that zone: with no meter there is nothing to observe while the valves are closed |
 | Rain measured | Rain sensor (daily mm) | Stage-and-commit forecast estimation (above) |
 | Card auto-install | Lovelace storage mode | Manual resource registration (documented above) |
@@ -217,11 +217,40 @@ card, and each day's own estimated flag in the daily history behind it.
 ## Entities & services
 
 One **hub device** (water budget, skip threshold, weighted temperature,
-session state with live queue, optional remaining consumption budget, global
-pause switch, *Evaluate now* / *Stop all* buttons) and one **device per
-zone** (state, next run, last outcome with reason, enable switch, per-cycle
-enable switches, order / cadence / adjustment numbers, suspend-until
-datetime).
+session state with live queue, optional remaining consumption budget,
+**unattributed water**, global pause switch, *Evaluate now* / *Stop all*
+buttons) and one **device per zone** (state, next run, last outcome with
+reason, **total water**, enable switch, per-cycle enable switches, order /
+cadence / adjustment numbers, suspend-until datetime).
+
+The two water sensors carry `device_class: water` and `state_class:
+total_increasing`, so Home Assistant's own statistics engine derives their
+daily/monthly/yearly figures and both are eligible for the **Water
+dashboard**:
+
+- **`zone_water_total`** — one per zone, all-time litres, with `today_l` /
+  `month_l` / `estimated` / `source` / `meter_entity` attributes.
+- **`hub_unattributed_water`** — litres a meter measured that no zone
+  claimed, with a `closed_l` subset measured while every managed valve
+  reported closed.
+
+### Upgrading from 3.2.x
+
+A meter's flow is now integrated **continuously**, not only while a cycle is
+running, so the hand-built chain many installs kept alongside this
+integration is redundant: the `integration` (Riemann sum) helper that turned
+L/min into litres, the `utility_meter` that cut it into daily/monthly cycles,
+and the template sensors that split it per zone are all replaced by
+`zone_water_total`, `hub_unattributed_water` and HA's own statistics. Delete
+them once you are satisfied the new sensors read what you expect — that
+deletion is the point of this release.
+
+Historical data is **not** imported: the new sensors start from zero at the
+upgrade, and the old monthly consumption counter is carried once as this
+period's opening balance so the budget keeps enforcing to the end of the
+month. This is a deliberate choice, not a limitation to work around — a
+back-fill would mix measured with estimated litres under a provenance flag
+that could no longer be trusted.
 
 Services: `run_zone`, `run_all`, `skip_today`, `pause`, `suspend_until`,
 `resume`, `stop_all`, `evaluate` (returns the full computed plan),

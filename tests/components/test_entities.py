@@ -825,7 +825,11 @@ async def test_month_l_is_the_zone_s_own_month_not_the_hub_total(
 async def test_a_zone_on_the_line_meter_is_declared_shared_even_when_cleared(
     hass: HomeAssistant, freezer: FrozenDateTimeFactory
 ) -> None:
-    """Empty string is a reachable way of saying "no meter" (runtime.py:240).
+    """Empty string is a reachable way of saying "no meter".
+
+    That is why IrrigationRuntime.resolved_meter_entity tests the field for
+    truthiness rather than `is not None`.
+
 
     sensor.py used `is None` here, so a zone whose meter was cleared fed from
     the line meter without being labelled -- and the label is the set the
@@ -962,6 +966,37 @@ async def test_meter_entity_reflects_the_resolved_meter(
 
     assert own.attributes["meter_entity"] == "sensor.own"
     assert shared.attributes["meter_entity"] == "sensor.line"
+
+
+async def test_a_zone_that_can_record_nothing_says_so(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    """Neither a meter nor a nominal rate: `source` must not claim `measured`.
+
+    Such a zone records nothing at all -- there is nothing to integrate, and
+    add_consumption returns before booking an estimate -- yet it published
+    `source: "measured"` at 0 L, which describes a measurement that will never
+    happen. Its neighbour, which has a nominal rate and therefore does record,
+    keeps reading `measured` until its first litres arrive.
+    """
+    freezer.move_to(START)
+    park = MockValvePark(hass)
+    park.add("valve.a")
+    park.add("valve.b")
+    mock_weather(hass)
+    entry = await setup_hub(
+        hass,
+        [
+            zone_data("Bare", "valve.a", minutes=10, order=1),
+            zone_data("Nominal", "valve.b", minutes=10, nominal_flow_lpm=7.5, order=2),
+        ],
+    )
+    bare_id, nominal_id = entry.runtime_data.zone_ids
+
+    assert role_state(hass, "zone_water_total", zone_id=bare_id).attributes["source"] == "none"
+    assert role_state(hass, "zone_water_total", zone_id=nominal_id).attributes["source"] == (
+        "measured"
+    )
 
 
 async def test_meter_entity_is_none_when_no_meter_resolves(

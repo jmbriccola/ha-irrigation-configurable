@@ -220,17 +220,26 @@ async def test_the_notice_clears_when_the_meter_starts_declaring_litres_per_minu
     assert registry.async_get_issue(DOMAIN, "flow_unit_corrected") is None
 
 
-async def test_a_value_tick_does_not_re_render_every_entity(
+async def test_value_ticks_do_not_re_render_every_entity_per_tick(
     hass: HomeAssistant,
 ) -> None:
-    """The subscription reacts to the declared unit, not to the flow.
+    """The unit subscription reacts to the declared unit, not to the flow.
 
-    Both consumers depend on the unit the reader resolves and on nothing else
-    -- a running cycle's litres come from the meter's ledger, which the reader
-    feeds continuously, not from this per-entity update signal. A meter
-    reporting every second would otherwise re-render every entity of the
-    integration and rewrite the issue registry at 1 Hz to reach the same two
-    conclusions.
+    _on_flow_sensor's two consumers depend on the unit the reader resolves and
+    on nothing else -- a running cycle's litres come from the meter's ledger,
+    which the reader feeds continuously, not from this per-entity update
+    signal. A meter reporting every second would otherwise re-render every
+    entity of the integration and rewrite the issue registry at 1 Hz to reach
+    the same two conclusions.
+
+    The count is no longer required to be zero, and deliberately so:
+    WaterAccountant._on_sample dispatches once it credits litres, because the
+    water entities are push-only and water accrued outside a session has
+    nothing else to refresh them. That dispatch is throttled to one a minute,
+    which is what the first phase pins -- ten value ticks inside one window
+    are worth one dispatch between them, not ten. The unit filter itself is
+    still silent on value ticks, which the second phase shows by taking the
+    unit change on top of whatever the first phase left standing.
     """
     hass.states.async_set("sensor.flow", "0.45", {"unit_of_measurement": "m³/h"})
     entry = await setup_hub(hass, [zone_data("Alpha", "valve.a", flow_sensor="sensor.flow")])
@@ -243,14 +252,18 @@ async def test_a_value_tick_does_not_re_render_every_entity(
 
     unsub = async_dispatcher_connect(hass, SIGNAL_UPDATE, _count)
     try:
-        hass.states.async_set("sensor.flow", "0.50", {"unit_of_measurement": "m³/h"})
-        await hass.async_block_till_done()
-        assert dispatches == 0
+        for step in range(10):
+            hass.states.async_set(
+                "sensor.flow", f"{0.50 + step * 0.01:.2f}", {"unit_of_measurement": "m³/h"}
+            )
+            await hass.async_block_till_done()
+        assert dispatches <= 1
+        after_value_ticks = dispatches
 
         # The unit itself changing is exactly what must get through.
         hass.states.async_set("sensor.flow", "0.50", {"unit_of_measurement": "L/min"})
         await hass.async_block_till_done()
-        assert dispatches == 1
+        assert dispatches == after_value_ticks + 1
     finally:
         unsub()
     assert entry.runtime_data is not None
