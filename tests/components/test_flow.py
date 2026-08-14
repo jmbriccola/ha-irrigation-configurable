@@ -284,3 +284,31 @@ async def test_a_meter_added_by_a_config_update_is_subscribed_without_a_reload(
     assert issue is not None
     assert issue.translation_placeholders is not None
     assert "sensor.late (m³/h)" in issue.translation_placeholders["sensors"]
+
+
+def test_available_distinguishes_a_true_zero_from_a_gap(hass: HomeAssistant) -> None:
+    """0.0 L/min means two opposite things; accounting needs them apart.
+
+    The zero-flow guard is entitled to treat an unavailable meter as zero
+    flow. An integrator is not: a gap is water it did not observe, not water
+    that did not pass.
+    """
+    reader = FlowSensorReader(hass, "sensor.flow")
+
+    hass.states.async_set("sensor.flow", "0", {"unit_of_measurement": "L/min"})
+    reading = reader.read()
+    assert reading.lpm == 0.0
+    assert reading.available is True
+
+    hass.states.async_set("sensor.flow", "unavailable", {"unit_of_measurement": "L/min"})
+    reading = reader.read()
+    assert reading.lpm == 0.0
+    assert reading.available is False
+
+    hass.states.async_set("sensor.flow", "not a number", {"unit_of_measurement": "L/min"})
+    assert reader.read().available is False
+
+    hass.states.async_set("sensor.flow", "5", {})  # unit unknown
+    reading = reader.read()
+    assert reading.lpm is None
+    assert reading.available is False

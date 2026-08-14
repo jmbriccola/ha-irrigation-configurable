@@ -45,6 +45,10 @@ class FlowReading:
     lpm: float | None
     unit: str | None
     source: FlowUnitSource
+    #: False when no number was read: the entity is missing, unavailable, or
+    #: non-numeric. Distinct from ``lpm == 0.0``, which the zero-flow guard is
+    #: entitled to act on but an integrator must not count as water not passed.
+    available: bool = False
 
     @property
     def unit_known(self) -> bool:
@@ -84,19 +88,20 @@ class FlowSensorReader:
         elif declared in SUPPORTED_FLOW_UNITS:
             unit, source = str(declared), "declared"
         else:
-            return FlowReading(None, None, "unknown")
+            return FlowReading(None, None, "unknown", False)
 
         if state is None or state.state in _UNUSABLE_STATES:
             # Unit known, value not: that is zero flow, and the zero-flow guard
-            # is entitled to act on it. Not the same as an unknown unit.
-            return FlowReading(0.0, unit, source)
+            # is entitled to act on it. Not the same as an unknown unit, and
+            # not the same as a measured zero -- available says which.
+            return FlowReading(0.0, unit, source, False)
         try:
             raw = float(state.state)
         except ValueError:
-            return FlowReading(0.0, unit, source)
+            return FlowReading(0.0, unit, source, False)
 
         lpm = VolumeFlowRateConverter.convert(max(raw, 0.0), unit, CANONICAL_UNIT)
-        return FlowReading(max(lpm, 0.0), unit, source)
+        return FlowReading(max(lpm, 0.0), unit, source, True)
 
     @property
     def unit_known(self) -> bool:
