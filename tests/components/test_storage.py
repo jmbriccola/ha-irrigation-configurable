@@ -2,6 +2,7 @@
 
 from datetime import UTC, date, datetime
 
+from custom_components.irrigation_maestro.engine.metering import UNATTRIBUTED_KEY
 from custom_components.irrigation_maestro.engine.model import EngineParams
 from custom_components.irrigation_maestro.migration import migrate_last_completed
 from custom_components.irrigation_maestro.storage import RuntimeState
@@ -192,6 +193,25 @@ async def test_water_totals_accumulate_and_split_by_provenance(hass: HomeAssista
     assert state.water_for_day("z1", day) == 15.0
 
 
+async def test_add_water_records_a_gap_with_zero_litres(hass: HomeAssistant) -> None:
+    """A reading gap with no litres must still leave a trace in the daily record.
+
+    The guard clause is `liters <= 0 and gap_s <= 0`, so a gap-only call (no
+    litres, some elapsed gap) must not be swallowed: l stays at zero but
+    gap_s accumulates.
+    """
+    state = RuntimeState(hass, "entry_water_gap")
+    await state.async_load()
+    day = date(2026, 8, 14)
+
+    state.add_water("z1", 0.0, day=day, estimated=False, gap_s=30.0)
+
+    assert state.zone_water_total("z1") == 0.0
+    record = state.daily_water()[day.isoformat()]["z1"]
+    assert record["l"] == 0.0
+    assert record["gap_s"] == 30.0
+
+
 async def test_unattributed_tracks_closed_valves_separately(hass: HomeAssistant) -> None:
     """Priming litres are unattributed; only the all-closed subset is suspect."""
     state = RuntimeState(hass, "entry_water2")
@@ -204,6 +224,27 @@ async def test_unattributed_tracks_closed_valves_separately(hass: HomeAssistant)
     assert state.unattributed_total("z1") == 10.0
     assert state.unattributed_closed("z1") == 8.0
     assert state.unattributed_total() == 10.0
+
+
+async def test_unattributed_daily_record_tracks_closed_l_not_just_the_counter(
+    hass: HomeAssistant,
+) -> None:
+    """closed_l is leak detection's entire input, at the daily level, not just the cumulative.
+
+    A mixed sequence -- some litres with the master pre-open, some with every
+    managed valve closed -- must leave a daily closed_l that reflects only the
+    closed subset, independently of l (which reflects all of it).
+    """
+    state = RuntimeState(hass, "entry_water_closed_daily")
+    await state.async_load()
+    day = date(2026, 8, 14)
+
+    state.add_unattributed("z1", 2.0, day=day, valves_closed=False)
+    state.add_unattributed("z1", 8.0, day=day, valves_closed=True)
+
+    record = state.daily_water()[day.isoformat()][UNATTRIBUTED_KEY]
+    assert record["l"] == 10.0
+    assert record["closed_l"] == 8.0
 
 
 async def test_water_survives_a_reload_without_going_backwards(hass: HomeAssistant) -> None:

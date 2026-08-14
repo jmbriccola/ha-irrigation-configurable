@@ -139,7 +139,7 @@ class RuntimeState:
         730-day x N-zone sweep does not belong on that path. This one is only
         ever called from the once-a-day midnight callback, which does save.
         """
-        self._data["water"]["daily"] = metering.prune_daily(self._data["water"]["daily"], today)
+        self._water["daily"] = metering.prune_daily(self._water["daily"], today)
 
     # Per-zone state --------------------------------------------------------
 
@@ -320,17 +320,15 @@ class RuntimeState:
         entry["total_l"] = float(entry["total_l"]) + liters
         if valves_closed:
             entry["closed_l"] = float(entry["closed_l"]) + liters
-        daily = metering.roll_into_day(
+        self._water["daily"] = metering.roll_into_day(
             self._water["daily"],
             day.isoformat(),
             metering.UNATTRIBUTED_KEY,
             liters,
             estimated=False,
             gap_s=0.0,
+            closed_l=liters if valves_closed else 0.0,
         )
-        record = daily[day.isoformat()][metering.UNATTRIBUTED_KEY]
-        record["closed_l"] = float(record.get("closed_l", 0.0)) + (liters if valves_closed else 0.0)
-        self._water["daily"] = daily
 
     def zone_water_total(self, zone_id: str) -> float:
         return float(self._water["zones"].get(zone_id, {}).get("total_l", 0.0))
@@ -357,8 +355,16 @@ class RuntimeState:
         return metering.sum_period(self._water["daily"], start, end)
 
     def daily_water(self) -> metering.DailyLitres:
-        """Read-only snapshot of the daily series (diagnostics, card)."""
-        return {day: dict(keys) for day, keys in self._water["daily"].items()}
+        """Read-only snapshot of the daily series (diagnostics, card).
+
+        Copied three levels deep -- day, key and record -- so a caller
+        mutating the returned dict, including its innermost per-key records,
+        can never corrupt the live store.
+        """
+        return {
+            day: {key: dict(record) for key, record in keys.items()}
+            for day, keys in self._water["daily"].items()
+        }
 
     def carried_over_for(self, period_start: date) -> float:
         """The opening balance, but only for the period it was stamped with."""
