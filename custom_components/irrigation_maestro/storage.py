@@ -254,34 +254,6 @@ class RuntimeState:
     def set_manual_stop(self, at: datetime | None) -> None:
         self._data["manual_stop_at"] = at.isoformat() if at else None
 
-    # Consumption -----------------------------------------------------------
-    #
-    # No longer in _default_data: a fresh install never has it, and an
-    # upgraded one loses it the first time migrate_consumption runs (3.3.0).
-    # These three still tolerate its total absence -- via .get() rather than
-    # a bare subscript -- because add_consumption is only a test helper now
-    # (nothing in production calls it any more; _consumption_factor is the
-    # last production reader, until Task 11 replaces it with the derived
-    # total).
-
-    @property
-    def consumption_liters(self) -> float:
-        return float(self._data.get("consumption", {}).get("liters", 0.0))
-
-    @property
-    def consumption_period_start(self) -> date | None:
-        raw = self._data.get("consumption", {}).get("period_start")
-        return date.fromisoformat(raw) if raw else None
-
-    def add_consumption(self, liters: float, *, period_start: date) -> None:
-        """Accumulate liters; a new period start resets the counter."""
-        if self.consumption_period_start != period_start:
-            self._data["consumption"] = {
-                "period_start": period_start.isoformat(),
-                "liters": 0.0,
-            }
-        self._data["consumption"]["liters"] += max(liters, 0.0)
-
     # Water accounting ------------------------------------------------------
 
     @property

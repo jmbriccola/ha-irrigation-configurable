@@ -505,10 +505,25 @@ class IrrigationRuntime:
         self.dispatch_update()
         return evaluation
 
+    def consumption_used_liters(self) -> float:
+        """Attributed litres this period: the carried balance plus the daily sum.
+
+        Derived, never stored: one number for the water, so a per-zone total and
+        the budget cannot drift apart. Unattributed water is excluded on
+        purpose -- letting a leak into the budget would let it suspend
+        irrigation, the right consequence from the wrong cause.
+        """
+        today = dt_util.now().date()
+        period_start = today.replace(day=1)
+        return self.state.carried_over_for(period_start) + self.state.water_for_period(
+            period_start, today
+        )
+
     def _consumption_factor(self) -> tuple[float, bool]:
         """(duration_factor, suspend_all) from the consumption budget."""
         budget = self.hub.consumption_budget_liters
-        if budget is None or self.state.consumption_liters < budget:
+        used = self.consumption_used_liters()
+        if budget is None or used < budget:
             return 1.0, False
         self._notify_budget_exceeded_once()
         if self.hub.consumption_action == "reduce":
@@ -518,19 +533,19 @@ class IrrigationRuntime:
         return 1.0, False
 
     def _notify_budget_exceeded_once(self) -> None:
-        period = (self.state.consumption_period_start or dt_util.now().date()).isoformat()
+        used = self.consumption_used_liters()
+        period = dt_util.now().date().replace(day=1).isoformat()
         if self._budget_notified_period == period:
             return
         self._budget_notified_period = period
-        self.fire_event(EVENT_CONSUMPTION_BUDGET, {"liters": self.state.consumption_liters})
+        self.fire_event(EVENT_CONSUMPTION_BUDGET, {"liters": used})
         self.entry.async_create_background_task(
             self.hass,
             self.notifier.async_notify(
                 EVENT_CONSUMPTION_BUDGET,
                 title="💧 Irrigation Maestro",
                 message=(
-                    "Monthly water budget exceeded "
-                    f"({self.state.consumption_liters:.0f} L used). "
+                    f"Monthly water budget exceeded ({used:.0f} L used). "
                     f"Configured action: {self.hub.consumption_action}."
                 ),
             ),

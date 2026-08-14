@@ -617,11 +617,18 @@ async def test_a_volume_cycle_on_an_unresolvable_meter_still_completes(
 async def test_consumption_counts_real_litres_from_a_cubic_metre_meter(
     hass: HomeAssistant, freezer: FrozenDateTimeFactory
 ) -> None:
-    """0.45 m³/h for ten minutes is 75 L, not 4.5 L."""
+    """0.45 m³/h for ten minutes is 75 L, not 4.5 L.
+
+    The meter is driven to zero outside the run window: integration is now
+    continuous, so a meter parked at 0.45 m³/h for the whole advance would
+    report flow through the ~32 minutes the valve is closed as well. The 4.5 L
+    sentinel this test exists to catch is unchanged -- it is far below the
+    bound either way.
+    """
     freezer.move_to(START)
     park = MockValvePark(hass)
     park.add("valve.a")
-    hass.states.async_set("sensor.flow", "0.45", {"unit_of_measurement": "m³/h"})
+    hass.states.async_set("sensor.flow", "0", {"unit_of_measurement": "m³/h"})
     mock_weather(hass)
     entry = await setup_hub(
         hass,
@@ -629,12 +636,16 @@ async def test_consumption_counts_real_litres_from_a_cubic_metre_meter(
         {"consumption_budget": {"liters_per_month": 1000, "action": "notify"}},
     )
     await advance(hass, freezer, 31 * 60)
-    await advance(hass, freezer, 11 * 60)
+    assert hass.states.get("valve.a").state == "open"
+    hass.states.async_set("sensor.flow", "0.45", {"unit_of_measurement": "m³/h"})
+    await advance(hass, freezer, 10 * 60, step=10.0)
+    hass.states.async_set("sensor.flow", "0", {"unit_of_measurement": "m³/h"})
+    await advance(hass, freezer, 60)
 
     runtime = entry.runtime_data
     # ~7.5 L/min for ~10 min. Generous bounds: the exact figure depends on when
-    # the integrator samples, but 4.5 L (the un-converted answer) is far below.
-    assert 60 <= runtime.state.consumption_liters <= 90
+    # the ledger samples, but 4.5 L (the un-converted answer) is far below.
+    assert 60 <= runtime.consumption_used_liters() <= 90
 
 
 async def test_a_zone_without_a_meter_still_estimates_from_the_nominal_rate(
@@ -652,4 +663,5 @@ async def test_a_zone_without_a_meter_still_estimates_from_the_nominal_rate(
     await advance(hass, freezer, 31 * 60)
     await advance(hass, freezer, 11 * 60)
     runtime = entry.runtime_data
-    assert 70 <= runtime.state.consumption_liters <= 80
+    assert 70 <= runtime.consumption_used_liters() <= 80
+    assert runtime.state.zone_water_estimated(runtime.zone_ids[0]) > 0

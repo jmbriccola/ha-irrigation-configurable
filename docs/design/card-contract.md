@@ -20,7 +20,7 @@ config entry).
 | `hub_skip_threshold`| sensor   | mm (float)                     | — |
 | `hub_weighted_temp` | sensor   | °C (float) or unavailable      | `temp_d3`, `temp_d2`, `temp_d1`, `temp_today_eff`, `temp_tomorrow`, `stale_weather` (bool) |
 | `hub_session`       | sensor   | `idle` \| `evaluating` \| `running` | `queue`: ordered list of `{zone_id, zone_name, cycle_id, duration_min, state}`; `started_at` (ISO); `active_zone_id` |
-| `hub_consumption_left` | sensor | liters left (float) or unavailable | `budget_liters`, `used_liters`, `period_start`, `action` — entity always exists; unavailable when no budget is configured |
+| `hub_consumption_left` | sensor | liters left (float) or unavailable | `budget_liters`, `used_liters`, `unattributed_liters`, `period_start`, `action` — entity always exists; unavailable when no budget is configured |
 | `hub_pause`         | switch   | on = globally paused           | — |
 | `hub_evaluate`      | button   | press = evaluate now           | — |
 | `hub_stop_all`      | button   | press = stop everything        | — |
