@@ -628,6 +628,90 @@ async def test_a_shared_line_meter_without_nominals_splits_equally(
     assert alpha_total == pytest.approx(beta_total, rel=0.05)  # 50/50
 
 
+@pytest.mark.parametrize("valve_state", ["opening", "closing", "unavailable"])
+async def test_an_uncertain_valve_contributes_no_leak_evidence(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory, valve_state: str
+) -> None:
+    """Not-open is not closed: an uncertain valve must not manufacture a leak.
+
+    _all_valves_closed used to be `not any(is_open)`, which contradicts
+    valves.py -- is_closed treats an uncertain state as busy, never as free.
+    A `valve.` entity publishes opening/closing while it travels and a battery
+    Zigbee valve publishes unavailable mid-run; in every one of those windows
+    _claimants returns [] AND the weaker test returns True, so the litres were
+    booked into closed_l, the only input 3.4.0's leak detection reads and
+    persisted from this release onward. The water must still be seen -- it
+    flowed -- but it is not evidence of anything.
+    """
+    freezer.move_to(START)
+    park = MockValvePark(hass)
+    park.add("valve.a", valve_state)
+    hass.states.async_set("sensor.flow", "5", {"unit_of_measurement": "L/min"})
+    mock_weather(hass)
+    entry = await setup_hub(
+        hass, [zone_data("Alpha", "valve.a", minutes=10, flow_sensor="sensor.flow")]
+    )
+    runtime = entry.runtime_data
+
+    # Well before the 05:30 trigger, so no session ever touches the valve --
+    # and the watchdog only force-closes valves that report *open*, so the
+    # uncertain state stands for the whole window.
+    await advance(hass, freezer, 600, step=10.0)
+
+    assert hass.states.get("valve.a").state == valve_state
+    assert runtime.state.unattributed_total() > 40
+    assert runtime.state.unattributed_closed() == 0.0
+
+
+async def test_a_shared_line_meter_with_only_some_nominals_splits_equally(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    """One zone declares a nominal flow, the other does not: equal shares.
+
+    The fallback used to need *every* nominal missing (total_weight <= 0), so
+    a mixed configuration credited the unset zone a weight of zero -- exactly
+    zero litres for a zone whose valve was demonstrably open. Water is
+    conserved either way and no leak is flagged, but "you used nothing" is a
+    plainly false per-zone figure, and a partial set of nominals cannot yield
+    a trustworthy proportion to replace it with.
+    """
+    freezer.move_to(START)
+    park = MockValvePark(hass)
+    park.add("valve.a")
+    park.add("valve.b")
+    hass.states.async_set("sensor.line", "0", {"unit_of_measurement": "L/min"})
+    mock_weather(hass)
+    entry = await setup_hub(
+        hass,
+        [
+            zone_data(
+                "Alpha",
+                "valve.a",
+                minutes=10,
+                nominal_flow_lpm=10.0,
+                order=1,
+                compatibility_group="shared",
+            ),
+            zone_data("Beta", "valve.b", minutes=10, order=2, compatibility_group="shared"),
+        ],
+        {"line_flow_sensor": "sensor.line", "max_concurrent": 2},
+    )
+    runtime = entry.runtime_data
+    alpha, beta = runtime.zone_ids[0], runtime.zone_ids[1]
+
+    await advance(hass, freezer, 31 * 60)
+    assert hass.states.get("valve.a").state == "open"
+    assert hass.states.get("valve.b").state == "open"
+    hass.states.async_set("sensor.line", "40", {"unit_of_measurement": "L/min"})
+    await advance(hass, freezer, 300, step=10.0)
+
+    alpha_total = runtime.state.zone_water_total(alpha)
+    beta_total = runtime.state.zone_water_total(beta)
+    assert 180 <= alpha_total + beta_total <= 220  # 40 L/min x ~5 min, once
+    assert beta_total > 0.0  # never "you used nothing"
+    assert alpha_total == pytest.approx(beta_total, rel=0.05)
+
+
 async def test_a_zone_vs_zone_override_conflict_is_reported_then_cleared(
     hass: HomeAssistant,
 ) -> None:
