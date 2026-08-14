@@ -75,8 +75,14 @@ def prune_daily(daily: DailyLitres, today: date, *, keep_days: int = RETENTION_D
     return {day: keys for day, keys in daily.items() if day >= cutoff}
 
 
-def sum_period(daily: DailyLitres, start: date, end: date) -> float:
-    """Attributed litres over an inclusive day range, across every zone.
+def sum_period(daily: DailyLitres, start: date, end: date, *, key: str | None = None) -> float:
+    """Attributed litres over an inclusive day range.
+
+    Across every zone by default, or one zone alone when ``key`` names it. The
+    two readings are different questions -- the budget spends the whole
+    account, a per-zone sensor reports its own row -- and both must be the
+    same slice of the same daily history, or a zone's "this month" would
+    contradict the "today" printed beside it.
 
     Unattributed water is excluded on purpose: it is not watering, and letting
     it into the budget would let a leak suspend irrigation.
@@ -86,8 +92,8 @@ def sum_period(daily: DailyLitres, start: date, end: date) -> float:
     for day, keys in daily.items():
         if day < first or day > last:
             continue
-        for key, entry in keys.items():
-            if key == UNATTRIBUTED_KEY:
+        for entry_key, entry in keys.items():
+            if entry_key == UNATTRIBUTED_KEY or (key is not None and entry_key != key):
                 continue
             total += float(entry.get("l", 0.0))
     return total

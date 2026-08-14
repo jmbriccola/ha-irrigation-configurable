@@ -88,3 +88,35 @@ def test_sum_period_covers_the_inclusive_range_and_ignores_unattributed() -> Non
     daily.setdefault("2026-08-14", {})[UNATTRIBUTED_KEY] = {"l": 42.0, "closed_l": 42.0}
 
     assert sum_period(daily, date(2026, 8, 1), date(2026, 8, 14)) == 35.0
+
+
+def test_sum_period_excludes_days_before_the_range() -> None:
+    """The left edge is a real bound, not decoration.
+
+    The inclusive-range test above only ever exercises the right edge: every
+    one of its days is on or after the start, so a sum that dropped the
+    `day < first` half of the guard would still pass it. Last month's litres
+    must not land in this month's budget.
+    """
+    daily: dict = {}
+    daily = roll_into_day(daily, "2026-07-31", "z1", 100.0, estimated=False, gap_s=0.0)
+    daily = roll_into_day(daily, "2026-08-01", "z1", 7.0, estimated=False, gap_s=0.0)
+
+    assert sum_period(daily, date(2026, 8, 1), date(2026, 8, 31)) == 7.0
+
+
+def test_sum_period_can_be_scoped_to_one_key() -> None:
+    """The per-zone reading and the account-wide one, from one function.
+
+    Without the filter a zone's "this month" is the hub's total: two zones at
+    10 L and 20 L would both report 30 L, contradicting the per-zone "today"
+    printed next to it.
+    """
+    daily: dict = {}
+    daily = roll_into_day(daily, "2026-08-14", "z1", 10.0, estimated=False, gap_s=0.0)
+    daily = roll_into_day(daily, "2026-08-14", "z2", 20.0, estimated=False, gap_s=0.0)
+
+    assert sum_period(daily, date(2026, 8, 1), date(2026, 8, 31)) == 30.0
+    assert sum_period(daily, date(2026, 8, 1), date(2026, 8, 31), key="z1") == 10.0
+    assert sum_period(daily, date(2026, 8, 1), date(2026, 8, 31), key="z2") == 20.0
+    assert sum_period(daily, date(2026, 8, 1), date(2026, 8, 31), key="nobody") == 0.0

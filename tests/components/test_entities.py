@@ -781,6 +781,47 @@ async def test_the_unattributed_sensor_separates_priming_from_suspect_water(
     assert state.attributes["closed_l"] == 7.0
 
 
+async def test_month_l_is_the_zone_s_own_month_not_the_hub_total(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    """Two zones, two different months -- not one shared figure repeated.
+
+    month_l used to call the account-wide period sum, so every zone published
+    the hub total while today_l beside it stayed zone-scoped: two attributes
+    in one dict measuring different things, and two zones at 100 L and 300 L
+    both rendering "this month 400 L". Asserting the two rows differ, and
+    that each equals its own zone's litres, is what a hub-wide reading cannot
+    satisfy.
+    """
+    freezer.move_to(START)
+    park = MockValvePark(hass)
+    park.add("valve.a")
+    park.add("valve.b")
+    mock_weather(hass)
+    entry = await setup_hub(
+        hass,
+        [
+            zone_data("Alpha", "valve.a", minutes=10, order=1),
+            zone_data("Beta", "valve.b", minutes=10, order=2),
+        ],
+    )
+    runtime = entry.runtime_data
+    alpha, beta = runtime.zone_ids
+    today = dt_util.now().date()
+    runtime.state.add_water(alpha, 100.0, day=today, estimated=False)
+    runtime.state.add_water(beta, 300.0, day=today, estimated=False)
+    runtime.dispatch_update()
+    await hass.async_block_till_done()
+
+    alpha_state = role_state(hass, "zone_water_total", zone_id=alpha)
+    beta_state = role_state(hass, "zone_water_total", zone_id=beta)
+
+    assert alpha_state.attributes["month_l"] == 100.0
+    assert beta_state.attributes["month_l"] == 300.0
+    assert alpha_state.attributes["month_l"] == alpha_state.attributes["today_l"]
+    assert beta_state.attributes["month_l"] == beta_state.attributes["today_l"]
+
+
 async def test_a_zone_on_the_line_meter_is_declared_shared_even_when_cleared(
     hass: HomeAssistant, freezer: FrozenDateTimeFactory
 ) -> None:

@@ -339,7 +339,22 @@ class RuntimeState:
         return float(self._water["daily"].get(day.isoformat(), {}).get(zone_id, {}).get("l", 0.0))
 
     def water_for_period(self, start: date, end: date) -> float:
+        """Every zone's litres over an inclusive day range: the whole account.
+
+        What the monthly budget spends. Deliberately not what a per-zone
+        sensor reports -- see ``zone_water_for_period``.
+        """
         return metering.sum_period(self._water["daily"], start, end)
+
+    def zone_water_for_period(self, zone_id: str, start: date, end: date) -> float:
+        """One zone's litres over an inclusive day range.
+
+        The same slice of the same daily history as ``water_for_day``, so a
+        zone's "this month" and its "today" measure the same thing. Publishing
+        the account-wide total here instead would make every zone read alike
+        and contradict the figure printed beside it.
+        """
+        return metering.sum_period(self._water["daily"], start, end, key=zone_id)
 
     def daily_water(self) -> metering.DailyLitres:
         """Read-only snapshot of the daily series (diagnostics, card).
