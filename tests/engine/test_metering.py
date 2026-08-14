@@ -35,6 +35,19 @@ def test_roll_into_day_accumulates_without_mutating() -> None:
     assert second["2026-08-14"]["z1"]["gap_s"] == 30.0
 
 
+def test_roll_into_day_accumulates_closed_l_independently_of_l() -> None:
+    """closed_l is the leak-detection input: it must track apart from l.
+
+    l is every litre credited to the key; closed_l is only the subset seen
+    while every managed valve reported closed.
+    """
+    daily = roll_into_day({}, "2026-08-14", "z1", 2.0, estimated=False, gap_s=0.0, closed_l=0.0)
+    daily = roll_into_day(daily, "2026-08-14", "z1", 8.0, estimated=False, gap_s=0.0, closed_l=8.0)
+
+    assert daily["2026-08-14"]["z1"]["l"] == 10.0
+    assert daily["2026-08-14"]["z1"]["closed_l"] == 8.0
+
+
 def test_roll_into_day_marks_a_day_estimated_once_any_litre_is() -> None:
     """Mixed provenance is estimated: the number is not wholly measured."""
     daily = roll_into_day({}, "2026-08-14", "z1", 10.0, estimated=False, gap_s=0.0)

@@ -40,19 +40,26 @@ def roll_into_day(
     *,
     estimated: bool,
     gap_s: float,
+    closed_l: float = 0.0,
 ) -> DailyLitres:
     """Add litres to one key on one day, returning a new dict.
 
     ``est`` latches true: a day that mixes measured and estimated litres is not
     wholly measured, and reporting it as measured would be the plausible-but-
     false number this feature exists to remove.
+
+    ``closed_l`` is the subset of ``liters`` seen while every managed valve
+    reported closed. It is the only part leak detection reads, so it is an
+    explicit parameter accumulated exactly like ``l`` and ``gap_s`` -- never a
+    field callers patch onto the returned dict after the fact.
     """
     updated: DailyLitres = {existing_day: dict(keys) for existing_day, keys in daily.items()}
     day_record = updated.setdefault(day, {})
-    entry = dict(day_record.get(key, {"l": 0.0, "est": False, "gap_s": 0.0}))
+    entry = dict(day_record.get(key, {"l": 0.0, "est": False, "gap_s": 0.0, "closed_l": 0.0}))
     entry["l"] = float(entry["l"]) + max(liters, 0.0)
     entry["est"] = bool(entry["est"]) or estimated
     entry["gap_s"] = float(entry["gap_s"]) + max(gap_s, 0.0)
+    entry["closed_l"] = float(entry.get("closed_l", 0.0)) + max(closed_l, 0.0)
     day_record[key] = entry
     return updated
 
