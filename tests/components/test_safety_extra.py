@@ -726,3 +726,95 @@ async def test_a_zone_on_the_line_meter_takes_the_hubs_unit_override(
     outcome = runtime.state.last_outcome(runtime.zone_ids[0])
     assert outcome["result"] == "completed"
     assert outcome["volume_l"] >= 20
+
+
+async def test_volume_target_reached_on_the_read_that_loses_the_unit(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    """Litres already integrated finish the run even if that read kills the unit.
+
+    The target check sits above the unit_known gate on purpose (session.py:228):
+    water certainly delivered is still delivered. Without this test a refactor
+    can move the check below the gate and hang the cycle on its safety timeout.
+    """
+    freezer.move_to(START)
+    park = MockValvePark(hass)
+    park.add("valve.a")
+    hass.states.async_set("sensor.flow", "60", {"unit_of_measurement": "L/min"})
+    mock_weather(hass)
+    entry = await setup_hub(
+        hass,
+        [
+            zone_data(
+                "Alpha",
+                "valve.a",
+                flow_sensor="sensor.flow",
+                cycles=[
+                    {
+                        "id": "cy_alpha",
+                        "name": "Morning",
+                        "enabled": True,
+                        "trigger": {"kind": "time", "at": "05:30"},
+                        "curve": {
+                            "points": [[20.0, 100.0]],
+                            "min_value": 1.0,
+                            "max_value": 500.0,
+                            "kind": "volume",
+                        },
+                        "volume_safety_timeout_min": 60,
+                    }
+                ],
+            )
+        ],
+    )
+    await advance(hass, freezer, 31 * 60)
+    assert hass.states.get("valve.a").state == "open"
+
+    # 60 L/min for ~2 min crosses the 100 L target; the same read that carries
+    # it past the target also removes the unit.
+    await advance(hass, freezer, 120, step=1.0)
+    hass.states.async_set("sensor.flow", "60", {})  # unit gone
+    await advance(hass, freezer, 60, step=1.0)
+
+    assert hass.states.get("valve.a").state == "closed"
+    runtime = entry.runtime_data
+    outcome = runtime.state.last_outcome(runtime.zone_ids[0])
+    assert outcome["result"] == "completed"
+
+
+async def test_flow_in_range_reports_nothing(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    """The positive path of _check_range: sustained in-range flow is silent.
+
+    Without this, a refactor that never calls report_flow_out_of_range at all
+    passes the whole suite.
+    """
+    freezer.move_to(START)
+    park = MockValvePark(hass)
+    park.add("valve.a")
+    hass.states.async_set("sensor.flow", "10", {"unit_of_measurement": "L/min"})
+    mock_weather(hass)
+    entry = await setup_hub(
+        hass,
+        [
+            zone_data(
+                "Alpha",
+                "valve.a",
+                minutes=10,
+                flow_sensor="sensor.flow",
+                nominal_flow_lpm=10.0,
+                flow_tolerance_pct=25,
+            )
+        ],
+    )
+    runtime = entry.runtime_data
+    reported: list[tuple[float, float, float]] = []
+    runtime.report_flow_out_of_range = lambda *args: reported.append(args)  # type: ignore[method-assign]
+
+    await advance(hass, freezer, 31 * 60)
+    assert hass.states.get("valve.a").state == "open"
+    # Well past RANGE_SUSTAIN_S (120 s) with flow inside 7.5-12.5 L/min.
+    await advance(hass, freezer, 300, step=1.0)
+
+    assert reported == []
