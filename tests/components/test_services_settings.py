@@ -306,6 +306,30 @@ async def test_a_multi_event_call_writes_nothing_when_one_event_would_be_mute(
     assert "notifications" not in entry.options
 
 
+async def test_a_multi_event_call_writes_nothing_when_a_later_event_would_be_mute(
+    hass: HomeAssistant,
+) -> None:
+    # Unlike the identical-payload case above, "watchdog" here validates fine
+    # on its own (it already has a stored recipient) and only "anomaly" -- the
+    # second named event -- would end up mute. A validate-then-persist-per-
+    # event bug would leave "watchdog" written before "anomaly" aborts the
+    # call; the single _write_hub_options after the loop is what has to
+    # prevent that.
+    entry = await setup_hub(
+        hass,
+        [zone_data("Pots", "valve.pots")],
+        {"notifications": {"watchdog": {"enabled": False, "services": ["phone"]}}},
+    )
+    with pytest.raises(ServiceValidationError):
+        await hass.services.async_call(
+            DOMAIN,
+            "set_notifications",
+            {"events": ["watchdog", "anomaly"], "enabled": True},
+            blocking=True,
+        )
+    assert entry.options["notifications"] == {"watchdog": {"enabled": False, "services": ["phone"]}}
+
+
 async def test_event_and_events_together_are_refused(hass: HomeAssistant) -> None:
     await setup_hub(hass, [zone_data("Pots", "valve.pots")])
     with pytest.raises(vol.Invalid):
@@ -355,6 +379,80 @@ async def test_a_test_notification_to_a_missing_recipient_reports_the_failure(
         DOMAIN, "test_notification", {"services": ["gone"]}, blocking=True, return_response=True
     )
     assert response == {"results": {"gone": {"sent": False, "error": "unknown_service"}}}
+
+
+@pytest.mark.parametrize(
+    ("language", "message"),
+    [
+        ("en", "Test notification. If you can read this, this recipient works."),
+        (
+            "it",
+            "Notifica di prova. Se riesci a leggere questo messaggio, il destinatario funziona.",
+        ),
+        # Any other hass language: the Developer Tools caller still gets English,
+        # never a KeyError.
+        ("de", "Test notification. If you can read this, this recipient works."),
+    ],
+)
+async def test_a_test_notification_default_message_follows_hass_language(
+    hass: HomeAssistant, language: str, message: str
+) -> None:
+    hass.config.language = language
+    await setup_hub(hass, [zone_data("Pots", "valve.pots")])
+    calls: list[ServiceCall] = []
+
+    async def handler(call: ServiceCall) -> None:
+        calls.append(call)
+
+    hass.services.async_register("notify", "phone", handler)
+    await hass.services.async_call(
+        DOMAIN, "test_notification", {"services": ["phone"]}, blocking=True, return_response=True
+    )
+    assert calls[0].data["title"] == "Irrigation Maestro"
+    assert calls[0].data["message"] == message
+
+
+async def test_a_test_notification_explicit_message_wins_over_the_language_default(
+    hass: HomeAssistant,
+) -> None:
+    hass.config.language = "it"
+    await setup_hub(hass, [zone_data("Pots", "valve.pots")])
+    calls: list[ServiceCall] = []
+
+    async def handler(call: ServiceCall) -> None:
+        calls.append(call)
+
+    hass.services.async_register("notify", "phone", handler)
+    await hass.services.async_call(
+        DOMAIN,
+        "test_notification",
+        {"services": ["phone"], "message": "Custom"},
+        blocking=True,
+        return_response=True,
+    )
+    assert calls[0].data["message"] == "Custom"
+
+
+async def test_a_test_notification_deduplicates_aliased_recipients(hass: HomeAssistant) -> None:
+    # "notify.phone" and "phone" normalise to the same service; without
+    # de-duplication this sends twice and the second result silently
+    # overwrites the first.
+    await setup_hub(hass, [zone_data("Pots", "valve.pots")])
+    calls: list[ServiceCall] = []
+
+    async def handler(call: ServiceCall) -> None:
+        calls.append(call)
+
+    hass.services.async_register("notify", "phone", handler)
+    response = await hass.services.async_call(
+        DOMAIN,
+        "test_notification",
+        {"services": ["notify.phone", "phone"]},
+        blocking=True,
+        return_response=True,
+    )
+    assert len(calls) == 1
+    assert response == {"results": {"phone": {"sent": True, "error": None}}}
 
 
 async def test_a_test_notification_reports_a_recipient_that_raises(hass: HomeAssistant) -> None:
@@ -409,6 +507,45 @@ async def test_notification_status_reports_the_field_install_shape(hass: HomeAss
     )
     assert response["enabled_without_target"] == ["interrupted"]
     assert response["verdict"] == "silent"
+
+
+def _assert_no_tuples_or_sets(value: object) -> None:
+    """Walk a decoded response and fail on the first tuple, set or frozenset.
+
+    HA 2026.7.2 does not actually reject tuples in a service response --
+    homeassistant/helpers/json.py coerces them to lists on the way out -- so
+    this is a type-contract test on NotificationStatus.as_dict() and
+    EventStatus.as_dict(), not a guard against a crash.
+    """
+    assert not isinstance(value, tuple | set | frozenset), f"found {type(value)}: {value!r}"
+    if isinstance(value, dict):
+        for nested in value.values():
+            _assert_no_tuples_or_sets(nested)
+    elif isinstance(value, list):
+        for nested in value:
+            _assert_no_tuples_or_sets(nested)
+
+
+async def test_notification_status_response_contains_no_tuples_or_sets(
+    hass: HomeAssistant,
+) -> None:
+    """NotificationStatus.as_dict() and EventStatus.as_dict() convert at every
+    level today; nothing pins that. `unreachable` is seeded here (an enabled
+    essential event whose recipient is not a registered service) so every
+    dict-valued field is exercised at least once, alongside the tuple-valued
+    fields (`services`, `missing`, `recommended`, `unreachable`'s values) every
+    response already carries.
+    """
+    await setup_hub(
+        hass,
+        [zone_data("Pots", "valve.pots")],
+        {"notifications": {"watchdog": {"enabled": True, "services": ["gone"]}}},
+    )
+    response = await hass.services.async_call(
+        DOMAIN, "notification_status", {}, blocking=True, return_response=True
+    )
+    assert response["unreachable"] == {"gone": ["watchdog"]}
+    _assert_no_tuples_or_sets(response)
 
 
 async def test_notification_status_never_offers_the_notify_entity_service(
