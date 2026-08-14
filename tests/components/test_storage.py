@@ -231,16 +231,19 @@ async def test_unattributed_daily_record_tracks_closed_l_not_just_the_counter(
 ) -> None:
     """closed_l is leak detection's entire input, at the daily level, not just the cumulative.
 
-    A mixed sequence -- some litres with the master pre-open, some with every
-    managed valve closed -- must leave a daily closed_l that reflects only the
-    closed subset, independently of l (which reflects all of it).
+    Three calls: one with the master pre-open (contributes to total_l only),
+    then two separate closed-valve contributions (3.0, then 5.0). closed_l
+    must be their sum, 8.0, not the last one, 5.0 -- an overwrite bug would
+    leave closed_l at 5.0 while total_l (10.0) stayed correct, so pinning
+    both is what catches it.
     """
     state = RuntimeState(hass, "entry_water_closed_daily")
     await state.async_load()
     day = date(2026, 8, 14)
 
     state.add_unattributed("z1", 2.0, day=day, valves_closed=False)
-    state.add_unattributed("z1", 8.0, day=day, valves_closed=True)
+    state.add_unattributed("z1", 3.0, day=day, valves_closed=True)
+    state.add_unattributed("z1", 5.0, day=day, valves_closed=True)
 
     record = state.daily_water()[day.isoformat()][UNATTRIBUTED_KEY]
     assert record["l"] == 10.0
