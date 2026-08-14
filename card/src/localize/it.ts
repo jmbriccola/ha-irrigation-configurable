@@ -280,6 +280,8 @@ export const it: Record<keyof typeof en, string> = {
 
   // Procedura guidata notifiche (pannello)
   "notify.loading": "Lettura dello stato delle notifiche…",
+  "notify.load_failed": "Non è stato possibile leggere lo stato delle notifiche.",
+  "notify.retry": "Riprova",
   "notify.mute_title": "Non riceverai nessuna notifica",
   "notify.mute_body":
     "Nessun evento essenziale arriva a qualcuno: una chiusura forzata, un'anomalia, un'irrigazione interrotta o un programma mancato passerebbero inosservati.",
@@ -294,8 +296,10 @@ export const it: Record<keyof typeof en, string> = {
   "notify.recipient_gone_hint":
     "Un destinatario indicato come non più esistente resta memorizzato e viene riscritto a ogni salvataggio. Deselezionalo per rimuoverlo.",
   "notify.send_test": "Invia prova",
+  "notify.test_sending": "Invio in corso…",
   "notify.test_ok": "Inviata",
   "notify.test_failed": "Non consegnata: {error}",
+  "notify.test_no_result": "nessun risultato ricevuto",
   "notify.preset_recommended": "Consigliato",
   "notify.preset_critical": "Solo critici",
   "notify.preset_all": "Tutto",

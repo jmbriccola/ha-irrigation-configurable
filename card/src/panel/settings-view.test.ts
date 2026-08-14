@@ -325,6 +325,19 @@ describe("the notifications section", () => {
     expect(effectiveNotifyPriority(selection, status, "completed")).toBe("normal");
   });
 
+  it("asks for the status again when the read that failed is retried", () => {
+    // The only way out of a failed first read: without this event the
+    // notifications section is stuck on its message until the user leaves
+    // settings and comes back.
+    const element = new ImcSettingsView();
+    let fired = 0;
+    element.addEventListener("imc-settings-retry-notifications", () => (fired += 1));
+
+    (element as unknown as { _retryNotifyStatus(): void })._retryNotifyStatus();
+
+    expect(fired).toBe(1);
+  });
+
   it("shows the user's own choice over the backend's default", () => {
     const status = statusWith({ watchdog: "high" });
     expect(

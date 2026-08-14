@@ -58,6 +58,29 @@ function calendarFields(calendar: CalendarConfig): Record<string, unknown> {
 }
 
 /**
+ * `test_notification`'s payload, checked rather than asserted — the same
+ * treatment `_loadNotificationStatus` gives the status read, and for the same
+ * reason: a service response is data crossing a process boundary, not a
+ * value this module produced. Taking it on trust would put `undefined`
+ * behind `result.sent` and render a recipient nobody proved as failed with
+ * an empty reason, or — worse — as sent.
+ *
+ * `undefined` means "no usable answer"; the caller turns that into a real
+ * per-recipient verdict rather than showing nothing.
+ */
+export function parseTestResults(raw: unknown): Record<string, NotifyTestResult> | undefined {
+  if (typeof raw !== "object" || raw === null || Array.isArray(raw)) return undefined;
+  const parsed: Record<string, NotifyTestResult> = {};
+  for (const [service, value] of Object.entries(raw)) {
+    if (typeof value !== "object" || value === null) return undefined;
+    const { sent, error } = value as { sent?: unknown; error?: unknown };
+    if (typeof sent !== "boolean") return undefined;
+    parsed[service] = { sent, error: typeof error === "string" ? error : null };
+  }
+  return parsed;
+}
+
+/**
  * Sidebar panel shell: zone tabs + the selected zone's read-only program
  * list. Registered via panel_custom (see custom_components/.../panel.py),
  * which sets `hass`/`narrow`/`route`/`panel` on the element.
@@ -83,7 +106,14 @@ export class IrrigationMaestroPanel extends LitElement {
   // and whether it reaches anyone, `test_notification` reports per recipient
   // whether a message actually left.
   @state() private _notifyStatus?: NotificationStatusResponse;
+  // The last `notification_status` read failed. Only consulted when there is
+  // no status to show at all — see `_loadNotificationStatus`.
+  @state() private _notifyStatusFailed = false;
   @state() private _testResults: Record<string, NotifyTestResult> = {};
+  // The recipients whose test send is still outstanding: `test_notification`
+  // sends with blocking=True, so a slow notify integration can leave the
+  // click unanswered for seconds.
+  @state() private _testPending: string[] = [];
 
   private _relevantIds: string[] = [];
   private _statesCount = 0;
@@ -197,6 +227,7 @@ export class IrrigationMaestroPanel extends LitElement {
     // A test result belongs to one visit: showing last time's ✓ next to a
     // recipient nobody has proved since would be a lie about the present.
     this._testResults = {};
+    this._testPending = [];
     const [cfg] = await Promise.all([this._readConfig(), this._loadNotificationStatus()]);
     if (cfg) {
       this._options = cfg.options;
@@ -214,15 +245,27 @@ export class IrrigationMaestroPanel extends LitElement {
    * place that derives them.
    */
   private async _loadNotificationStatus(): Promise<void> {
+    // Cleared first, so a retry shows the reading line again instead of
+    // leaving the failure standing while the new read is in flight.
+    this._notifyStatusFailed = false;
     const res = await this._call("irrigation_maestro", "notification_status", {}, true);
     const response = res?.response;
+    if (Array.isArray(response?.["events"])) {
+      this._notifyStatus = response as unknown as NotificationStatusResponse;
+      return;
+    }
     // A payload with no `events` is not a status, and a failed call has
     // already raised the error toast. Either way the last known status is
     // KEPT rather than cleared: a transient failure on the post-save re-read
     // would otherwise replace the whole wizard with its loading line.
-    if (Array.isArray(response?.["events"])) {
-      this._notifyStatus = response as unknown as NotificationStatusResponse;
-    }
+    //
+    // The failure is recorded because the FIRST read has no last known status
+    // to keep: settings opens on the reading line, and without this the line
+    // stays there forever, explained only by a toast that expires in 6s and
+    // recoverable only by leaving settings and coming back. The view shows
+    // this in place of that line, with a retry — and, when there IS a status,
+    // shows the status, which is what the post-save re-read needs.
+    this._notifyStatusFailed = true;
   }
 
   /**
@@ -248,29 +291,55 @@ export class IrrigationMaestroPanel extends LitElement {
   }
 
   /**
-   * A test send in the user's own language — the service's own defaults are
-   * English. Results are MERGED, not replaced: the wizard tests one
-   * recipient at a time, and replacing would erase the previous
-   * recipient's verdict the moment the next one is proved.
+   * A test send in the user's own language. `test_notification`'s own
+   * defaults follow `hass.config.language` (English fallback), so this is no
+   * longer what saves an Italian instance from an English test message — but
+   * the panel keeps sending its own strings, because the card's language is
+   * the frontend locale of whoever is logged in, which is not necessarily the
+   * language the instance is configured in.
+   *
+   * Results are MERGED, not replaced: the wizard tests one recipient at a
+   * time, and replacing would erase the previous recipient's verdict the
+   * moment the next one is proved.
+   *
+   * EVERY tested recipient gets a verdict, including when the call itself
+   * failed or answered with something unusable. The inline ✓/✗ is the whole
+   * point of the feature: leaving the row the user just clicked blank answers
+   * the one question they asked with silence, and the 6s toast is gone before
+   * they look away from it.
    */
   private async _onTestNotification(ev: CustomEvent<NotificationTestDetail>): Promise<void> {
     const lang = pickLanguage(this.hass);
-    const res = await this._call(
-      "irrigation_maestro",
-      "test_notification",
-      {
-        services: ev.detail.services,
-        title: localize(lang, "notify.test_title"),
-        message: localize(lang, "notify.test_message"),
-      },
-      true,
-    );
-    const results = res?.response?.["results"];
-    if (results === undefined) return;
-    this._testResults = {
-      ...this._testResults,
-      ...(results as Record<string, NotifyTestResult>),
-    };
+    const services = ev.detail.services;
+    this._testPending = [...new Set([...this._testPending, ...services])];
+    try {
+      const res = await this._call(
+        "irrigation_maestro",
+        "test_notification",
+        {
+          services,
+          title: localize(lang, "notify.test_title"),
+          message: localize(lang, "notify.test_message"),
+        },
+        true,
+      );
+      // The spread carries any recipient the backend answered for that the
+      // caller did not name (an alias resolving to another service); the loop
+      // then guarantees a FRESH verdict for every recipient actually tested,
+      // overwriting an earlier one rather than leaving yesterday's ✓ standing
+      // over a send that just failed.
+      const answered = parseTestResults(res?.response?.["results"]) ?? {};
+      const merged: Record<string, NotifyTestResult> = { ...this._testResults, ...answered };
+      for (const service of services) {
+        merged[service] = answered[service] ?? {
+          sent: false,
+          error: localize(lang, "notify.test_no_result"),
+        };
+      }
+      this._testResults = merged;
+    } finally {
+      this._testPending = this._testPending.filter((service) => !services.includes(service));
+    }
   }
 
   /**
@@ -722,6 +791,7 @@ export class IrrigationMaestroPanel extends LitElement {
           this._saveSettings("set_concurrency", e.detail)}
         @imc-settings-save-notifications=${this._onSaveNotifications}
         @imc-settings-test-notification=${this._onTestNotification}
+        @imc-settings-retry-notifications=${() => void this._loadNotificationStatus()}
         @imc-settings-back=${this._onSettingsBack}
         >
           <header><h1>${localize(lang, "panel.title")}</h1></header>
@@ -730,7 +800,9 @@ export class IrrigationMaestroPanel extends LitElement {
             .hass=${hass}
             .options=${this._options ?? {}}
             .notifyStatus=${this._notifyStatus}
+            .notifyStatusFailed=${this._notifyStatusFailed}
             .testResults=${this._testResults}
+            .testPending=${this._testPending}
           ></imc-settings-view>
         </div>
       `;

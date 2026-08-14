@@ -277,6 +277,8 @@ export const en = {
 
   // Notification wizard (panel)
   "notify.loading": "Reading the notification status…",
+  "notify.load_failed": "The notification status could not be read.",
+  "notify.retry": "Try again",
   "notify.mute_title": "You will not receive any notification",
   "notify.mute_body":
     "No essential event reaches anyone: a forced valve closure, an anomaly, an interrupted run or a missed program would pass unnoticed.",
@@ -291,10 +293,14 @@ export const en = {
   "notify.recipient_gone_hint":
     "A recipient marked as no longer existing is still stored and is still written back on every save. Uncheck it to remove it.",
   "notify.send_test": "Send a test",
+  "notify.test_sending": "Sending…",
   // "Sent", not "Delivered": the service learns only that notify.<service>
   // accepted the call without raising — a push can still die downstream.
   "notify.test_ok": "Sent",
   "notify.test_failed": "Not delivered: {error}",
+  // The reason shown when the test send itself never came back with a
+  // verdict — the call failed, or answered with something unusable.
+  "notify.test_no_result": "no result came back",
   "notify.preset_recommended": "Recommended",
   "notify.preset_critical": "Critical only",
   "notify.preset_all": "Everything",
