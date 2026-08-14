@@ -37,6 +37,11 @@ _LOGGER = logging.getLogger(__name__)
 #: delay rather than at the end of the run.
 DEFAULT_TICK_S = 30.0
 
+#: Floor between two store writes (and two entity refreshes) asked for by the
+#: sample path. A meter can report several times a second; the store it writes
+#: to is shared with everything else the integration persists.
+_PERSIST_INTERVAL_S = 60.0
+
 
 @dataclass(frozen=True, slots=True)
 class MeterSample:
@@ -241,6 +246,9 @@ class WaterAccountant:
         # longer exists. Ids and nominal flow are all _on_sample needs.
         self._pending_claimants: dict[str, list[tuple[str, float]]] = {}
         self._pending_valves_closed: dict[str, bool] = {}
+        #: When the sample path last asked for a store write and an entity
+        #: refresh. See _due_to_persist.
+        self._last_persist_at: datetime | None = None
 
     def start(self) -> None:
         self.rebuild()
@@ -256,6 +264,7 @@ class WaterAccountant:
         self._last_totals.clear()
         self._pending_claimants.clear()
         self._pending_valves_closed.clear()
+        self._last_persist_at = None
 
     def rebuild(self) -> None:
         """Rebuild the ledger set from the current configuration -- by diffing.
@@ -492,7 +501,42 @@ class WaterAccountant:
                     day=day,
                     estimated=False,
                 )
+        if not self._due_to_persist(sample.at):
+            return
         state.schedule_save()
+        # Every entity here is push-only: it re-reads on SIGNAL_UPDATE and
+        # never polls. In-session litres are covered, because the session
+        # dispatches on segment end and on each phase transition -- water
+        # accrued OUTSIDE a session is not. A tap left open at 21:00 puts
+        # thousands of litres into the store while hub_unattributed_water's
+        # HA state does not move until the midnight housekeeping, which books
+        # the whole delta on the wrong statistics day.
+        self._runtime.dispatch_update()
+
+    def _due_to_persist(self, at: datetime) -> bool:
+        """At most one store write and one entity refresh per minute.
+
+        Store._async_schedule_callback_delayed_write reschedules to
+        _next_write_time whenever its timer fires early, and every
+        async_delay_save pushes that to now + _SAVE_DELAY_S. A meter
+        publishing faster than that delay therefore postpones the write for
+        as long as flow continues -- and the store is shared, so a 90-minute
+        session on a 3 s meter lands no write at all and takes
+        set_last_completed for cycles that already finished down with it. A
+        power cut then waters those zones again on the next evaluate. Nothing
+        wrote at meter frequency before 3.3.0; this path must not either.
+
+        The unconditional saves elsewhere are untouched: day rollover,
+        record_estimate and the end of a cycle all still write immediately.
+        """
+        if self._last_persist_at is not None:
+            elapsed_s = (at - self._last_persist_at).total_seconds()
+            # Any non-forward gap re-arms at once: a clock stepping back must
+            # not mute the store for the length of the step.
+            if 0.0 <= elapsed_s < _PERSIST_INTERVAL_S:
+                return False
+        self._last_persist_at = at
+        return True
 
     def record_estimate(self, zone_id: str, liters: float) -> None:
         """Litres for a zone with no meter: nominal rate x minutes, marked.

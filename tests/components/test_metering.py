@@ -394,6 +394,115 @@ async def test_a_zone_without_a_meter_gets_a_marked_estimate(
     assert runtime.state.zone_water_estimated(zone_id) == runtime.state.zone_water_total(zone_id)
 
 
+async def _report_every_second(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory, seconds: int
+) -> None:
+    """Drive a meter that publishes faster than the store's own save delay.
+
+    The value has to move on every write: an identical state and attribute
+    set fires EVENT_STATE_REPORTED, not EVENT_STATE_CHANGED, and would never
+    reach the ledger's listener at all.
+    """
+    for step in range(seconds):
+        hass.states.async_set(
+            "sensor.flow", f"{10 + step * 0.001:.3f}", {"unit_of_measurement": "L/min"}
+        )
+        await advance(hass, freezer, 1, step=1.0)
+
+
+async def test_a_fast_meter_does_not_write_the_store_on_every_sample(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """One store write a minute from the sample path, not one per sample.
+
+    Store.async_delay_save pushes _next_write_time to now + the delay, and
+    _async_schedule_callback_delayed_write reschedules whenever its timer
+    fires early -- so a meter reporting faster than that delay postpones the
+    write for as long as flow continues. The store is shared: a long session
+    on a fast meter would land no write at all and hold back
+    set_last_completed for cycles that already finished, so a power cut
+    waters those zones again on the next evaluate. Nothing wrote at meter
+    frequency before 3.3.0.
+
+    The window is 05:00 to 05:05, which contains none of the runtime's other
+    writers (temp tracking is on the ten-minute marks, rain staging at minute
+    55, housekeeping at midnight) and no session -- so every save counted
+    here comes from the sample path. Five minutes of 1 Hz samples is 300
+    opportunities and at most six permitted writes; the bound is loose enough
+    to survive an off-by-one at either edge and still two orders of magnitude
+    away from per-sample.
+    """
+    freezer.move_to(START)
+    park = MockValvePark(hass)
+    park.add("valve.a")
+    hass.states.async_set("sensor.flow", "10", {"unit_of_measurement": "L/min"})
+    mock_weather(hass)
+    entry = await setup_hub(
+        hass, [zone_data("Alpha", "valve.a", minutes=10, flow_sensor="sensor.flow")]
+    )
+    runtime = entry.runtime_data
+
+    saves = 0
+    dispatches = 0
+    real_save = runtime.state.schedule_save
+    real_dispatch = runtime.dispatch_update
+
+    def _counted_save() -> None:
+        nonlocal saves
+        saves += 1
+        real_save()
+
+    def _counted_dispatch() -> None:
+        nonlocal dispatches
+        dispatches += 1
+        real_dispatch()
+
+    monkeypatch.setattr(runtime.state, "schedule_save", _counted_save)
+    monkeypatch.setattr(runtime, "dispatch_update", _counted_dispatch)
+
+    await _report_every_second(hass, freezer, 300)
+
+    assert runtime.state.unattributed_total() > 0.0  # the litres are still credited
+    assert saves <= 8
+    assert dispatches <= 8
+
+
+async def test_water_accrued_outside_a_session_refreshes_its_entity(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    """A tap left open must move the sensor's HA state, not only the store.
+
+    Every entity on this path is push-only: it re-reads on SIGNAL_UPDATE and
+    never polls. In-session litres are covered because the session dispatches
+    on segment end and on phase transitions; water accrued outside one had no
+    dispatcher at all, so hub_unattributed_water's state stood still until
+    the midnight housekeeping and the whole delta landed on the wrong
+    statistics day.
+    """
+    freezer.move_to(START)
+    park = MockValvePark(hass)
+    park.add("valve.a")
+    hass.states.async_set("sensor.flow", "10", {"unit_of_measurement": "L/min"})
+    mock_weather(hass)
+    entry = await setup_hub(
+        hass, [zone_data("Alpha", "valve.a", minutes=10, flow_sensor="sensor.flow")]
+    )
+    runtime = entry.runtime_data
+
+    sensor_id = next(
+        state.entity_id
+        for state in hass.states.async_all()
+        if state.attributes.get("maestro_role") == "hub_unattributed_water"
+    )
+    assert float(hass.states.get(sensor_id).state) == 0.0
+
+    # No session anywhere near: this is water nobody asked for.
+    await _report_every_second(hass, freezer, 180)
+
+    assert runtime.state.unattributed_total() > 0.0
+    assert float(hass.states.get(sensor_id).state) > 0.0
+
+
 async def test_rebuild_keeps_a_live_subscription_when_the_meter_is_unaffected(
     hass: HomeAssistant, freezer: FrozenDateTimeFactory
 ) -> None:
