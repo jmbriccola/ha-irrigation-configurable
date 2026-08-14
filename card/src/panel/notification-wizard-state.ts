@@ -166,7 +166,11 @@ export function buildSaveCalls(selection: WizardSelection): SetNotificationsCall
   // "normal", or it would inherit that explicit value and gain a priority it
   // never asked for.
   const byPriority = new Map<NotifyPriority | undefined, string[]>();
-  for (const event of selection.events) {
+  // Bucketed from `chosen`, not from `selection.events`: a duplicated entry
+  // would otherwise be repeated inside the call's `events` list. The wizard's
+  // `_toggleEvent` cannot produce one, but this function is pure and takes
+  // whatever selection it is handed.
+  for (const event of chosen) {
     const priority = selection.priorities[event];
     byPriority.set(priority, [...(byPriority.get(priority) ?? []), event]);
   }

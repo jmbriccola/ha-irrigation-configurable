@@ -167,6 +167,20 @@ describe("buildSaveCalls", () => {
     ).toThrow(/recipient/i);
   });
 
+  it("sends a duplicated event once", () => {
+    // Not reachable from the wizard — `_toggleEvent` removes what is already
+    // chosen — but this function is pure and takes whatever selection it is
+    // handed, and a repeated entry would go out repeated inside `events`.
+    const calls = buildSaveCalls({
+      recipients: ["phone"],
+      events: ["watchdog", "watchdog"],
+      priorities: {},
+    });
+    const enabling = calls.filter((call) => call.enabled);
+    expect(enabling).toHaveLength(1);
+    expect(enabling[0]!.events).toEqual(["watchdog"]);
+  });
+
   it("disables everything when the user selects no event", () => {
     const calls = buildSaveCalls({ recipients: ["phone"], events: [], priorities: {} });
     expect(calls).toHaveLength(1);
