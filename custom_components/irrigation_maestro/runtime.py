@@ -34,6 +34,7 @@ from .const import (
 )
 from .engine.curves import CurveKind, curve_value
 from .engine.evaluate import evaluate_session
+from .engine.metering import HUB_SCOPE
 from .engine.model import SessionEvaluation, SkipReason
 from .engine.planner import PlannedRun, build_session_plan
 from .engine.scheduling import split_soak
@@ -1218,57 +1219,87 @@ class IrrigationRuntime:
 
     # Leak detection ------------------------------------------------------------------
 
+    def leak_scopes(self) -> list[str]:
+        """Every scope a leak alarm can name: each zone, plus the hub itself.
+
+        The same key set the unattributed water bucket uses, and deliberately
+        so. HUB_SCOPE is not a fallback for "no zone configured": it is the
+        answer whenever a meter serves more than one zone, where which zone
+        leaks is genuinely unanswerable but whether the SYSTEM leaks is not.
+        Without it, every installation on a shared line meter would have no
+        source 2 at all while the documentation promised it a flow meter was
+        enough -- a false claim about a safety feature.
+
+        Always present, even when no meter currently resolves to it, so the
+        state is queryable at all times and a configuration change cannot
+        silently remove an alarm's home.
+        """
+        return [*self.zones, HUB_SCOPE]
+
     def _rebuild_leak_detectors(self) -> None:
-        """One detector per zone, rebuilt by diffing rather than by replacing.
+        """One detector per scope, rebuilt by diffing rather than by replacing.
 
         A detector holds a live alarm and a confirmation window in progress.
         Dropping and recreating the whole set on every configuration change --
         even one that touches no leak setting -- would silently clear an active
         alarm and restart a window that was seconds from confirming, which is
         the same defect WaterAccountant.rebuild avoids for its ledgers. So a
-        surviving zone keeps its detector and is only told to re-resolve its
-        sources; only a zone that left the configuration is stopped and
+        surviving scope keeps its detector and is only told to re-resolve its
+        sources; only a scope that left the configuration is stopped and
         dropped.
         """
-        for zone_id in list(self._leak_detectors):
-            if zone_id not in self.zones:
-                self._leak_detectors.pop(zone_id).stop()
-        for zone_id in self.zones:
-            detector = self._leak_detectors.get(zone_id)
+        scopes = self.leak_scopes()
+        for scope in list(self._leak_detectors):
+            if scope not in scopes:
+                self._leak_detectors.pop(scope).stop()
+        for scope in scopes:
+            detector = self._leak_detectors.get(scope)
             if detector is None:
-                detector = LeakDetector(self, zone_id)
-                self._leak_detectors[zone_id] = detector
+                detector = LeakDetector(self, scope)
+                self._leak_detectors[scope] = detector
             detector.start()
 
-    def leak_detector(self, zone_id: str) -> LeakDetector | None:
-        """The detector for a zone, or None when the id names no zone.
+    def leak_detector(self, scope: str) -> LeakDetector | None:
+        """The detector for a scope, or None when the scope names nothing.
 
-        WaterAccountant feeds source 2 through this, keyed by the *scope* of
-        the meter that reported -- which is HUB_SCOPE whenever a meter serves
-        more than one zone. That resolves to None here, on purpose: with two
-        zones behind one meter, "which zone leaks" has no answer, and naming
-        one of them would be a guess presented as a diagnosis. Such an
-        installation keeps source 1 per zone, and its unattributed closed_l
-        stays visible on the hub sensor.
+        WaterAccountant feeds source 2 through this, keyed by the scope of the
+        meter that reported -- a zone id when exactly one zone is behind that
+        meter, HUB_SCOPE otherwise.
         """
-        return self._leak_detectors.get(zone_id)
+        return self._leak_detectors.get(scope)
 
-    def leak_state(self, zone_id: str) -> LeakState:
-        """A zone's alarm. A zone with no detector is simply not alarming."""
-        detector = self._leak_detectors.get(zone_id)
+    def leak_state(self, scope: str) -> LeakState:
+        """A scope's alarm. A scope with no detector is simply not alarming."""
+        detector = self._leak_detectors.get(scope)
         return detector.state if detector is not None else LeakState()
 
-    def on_leak_raised(self, zone_id: str, state: LeakState) -> None:
+    def _leak_subject(self, scope: str) -> str:
+        """Who an alarm is about, for a log line: a zone's name, or the system.
+
+        HUB_SCOPE must never be printed as though it were a zone id. It means
+        the water was seen on a meter shared by several zones (or by none), so
+        the honest subject is the installation itself.
+        """
+        if scope == HUB_SCOPE:
+            return "the system (shared meter)"
+        zone = self.zones.get(scope)
+        return zone.config.name if zone else scope
+
+    def on_leak_raised(self, scope: str, state: LeakState) -> None:
         """The alarm went false -> true, once, for however many sources agree.
 
         Task 8 attaches the user-facing consequences here: the notification,
-        the Repairs issue that outlives it, and the configured leak_action.
+        the Repairs issue that outlives it, and the configured leak_action. Its
+        message must branch on the scope -- a hub-scope alarm cannot name a
+        zone, because no zone can be blamed for water on a shared meter.
         """
-        _LOGGER.warning("Zone %s: leak alarm raised by %s", zone_id, state.first_source)
-        self._fire_leak_event(zone_id, state, "active")
+        _LOGGER.warning(
+            "Leak alarm raised on %s by %s", self._leak_subject(scope), state.first_source
+        )
+        self._fire_leak_event(scope, state, "active")
         self.dispatch_update()
 
-    def on_leak_repeated(self, zone_id: str, state: LeakState) -> None:
+    def on_leak_repeated(self, scope: str, state: LeakState) -> None:
         """Still leaking, one leak_repeat_min later.
 
         No event is fired: an automation consuming the event stream counts
@@ -1276,22 +1307,29 @@ class IrrigationRuntime:
         of unifying the sources. Task 8 attaches the repeat notification here.
         """
         _LOGGER.warning(
-            "Zone %s is still reporting a leak (sources: %s)",
-            zone_id,
+            "%s is still reporting a leak (sources: %s)",
+            self._leak_subject(scope),
             ", ".join(sorted(state.sources)),
         )
 
-    def on_leak_cleared(self, zone_id: str) -> None:
+    def on_leak_cleared(self, scope: str) -> None:
         """The last source withdrew. Task 8 attaches the clearing notice."""
-        _LOGGER.warning("Zone %s: leak alarm cleared", zone_id)
-        self._fire_leak_event(zone_id, LeakState(), "cleared")
+        _LOGGER.warning("Leak alarm cleared on %s", self._leak_subject(scope))
+        self._fire_leak_event(scope, LeakState(), "cleared")
         self.dispatch_update()
 
-    def _fire_leak_event(self, zone_id: str, state: LeakState, phase: str) -> None:
+    def _fire_leak_event(self, scope: str, state: LeakState, phase: str) -> None:
+        """The one place the leak payload is built.
+
+        ``zone_id`` is None for a hub-scope alarm rather than carrying
+        HUB_SCOPE, so an automation that reads it cannot address a zone that
+        was never implicated. ``scope`` always carries the real key.
+        """
         self.fire_event(
             EVENT_LEAK,
             {
-                "zone_id": zone_id,
+                "scope": scope,
+                "zone_id": None if scope == HUB_SCOPE else scope,
                 "state": phase,
                 "first_source": state.first_source,
                 "sources": sorted(state.sources),
