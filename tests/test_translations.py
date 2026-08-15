@@ -73,6 +73,33 @@ def test_the_zone_override_conflict_message_still_supplies_its_own_noun() -> Non
     assert "zona {second}" in it_desc
 
 
+def test_the_leak_messages_never_presume_which_kind_of_sensor_reported() -> None:
+    """A "moisture" sensor on a valve is not necessarily a ground probe.
+
+    On the SONOFF SWV it is an alarm derived from the valve's own internal
+    flow meter -- "water is passing while I am shut" -- mapped to the nearest
+    device class; on other hardware it really is a probe. Any wording that
+    presumes one is false for half of all installations, so the notice says
+    the valve reports a leak and leaves the mechanism to a sentence that
+    names both.
+    """
+    en = json.loads((TRANSLATIONS_DIR / "en.json").read_text(encoding="utf-8"))
+    it = json.loads((TRANSLATIONS_DIR / "it.json").read_text(encoding="utf-8"))
+
+    assert (
+        "The valve of zone {zone} reports a leak"
+        in en["issues"]["leak_zone_valve_sensor"]["description"]
+    )
+    assert (
+        "La valvola della zona {zone} segnala una perdita d'acqua"
+        in it["issues"]["leak_zone_valve_sensor"]["description"]
+    )
+    # The system notice cannot name a zone, because a shared meter cannot.
+    for locale in (en, it):
+        assert "{zone}" not in locale["issues"]["leak_system_flow"]["description"]
+        assert "{zone}" not in locale["issues"]["leak_system_flow"]["title"]
+
+
 def test_the_flow_meter_translations_say_flussometro_never_a_synonym() -> None:
     """Terminology rule: in Italian, a flow meter is "flussometro", always --
     never "contatore di portata", "misuratore di portata", or any other
@@ -84,6 +111,12 @@ def test_the_flow_meter_translations_say_flussometro_never_a_synonym() -> None:
         "flow_unit_corrected",
         "flow_unit_override_conflict",
         "flow_unit_override_conflict_line",
+        # The two leak notices whose evidence IS a meter reading. The
+        # valve-sensor one is deliberately absent: its evidence is the valve's
+        # own sensor, and naming a flussometro there would describe one
+        # hardware reading of "moisture" as though it were the only one.
+        "leak_zone_flow",
+        "leak_system_flow",
     ):
         issue = it["issues"][key]
         text = issue["title"] + " " + issue["description"]

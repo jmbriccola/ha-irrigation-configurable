@@ -29,7 +29,11 @@ from homeassistant.util import dt as dt_util
 
 from .accounting import WaterAccountant
 from .const import (
+    CONF_LEAK_ACTION,
     DOMAIN,
+    LEAK_ACTION_CLOSE,
+    LEAK_ACTION_CLOSE_AND_BLOCK,
+    LEAK_ACTIONS,
     SUBENTRY_TYPE_ZONE,
 )
 from .engine.curves import CurveKind, curve_value
@@ -39,7 +43,7 @@ from .engine.model import SessionEvaluation, SkipReason
 from .engine.planner import PlannedRun, build_session_plan
 from .engine.scheduling import split_soak
 from .flow import CANONICAL_UNIT, FlowSensorReader
-from .leak import LeakDetector, LeakState
+from .leak import SOURCE_NO_FLOW_CLOSED, SOURCE_VALVE_SENSOR, LeakDetector, LeakState
 from .models import CycleConfig, HubConfig, ZoneConfig
 from .notify import (
     EVENT_ANOMALY,
@@ -78,6 +82,17 @@ SIGNAL_ZONES_CHANGED = f"{DOMAIN}_zones_changed"
 # whose command never actuated cannot mask a later manual intervention.
 _LEDGER_TTL_S = 60
 _EVALUATION_REUSE_S = 120
+#: Notification titles. The raise and the reminder share one, so a phone that
+#: groups by title groups a standing condition with its own reminders.
+_LEAK_TITLE = "🚨 Irrigation: possible leak"
+_LEAK_CLEARED_TITLE = "💧 Irrigation: leak condition cleared"
+#: How each source reads in a message. Deliberately descriptions of what was
+#: OBSERVED, not of what it means: "the valve's own sensor" is true whether
+#: that sensor is a ground probe or the SWV's internal flow alarm.
+_LEAK_SOURCE_PHRASES = {
+    SOURCE_VALVE_SENSOR: "the valve's own sensor",
+    SOURCE_NO_FLOW_CLOSED: "flow measured with every valve closed",
+}
 _SKIP_NOTICE_DEBOUNCE_S = 5
 _TEMP_TRACK_MINUTES = 10
 _INDEFINITE = datetime(2999, 1, 1, tzinfo=dt_util.UTC)
@@ -162,6 +177,7 @@ class IrrigationRuntime:
         self.sentinel.start()
         self._refresh_notification_issues()
         self._report_rescaled_flow_meters()
+        self._report_invalid_leak_action()
 
     async def async_shutdown(self) -> None:
         """Entry unload: stop everything and leave the valves closed."""
@@ -234,6 +250,7 @@ class IrrigationRuntime:
         )
         self._refresh_notification_issues()
         self._report_rescaled_flow_meters()
+        self._report_invalid_leak_action()
         if removed or (set(self.zones) - old_zone_ids) or cycles_changed:
             async_dispatcher_send(self.hass, SIGNAL_ZONES_CHANGED, self.entry.entry_id)
         self.dispatch_update()
@@ -1258,12 +1275,36 @@ class IrrigationRuntime:
         for scope in list(self._leak_detectors):
             if scope not in scopes:
                 self._leak_detectors.pop(scope).stop()
+                # A dropped detector never withdraws -- stop() only cancels its
+                # subscriptions -- so this is the only place its Repairs issue
+                # can ever be deleted. Without it, removing a zone that was
+                # alarming leaves an issue nothing can take down.
+                ir.async_delete_issue(self.hass, DOMAIN, self._leak_issue_id(scope))
         for scope in scopes:
             detector = self._leak_detectors.get(scope)
             if detector is None:
                 detector = LeakDetector(self, scope)
                 self._leak_detectors[scope] = detector
             detector.start(has_meter=scope in metered)
+        self._reconcile_leak_issues()
+
+    def _reconcile_leak_issues(self) -> None:
+        """Delete the issue of every scope that is not actually alarming.
+
+        The alarm lives in memory and the issue registry does not, so a restart
+        (or an alarm that ended while Home Assistant was down) would otherwise
+        leave an issue standing with nothing behind it and no path left that
+        could delete it. Run after ``start()``, which re-judges every source
+        from live state and can raise on the spot, so a leak that is still
+        present keeps the issue it just re-created.
+
+        Deletion only: an issue is created by the raise, together with the
+        notification that belongs to the same transition. Creating one here
+        would be a second author for the same fact.
+        """
+        for scope, detector in self._leak_detectors.items():
+            if not detector.state.active:
+                ir.async_delete_issue(self.hass, DOMAIN, self._leak_issue_id(scope))
 
     def leak_detector(self, scope: str) -> LeakDetector | None:
         """The detector for a scope, or None when the scope names nothing.
@@ -1294,15 +1335,33 @@ class IrrigationRuntime:
     def on_leak_raised(self, scope: str, state: LeakState) -> None:
         """The alarm went false -> true, once, for however many sources agree.
 
-        Task 8 attaches the user-facing consequences here: the notification,
-        the Repairs issue that outlives it, and the configured leak_action. Its
-        message must branch on the scope -- a hub-scope alarm cannot name a
-        zone, because no zone can be blamed for water on a shared meter.
+        Everything the user sees hangs off this one transition: the event, the
+        notification, the Repairs issue that outlives it, and the configured
+        action. A second source arriving later adds itself to ``sources`` and
+        reaches none of them, which is the whole point of one alarm per scope.
         """
         _LOGGER.warning(
             "Leak alarm raised on %s by %s", self._leak_subject(scope), state.first_source
         )
         self._fire_leak_event(scope, state, "active")
+        ir.async_create_issue(
+            self.hass,
+            DOMAIN,
+            self._leak_issue_id(scope),
+            is_fixable=False,
+            severity=ir.IssueSeverity.ERROR,
+            translation_key=self._leak_translation_key(scope, state),
+            translation_placeholders=self._leak_placeholders(scope),
+        )
+        self._notify_leak(
+            EVENT_LEAK, title=_LEAK_TITLE, message=self._leak_raised_message(scope, state)
+        )
+        if self.hub.leak_action in (LEAK_ACTION_CLOSE, LEAK_ACTION_CLOSE_AND_BLOCK):
+            self.entry.async_create_background_task(
+                self.hass,
+                self.async_close_for_leak(scope),
+                name="irrigation_maestro_leak_close",
+            )
         self.dispatch_update()
 
     def on_leak_repeated(self, scope: str, state: LeakState) -> None:
@@ -1310,23 +1369,285 @@ class IrrigationRuntime:
 
         No event is fired: an automation consuming the event stream counts
         alarms, and a reminder is not a second alarm -- that is the whole point
-        of unifying the sources. Task 8 attaches the repeat notification here.
+        of unifying the sources. No second re-close either: the action is one
+        attempt per alarm, not a retry loop against a valve that has already
+        been told.
         """
         _LOGGER.warning(
             "%s is still reporting a leak (sources: %s)",
             self._leak_subject(scope),
             ", ".join(sorted(state.sources)),
         )
+        self._notify_leak(
+            EVENT_LEAK, title=_LEAK_TITLE, message=self._leak_repeated_message(scope, state)
+        )
 
     def on_leak_cleared(self, scope: str, state: LeakState) -> None:
-        """The last source withdrew. Task 8 attaches the clearing notice.
+        """The last source withdrew: close the event, the issue and the notice.
 
         ``state`` is the alarm as it was immediately before clearing, so the
         event says what kind of leak has ended rather than only that one has.
         """
         _LOGGER.warning("Leak alarm cleared on %s", self._leak_subject(scope))
         self._fire_leak_event(scope, state, "cleared")
+        ir.async_delete_issue(self.hass, DOMAIN, self._leak_issue_id(scope))
+        self._notify_leak(
+            EVENT_LEAK, title=_LEAK_CLEARED_TITLE, message=self._leak_cleared_message(scope)
+        )
         self.dispatch_update()
+
+    def _notify_leak(self, event: str, *, title: str, message: str) -> None:
+        """Push one leak notice. The hooks are callbacks; this cannot await."""
+        self.entry.async_create_background_task(
+            self.hass,
+            self.notifier.async_notify(event, title=title, message=message),
+            name="irrigation_maestro_notify_leak",
+        )
+
+    @staticmethod
+    def _leak_issue_id(scope: str) -> str:
+        return f"leak_{scope}"
+
+    @staticmethod
+    def _leak_translation_key(scope: str, state: LeakState) -> str:
+        """Which authored template this alarm gets.
+
+        Three of them, not one with placeholders, for the reason
+        ``flow_unit_override_conflict_line`` already exists separately from
+        ``flow_unit_override_conflict``: a placeholder is plain string
+        substitution, so a template cannot say "zone Alpha" in one case and
+        "the system" in another, nor name a different sensor per source,
+        across two languages. Each shape is authored in full, per locale.
+
+        A hub scope has no leak sensor to resolve -- ``LeakDetector`` never
+        subscribes to one without a zone -- so its only reachable source is
+        flow, and it takes the system template whatever ``first_source`` says.
+        """
+        if scope == HUB_SCOPE:
+            return "leak_system_flow"
+        if state.first_source == SOURCE_VALVE_SENSOR:
+            return "leak_zone_valve_sensor"
+        return "leak_zone_flow"
+
+    def _leak_placeholders(self, scope: str) -> dict[str, str]:
+        """The system template names no zone, so it is given no placeholder.
+
+        Home Assistant renders the template it is handed; an unused
+        placeholder is harmless, but a template written with none must not be
+        handed a zone name it might one day be tempted to interpolate.
+        """
+        if scope == HUB_SCOPE:
+            return {}
+        zone = self.zones.get(scope)
+        return {"zone": zone.config.name if zone else scope}
+
+    def _leak_raised_message(self, scope: str, state: LeakState) -> str:
+        """What is KNOWN, in wording true for both readings of the sensor.
+
+        A ``device_class: moisture`` sensor on a valve is not necessarily a
+        ground probe: on the SONOFF SWV it is an alarm derived from the valve's
+        own internal flow meter -- "water is passing while I am closed" --
+        mapped to the nearest available class, while on other hardware it
+        really is a probe. "Water detected on the ground" would be false for
+        half of all installations, so the message says the valve reports a
+        leak and stops there.
+
+        The scope decides the subject. A hub alarm cannot name a zone, because
+        water on a meter serving more than one zone genuinely does not say
+        which of them leaks -- and claiming one would send the user digging in
+        the wrong flowerbed.
+        """
+        if scope == HUB_SCOPE:
+            detail = (
+                "Possible leak in the irrigation system -- water is flowing while "
+                "every valve reports closed. The meter that measured it does not "
+                "belong to a single zone, so which zone is leaking cannot be told."
+            )
+        elif state.first_source == SOURCE_VALVE_SENSOR:
+            detail = (
+                f"{self._zone_name(scope)}: possible leak -- the valve of this zone "
+                "reports a leak while it is closed."
+            )
+        else:
+            detail = (
+                f"{self._zone_name(scope)}: possible leak -- water is flowing while "
+                "every valve reports closed."
+            )
+        return f"{detail} {self._leak_action_note()}"
+
+    def _leak_repeated_message(self, scope: str, state: LeakState) -> str:
+        """The reminder, and the only place a second source ever surfaces.
+
+        It stayed silent when it arrived -- one alarm, one notification -- so
+        the reminder lists every source currently reporting rather than only
+        the one that raised the alarm.
+
+        The timestamp is when detection CONFIRMED the leak, which is not when
+        the water started and must never be offered as though it were: the
+        alarm is memory-only, so a restart or a de-configure-and-restore yields
+        a fresh one for a leak that never stopped.
+        """
+        sources = ", ".join(
+            _LEAK_SOURCE_PHRASES.get(source, source) for source in sorted(state.sources)
+        )
+        confirmed = (
+            ""
+            if state.since is None
+            else f" Confirmed at {dt_util.as_local(state.since):%H:%M} "
+            "(when detection confirmed it, not when the water started)."
+        )
+        subject = "The irrigation system" if scope == HUB_SCOPE else self._zone_name(scope)
+        return f"{subject}: still reporting a leak ({sources}).{confirmed}"
+
+    def _leak_cleared_message(self, scope: str) -> str:
+        """Deliberately says only that the alarm ended.
+
+        An alarm is withdrawn by evidence that the water stopped OR by its last
+        source leaving the configuration, and a message claiming the sensor now
+        reports no leak would be false in the second case.
+        """
+        subject = "The irrigation system" if scope == HUB_SCOPE else self._zone_name(scope)
+        resumed = (
+            " New cycles are allowed again."
+            if self.hub.leak_action == LEAK_ACTION_CLOSE_AND_BLOCK
+            else ""
+        )
+        return f"{subject}: the leak condition has cleared.{resumed}"
+
+    def _leak_action_note(self) -> str:
+        """What the configured action does, stated as policy and not as a boast.
+
+        Closing a valve that is already closed is a no-op, and the component
+        cannot stop a leak it detects while idle -- it can only report it and
+        re-assert the closure. Saying so is the point: the user chose this
+        default after being shown the trade-off, and a message implying the
+        water has been dealt with would undo that.
+        """
+        if self.hub.leak_action == LEAK_ACTION_CLOSE_AND_BLOCK:
+            return (
+                "Configured action: close and block -- the master and the implicated "
+                "valve are commanded closed again, and no new cycle starts for the "
+                "zones concerned while the alarm lasts."
+            )
+        if self.hub.leak_action == LEAK_ACTION_CLOSE:
+            return (
+                "Configured action: close -- the master and the implicated valve are "
+                "commanded closed again. That recovers a valve left open by a command "
+                "that never landed; it cannot stop water passing a valve already shut."
+            )
+        return "Configured action: notify only."
+
+    def _zone_name(self, zone_id: str) -> str:
+        zone = self.zones.get(zone_id)
+        return zone.config.name if zone else zone_id
+
+    # What the alarm does ---------------------------------------------------------------
+
+    def leak_zone_ids(self, scope: str) -> list[str]:
+        """Which zones an alarm on this scope implicates.
+
+        A zone scope implicates that zone. A hub scope implicates every zone
+        whose meter reports under HUB_SCOPE -- exactly the set that could be
+        leaking, resolved through the accountant's own scope rule so the zones
+        an alarm names can never disagree with the zones its litres came from.
+
+        When no zone resolves to such a meter at all (every zone has its own,
+        and a line meter measures the whole installation on top), the honest
+        answer is every zone: that meter sits upstream of all of them, and an
+        empty set would make the alarm's consequences vanish on precisely the
+        topology where it is least able to point at anyone.
+        """
+        if scope != HUB_SCOPE:
+            return [scope] if scope in self.zones else []
+        served = [
+            zone_id
+            for zone_id, zone in self.zones.items()
+            if (meter := self.resolved_meter_entity(zone.config)) is not None
+            and self.accountant.scope_for(meter) == HUB_SCOPE
+        ]
+        return served or list(self.zones)
+
+    def leak_blocked_zone_ids(self) -> set[str]:
+        """Every zone close_and_block currently refuses to start a cycle for.
+
+        Empty under any other action, so the block is a property of the
+        configuration and the live alarms together -- changing the action
+        releases the block at once, with no state to unwind.
+        """
+        if self.hub.leak_action != LEAK_ACTION_CLOSE_AND_BLOCK:
+            return set()
+        blocked: set[str] = set()
+        for scope, detector in self._leak_detectors.items():
+            if detector.state.active:
+                blocked.update(self.leak_zone_ids(scope))
+        return blocked
+
+    def leak_block_active(self, zone_id: str) -> bool:
+        return zone_id in self.leak_blocked_zone_ids()
+
+    async def async_close_for_leak(self, scope: str) -> None:
+        """One re-close attempt of the master and the implicated valves.
+
+        Honestly bounded: closing a valve that is already closed is a no-op,
+        and the component cannot stop a leak it detects while idle. What this
+        genuinely recovers is a valve left open by a command that never landed
+        -- most plausibly the master, since source 2 needs every valve closed
+        before it will confirm anything, while a zone's own sensor needs only
+        its own. It does not repair a seeping seat and must not pretend to.
+
+        Skipped entirely while a session is running. ``close`` promises that
+        cycles continue, the session owns every managed valve while it runs,
+        and a zone's sensor can alarm while a DIFFERENT zone waters -- so
+        closing the master here would abort a legitimate cycle on a zone
+        nothing has implicated. The alarm persists and says so; the water does
+        not become our excuse for stopping someone else's watering.
+
+        Ledger-registered, and guarded on ``is_closed`` for the same reason
+        every other close path is: a command to an already-closed valve
+        produces no transition, so its entry would sit for the whole TTL and
+        absorb the next genuine manual close.
+        """
+        if self.session.active:
+            _LOGGER.warning(
+                "Leak alarm on %s: not re-closing while a cycle is running",
+                self._leak_subject(scope),
+            )
+            return
+        controllers = [self.zones[zone_id].valve for zone_id in self.leak_zone_ids(scope)]
+        if self.master_controller is not None:
+            controllers.append(self.master_controller)
+        for controller in controllers:
+            if controller.is_closed:
+                continue
+            self.ledger_expect(controller.entity_id, "close")
+            await controller.async_close()
+
+    def _report_invalid_leak_action(self) -> None:
+        """A rejected leak_action must leave a trace.
+
+        ``leak_action_from_config`` falls back to ``close`` rather than
+        refusing to load the integration, which is right -- but silently, so a
+        user who mistypes the action believes they configured one thing and
+        gets another, with the failure least visible exactly where it matters
+        most. The service schema cannot be the whole answer: options also
+        arrive through import_config and through a hand-edited entry.
+        """
+        raw = self.entry.options.get(CONF_LEAK_ACTION)
+        if raw is None or str(raw) in LEAK_ACTIONS:
+            ir.async_delete_issue(self.hass, DOMAIN, "leak_action_invalid")
+            return
+        _LOGGER.warning(
+            "Unrecognised leak_action %r; using %s instead", str(raw), self.hub.leak_action
+        )
+        ir.async_create_issue(
+            self.hass,
+            DOMAIN,
+            "leak_action_invalid",
+            is_fixable=False,
+            severity=ir.IssueSeverity.WARNING,
+            translation_key="leak_action_invalid",
+            translation_placeholders={"value": str(raw)},
+        )
 
     def _fire_leak_event(self, scope: str, state: LeakState, phase: str) -> None:
         """The one place the leak payload is built.

@@ -641,6 +641,30 @@ set_valve_safety:
       example: 45
       selector:
         number: { min: 1, max: 1440, step: 1, unit_of_measurement: min, mode: box }
+    leak_action:
+      example: close
+      selector:
+        select:
+          options:
+            - notify
+            - close
+            - close_and_block
+    leak_threshold_lpm:
+      example: 0.5
+      selector:
+        number: { min: 0, max: 100, step: 0.1, unit_of_measurement: L/min, mode: box }
+    leak_confirm_s:
+      example: 300
+      selector:
+        number: { min: 0, max: 3600, step: 1, unit_of_measurement: s, mode: box }
+    leak_repeat_min:
+      example: 360
+      selector:
+        number: { min: 0, max: 10080, step: 1, unit_of_measurement: min, mode: box }
+    require_water_supply:
+      example: true
+      selector:
+        boolean:
 
 set_concurrency:
   fields:

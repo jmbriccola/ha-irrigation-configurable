@@ -669,7 +669,7 @@
     },
     "set_valve_safety": {
       "name": "Imposta sicurezza valvole",
-      "description": "Timeout di conferma e watchdog.",
+      "description": "Timeout di conferma, watchdog, rilevamento delle perdite d'acqua e presenza d'acqua.",
       "fields": {
         "open_confirm_s": {
           "name": "Conferma apertura",
@@ -690,6 +690,26 @@
         "watchdog_max_min": {
           "name": "Massimo watchdog",
           "description": "Minuti dopo i quali il watchdog forza la chiusura di una valvola."
+        },
+        "leak_action": {
+          "name": "Azione in caso di perdita",
+          "description": "Cosa succede quando una perdita d'acqua viene confermata. notify: solo una notifica e una segnalazione nelle riparazioni. close (predefinita): anche un tentativo di richiusura della valvola master e della valvola implicata, che recupera una valvola rimasta aperta per un comando mai arrivato ma non può fermare l'acqua che passa attraverso una valvola già chiusa. close_and_block: in più, rifiuta di avviare nuovi cicli per le zone interessate finché la perdita dura."
+        },
+        "leak_threshold_lpm": {
+          "name": "Soglia di perdita",
+          "description": "Litri al minuto oltre i quali l'acqua che scorre con tutte le valvole chiuse conta come perdita. Sotto è gocciolamento e drenaggio. Zero significa che conta qualsiasi flusso."
+        },
+        "leak_confirm_s": {
+          "name": "Conferma perdita",
+          "description": "Secondi per cui una perdita deve essere segnalata prima di essere creduta. La sorgente basata sul flussometro conta solo i secondi effettivamente misurati; il sensore della valvola conta il tempo trascorso dal più recente fra l'attivazione del sensore e la chiusura di quella valvola."
+        },
+        "leak_repeat_min": {
+          "name": "Intervallo dei promemoria",
+          "description": "Minuti fra un promemoria e il successivo finché la perdita dura. Una notifica al passaggio, poi un promemoria a questo intervallo; zero spegne i promemoria senza toccare l'allarme."
+        },
+        "require_water_supply": {
+          "name": "Richiedi la presenza d'acqua",
+          "description": "Rifiuta di avviare un ciclo per una zona il cui sensore segnala mancanza d'acqua. Senza acqua il ciclo non irriga comunque nulla, quindi bloccarlo non costa niente al giardino."
         }
       }
     },
@@ -880,6 +900,22 @@
     "consumption_history_restarted": {
       "title": "Il totale mensile dell'acqua riparte da un saldo riportato",
       "description": "Il vecchio contatore mensile dei consumi è stato sostituito dallo storico dell'acqua per zona introdotto nella 3.3.0. Il suo ultimo valore è stato riportato una sola volta come saldo di apertura di questo periodo: mescola litri misurati da un flussometro con litri stimati come portata nominale × minuti e non ha una suddivisione giornaliera. Entrambi i limiti si risolvono da soli al cambio di periodo successivo, quando il saldo scade e il totale torna a derivare interamente dallo storico per zona."
+    },
+    "leak_zone_valve_sensor": {
+      "title": "Possibile perdita d'acqua nella zona {zone}",
+      "description": "La valvola della zona {zone} segnala una perdita d'acqua mentre è chiusa. Su alcune valvole quel sensore è una sonda a terra; su altre (la SONOFF SWV, per esempio) è un allarme derivato dal flussometro interno della valvola e significa «sta passando acqua mentre sono chiusa». In entrambi i casi, ciò che si sa è che la valvola segnala acqua che non dovrebbe vedere. Controlla la tenuta della valvola e la linea. Questa segnalazione resta finché il sensore non torna a indicare nessuna perdita, o finché non viene rimosso dalla zona: la notifica si legge e si dimentica, questa no. Irrigation Maestro può richiudere la valvola master e questa valvola, il che recupera una valvola rimasta aperta per un comando mai arrivato, ma nulla di ciò che fa può fermare l'acqua che passa attraverso una valvola già chiusa. Se l'azione in caso di perdita è impostata su «chiudi e blocca», nessun nuovo ciclo parte per questa zona finché la segnalazione è presente."
+    },
+    "leak_zone_flow": {
+      "title": "Possibile perdita d'acqua nella zona {zone}",
+      "description": "Il flussometro che serve la zona {zone} ha misurato acqua più a lungo della finestra di conferma mentre tutte le valvole gestite risultavano chiuse. Solo Irrigation Maestro può fare questa verifica, perché solo lui ha comandato la chiusura. Controlla la tenuta della valvola e la linea. Questa segnalazione resta finché il flussometro non indica che l'acqua si è fermata, o finché il flussometro non viene rimosso dalla zona: la notifica si legge e si dimentica, questa no. Irrigation Maestro può richiudere la valvola master e questa valvola, il che recupera una valvola rimasta aperta per un comando mai arrivato, ma nulla di ciò che fa può fermare l'acqua che passa attraverso una valvola già chiusa. Se l'azione in caso di perdita è impostata su «chiudi e blocca», nessun nuovo ciclo parte per questa zona finché la segnalazione è presente."
+    },
+    "leak_system_flow": {
+      "title": "Possibile perdita d'acqua nell'impianto",
+      "description": "Un flussometro ha misurato acqua più a lungo della finestra di conferma mentre tutte le valvole gestite risultavano chiuse. Quel flussometro non appartiene a una sola zona, quindi quale zona stia perdendo non si può davvero dire: si sa solo che l'impianto sta perdendo acqua. Controlla la linea e le valvole una per una. Questa segnalazione resta finché il flussometro non indica che l'acqua si è fermata: la notifica si legge e si dimentica, questa no. Se l'azione in caso di perdita è impostata su «chiudi e blocca», nessun nuovo ciclo parte per le zone servite da quel flussometro finché la segnalazione è presente."
+    },
+    "leak_action_invalid": {
+      "title": "Azione in caso di perdita non riconosciuta",
+      "description": "L'azione in caso di perdita è impostata su «{value}», che non è né notify, né close, né close_and_block. Irrigation Maestro sta usando «close»: una perdita verrà notificata, registrata qui e seguita da un tentativo di richiusura, ma non dal blocco che forse volevi configurare. Reimposta l'azione in Irrigazione → Impostazioni."
     }
   },
   "exceptions": {
