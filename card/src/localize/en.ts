@@ -123,6 +123,8 @@ export const en = {
   "reason.no_flow": "No water flow detected",
   "reason.flow_out_of_range": "Flow out of range",
   "reason.close_failed": "Valve failed to close",
+  "reason.leak": "Blocked by a leak alarm",
+  "reason.no_water_supply": "No water supply",
   "reason.watchdog": "Closed by the safety watchdog",
   "reason.zone_removed": "Zone removed",
   "reason.shutdown": "Integration shut down",

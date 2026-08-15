@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { en } from "./en";
 import { it as itDict } from "./it";
+import { REASON_KEYS } from "../types";
 
 /**
  * `en.ts` is the reference dictionary; the TypeScript type on `it.ts`
@@ -25,5 +26,25 @@ describe("locale parity: en.ts vs it.ts", () => {
 
   it("declare their keys in the same order", () => {
     expect(Object.keys(itDict)).toEqual(Object.keys(en));
+  });
+});
+
+/**
+ * An outcome whose `reason_key` has no label renders as the raw string the
+ * integration sent -- `leak`, in the panel, for every cycle refused by the
+ * `close_and_block` action, from the day that reason shipped until the day
+ * this test was written. The type union alone cannot catch it: adding a key
+ * to `REASON_KEYS` compiles perfectly well without a dictionary entry.
+ *
+ * `restart` is the documented exception: the card contract states that a
+ * restart leaves no per-cycle outcome by design, so the key can never reach
+ * a rendered outcome and has deliberately never been given a label.
+ */
+describe("every reason key the card can render has a label", () => {
+  const RENDERED = REASON_KEYS.filter((key) => key !== "restart");
+
+  it.each(RENDERED)("localizes reason.%s in both locales", (key) => {
+    expect(en[`reason.${key}` as keyof typeof en]).toBeTruthy();
+    expect(itDict[`reason.${key}` as keyof typeof en]).toBeTruthy();
   });
 });

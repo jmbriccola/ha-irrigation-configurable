@@ -42,6 +42,7 @@ CONF_LEAK_THRESHOLD_LPM: Final = "leak_threshold_lpm"
 CONF_LEAK_CONFIRM_S: Final = "leak_confirm_s"
 CONF_LEAK_REPEAT_MIN: Final = "leak_repeat_min"
 CONF_REQUIRE_WATER_SUPPLY: Final = "require_water_supply"
+CONF_WATER_SUPPLY_CONFIRM_S: Final = "water_supply_confirm_s"
 
 # What the component does when a leak alarm goes active.
 LEAK_ACTION_NOTIFY: Final = "notify"
@@ -205,6 +206,21 @@ DEFAULT_LEAK_REPEAT_MIN: Final = 360
 #: A missing water supply blocks the start of a cycle by default: with no water
 #: the cycle waters nothing anyway, so blocking costs the garden nothing.
 DEFAULT_REQUIRE_WATER_SUPPLY: Final = True
+#: How long the supply must have been reported missing before a cycle start is
+#: refused. Deliberately shorter than DEFAULT_LEAK_CONFIRM_S, because the two
+#: mistakes cost different amounts: a false leak alarm shuts valves and shouts,
+#: while a false supply block withholds water that -- if the sensor is right --
+#: was never going to arrive. And erring the other way is cheap too: a window
+#: too long merely lets the cycle start, and the zero-flow guard interrupts it
+#: a few minutes later with the same diagnosis. The two behaviours degrade into
+#: each other rather than contradicting.
+#:
+#: Measured against the sensor's own last_changed, so nothing is tracked and
+#: nothing can drift. After a restart a restored state's last_changed is the
+#: restore, so the clock restarts -- the safe direction: we do not know how
+#: long the supply has been out, so we do not withhold water until it is
+#: confirmed again.
+DEFAULT_WATER_SUPPLY_CONFIRM_S: Final = 180
 
 # Runtime -----------------------------------------------------------------
 

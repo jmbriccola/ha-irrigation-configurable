@@ -60,6 +60,11 @@ export const REASON_KEYS = [
   "flow_out_of_range",
   "close_failed",
   "restart",
+  // A confirmed leak alarm under the close_and_block action.
+  "leak",
+  // Not a leak: the zone's water-supply sensor reports there is no water.
+  // Both a refused start and the diagnosis of a zero-flow interrupt.
+  "no_water_supply",
 ] as const;
 export type ReasonKey = (typeof REASON_KEYS)[number];
 

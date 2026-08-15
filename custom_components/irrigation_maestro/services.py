@@ -148,6 +148,7 @@ ATTR_LEAK_THRESHOLD_LPM: Final = "leak_threshold_lpm"
 ATTR_LEAK_CONFIRM_S: Final = "leak_confirm_s"
 ATTR_LEAK_REPEAT_MIN: Final = "leak_repeat_min"
 ATTR_REQUIRE_WATER_SUPPLY: Final = "require_water_supply"
+ATTR_WATER_SUPPLY_CONFIRM_S: Final = "water_supply_confirm_s"
 ATTR_MAX_CONCURRENT: Final = "max_concurrent"
 ATTR_COMPATIBILITY_GROUPS: Final = "compatibility_groups"
 ATTR_MASTER_PRE_OPEN_S: Final = "master_pre_open_s"
@@ -398,6 +399,7 @@ _VALVE_SAFETY_KEYS: Final = {
     ATTR_LEAK_CONFIRM_S: const.CONF_LEAK_CONFIRM_S,
     ATTR_LEAK_REPEAT_MIN: const.CONF_LEAK_REPEAT_MIN,
     ATTR_REQUIRE_WATER_SUPPLY: const.CONF_REQUIRE_WATER_SUPPLY,
+    ATTR_WATER_SUPPLY_CONFIRM_S: const.CONF_WATER_SUPPLY_CONFIRM_S,
 }
 _CONCURRENCY_KEYS: Final = {
     ATTR_MAX_CONCURRENT: const.CONF_MAX_CONCURRENT,
@@ -481,6 +483,9 @@ _SET_VALVE_SAFETY_SCHEMA = vol.Schema(
         vol.Optional(ATTR_LEAK_CONFIRM_S): _seconds(0, 3600),
         vol.Optional(ATTR_LEAK_REPEAT_MIN): _seconds(0, 10080),
         vol.Optional(ATTR_REQUIRE_WATER_SUPPLY): cv.boolean,
+        # Zero is legal here too, and means "block on the first reading":
+        # a deliberate choice for a sensor its owner trusts completely.
+        vol.Optional(ATTR_WATER_SUPPLY_CONFIRM_S): _seconds(0, 3600),
     }
 )
 _SET_CONCURRENCY_SCHEMA = vol.Schema(
