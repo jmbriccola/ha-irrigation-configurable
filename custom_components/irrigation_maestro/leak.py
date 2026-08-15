@@ -61,6 +61,30 @@ class LeakState:
     first_source: str | None = None
     sources: frozenset[str] = field(default_factory=frozenset)
 
+    @property
+    def describing_source(self) -> str | None:
+        """The source whose evidence a user-facing description should cite.
+
+        ``first_source`` for as long as it is still contributing, because which
+        source noticed first is the honest diagnosis and re-describing a
+        standing alarm every time a second source joins would churn a notice
+        for no new fact.
+
+        But ``first_source`` is written once and never revisited, and a source
+        can stop contributing while the alarm survives on another -- source 2
+        withdraws when its meter leaves the configuration, source 1 when its
+        sensor does. The description has to move with the evidence: a zone that
+        no longer has a meter must not stand accused on flow evidence it cannot
+        produce. A wrong diagnosis is worse than a wrong promise, because it
+        sends the user to look at the wrong thing.
+
+        Sorted, so two survivors resolve the same way every time rather than by
+        set iteration order.
+        """
+        if self.first_source is not None and self.first_source in self.sources:
+            return self.first_source
+        return next(iter(sorted(self.sources)), None)
+
 
 class LeakDetector:
     """Watches one scope's sources and keeps a single alarm state.
@@ -378,13 +402,19 @@ class LeakDetector:
             # One alarm, two sources: losing one of them is not the end of the
             # leak, and re-notifying about the survivor would be a second
             # notification for the same event.
+            #
+            # It can still change what the alarm should SAY, though, which is
+            # the one thing this branch has to hand on: if the withdrawn source
+            # is the one the standing description cites, the description is now
+            # about evidence that no longer exists. Deliberately not a raise
+            # and not a clear -- see on_leak_sources_changed.
             self.state = LeakState(
                 active=True,
                 since=self.state.since,
                 first_source=self.state.first_source,
                 sources=remaining,
             )
-            self._runtime.dispatch_update()
+            self._runtime.on_leak_sources_changed(self._scope, self.state)
             return
         cleared = self.state
         self.state = LeakState()
