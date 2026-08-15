@@ -35,10 +35,6 @@ describe("locale parity: en.ts vs it.ts", () => {
  * `close_and_block` action, from the day that reason shipped until the day
  * this test was written. The type union alone cannot catch it: adding a key
  * to `REASON_KEYS` compiles perfectly well without a dictionary entry.
- *
- * `restart` is the documented exception: the card contract states that a
- * restart leaves no per-cycle outcome by design, so the key can never reach
- * a rendered outcome and has deliberately never been given a label.
  */
 describe("every reason key the card can render has a label", () => {
   // `restart` is excluded on purpose, not by oversight: the card contract

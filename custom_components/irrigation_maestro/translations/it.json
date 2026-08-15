@@ -709,11 +709,11 @@
         },
         "require_water_supply": {
           "name": "Richiedi la presenza d'acqua",
-          "description": "Rifiuta di avviare un ciclo per una zona il cui sensore segnala mancanza d'acqua. Senza acqua il ciclo non irriga comunque nulla, quindi bloccarlo non costa niente al giardino."
+          "description": "Rifiuta di avviare un ciclo per una zona il cui sensore segnala mancanza d'acqua, una volta che la mancanza è durata quanto la finestra di conferma qui sotto. Senza acqua il ciclo non irriga comunque nulla, quindi bloccarlo non costa niente al giardino. Disattivarlo lascia comunque la segnalazione nelle riparazioni e la notifica: segnalano una condizione, e scegliere di irrigare lo stesso non è scegliere di non esserne informati."
         },
         "water_supply_confirm_s": {
           "name": "Conferma mancanza d'acqua",
-          "description": "Secondi per cui la mancanza d'acqua deve essere segnalata prima che l'avvio di un ciclo venga rifiutato, così che una singola lettura ballerina non possa negare l'acqua al giardino. Non ritarda invece la diagnosi di un ciclo già interrotto dal controllo di flusso nullo, che indica subito la mancanza d'acqua. Dopo un riavvio il conteggio riparte da zero, perché da quanto tempo manchi l'acqua non è conoscibile."
+          "description": "Secondi per cui la mancanza d'acqua deve essere segnalata prima che qualcosa agisca: solo quando è durata almeno questo tempo viene rifiutato l'avvio di un ciclo, aperta una segnalazione nelle riparazioni e inviata una notifica. Una singola lettura ballerina non nega quindi l'acqua al giardino e non dice nulla, ma un valore alto ritarda l'essere avvisati tanto quanto ritarda il rifiuto. Non ritarda invece la diagnosi di un ciclo già interrotto dal controllo di flusso nullo, che indica subito la mancanza d'acqua. Dopo un riavvio il conteggio riparte da zero, perché da quanto tempo manchi l'acqua non è conoscibile."
         }
       }
     },
@@ -919,7 +919,7 @@
     },
     "water_supply_missing": {
       "title": "Mancanza d'acqua nella zona {zone}",
-      "description": "Il sensore di presenza d'acqua della zona {zone} segnala che l'acqua manca. Quel sensore ha device class «problem», quindi «on» significa che il problema c'è -- niente acqua -- comunque si legga il suo nome. Non è una perdita: non sta uscendo nulla, semplicemente non c'è nulla con cui irrigare. Controlla il rubinetto, la pressione di rete e ogni intercettazione a monte. Se il requisito di presenza d'acqua non è stato disattivato, nessun nuovo ciclo parte per questa zona una volta che la mancanza è durata quanto la finestra di conferma, così che una singola lettura ballerina non possa negare l'acqua al giardino; un ciclo che parta comunque viene interrotto pochi minuti dopo dal controllo di flusso nullo, che indica proprio la mancanza d'acqua come motivo. Questa segnalazione sparisce non appena il sensore torna a indicare presenza d'acqua, o quando il sensore viene rimosso dalla zona."
+      "description": "Il sensore di presenza d'acqua della zona {zone} segnala che l'acqua manca. Quel sensore ha device class «problem», quindi «on» significa che il problema c'è -- niente acqua -- comunque si legga il suo nome. Non è una perdita: non sta uscendo nulla, semplicemente non c'è nulla con cui irrigare. Controlla il rubinetto, la pressione di rete e ogni intercettazione a monte. Finché il sensore continua a segnalare la mancanza d'acqua, e se il requisito di presenza d'acqua non è stato disattivato, nessun nuovo ciclo parte per questa zona: il rifiuto aspetta che la mancanza sia durata quanto la finestra di conferma, così che una singola lettura ballerina non possa negare l'acqua al giardino, e un ciclo che parta comunque viene interrotto pochi minuti dopo dal controllo di flusso nullo, che indica proprio la mancanza d'acqua come motivo. Se invece è il sensore stesso a tacere -- non disponibile o sconosciuto, come può benissimo capitare a un dispositivo a batteria o Zigbee proprio durante il guasto che ha segnalato -- questa segnalazione resta ma il rifiuto cade, e le due cose non si contraddicono: il silenzio non prova che l'acqua sia tornata, quindi nulla qui può sostenerlo, mentre per negare l'acqua serve la prova positiva che non ce ne sia. Questa segnalazione sparisce non appena il sensore torna a indicare presenza d'acqua, o quando il sensore viene rimosso dalla zona."
     },
     "leak_action_invalid": {
       "title": "Azione in caso di perdita non riconosciuta",
