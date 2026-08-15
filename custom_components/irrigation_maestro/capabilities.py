@@ -9,7 +9,9 @@ entities for the device_class it needs -- "moisture" for a leak report,
 Detection proposes; storage decides. Nothing here is applied implicitly: what
 acts at runtime is only what is written in the zone's configuration, because a
 silently adopted sensor is a coupling between two devices that nobody
-authorised. add_zone writes what this finds; the panel pre-fills with it.
+authorised. The intended wiring is add_zone writing what this finds and the
+panel pre-filling from it -- that does not exist yet; today only the
+discover_zone_sensors service and this module's own tests call it.
 
 A capability that is neither configured nor available is declared absent, which
 is the point: an alarm that will never fire must say so rather than sit there
@@ -79,6 +81,12 @@ def discover_sibling_sensors(
     states currently show. A valve absent from the registry, or with no
     device -- a template or helper entity is a legitimate configuration --
     yields no candidates rather than raising.
+
+    If a device exposes two sensors of the same class, the first one the
+    registry iterates wins -- registration order, not a chosen criterion.
+    That is deliberately arbitrary, not an oversight: it is acceptable for a
+    proposal the user still confirms, but re-pairing the device can silently
+    change which one gets proposed.
     """
     registry = er.async_get(hass)
     valve = registry.async_get(valve_entity)
@@ -102,9 +110,11 @@ def discover_sibling_sensors(
 def resolve_zone_capabilities(hass: HomeAssistant, zone: ZoneConfig) -> ZoneCapabilities:
     """What this zone has, and what its valve's device could offer."""
     leak_candidate, supply_candidate = discover_sibling_sensors(hass, zone.valve_entity)
-    # update_zone writes leak_sensor/water_supply_sensor unconditionally, so ""
-    # is a reachable "no sensor" on every zone -- resolve with truthiness, not
-    # `is None`.
+    # update_zone stores a supplied leak_sensor/water_supply_sensor verbatim,
+    # empty string included -- unlike flow_sensor_unit, there is no special
+    # case that clears the key on an empty value. A zone that update_zone has
+    # never touched carries None instead. Both "" and None are reachable, so
+    # resolve with truthiness, not `is None`.
     return ZoneCapabilities(
         leak_sensor=zone.leak_sensor or None,
         water_supply_sensor=zone.water_supply_sensor or None,
