@@ -27,9 +27,17 @@ from custom_components.irrigation_maestro.leak import (
 )
 from freezegun.api import FrozenDateTimeFactory
 from homeassistant.config_entries import ConfigEntry, ConfigEntryState, ConfigSubentry
-from homeassistant.core import HomeAssistant, State
+from homeassistant.const import EVENT_STATE_CHANGED
+from homeassistant.core import (
+    Event,
+    EventStateChangedData,
+    HomeAssistant,
+    State,
+    callback,
+)
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers import issue_registry as ir
+from homeassistant.util.async_ import get_scheduled_timer_handles
 
 from .mocks import MockValvePark
 from .test_entities import role_state
@@ -62,6 +70,23 @@ def _leak_entity(hass: HomeAssistant, entry: ConfigEntry, zone_id: str | None = 
 
 def _moisture(value: str) -> tuple[str, dict[str, Any]]:
     return value, {"device_class": "moisture"}
+
+
+def _pending_observation_wakes(hass: HomeAssistant) -> int:
+    """How many start-up observation windows are armed on the event loop.
+
+    Reaching into the loop's own scheduled handles because that is the only
+    place a leaked timer exists -- nothing black-box can observe one. Same
+    idiom, and same handle shape, as the supply-wake counter in test_leaks.
+    """
+    count = 0
+    for handle in get_scheduled_timer_handles(hass.loop):
+        if handle.cancelled() or not handle._args:
+            continue
+        target = getattr(handle._args[-1], "target", None)
+        if getattr(target, "__name__", None) == "_on_leak_observation_wake":
+            count += 1
+    return count
 
 
 async def test_a_leak_on_one_zone_turns_only_that_zones_entity_on(
@@ -98,7 +123,9 @@ async def test_a_leak_on_one_zone_turns_only_that_zones_entity_on(
     runtime = entry.runtime_data
     alpha, beta = runtime.zone_ids
 
-    assert _leak_entity(hass, entry, alpha).state == "off"
+    # Not "off" yet: nothing has been watched for a full window (see the
+    # start-up test below). Only the alarm raised after it counts here.
+    assert _leak_entity(hass, entry, alpha).state == "unavailable"
 
     hass.states.async_set("binary_sensor.a_leak", *_moisture("on"))
     await advance(hass, freezer, _PAST_CONFIRM_S, step=10.0)
@@ -147,6 +174,10 @@ async def test_a_scope_with_no_source_is_unavailable_rather_than_off(
 
     The third step then pins what a source is: evidence reporting for THIS
     scope, not a meter existing anywhere in the installation.
+
+    The start-up window is stepped over first, so that everything after it
+    fails for one reason only. Both reasons produce ``unavailable`` and the
+    test would not be able to tell them apart otherwise.
     """
     freezer.move_to(START)
     park = MockValvePark(hass)
@@ -156,6 +187,7 @@ async def test_a_scope_with_no_source_is_unavailable_rather_than_off(
     entry = await setup_hub(hass, [zone_data("Alpha", "valve.a")])
     runtime = entry.runtime_data
     zone_id = runtime.zone_ids[0]
+    await advance(hass, freezer, _PAST_CONFIRM_S, step=10.0)
 
     assert _leak_entity(hass, entry, zone_id).state == "unavailable"
     assert _leak_entity(hass, entry).state == "unavailable"
@@ -206,26 +238,46 @@ async def test_an_alarm_survives_its_meter_going_silent_without_going_unavailabl
     must still stand behind the alarm it is publishing. Neither is a
     de-configuration, which is the only silence that withdraws a source, and
     which the user performs deliberately.
+
+    A quiet SIBLING carries the same silence with no alarm behind it, and it
+    is not decoration: an alarm that is standing is published whatever the
+    availability rule says, so a zone holding one cannot by itself tell a
+    configuration-based rule from a liveness-based one. Beta can. Its meter is
+    just as gone, it has nothing to report, and it must still answer ``off``
+    rather than withdraw -- the same principle, on the side of the pair where
+    it is observable.
     """
     freezer.move_to(START)
     park = MockValvePark(hass)
     park.add("valve.a")
-    hass.states.async_set("sensor.flow", "2.0", {"unit_of_measurement": "L/min"})
+    park.add("valve.b")
+    hass.states.async_set("sensor.flow_a", "2.0", {"unit_of_measurement": "L/min"})
+    hass.states.async_set("sensor.flow_b", "0.0", {"unit_of_measurement": "L/min"})
     mock_weather(hass)
-    entry = await setup_hub(hass, [zone_data("Alpha", "valve.a", flow_sensor="sensor.flow")])
+    entry = await setup_hub(
+        hass,
+        [
+            zone_data("Alpha", "valve.a", flow_sensor="sensor.flow_a"),
+            zone_data("Beta", "valve.b", order=200, flow_sensor="sensor.flow_b"),
+        ],
+    )
     runtime = entry.runtime_data
-    zone_id = runtime.zone_ids[0]
+    alpha, beta = runtime.zone_ids
 
     await advance(hass, freezer, _PAST_CONFIRM_S, step=10.0)
-    assert _leak_entity(hass, entry, zone_id).state == "on"
+    assert _leak_entity(hass, entry, alpha).state == "on"
+    assert _leak_entity(hass, entry, beta).state == "off"
 
-    hass.states.async_set("sensor.flow", "unavailable", {"unit_of_measurement": "L/min"})
+    hass.states.async_set("sensor.flow_a", "unavailable", {"unit_of_measurement": "L/min"})
+    hass.states.async_set("sensor.flow_b", "unavailable", {"unit_of_measurement": "L/min"})
     await advance(hass, freezer, 300, step=10.0)
 
-    assert runtime.leak_state(zone_id).active is True
-    assert _leak_entity(hass, entry, zone_id).state == "on"
+    assert runtime.leak_state(alpha).active is True
+    assert _leak_entity(hass, entry, alpha).state == "on"
+    assert _leak_entity(hass, entry, beta).state == "off"
 
-    hass.states.async_remove("sensor.flow")
+    hass.states.async_remove("sensor.flow_a")
+    hass.states.async_remove("sensor.flow_b")
     await advance(hass, freezer, 300, step=10.0)
     # Asked again rather than left holding whatever it last published: an
     # entity that never re-evaluates would pass this test while answering the
@@ -233,9 +285,11 @@ async def test_an_alarm_survives_its_meter_going_silent_without_going_unavailabl
     runtime.dispatch_update()
     await hass.async_block_till_done()
 
-    assert runtime.zone_flow_meter_usable(runtime.zones[zone_id]) is False
-    assert runtime.leak_state(zone_id).active is True
-    assert _leak_entity(hass, entry, zone_id).state == "on"
+    assert runtime.zone_flow_meter_usable(runtime.zones[alpha]) is False
+    assert runtime.zone_flow_meter_usable(runtime.zones[beta]) is False
+    assert runtime.leak_state(alpha).active is True
+    assert _leak_entity(hass, entry, alpha).state == "on"
+    assert _leak_entity(hass, entry, beta).state == "off"
 
 
 async def test_an_alarm_survives_its_sensor_vanishing_without_going_unavailable(
@@ -252,22 +306,34 @@ async def test_an_alarm_survives_its_sensor_vanishing_without_going_unavailable(
     reported, but it is reported where it belongs: ``leak_sensor_missing`` in
     ``zone_state.degraded``, which describes the zone's plumbing rather than
     retracting a standing alarm.
+
+    The quiet sibling is here for the same reason as in the meter test: a
+    standing alarm is published whatever the availability rule says, so only
+    the zone with nothing to report can show which rule is in force.
     """
     freezer.move_to(START)
     park = MockValvePark(hass)
     park.add("valve.a")
+    park.add("valve.b")
     hass.states.async_set("binary_sensor.a_leak", *_moisture("on"))
+    hass.states.async_set("binary_sensor.b_leak", *_moisture("off"))
     mock_weather(hass)
     entry = await setup_hub(
-        hass, [zone_data("Alpha", "valve.a", leak_sensor="binary_sensor.a_leak")]
+        hass,
+        [
+            zone_data("Alpha", "valve.a", leak_sensor="binary_sensor.a_leak"),
+            zone_data("Beta", "valve.b", order=200, leak_sensor="binary_sensor.b_leak"),
+        ],
     )
     runtime = entry.runtime_data
-    zone_id = runtime.zone_ids[0]
+    alpha, beta = runtime.zone_ids
 
     await advance(hass, freezer, _PAST_CONFIRM_S, step=10.0)
-    assert _leak_entity(hass, entry, zone_id).state == "on"
+    assert _leak_entity(hass, entry, alpha).state == "on"
+    assert _leak_entity(hass, entry, beta).state == "off"
 
     hass.states.async_remove("binary_sensor.a_leak")
+    hass.states.async_remove("binary_sensor.b_leak")
     await advance(hass, freezer, 300, step=10.0)
     # Nothing in this installation dispatches an update on its own -- there is
     # no meter and the detector says nothing when it has nothing to say -- so
@@ -277,8 +343,10 @@ async def test_an_alarm_survives_its_sensor_vanishing_without_going_unavailable(
     await hass.async_block_till_done()
 
     assert hass.states.get("binary_sensor.a_leak") is None
-    assert runtime.leak_state(zone_id).active is True
-    assert _leak_entity(hass, entry, zone_id).state == "on"
+    assert hass.states.get("binary_sensor.b_leak") is None
+    assert runtime.leak_state(alpha).active is True
+    assert _leak_entity(hass, entry, alpha).state == "on"
+    assert _leak_entity(hass, entry, beta).state == "off"
 
 
 async def test_the_entity_cites_the_same_source_the_repairs_notice_does(
@@ -346,15 +414,27 @@ async def test_adding_and_removing_a_zone_adds_and_removes_its_leak_entity(
     with no leak entity until the next restart -- unnoticeable in a suite that
     only ever configures zones up front, and exactly when a user is setting a
     new zone up.
+
+    The new zone also serves its OWN observation window rather than inheriting
+    the one the installation has already worked through: the window measures
+    how long THIS scope has been watched, and nobody watched this zone before
+    it existed. Asserted against an established sibling in the same instant,
+    so a window keyed to the runtime rather than to the scope is visible.
     """
     freezer.move_to(START)
     park = MockValvePark(hass)
     park.add("valve.a")
     park.add("valve.b")
+    hass.states.async_set("binary_sensor.a_leak", *_moisture("off"))
     hass.states.async_set("binary_sensor.b_leak", *_moisture("off"))
     mock_weather(hass)
-    entry = await setup_hub(hass, [zone_data("Alpha", "valve.a")])
+    entry = await setup_hub(
+        hass, [zone_data("Alpha", "valve.a", leak_sensor="binary_sensor.a_leak")]
+    )
     runtime = entry.runtime_data
+    alpha = runtime.zone_ids[0]
+    await advance(hass, freezer, _PAST_CONFIRM_S, step=10.0)
+    assert _leak_entity(hass, entry, alpha).state == "off"
 
     beta = ConfigSubentry(
         data=zone_data("Beta", "valve.b", order=200, leak_sensor="binary_sensor.b_leak"),
@@ -366,6 +446,11 @@ async def test_adding_and_removing_a_zone_adds_and_removes_its_leak_entity(
     await hass.async_block_till_done()
 
     assert entry.runtime_data is runtime  # no reload
+    assert _leak_entity(hass, entry, beta.subentry_id).state == "unavailable"
+    assert _leak_entity(hass, entry, alpha).state == "off"
+
+    await advance(hass, freezer, _PAST_CONFIRM_S, step=10.0)
+
     assert _leak_entity(hass, entry, beta.subentry_id).state == "off"
 
     hass.config_entries.async_remove_subentry(entry, beta.subentry_id)
@@ -376,29 +461,157 @@ async def test_adding_and_removing_a_zone_adds_and_removes_its_leak_entity(
     assert _leak_entity_id(hass, entry, beta.subentry_id) is None
 
 
-async def test_the_alarm_is_re_detected_after_a_restart_rather_than_restored(
+async def test_a_scope_says_nothing_until_it_has_watched_for_a_full_window(
     hass: HomeAssistant, freezer: FrozenDateTimeFactory
 ) -> None:
-    """Stated plainly, because it is a limitation and not a feature.
+    """Just-booted is not the same as no-problem, and only one of them is off.
+
+    The detector holds its alarm in memory only, so every scope starts with no
+    alarm and a confirmation window that has not run. For that window we have
+    not established that there is no leak; we have only just started looking,
+    and a leak running since before the restart is one neither source has had
+    time to confirm. ``off`` there asserts something nobody has checked.
+
+    It ends by itself, with nothing else happening: this installation has no
+    meter and a quiet sensor, so no sample, no state change and no
+    configuration edit will dispatch an update -- only the wake armed for the
+    window's own end can move this entity, and if it were missing the entity
+    would sit at ``unavailable`` for hours after it had earned the right to
+    answer.
+    """
+    freezer.move_to(START)
+    park = MockValvePark(hass)
+    park.add("valve.a")
+    hass.states.async_set("binary_sensor.a_leak", *_moisture("off"))
+    mock_weather(hass)
+    entry = await setup_hub(
+        hass, [zone_data("Alpha", "valve.a", leak_sensor="binary_sensor.a_leak")]
+    )
+    zone_id = entry.runtime_data.zone_ids[0]
+
+    assert _leak_entity(hass, entry, zone_id).state == "unavailable"
+
+    # Just short of the window: still nothing established.
+    await advance(hass, freezer, 290, step=10.0)
+    assert _leak_entity(hass, entry, zone_id).state == "unavailable"
+
+    await advance(hass, freezer, 30, step=10.0)
+
+    assert _leak_entity(hass, entry, zone_id).state == "off"
+
+
+async def test_the_start_up_window_arms_one_timer_and_leaves_none_behind(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    """It ends, and it ends for good: one wake, then nothing.
+
+    Two refusals in one, both invisible from the outside. The window must not
+    keep re-arming once every scope has served it -- a timer that never stops
+    is what the ``leak_repeat_min`` reminder is FOR and this is not that -- and
+    it must not survive an unload, which is the leak nothing black-box can
+    see. A zone added after the first window has closed re-arms it exactly
+    once, for itself.
+    """
+    freezer.move_to(START)
+    park = MockValvePark(hass)
+    park.add("valve.a")
+    park.add("valve.b")
+    hass.states.async_set("binary_sensor.a_leak", *_moisture("off"))
+    mock_weather(hass)
+    entry = await setup_hub(
+        hass, [zone_data("Alpha", "valve.a", leak_sensor="binary_sensor.a_leak")]
+    )
+
+    assert _pending_observation_wakes(hass) == 1
+
+    await advance(hass, freezer, _PAST_CONFIRM_S, step=10.0)
+
+    assert _pending_observation_wakes(hass) == 0
+
+    hass.config_entries.async_add_subentry(
+        entry,
+        ConfigSubentry(
+            data=zone_data("Beta", "valve.b", order=200, leak_sensor="binary_sensor.b_leak"),
+            subentry_type="zone",
+            title="Beta",
+            unique_id=None,
+        ),
+    )
+    await hass.async_block_till_done()
+
+    assert _pending_observation_wakes(hass) == 1
+
+    await hass.config_entries.async_unload(entry.entry_id)
+    await hass.async_block_till_done()
+
+    assert _pending_observation_wakes(hass) == 0
+
+
+async def test_a_standing_alarm_is_published_even_inside_the_start_up_window(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    """The start-up window withholds a silence, never an answer we hold.
+
+    Where the two rules of this entity meet. A config-entry reload leaves the
+    source entities' timestamps untouched, so the sensor has been asserting for
+    longer than ``leak_confirm_s`` already and the rebuilt detector raises in
+    the same instant it starts -- while this scope's observation window has
+    only just begun. Ranking the window first would hide a live alarm for five
+    minutes, which is the mid-alarm retraction the entity's other rule exists
+    to forbid, arriving through the start-up door.
+
+    The alarm is genuinely new, not restored -- ``since`` moves forward -- and
+    that is precisely why publishing it is honest: it was re-derived from live
+    state a moment ago.
+    """
+    freezer.move_to(START)
+    park = MockValvePark(hass)
+    park.add("valve.a")
+    hass.states.async_set("binary_sensor.a_leak", *_moisture("on"))
+    mock_weather(hass)
+    entry = await setup_hub(
+        hass, [zone_data("Alpha", "valve.a", leak_sensor="binary_sensor.a_leak")]
+    )
+    zone_id = entry.runtime_data.zone_ids[0]
+
+    await advance(hass, freezer, _PAST_CONFIRM_S, step=10.0)
+    confirmed_at = _leak_entity(hass, entry, zone_id).attributes["since"]
+
+    await advance(hass, freezer, 600, step=10.0)
+    await hass.config_entries.async_reload(entry.entry_id)
+    await hass.async_block_till_done()
+
+    # No time has passed since the rebuild: the window is at its widest and the
+    # alarm outranks it anyway.
+    restarted = _leak_entity(hass, entry, zone_id)
+    assert restarted.state == "on"
+    assert restarted.attributes["since"] > confirmed_at
+
+
+async def test_a_restart_during_a_live_leak_re_earns_it_and_never_says_off(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    """The whole reason the start-up window exists, stated as an automation.
 
     ``LeakDetector`` keeps its alarm in memory only, on purpose: a restart is
-    not evidence that a leak is still running. Nothing here restores it, and
-    this entity adds no persistence of its own -- it publishes what the
-    detector holds, and after a restart the detector holds nothing until a
-    source says so again.
+    not evidence that a leak is still running, and a restored alarm can be
+    stale -- fixed while the system was down. So the evidence is re-earned,
+    which is why ``since`` moves forward here rather than coming back as it
+    was. Nothing persists it and this entity adds no persistence of its own.
 
-    What makes that acceptable is re-detection from LIVE state: a sensor
-    already asserting when we come up has no state change left to make, and
-    ``start()`` judges it anyway. So the alarm comes back -- as a NEW alarm,
-    which is what ``since`` moving forward proves. Had anything been restored,
-    it would have carried the old timestamp.
+    What must NOT happen in the meantime is the entity saying ``off``. The
+    natural pair a user writes is "leak -> close the mains" and "leak cleared
+    -> reopen it", and the second triggers on ``to: "off"``. A restart in the
+    middle of a live leak would fire it and put the water back on, because we
+    told it the leak had stopped when in truth we had forgotten. A transition
+    into ``unavailable`` fires no such trigger, so every state this entity
+    publishes across the restart is asserted, not just the one at the end.
 
-    One honest caveat this test cannot show, because a config-entry reload is
-    not a restart: after a real Home Assistant restart the sensor's own
-    ``last_changed`` is the restore too, so the confirmation window runs again
-    from start-up and the entity reads ``off`` for up to ``leak_confirm_s``
-    before saying ``on`` again. Here those timestamps survive the reload, so
-    re-confirmation is immediate.
+    The sensor is re-asserted immediately before the reload so its
+    ``last_changed`` is the restore, which is what a real Home Assistant
+    restart looks like: without that the alarm is re-raised instantly from a
+    timestamp that outlived the reload, and the gap this test is about never
+    opens.
     """
     freezer.move_to(START)
     park = MockValvePark(hass)
@@ -414,11 +627,34 @@ async def test_the_alarm_is_re_detected_after_a_restart_rather_than_restored(
     first = _leak_entity(hass, entry, zone_id)
     assert first.state == "on"
     confirmed_at = first.attributes["since"]
+    entity_id = first.entity_id
+
+    published: list[str] = []
+
+    @callback
+    def _record(event: Event[EventStateChangedData]) -> None:
+        if event.data["entity_id"] != entity_id:
+            return
+        new_state = event.data["new_state"]
+        if new_state is not None:
+            published.append(new_state.state)
+
+    hass.bus.async_listen(EVENT_STATE_CHANGED, _record)
 
     await advance(hass, freezer, 600, step=10.0)
+    # The sensor as a restart leaves it: still asserting, but with a timestamp
+    # no older than the restart itself.
+    hass.states.async_remove("binary_sensor.a_leak")
+    hass.states.async_set("binary_sensor.a_leak", *_moisture("on"))
     await hass.config_entries.async_reload(entry.entry_id)
     await hass.async_block_till_done()
+
+    assert _leak_entity(hass, entry, zone_id).state == "unavailable"
+
+    await advance(hass, freezer, _WELL_PAST_CONFIRM_S, step=10.0)
 
     restarted = _leak_entity(hass, entry, zone_id)
     assert restarted.state == "on"
     assert restarted.attributes["since"] > confirmed_at
+    # Not one clearing edge anywhere across the restart.
+    assert "off" not in published
