@@ -167,7 +167,19 @@ interval's start, or to the unattributed scope when there were none — and the
 whole gap goes to each claimant rather than being split, because it is a
 duration, not a quantity. `last_gap_at` (design spec §1.4) is the same fact's
 instant, kept per zone beside the counters because the daily history knows how
-many seconds fell but not when; `zone_water_total` publishes it. Zone entries
+many seconds fell but not when; `zone_water_total` publishes it.
+
+A **gap-only sample writes nothing**: it updates the accounting in memory and
+returns before the persist/dispatch throttle. `FlowSensorReader` reads a
+missing entity as unit-unknown, so a typo'd or deleted meter emits nothing but
+gap-only samples — and letting those through would mean an `async_delay_save`
+of the whole state file plus a full `dispatch_update` once a minute for the
+life of that misconfiguration, on hardware that is typically a Pi on an SD
+card. Gaps therefore ride along with the next write that has a reason of its
+own (a litre-bearing sample, `record_estimate`, a cycle's end, midnight
+housekeeping), and an unclean shutdown in between loses at most some gap
+seconds — the cheapest thing in this store, where the same trade on litres
+would cost a wrong meter reading. Zone entries
 written before this release simply lack the key and read as `None`
 (`STORAGE_VERSION` stays 1). Unattributed scopes carry no `last_gap_at`: no
 entity reports one for a scope.

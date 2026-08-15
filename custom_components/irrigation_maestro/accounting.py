@@ -169,10 +169,12 @@ class MeterLedger:
 
         One final sample carrying ``lpm=None`` fixes that with the monitor's
         own machinery instead of a registry of monitors: the unit-lost
-        transition makes it blind, the guard stops judging, and the run
-        finishes on its duration. Which is the honest reading -- from the
-        run's point of view the meter has become unreadable, exactly the case
-        that rule already covers.
+        transition makes it blind, the guard stops judging, and the run ends
+        on its own schedule instead of being cut short -- its duration, or for
+        a volume cycle the volume_safety_timeout_min that already covers a run
+        with no usable meter. Which is the honest reading -- from the run's
+        point of view the meter has become unreadable, exactly the case that
+        rule already covers.
 
         Deliberately not folded into ``stop()``: a ledger shutting down
         normally (Home Assistant stopping, the entry unloading) must not start
@@ -638,6 +640,25 @@ class WaterAccountant:
                     gap_s=gap_s,
                     gap_at=sample.at,
                 )
+        # A gap-only sample stops here: recorded in memory, but it asks for
+        # neither a store write nor an entity refresh of its own.
+        #
+        # FlowSensorReader.read returns unit-unknown for a *missing* entity as
+        # well as an unresolvable unit, so a typo'd or deleted line_flow_sensor
+        # produces nothing but gap-only samples -- forever. Letting those reach
+        # the throttle would put such an install into a permanent once-a-minute
+        # write of the whole state file, on hardware that is typically an SD
+        # card, for a fault whose cost would surface months later as wear and
+        # be impossible to trace back here.
+        #
+        # Nothing is lost that matters: gap seconds and last_gap_at ride along
+        # with the next write that has a reason of its own -- a litre-bearing
+        # sample (still once a minute, unchanged), record_estimate, the end of
+        # a cycle, midnight housekeeping. An unclean shutdown in between costs
+        # a slightly under-reported outage, where the same trade on litres
+        # would cost a wrong meter reading.
+        if liters <= 0:
+            return
         if not self._due_to_persist(sample.at):
             return
         state.schedule_save()
