@@ -30,7 +30,7 @@ config entry).
 
 | maestro_role        | platform | state | extra attributes |
 |---------------------|----------|-------|------------------|
-| `zone_state`        | sensor   | `idle` \| `queued` \| `watering` \| `soaking` \| `paused` \| `suspended` \| `disabled` | `zone_name`, `order`, `adjustment_pct` (float, 10–300), `degraded` (list of keys, see below), `run_started_at` (ISO, while watering), `run_duration_min` (frozen total), `run_planned_runs` (soak split list), `active_cycle_id`, `suspended_until` (ISO or null), `cycles` (list, see below) |
+| `zone_state`        | sensor   | `idle` \| `queued` \| `watering` \| `soaking` \| `paused` \| `suspended` \| `disabled` | `zone_name`, `order`, `adjustment_pct` (float, 10–300), `degraded` (list of keys, see below), `run_started_at` (ISO, while watering), `run_duration_min` (frozen total), `run_planned_runs` (soak split list), `active_cycle_id`, `suspended_until` (ISO or null), `cycles` (list, see below), `capabilities` (object, see "Zone capabilities" below) |
 | `zone_next_run`     | sensor   | ISO timestamp or unavailable | `cycle_id`, `cycle_name` |
 | `zone_last_outcome` | sensor   | `completed` \| `skipped` \| `interrupted` \| `cancelled` \| `none` | `reason_key` (see keys), `finished_at` (ISO), `cycle_id`, `duration_min`, `volume_l` |
 | `zone_water_total`  | sensor   | liters (float), `device_class: water`, `state_class: total_increasing` | `estimated` (bool), `source` (`measured` \| `nominal` \| `mixed` \| `none`), `today_l` (float), `month_l` (float), `meter_entity` (entity id or null), `last_gap_at` (ISO or null) — see "Water accounting sensors" below |
@@ -120,7 +120,11 @@ call the same value `program_id` in their fields, for the user-facing name):
 
 `degraded` keys: `switch_valve` (no position feedback), `no_flow_meter`,
 `flow_unit_unknown` (a meter is configured but its unit cannot be resolved),
-`line_meter_shared`, `no_hourly_forecast`, `volume_mode_unavailable`.
+`line_meter_shared`, `no_hourly_forecast`, `volume_mode_unavailable`,
+`leak_sensor_missing`, `water_supply_sensor_missing` (a sensor is configured
+but no longer resolves in either the entity registry or the state machine —
+see "Zone capabilities" below for why this is not folded into `capabilities`
+itself).
 
 ### Water accounting sensors (`zone_water_total`, `hub_unattributed_water`)
 
@@ -208,6 +212,92 @@ holding the same fact would be a second thing that could drift from it.
     was measured on a meter that serves exactly one zone, `"__hub__"` when
     it was measured on a meter serving more than one zone (or none).
     Scopes with zero litres are omitted.
+
+### Zone capabilities (`zone_state.capabilities`)
+
+Resolved **per zone, not per hub**: in a mixed installation one zone's valve
+sits on a device that exposes a moisture/problem sibling sensor and another
+does not, and each zone reports its own hardware — never the hub's or
+another zone's. `zone_state.capabilities` is an object with three keys, each
+one of three string values:
+
+```json
+"capabilities": {
+  "water_accounting": "measured" | "estimated" | "unavailable",
+  "leak_detection":   "configured" | "candidate_available" | "unavailable",
+  "water_supply":     "configured" | "candidate_available" | "unavailable"
+}
+```
+
+- **`leak_detection` / `water_supply`** — from `capabilities.py`'s
+  `resolve_zone_capabilities`, one per zone:
+  - `configured`: the zone's `leak_sensor` / `water_supply_sensor` is set,
+    to any entity id, anywhere — not necessarily a sibling of the valve (a
+    ground probe near the bed is a legitimate, deliberate choice). The card
+    should render this as **active**, not as an invitation.
+  - `candidate_available`: nothing is configured, but the valve's own
+    device exposes a `binary_sensor` of the matching `device_class`
+    (`moisture` for leak, `problem` for water supply) that could be wired
+    up. Render this as an **invitation** — "your hardware could do this,
+    you have not told it to" — never as a warning or an alarm.
+  - `unavailable`: neither configured nor candidate. A **declared absence**,
+    on purpose: an alarm that would silently never fire is worse than a
+    capability that plainly says it is not covered, because the user would
+    otherwise believe they are protected.
+  - Detected candidates are matched by `device_class` alone, never by
+    entity id or name — a plausible-looking id earns a sensor nothing (see
+    `capabilities.py`'s own tests). The card must not re-derive candidates
+    by name either; read `candidate_available` and, if it needs the actual
+    entity id to offer wiring it up, call the `discover_zone_sensors`
+    service (below).
+- **`water_accounting`** — judged from the zone's flow meter and nominal
+  rate, not from `capabilities.py` (which knows nothing about flow). Two
+  runtime calls feed it, deliberately kept separate because they serve
+  different callers: `zone_has_flow_meter` is configuration only (a
+  momentarily unavailable sensor must not fail an edit), `zone_flow_meter_usable`
+  reads live state, at plan time and here.
+  - `measured`: a meter is **configured** (`zone_has_flow_meter`) and it
+    currently resolves a unit (`zone_flow_meter_usable`).
+  - `estimated`: **no meter is configured at all**, but `nominal_flow_lpm`
+    is set and nonzero, so litres are booked from nominal flow × minutes
+    every run.
+  - `unavailable`: either no meter is configured and no nominal rate is set
+    (unset or `0` — nothing to integrate, nothing to estimate, the same
+    verdict `zone_water_total`'s own `source: "none"` reaches for the
+    identical zone, and judged the same config-only way, so it cannot flap
+    with a momentarily unavailable sensor) — **or** a meter is configured
+    but its unit does not currently resolve, regardless of `nominal_flow_lpm`.
+    That second case is a live-state read (the same live check
+    `flow_unit_unknown` in `degraded` uses, so the two track together) and
+    intentionally does **not** mirror what the accounting engine books for
+    an individual run: `add_consumption` falls back to the nominal
+    estimate whenever the meter is unusable, configured or not, so a
+    zone's litres can keep accruing (and `zone_water_total`'s `source` can
+    read `nominal`/`mixed`) while its declared `water_accounting` reads
+    `unavailable`. That is deliberate here: a configured meter that is not
+    currently readable is a fault to surface and fix (mirroring
+    `flow_unit_unknown`), not a mode to reassure the user about — a silent
+    "estimated" would undersell a meter that stopped working.
+
+**"Configured and missing" is not a fourth `capabilities` value.**
+`capabilities.py` reports `configured` for a sensor the user chose even
+after that entity stops existing — deliberately: the module only records
+intent, and downgrading it the moment an entity blips would let the panel
+offer to silently overwrite a deliberate choice during, say, a Zigbee
+re-pair. But a configured sensor the user believes is covering them, and
+which has in fact vanished, has to be visible as such somewhere, or
+`configured` quietly becomes exactly the failure this whole model exists to
+prevent. That somewhere is the existing `degraded` list, not `capabilities`:
+`leak_sensor_missing` / `water_supply_sensor_missing` appear there whenever
+the zone's configured sensor no longer resolves in either the entity
+registry or the state machine (registry checked first, so a sensor that
+simply has not posted a state since restart — the normal case right after
+Home Assistant comes up — is not misreported as vanished). A zone can
+therefore show `leak_detection: "configured"` **and** `"leak_sensor_missing"
+in degraded` at the same time; that combination is what "configured, but no
+longer there" looks like from the attributes alone, and is exactly what
+distinguishes it from a zone whose configured sensor is present and
+healthy (`"configured"`, nothing in `degraded`).
 
 ## Services (domain `irrigation_maestro`)
 
@@ -379,7 +469,9 @@ Anomaly-only keys (fired in `anomaly` events, not as run outcomes):
 by design — the startup watchdog closes valves and the sentinel flags the
 missing outcome.
 
-Zone/session states and degraded keys above are localizable too.
+Zone/session states and degraded keys above are localizable too, as are the
+`capabilities` values (`measured`, `estimated`, `configured`,
+`candidate_available`, `unavailable`).
 
 ## The sidebar panel (`irrigation-maestro-panel`)
 
