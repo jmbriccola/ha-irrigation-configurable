@@ -252,10 +252,22 @@ problem* and neither case can claim that:
    that we have just started looking. After it, `off` means what it says — a
    leak present throughout the window would have been confirmed inside it.
 
-   The window is **per scope**, and it is measured over a period in which the
-   evidence could actually have been seen: it starts at **the first moment one
-   of that scope's sources reports something usable** (never earlier than the
-   integration itself, which is not watching before it loads). A source that
+   The window is **per scope and per source set**, and it is measured over a
+   period in which the evidence could actually have been seen: it starts at
+   **the first moment one of that scope's sources reports something usable**
+   (never earlier than the integration itself, which is not watching before it
+   loads), and it does not expire while one of the detector's own confirmation
+   windows is **in flight** — measured seconds already on the books, or a
+   sensor-plus-closed-valve pair being timed. Those two clocks are not the same
+   clock: the detector counts measured seconds, this one counts wall clock, and
+   an unmeasured interval stops one without stopping the other. Expiring on
+   wall clock alone would publish `off` seconds or minutes before an alarm
+   that was already being confirmed. Nothing healthy waits longer for it: "in
+   flight" means evidence is accumulating right now, and a dry meter or a quiet
+   sensor is not accumulating anything. Changing a scope's **source set**
+   (swapping the sensor, clearing the meter, adding a second source) makes it
+   earn a window again, because the credit belongs to the sources that served
+   it. A source that
    comes up 60 s late would
    otherwise be credited with 60 s of watching it did not do — and 240 s of
    evidence under a 300 s bar is a leak still unconfirmed at the instant we
@@ -263,9 +275,13 @@ problem* and neither case can claim that:
    sensor (not `unknown` from a device that has paired and not yet spoken),
    and a meter reading that is both numeric **and** in a resolvable unit (a
    meter with no unit publishes numbers and contributes no measured seconds
-   at all). A zone added later, and a zone that gains its first source later,
-   both serve a full window from that moment; a reload is a start-up like any
-   other.
+   at all). A zone added later, a zone that gains its first source later, and
+   a zone whose sources change at all, each serve a full window from that
+   moment; a reload is a start-up like any other. Once a window has been
+   served it stays served: a later confirmation window (post-cycle drainage
+   opens one on every cycle) does not take the answer back, and neither does
+   raising `leak_confirm_s` at runtime — a scope that has not yet served waits
+   out the new, longer window instead.
 
    **The cost, stated plainly:** a configured source that never reports
    anything usable leaves its entity unavailable indefinitely. That is the
