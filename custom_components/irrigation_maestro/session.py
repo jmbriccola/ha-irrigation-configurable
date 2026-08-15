@@ -54,6 +54,7 @@ REASON_MANUAL = "manual_intervention"
 REASON_NO_FLOW = "no_flow"
 REASON_CLOSE_FAILED = "close_failed"
 REASON_WATCHDOG = "watchdog"
+REASON_LEAK = "leak"
 
 _GATHER_WINDOW_S = 2.0
 
@@ -788,6 +789,19 @@ class SessionRunner:
         # Safety level 5: post-manual-stop block window.
         if not segment.manual and runtime.manual_block_active():
             self._record(segment, RESULT_CANCELLED, "manual_stop_block")
+            return
+
+        # A confirmed leak, under the leak action that opted into blocking.
+        # Here rather than at enqueue time so every path is covered by one
+        # gate, exactly like the window above: scheduled runs, manual runs and
+        # the later segments of a soak split all reach this before a valve
+        # opens. A segment already watering is NOT stopped -- blocking governs
+        # starts, and aborting a running cycle is what `close` promises not to
+        # do. Manual runs are deliberately not exempt: "no new cycles" includes
+        # the one asked for by hand, and the escapes are fixing the leak,
+        # removing the source that reported it, or changing the action.
+        if runtime.leak_block_active(segment.zone_id):
+            self._record(segment, RESULT_SKIPPED, REASON_LEAK)
             return
 
         # Calendar forbidden windows: never start inside one; truncate to

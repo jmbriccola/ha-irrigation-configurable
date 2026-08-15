@@ -563,16 +563,23 @@ class WaterAccountant:
         readings arrive through these ledgers -- so a scope missing from this
         set is one whose source 2 has gone permanently silent and whose alarm
         must be withdrawn by the configuration change itself, not left standing
-        for ever. Derived from the live ledgers and the same ``_scope_for``
+        for ever. Derived from the live ledgers and the same ``scope_for``
         that routes the samples, so the two can never disagree about who
         reports for whom: a zone that gains a second zone behind its meter
         leaves this set at the same instant its samples start arriving under
         HUB_SCOPE instead.
         """
-        return {self._scope_for(entity_id) for entity_id in self._ledgers}
+        return {self.scope_for(entity_id) for entity_id in self._ledgers}
 
-    def _scope_for(self, entity_id: str) -> str:
-        """Whose leak this would be: the sole zone on this meter, or the hub."""
+    def scope_for(self, entity_id: str) -> str:
+        """Whose leak this would be: the sole zone on this meter, or the hub.
+
+        Public because the alarm's consequences need it too: which zones a
+        hub-scope alarm implicates is "every zone whose meter reports under
+        HUB_SCOPE", and that has to be the same rule that routed the samples.
+        A second copy is how the zones an alarm blocks drift away from the
+        zones its litres came from.
+        """
         owners = [
             zone.config.zone_id
             for zone in self._runtime.zones.values()
@@ -626,7 +633,7 @@ class WaterAccountant:
         # has STOPPED, and it is what makes post-cycle drainage harmless; a
         # detector that never saw it would keep a window open on water that
         # ended minutes ago.
-        detector = self._runtime.leak_detector(self._scope_for(entity_id))
+        detector = self._runtime.leak_detector(self.scope_for(entity_id))
         if detector is not None:
             detector.note_flow(
                 liters=liters,
@@ -644,7 +651,7 @@ class WaterAccountant:
         state = self._runtime.state
         if not claimants:
             state.add_unattributed(
-                self._scope_for(entity_id),
+                self.scope_for(entity_id),
                 liters,
                 day=day,
                 valves_closed=valves_closed,

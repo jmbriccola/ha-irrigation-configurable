@@ -143,6 +143,11 @@ ATTR_CLOSE_CONFIRM_S: Final = "close_confirm_s"
 ATTR_SWITCH_CONFIRM_S: Final = "switch_confirm_s"
 ATTR_STARTUP_VALVE_TIMEOUT_S: Final = "startup_valve_timeout_s"
 ATTR_WATCHDOG_MAX_MIN: Final = "watchdog_max_min"
+ATTR_LEAK_ACTION: Final = "leak_action"
+ATTR_LEAK_THRESHOLD_LPM: Final = "leak_threshold_lpm"
+ATTR_LEAK_CONFIRM_S: Final = "leak_confirm_s"
+ATTR_LEAK_REPEAT_MIN: Final = "leak_repeat_min"
+ATTR_REQUIRE_WATER_SUPPLY: Final = "require_water_supply"
 ATTR_MAX_CONCURRENT: Final = "max_concurrent"
 ATTR_COMPATIBILITY_GROUPS: Final = "compatibility_groups"
 ATTR_MASTER_PRE_OPEN_S: Final = "master_pre_open_s"
@@ -384,6 +389,15 @@ _VALVE_SAFETY_KEYS: Final = {
     ATTR_SWITCH_CONFIRM_S: const.CONF_SWITCH_CONFIRM_S,
     ATTR_STARTUP_VALVE_TIMEOUT_S: const.CONF_STARTUP_VALVE_TIMEOUT_S,
     ATTR_WATCHDOG_MAX_MIN: const.CONF_WATCHDOG_MAX_MIN,
+    # Leak detection and the water-supply gate live here rather than in a
+    # service of their own: they are the same kind of setting as the
+    # confirmation windows above -- what the component does when a valve, or
+    # the water behind it, does not behave.
+    ATTR_LEAK_ACTION: const.CONF_LEAK_ACTION,
+    ATTR_LEAK_THRESHOLD_LPM: const.CONF_LEAK_THRESHOLD_LPM,
+    ATTR_LEAK_CONFIRM_S: const.CONF_LEAK_CONFIRM_S,
+    ATTR_LEAK_REPEAT_MIN: const.CONF_LEAK_REPEAT_MIN,
+    ATTR_REQUIRE_WATER_SUPPLY: const.CONF_REQUIRE_WATER_SUPPLY,
 }
 _CONCURRENCY_KEYS: Final = {
     ATTR_MAX_CONCURRENT: const.CONF_MAX_CONCURRENT,
@@ -455,6 +469,18 @@ _SET_VALVE_SAFETY_SCHEMA = vol.Schema(
         vol.Optional(ATTR_SWITCH_CONFIRM_S): _seconds(1, 300),
         vol.Optional(ATTR_STARTUP_VALVE_TIMEOUT_S): _seconds(1, 600),
         vol.Optional(ATTR_WATCHDOG_MAX_MIN): _seconds(1, 1440),
+        # vol.In over the one list of legal actions, so a value this schema
+        # accepts can never be one the runtime silently falls back from.
+        vol.Optional(ATTR_LEAK_ACTION): vol.In(const.LEAK_ACTIONS),
+        # Zero is legal on all three, and means something on each: threshold 0
+        # is "any flow at all is a leak", confirm 0 is "no waiting", repeat 0
+        # is "no reminders".
+        vol.Optional(ATTR_LEAK_THRESHOLD_LPM): vol.All(
+            vol.Coerce(float), vol.Range(min=0, max=100)
+        ),
+        vol.Optional(ATTR_LEAK_CONFIRM_S): _seconds(0, 3600),
+        vol.Optional(ATTR_LEAK_REPEAT_MIN): _seconds(0, 10080),
+        vol.Optional(ATTR_REQUIRE_WATER_SUPPLY): cv.boolean,
     }
 )
 _SET_CONCURRENCY_SCHEMA = vol.Schema(

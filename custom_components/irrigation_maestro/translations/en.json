@@ -669,7 +669,7 @@
     },
     "set_valve_safety": {
       "name": "Set valve safety",
-      "description": "Confirmation timeouts and the watchdog.",
+      "description": "Confirmation timeouts, the watchdog, leak detection and the water-supply gate.",
       "fields": {
         "open_confirm_s": {
           "name": "Open confirmation",
@@ -690,6 +690,26 @@
         "watchdog_max_min": {
           "name": "Watchdog maximum",
           "description": "Minutes after which the watchdog force-closes a valve."
+        },
+        "leak_action": {
+          "name": "Leak action",
+          "description": "What happens when a leak is confirmed. notify: a notification and a repair notice only. close (default): also one re-close attempt of the master and the implicated valve, which recovers a valve left open by a command that never landed but cannot stop water passing a valve already shut. close_and_block: also refuses to start new cycles for the zones concerned while the leak lasts."
+        },
+        "leak_threshold_lpm": {
+          "name": "Leak threshold",
+          "description": "Litres per minute above which flow with every valve closed counts as a leak. Below it is drip and drainage. Zero means any flow at all counts."
+        },
+        "leak_confirm_s": {
+          "name": "Leak confirmation",
+          "description": "Seconds a leak must be reported before it is believed. The flow source counts only the seconds its meter actually measured; the valve's own sensor counts wall-clock time since the later of the sensor asserting and that valve reporting closed."
+        },
+        "leak_repeat_min": {
+          "name": "Leak reminder interval",
+          "description": "Minutes between reminders while a leak persists. One notification on the transition, then a reminder at this interval; zero turns the reminders off without touching the alarm."
+        },
+        "require_water_supply": {
+          "name": "Require the water supply",
+          "description": "Refuse to start a cycle for a zone whose water-supply sensor reports no water. With no water the cycle waters nothing anyway, so blocking costs the garden nothing."
         }
       }
     },
@@ -880,6 +900,22 @@
     "consumption_history_restarted": {
       "title": "Monthly water total restarts from a carried balance",
       "description": "The old monthly consumption counter has been replaced by the per-zone water history introduced in 3.3.0. Its last value has been carried forward once as this period's opening balance: it mixes litres measured through a flow meter with litres estimated as nominal flow × minutes, and it has no day-by-day breakdown. Both limitations resolve themselves at the next period boundary, when the balance expires and the total comes entirely from the per-zone history again."
+    },
+    "leak_zone_valve_sensor": {
+      "title": "Possible leak on {zone}",
+      "description": "The valve of zone {zone} reports a leak while it is closed. On some valves that sensor is a ground probe; on others (the SONOFF SWV, for one) it is an alarm derived from the valve's own internal flow meter, meaning \"water is passing while I am shut\". Either way, what is known is that the valve reports water it should not be seeing. Check the valve seat and the line. This notice stays until the sensor reports no leak again, or until it is removed from the zone; the notification is read and forgotten, this is not. Irrigation Maestro can re-close the master and this valve, which recovers a valve left open by a command that never landed, but nothing it does can stop water passing a valve that is already shut. If the leak action is set to \"close and block\", no new cycle starts for this zone while this notice is present."
+    },
+    "leak_zone_flow": {
+      "title": "Possible leak on {zone}",
+      "description": "The flow meter serving zone {zone} measured water for longer than the confirmation window while every managed valve reported closed. Only Irrigation Maestro can make that check, because only it commanded the closure. Check the valve seat and the line. This notice stays until the meter reports the water has stopped, or until the meter is removed from the zone; the notification is read and forgotten, this is not. Irrigation Maestro can re-close the master and this valve, which recovers a valve left open by a command that never landed, but nothing it does can stop water passing a valve that is already shut. If the leak action is set to \"close and block\", no new cycle starts for this zone while this notice is present."
+    },
+    "leak_system_flow": {
+      "title": "Possible leak in the irrigation system",
+      "description": "A flow meter measured water for longer than the confirmation window while every managed valve reported closed. That meter does not belong to a single zone, so which zone is leaking genuinely cannot be told -- only that the system is losing water. Check the line and each valve in turn. This notice stays until the meter reports the water has stopped; the notification is read and forgotten, this is not. If the leak action is set to \"close and block\", no new cycle starts for the zones behind that meter while this notice is present."
+    },
+    "leak_action_invalid": {
+      "title": "Unrecognised leak action",
+      "description": "The leak action is set to \"{value}\", which is not one of notify, close or close_and_block. Irrigation Maestro is using \"close\" instead, so a leak will be notified, recorded here and followed by one re-close attempt -- but not by the blocking you may have meant to configure. Set the action again in Irrigazione → Settings."
     }
   },
   "exceptions": {
