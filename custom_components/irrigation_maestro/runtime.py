@@ -1185,14 +1185,23 @@ class IrrigationRuntime:
         The repair states the standing condition; this pushes the change,
         because a run silently losing volume mode and flow anomaly detection
         halfway through is something the user has to be told about now.
+
+        Two causes reach here, and the message must fit both: a unit that
+        stopped resolving, and a meter retired mid-run because it left the
+        configuration (MeterLedger.retire publishes a unit-less farewell
+        sample, which is this same transition from the monitor's point of
+        view). So the remedy stays general -- "set its unit" is no remedy at
+        all for a sensor that is no longer configured, and handing someone a
+        fix that cannot work, mid-cycle, is worse than handing them none.
         """
         self.entry.async_create_background_task(
             self.hass,
             self.notify_anomaly(
-                f"The flow sensor {entity_id} stopped reporting a usable unit "
-                "of measurement mid-cycle; its readings are no longer being "
-                "used. Volume mode and flow anomaly detection are off for it "
-                "until its unit is set."
+                f"The flow sensor {entity_id} became unreadable mid-cycle "
+                "(no usable unit, or no longer configured), so this run has "
+                "lost its flow readings. Volume mode and flow anomaly "
+                "detection are off for it until a usable flow meter is "
+                "configured again."
             ),
             name="irrigation_maestro_flow_unit_lost",
         )
