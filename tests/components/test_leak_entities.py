@@ -464,7 +464,21 @@ async def test_adding_and_removing_a_zone_adds_and_removes_its_leak_entity(
     assert _leak_entity(hass, entry, beta.subentry_id).state == "unavailable"
     assert _leak_entity(hass, entry, alpha).state == "off"
 
-    await advance(hass, freezer, _PAST_CONFIRM_S, step=10.0)
+    # Halfway through Beta's own window: still nothing, while the sibling that
+    # served its window keeps answering. A window shared across the
+    # installation would have Beta answering here on Alpha's minutes.
+    await advance(hass, freezer, 150, step=10.0)
+    # A blip on the settled sibling, which changes nothing for Alpha (it is
+    # settled) but does make every scope's book-keeping run at this instant --
+    # without which Beta's part-filled window is never computed at all, and the
+    # difference between its own minutes and the installation's cannot show.
+    hass.states.async_set("binary_sensor.a_leak", *_moisture("on"))
+    hass.states.async_set("binary_sensor.a_leak", *_moisture("off"))
+    await hass.async_block_till_done()
+    assert _leak_entity(hass, entry, beta.subentry_id).state == "unavailable"
+    assert _leak_entity(hass, entry, alpha).state == "off"
+
+    await advance(hass, freezer, 200, step=10.0)
 
     assert _leak_entity(hass, entry, beta.subentry_id).state == "off"
 
@@ -622,7 +636,14 @@ async def test_a_meter_with_no_resolvable_unit_never_starts_the_window(
     park.add("valve.a")
     hass.states.async_set("sensor.flow", "2.0")  # no unit_of_measurement
     mock_weather(hass)
-    entry = await setup_hub(hass, [zone_data("Alpha", "valve.a", flow_sensor="sensor.flow")])
+    # No cycle inside this test's half hour: the window counts only time in
+    # which a source could conclude something, and a zone that is watering is
+    # not such a time -- see the boot-mid-cycle test. Here the meter is the
+    # subject, so the schedule is moved out of the way rather than reasoned
+    # about.
+    entry = await setup_hub(
+        hass, [zone_data("Alpha", "valve.a", at="23:00", flow_sensor="sensor.flow")]
+    )
     runtime = entry.runtime_data
     zone_id = runtime.zone_ids[0]
 
@@ -673,16 +694,218 @@ async def test_the_window_does_not_expire_while_a_confirmation_is_in_flight(
     hass.states.async_set("sensor.flow", "unavailable", {"unit_of_measurement": "L/min"})
     await advance(hass, freezer, 200, step=10.0)
 
-    detector = runtime.leak_detector(zone_id)
-    assert detector is not None
-    assert detector.confirming is True  # measured seconds on the books
-    assert detector.state.active is False  # but not yet enough of them
+    # Not yet enough measured seconds to raise, and the entity must not fill
+    # the silence with an answer -- asserted through what it publishes, not
+    # through the detector's internals.
+    assert runtime.leak_state(zone_id).active is False
     assert _leak_entity(hass, entry, zone_id).state == "unavailable"
 
     hass.states.async_set("sensor.flow", "2.0", {"unit_of_measurement": "L/min"})
     await advance(hass, freezer, _WELL_PAST_CONFIRM_S, step=10.0)
 
     assert _leak_entity(hass, entry, zone_id).state == "on"
+
+
+async def test_an_asserting_sensor_over_an_unreported_valve_never_says_off(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    """Held evidence, not a running countdown -- the worst of the three.
+
+    The sensor reads ``on``; the valve has not reported at all, which on cloud
+    hardware is minutes of rate-limited backoff after a restart.
+    ``_evaluate_valve_sensor`` cancels its wake and returns, because there is
+    no confirmed closure to count from, so a gate that asked "is a countdown
+    running" would find none, latch, and publish ``off`` while this zone's own
+    leak sensor is reading ``on``. Then the valve reports shut, source 1 starts
+    from that instant, and the alarm arrives ``leak_confirm_s`` later:
+    ``unavailable -> off -> on``, the clearing edge, during a leak the sensor
+    was asserting throughout.
+
+    The evidence is what counts, so the entity holds its tongue until the alarm
+    it was always going to raise.
+    """
+    freezer.move_to(START)
+    park = MockValvePark(hass)
+    # No valve state at all: the entity exists in the configuration and has
+    # never reported, which is not the same as reporting "open".
+    hass.states.async_set("binary_sensor.a_leak", *_moisture("on"))
+    mock_weather(hass)
+    entry = await setup_hub(
+        hass,
+        [zone_data("Alpha", "valve.a", at="23:00", leak_sensor="binary_sensor.a_leak")],
+    )
+    runtime = entry.runtime_data
+    zone_id = runtime.zone_ids[0]
+
+    await advance(hass, freezer, _WELL_PAST_CONFIRM_S, step=10.0)
+
+    assert hass.states.get("valve.a") is None
+    assert runtime.leak_state(zone_id).active is False  # nothing to count from
+    assert _leak_entity(hass, entry, zone_id).state == "unavailable"
+
+    park.add("valve.a")  # the valve finally reports, and reports closed
+    await advance(hass, freezer, _WELL_PAST_CONFIRM_S, step=10.0)
+
+    assert _leak_entity(hass, entry, zone_id).state == "on"
+
+
+async def test_an_assertion_that_goes_silent_still_holds_the_window_open(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    """Silence does not retract a pending window, exactly as it does not
+    retract a raised alarm -- the same rule one level down.
+
+    The sensor asserts, then goes unavailable before its window completes. The
+    detector cancels the wake and holds; the entity must hold too, because the
+    last thing this scope heard was ``on`` and nothing has said otherwise.
+    """
+    freezer.move_to(START)
+    park = MockValvePark(hass)
+    park.add("valve.a")
+    hass.states.async_set("binary_sensor.a_leak", *_moisture("on"))
+    mock_weather(hass)
+    entry = await setup_hub(
+        hass,
+        [zone_data("Alpha", "valve.a", at="23:00", leak_sensor="binary_sensor.a_leak")],
+    )
+    runtime = entry.runtime_data
+    zone_id = runtime.zone_ids[0]
+
+    await advance(hass, freezer, 60, step=10.0)
+    hass.states.async_set("binary_sensor.a_leak", *_moisture("unavailable"))
+    await advance(hass, freezer, _WELL_PAST_CONFIRM_S, step=10.0)
+
+    assert runtime.leak_state(zone_id).active is False
+    assert _leak_entity(hass, entry, zone_id).state == "unavailable"
+
+    # A reading is the only thing that retracts it.
+    hass.states.async_set("binary_sensor.a_leak", *_moisture("off"))
+    await advance(hass, freezer, _PAST_CONFIRM_S, step=10.0)
+
+    assert _leak_entity(hass, entry, zone_id).state == "off"
+
+
+async def test_a_meter_confirming_from_the_start_never_publishes_off_first(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    """The coincident case, which is where the flow gate earns its keep.
+
+    A meter flowing above the threshold with every valve shut from the moment
+    we load: observable time and the detector's own measured seconds fill
+    together, so both reach ``leak_confirm_s`` in the same instant. Whichever
+    timer fires first decides what is published, and if the window closes
+    without asking about held evidence the entity says ``off`` in the tick
+    before the ``on`` it is about to say -- a clearing edge out of a tie.
+
+    Every state published is captured, not just the last, because the defect
+    is a single frame that the end state does not remember.
+    """
+    freezer.move_to(START)
+    park = MockValvePark(hass)
+    park.add("valve.a")
+    hass.states.async_set("sensor.flow", "2.0", {"unit_of_measurement": "L/min"})
+    mock_weather(hass)
+    entry = await setup_hub(
+        hass, [zone_data("Alpha", "valve.a", at="23:00", flow_sensor="sensor.flow")]
+    )
+    zone_id = entry.runtime_data.zone_ids[0]
+    entity_id = _leak_entity(hass, entry, zone_id).entity_id
+
+    published: list[str] = []
+
+    @callback
+    def _record(event: Event[EventStateChangedData]) -> None:
+        new_state = event.data["new_state"]
+        if event.data["entity_id"] == entity_id and new_state is not None:
+            published.append(new_state.state)
+
+    hass.bus.async_listen(EVENT_STATE_CHANGED, _record)
+
+    await advance(hass, freezer, _WELL_PAST_CONFIRM_S, step=10.0)
+
+    assert _leak_entity(hass, entry, zone_id).state == "on"
+    assert "off" not in published
+
+
+async def test_a_sensor_asserting_while_its_zone_waters_earns_no_window(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    """A probe under a running sprinkler tells us nothing, so it counts as
+    nothing.
+
+    ``leak.py`` gates source 1 on the zone's own valve being closed for exactly
+    this reason: on hardware where ``moisture`` is a real ground probe, the
+    probe is wet for the whole of its zone's cycle. Those minutes are not
+    observation, and crediting them would let a zone that watered through its
+    whole window answer ``off`` the instant the sensor cleared -- having
+    concluded nothing at all.
+    """
+    freezer.move_to(START)
+    park = MockValvePark(hass)
+    park.add("valve.a", "open")  # watering throughout
+    hass.states.async_set("binary_sensor.a_leak", *_moisture("on"))
+    mock_weather(hass)
+    entry = await setup_hub(
+        hass,
+        [zone_data("Alpha", "valve.a", at="23:00", leak_sensor="binary_sensor.a_leak")],
+    )
+    runtime = entry.runtime_data
+    zone_id = runtime.zone_ids[0]
+    park.force_state("valve.a", "open")
+    await advance(hass, freezer, _WELL_PAST_CONFIRM_S, step=10.0)
+    park.force_state("valve.a", "open")
+    await advance(hass, freezer, _WELL_PAST_CONFIRM_S, step=10.0)
+
+    assert hass.states.get("valve.a").state == "open"
+    assert _leak_entity(hass, entry, zone_id).state == "unavailable"
+
+    # The sprinkler stops and the probe dries: the scope starts its window HERE,
+    # with a source that is finally in a position to say something.
+    park.force_state("valve.a", "closed")
+    hass.states.async_set("binary_sensor.a_leak", *_moisture("off"))
+    await advance(hass, freezer, 200, step=10.0)
+    assert _leak_entity(hass, entry, zone_id).state == "unavailable"
+
+    await advance(hass, freezer, 150, step=10.0)
+    assert _leak_entity(hass, entry, zone_id).state == "off"
+
+
+async def test_a_boot_in_the_middle_of_a_cycle_earns_no_window(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    """Time in which no source could conclude anything is not observation.
+
+    Boot with a cycle running and a meter as the only source: every sample is
+    discarded because a valve is open (water through an open valve is
+    watering), so source 2 cannot reach a conclusion at any point. A window
+    counted on wall clock expires anyway and publishes "no problem" about a
+    period in which nothing could have been established. Counted on observable
+    time it does not move until the valves are shut again.
+    """
+    freezer.move_to(START)
+    park = MockValvePark(hass)
+    park.add("valve.a", "open")  # already watering when we come up
+    hass.states.async_set("sensor.flow", "0.0", {"unit_of_measurement": "L/min"})
+    mock_weather(hass)
+    entry = await setup_hub(
+        hass, [zone_data("Alpha", "valve.a", at="23:00", flow_sensor="sensor.flow")]
+    )
+    runtime = entry.runtime_data
+    zone_id = runtime.zone_ids[0]
+    # The watchdog closes what it finds open at startup; keep it open for the
+    # length of this test, which is what a cycle in progress looks like.
+    park.force_state("valve.a", "open")
+    await advance(hass, freezer, _WELL_PAST_CONFIRM_S, step=10.0)
+    park.force_state("valve.a", "open")
+    await advance(hass, freezer, _WELL_PAST_CONFIRM_S, step=10.0)
+
+    assert hass.states.get("valve.a").state == "open"
+    assert _leak_entity(hass, entry, zone_id).state == "unavailable"
+
+    park.force_state("valve.a", "closed")
+    await advance(hass, freezer, _PAST_CONFIRM_S, step=10.0)
+
+    assert _leak_entity(hass, entry, zone_id).state == "off"
 
 
 async def test_a_drainage_window_does_not_retract_a_settled_answer(
@@ -708,14 +931,23 @@ async def test_a_drainage_window_does_not_retract_a_settled_answer(
     await advance(hass, freezer, _PAST_CONFIRM_S, step=10.0)
     assert _leak_entity(hass, entry, zone_id).state == "off"
 
-    # Drainage: flow with everything shut, well short of the confirmation bar.
-    hass.states.async_set("sensor.flow", "2.0", {"unit_of_measurement": "L/min"})
-    await advance(hass, freezer, 60, step=10.0)
+    # Drainage: flow with everything shut, well short of the confirmation bar,
+    # and decaying as a draining line does. The changing reading matters: it is
+    # what drives the bookkeeping, so a scope that quietly un-settled itself
+    # would be visible here rather than hidden behind a stale publication.
+    for lpm in ("2.0", "1.8", "1.6", "1.5"):
+        hass.states.async_set("sensor.flow", lpm, {"unit_of_measurement": "L/min"})
+        await advance(hass, freezer, 20, step=10.0)
+    runtime.dispatch_update()
+    await hass.async_block_till_done()
 
-    detector = runtime.leak_detector(zone_id)
-    assert detector is not None
-    assert detector.confirming is True
     assert _leak_entity(hass, entry, zone_id).state == "off"
+
+    # And the premise, proved by what happens next rather than by reading the
+    # detector: those seconds were evidence accumulating, because leaving them
+    # to accumulate raises the alarm.
+    await advance(hass, freezer, _WELL_PAST_CONFIRM_S, step=10.0)
+    assert _leak_entity(hass, entry, zone_id).state == "on"
 
 
 async def test_changing_a_scope_s_sources_makes_it_earn_the_window_again(
@@ -729,8 +961,8 @@ async def test_changing_a_scope_s_sources_makes_it_earn_the_window_again(
     ever produced. Swap one sensor for another in a single edit and it never
     even passes through ``unavailable``.
 
-    Both are rule 4's own case -- a source configured long after start-up --
-    arriving through the configuration door rather than the clock.
+    Both are the same case as a source configured long after start-up,
+    arriving through the configuration door rather than through the clock.
     """
     freezer.move_to(START)
     park = MockValvePark(hass)
@@ -778,6 +1010,12 @@ async def test_the_start_up_window_arms_one_timer_and_leaves_none_behind(
     Both sensors report from the start, because a window only begins once its
     source has: a scope waiting on a sensor that has never spoken arms no
     timer at all, which is a different (and correct) zero.
+
+    The last stretch is the one that matters most for a running system: a
+    scope whose alarm is STANDING arms nothing either. Its entity publishes
+    the alarm whatever the window says, so a recheck would dispatch the whole
+    integration on a timer -- every entity rewritten, recorder included -- for
+    the length of an alarm that can last hours. The clearing hook re-arms it.
     """
     freezer.move_to(START)
     park = MockValvePark(hass)
@@ -796,18 +1034,30 @@ async def test_the_start_up_window_arms_one_timer_and_leaves_none_behind(
 
     assert _pending_observation_wakes(hass) == 0
 
-    hass.config_entries.async_add_subentry(
-        entry,
-        ConfigSubentry(
-            data=zone_data("Beta", "valve.b", order=200, leak_sensor="binary_sensor.b_leak"),
-            subentry_type="zone",
-            title="Beta",
-            unique_id=None,
-        ),
+    beta = ConfigSubentry(
+        data=zone_data("Beta", "valve.b", order=200, leak_sensor="binary_sensor.b_leak"),
+        subentry_type="zone",
+        title="Beta",
+        unique_id=None,
     )
+    hass.config_entries.async_add_subentry(entry, beta)
     await hass.async_block_till_done()
 
     assert _pending_observation_wakes(hass) == 1
+
+    # Beta alarms before its own window has filled: no timer while it stands.
+    hass.states.async_set("binary_sensor.b_leak", *_moisture("on"))
+    await advance(hass, freezer, _PAST_CONFIRM_S, step=10.0)
+    assert _leak_entity(hass, entry, beta.subentry_id).state == "on"
+    assert _pending_observation_wakes(hass) == 0
+
+    # When the alarm ends the scope is settled rather than waiting again: an
+    # asserting sensor over a closed valve is a source in a position to
+    # conclude, so those minutes counted as observation -- and they concluded.
+    hass.states.async_set("binary_sensor.b_leak", *_moisture("off"))
+    await hass.async_block_till_done()
+    assert _leak_entity(hass, entry, beta.subentry_id).state == "off"
+    assert _pending_observation_wakes(hass) == 0
 
     await hass.config_entries.async_unload(entry.entry_id)
     await hass.async_block_till_done()

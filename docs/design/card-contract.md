@@ -22,7 +22,7 @@ config entry).
 | `hub_session`       | sensor   | `idle` \| `evaluating` \| `running` | `queue`: ordered list of `{zone_id, zone_name, cycle_id, duration_min, state}`; `started_at` (ISO); `active_zone_id` |
 | `hub_consumption_left` | sensor | liters left (float) or unavailable | `budget_liters`, `used_liters`, `unattributed_liters`, `period_start`, `action` — entity always exists; unavailable when no budget is configured |
 | `hub_unattributed_water` | sensor | liters (float), `device_class: water`, `state_class: total_increasing` | `closed_l` (float), `per_scope` (`{scope: liters}`, only scopes with water > 0; scope is a `zone_id` or `"__hub__"`) — see "Water accounting sensors" below |
-| `hub_leak`          | binary_sensor | `on` = a leak is confirmed for the system scope, `device_class: problem`; **unavailable** when no source could ever raise it, and for one confirmation window after start-up | `sources`, `since`, `describing_source` — see "Leak entities" below |
+| `hub_leak`          | binary_sensor | `on` = a leak is confirmed for the system scope, `device_class: problem`; **unavailable** when no source could ever raise it, and until the scope has been observed for one confirmation window | `sources`, `since`, `describing_source` — see "Leak entities" below |
 | `hub_pause`         | switch   | on = globally paused           | — |
 | `hub_evaluate`      | button   | press = evaluate now           | — |
 | `hub_stop_all`      | button   | press = stop everything        | — |
@@ -35,7 +35,7 @@ config entry).
 | `zone_next_run`     | sensor   | ISO timestamp or unavailable | `cycle_id`, `cycle_name` |
 | `zone_last_outcome` | sensor   | `completed` \| `skipped` \| `interrupted` \| `cancelled` \| `none` | `reason_key` (see keys), `finished_at` (ISO), `cycle_id`, `duration_min`, `volume_l` |
 | `zone_water_total`  | sensor   | liters (float), `device_class: water`, `state_class: total_increasing` | `estimated` (bool), `source` (`measured` \| `nominal` \| `mixed` \| `none`), `today_l` (float), `month_l` (float), `meter_entity` (entity id or null), `last_gap_at` (ISO or null) — see "Water accounting sensors" below |
-| `zone_leak`         | binary_sensor | `on` = a leak is confirmed for this zone, `device_class: problem`; **unavailable** when no source could ever raise it, and for one confirmation window after start-up | `sources`, `since`, `describing_source` — see "Leak entities" below |
+| `zone_leak`         | binary_sensor | `on` = a leak is confirmed for this zone, `device_class: problem`; **unavailable** when no source could ever raise it, and until the scope has been observed for one confirmation window | `sources`, `since`, `describing_source` — see "Leak entities" below |
 | `zone_enabled`      | switch   | on/off | — |
 | `cycle_enabled`     | switch   | on/off (one per cycle) | `cycle_id`, `cycle_name` |
 | `zone_order`        | number   | int | — |
@@ -245,53 +245,70 @@ problem* and neither case can claim that:
    one takes effect without a reload — it then serves the window in rule 2,
    exactly as it would have at start-up.
 2. **Not watched long enough yet.** The entity is unavailable until its scope
-   has been observed for one confirmation window (`leak_confirm_s`, default
+   has been *observed* for one confirmation window (`leak_confirm_s`, default
    300 s). The alarm lives in memory only and is deliberately not persisted,
    so at start-up every scope begins with no alarm and a window that has not
    run: for that window we have not established that there is no leak, only
-   that we have just started looking. After it, `off` means what it says — a
-   leak present throughout the window would have been confirmed inside it.
+   that we have just started looking.
 
-   The window is **per scope and per source set**, and it is measured over a
-   period in which the evidence could actually have been seen: it starts at
-   **the first moment one of that scope's sources reports something usable**
-   (never earlier than the integration itself, which is not watching before it
-   loads), and it does not expire while one of the detector's own confirmation
-   windows is **in flight** — measured seconds already on the books, or a
-   sensor-plus-closed-valve pair being timed. Those two clocks are not the same
-   clock: the detector counts measured seconds, this one counts wall clock, and
-   an unmeasured interval stops one without stopping the other. Expiring on
-   wall clock alone would publish `off` seconds or minutes before an alarm
-   that was already being confirmed. Nothing healthy waits longer for it: "in
-   flight" means evidence is accumulating right now, and a dry meter or a quiet
-   sensor is not accumulating anything. Changing a scope's **source set**
-   (swapping the sensor, clearing the meter, adding a second source) makes it
+   **What the window counts is observation, not elapsed time.** Only seconds
+   in which one of the scope's sources could actually have concluded something
+   count towards it:
+
+   - a leak sensor reading `off` concludes it at any time, so those seconds
+     always count;
+   - a leak sensor reading `on` counts while that zone's valve reports closed,
+     which is exactly when the detector is timing its own window;
+   - a meter counts while it is measuring **and** every managed valve is
+     closed, because water through an open valve is watering and is discarded.
+
+   So a boot in the middle of a cycle earns nothing until the valves shut, and
+   a source that comes up 60 s late is not credited with 60 s it did not
+   watch. "Measuring" is strict: `on`/`off` from a sensor (not `unknown` from a
+   device that has paired and not yet spoken), and a meter reading that is both
+   numeric **and** in a resolvable unit.
+
+   **The window also cannot close while the scope holds unresolved
+   evidence** — the sensor's last reading was `on`, or the detector has
+   measured seconds on its books. Held, not ticking: a sensor reading `on`
+   over a valve that has not reported closed arms no timer anywhere, and
+   closing the window there would publish `off` while that zone's own leak
+   sensor is reading `on`.
+   Silence does not retract this any more than it retracts a raised alarm.
+
+   The window is **per scope and per source set**. Changing the set — swapping
+   the sensor, clearing the meter, adding a second source — makes the scope
    earn a window again, because the credit belongs to the sources that served
-   it. A source that
-   comes up 60 s late would
-   otherwise be credited with 60 s of watching it did not do — and 240 s of
-   evidence under a 300 s bar is a leak still unconfirmed at the instant we
-   would publish `off`. "Usable" is strict on purpose: `on`/`off` from a leak
-   sensor (not `unknown` from a device that has paired and not yet spoken),
-   and a meter reading that is both numeric **and** in a resolvable unit (a
-   meter with no unit publishes numbers and contributes no measured seconds
-   at all). A zone added later, a zone that gains its first source later, and
-   a zone whose sources change at all, each serve a full window from that
-   moment; a reload is a start-up like any other. Once a window has been
-   served it stays served: a later confirmation window (post-cycle drainage
-   opens one on every cycle) does not take the answer back, and neither does
-   raising `leak_confirm_s` at runtime — a scope that has not yet served waits
-   out the new, longer window instead.
+   it. A zone added later, and a zone that gains its first source later, each
+   serve a full window from that moment; a reload is a start-up like any other.
+   Note that a scope's meters follow the same `scope_for` rule the litres do,
+   so adding or removing a zone behind a shared line meter moves that meter
+   between scopes and costs those scopes their credit, even though neither was
+   edited directly.
+
+   Once a window has been served it stays served: a later confirmation window
+   (post-cycle drainage opens one on every cycle) does not take the answer
+   back, and neither does raising `leak_confirm_s` at runtime — a scope that
+   has not yet served waits out the new, longer window instead.
+
+   **What `off` therefore guarantees**, exactly: for one confirmation window,
+   this scope was in a position to see a leak and saw none, and no source is
+   holding evidence it has not resolved. It does **not** guarantee that a leak
+   could not begin in the seconds since — that is the detector's own
+   confirmation delay, which no entity can remove.
 
    **The cost, stated plainly:** a configured source that never reports
-   anything usable leaves its entity unavailable indefinitely. That is the
-   honest answer — the alternative is to publish "there is no problem" on
-   behalf of a device that has never spoken. Two of the three reasons have a
-   signal of their own in `zone_state.degraded` and a card should send the
-   user there: `leak_sensor_missing` (the sensor no longer exists) and
-   `flow_unit_unknown` (the meter's unit will not resolve). The third — a
-   sensor that exists and has simply never reported — has no separate signal
-   today; the unavailable leak entity is it.
+   anything usable, or a scope that is never in a position to observe (a
+   permanently open valve with a meter as its only source), leaves its entity
+   unavailable indefinitely. That is the honest answer — the alternative is to
+   publish "there is no problem" on behalf of a device that has never spoken,
+   or about a period in which nothing could have been noticed. Two of the
+   reasons have a signal of their own in `zone_state.degraded` and a card
+   should send the user there: `leak_sensor_missing` (the sensor no longer
+   exists) and `flow_unit_unknown` (the meter's unit will not resolve). The
+   others — a sensor that exists and has never reported, and a scope that has
+   never been observable — have no separate signal today; the unavailable leak
+   entity is it.
 
 Four consequences worth stating, because they are easy to get backwards:
 
