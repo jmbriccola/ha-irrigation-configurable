@@ -32,6 +32,37 @@ def _parse_time(value: str) -> time:
     return time(int(hour), int(minute))
 
 
+def _non_negative(raw: Any, default: float) -> float:
+    """A tunable that cannot sensibly be negative, or the default.
+
+    Falling back rather than raising, and rather than passing the value
+    through. Refusing to load the whole integration over one bad number would
+    take the irrigation down with it, but a negative leak_confirm_s means the
+    confirmation window is already over on the first measured sample -- the
+    detector would alarm instantly and for ever, on a setting the user
+    probably typed by accident. Non-numeric junk lands here too, for the same
+    reason. Zero stays legal everywhere it is meaningful: threshold 0 is "any
+    flow at all", confirm 0 is "no waiting", repeat 0 is "no reminders".
+    """
+    try:
+        value = float(raw)
+    except (TypeError, ValueError):
+        return default
+    return value if value >= 0 else default
+
+
+def leak_action_from_config(raw: Any) -> str:
+    """One of the three legal actions, or the default.
+
+    Validated here so an unrecognised value cannot reach the runtime, where
+    every comparison against the legal set would simply miss and silently
+    degrade the default ``close`` into doing nothing at all -- the failure
+    being least visible exactly when it matters most.
+    """
+    action = str(raw)
+    return action if action in const.LEAK_ACTIONS else const.LEAK_ACTION_CLOSE
+
+
 def engine_params_from_config(config: dict[str, Any]) -> EngineParams:
     """EngineParams from the hub's engine options, defaults for the rest."""
     known = set(EngineParams.__dataclass_fields__)
@@ -350,15 +381,24 @@ class HubConfig:
                 budget.get(const.CONF_BUDGET_REDUCE_PCT, const.DEFAULT_BUDGET_REDUCE_PCT)
             ),
             curve_templates=dict(options.get(const.CONF_CURVE_TEMPLATES, {})),
-            leak_action=str(options.get(const.CONF_LEAK_ACTION, const.LEAK_ACTION_CLOSE)),
-            leak_threshold_lpm=float(
-                options.get(const.CONF_LEAK_THRESHOLD_LPM, const.DEFAULT_LEAK_THRESHOLD_LPM)
+            leak_action=leak_action_from_config(
+                options.get(const.CONF_LEAK_ACTION, const.LEAK_ACTION_CLOSE)
+            ),
+            leak_threshold_lpm=_non_negative(
+                options.get(const.CONF_LEAK_THRESHOLD_LPM, const.DEFAULT_LEAK_THRESHOLD_LPM),
+                const.DEFAULT_LEAK_THRESHOLD_LPM,
             ),
             leak_confirm_s=int(
-                options.get(const.CONF_LEAK_CONFIRM_S, const.DEFAULT_LEAK_CONFIRM_S)
+                _non_negative(
+                    options.get(const.CONF_LEAK_CONFIRM_S, const.DEFAULT_LEAK_CONFIRM_S),
+                    const.DEFAULT_LEAK_CONFIRM_S,
+                )
             ),
             leak_repeat_min=int(
-                options.get(const.CONF_LEAK_REPEAT_MIN, const.DEFAULT_LEAK_REPEAT_MIN)
+                _non_negative(
+                    options.get(const.CONF_LEAK_REPEAT_MIN, const.DEFAULT_LEAK_REPEAT_MIN),
+                    const.DEFAULT_LEAK_REPEAT_MIN,
+                )
             ),
             require_water_supply=bool(
                 options.get(const.CONF_REQUIRE_WATER_SUPPLY, const.DEFAULT_REQUIRE_WATER_SUPPLY)

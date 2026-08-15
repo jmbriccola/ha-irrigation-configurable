@@ -43,10 +43,14 @@ CONF_LEAK_CONFIRM_S: Final = "leak_confirm_s"
 CONF_LEAK_REPEAT_MIN: Final = "leak_repeat_min"
 CONF_REQUIRE_WATER_SUPPLY: Final = "require_water_supply"
 
-# What the component does when a zone's leak alarm goes active.
+# What the component does when a leak alarm goes active.
 LEAK_ACTION_NOTIFY: Final = "notify"
 LEAK_ACTION_CLOSE: Final = "close"
 LEAK_ACTION_CLOSE_AND_BLOCK: Final = "close_and_block"
+#: The legal values, in one place: parsing validates against this and the
+#: service schema selects from it, so a value the options accept can never be
+#: one the runtime silently ignores.
+LEAK_ACTIONS: Final = (LEAK_ACTION_NOTIFY, LEAK_ACTION_CLOSE, LEAK_ACTION_CLOSE_AND_BLOCK)
 
 # Restrictions keys (hub-level and zone override)
 CONF_ALLOWED_WEEKDAYS: Final = "allowed_weekdays"
@@ -180,12 +184,20 @@ DEFAULT_BUDGET_REDUCE_PCT: Final = 50
 #: Sustained flow below this, with everything shut, is drip and drainage.
 #: Checked against the author's own plumbing.
 DEFAULT_LEAK_THRESHOLD_LPM: Final = 0.5
-#: How long that flow must persist. The window counts only seconds the meter
-#: actually measured, and resets whenever flow drops below the threshold or a
-#: valve stops reporting closed -- so post-cycle drainage cannot reach it: it
-#: would have to run above threshold for the whole of it, which is not
-#: drainage. One mechanism instead of a threshold plus a separate blanking
-#: window after each close.
+#: How long a leak must be reported before it is believed. One setting, two
+#: mechanisms, because the two sources observe different things:
+#:
+#: * source 2 (flow with everything shut) counts only the seconds its meter
+#:   actually MEASURED, and resets whenever flow drops below the threshold or
+#:   any managed valve stops reporting closed -- so post-cycle drainage cannot
+#:   reach it: it would have to run above threshold for the whole of it, which
+#:   is not drainage. One mechanism instead of a threshold plus a separate
+#:   blanking window after each close;
+#: * source 1 (the valve's own sensor) measures wall-clock time since the
+#:   later of the sensor asserting and THIS ZONE's valve reporting closed --
+#:   a level, not a rate, so there is nothing to accumulate. On hardware where
+#:   "moisture" is a real ground probe, that is what stops a probe wet from
+#:   its own zone's cycle alarming at every close.
 DEFAULT_LEAK_CONFIRM_S: Final = 300
 #: How often a leak that will not go away says so again. Long, because the
 #: alarm is a standing condition and a reminder every few minutes is noise.

@@ -150,12 +150,14 @@ class IrrigationRuntime:
             self.state.schedule_save()
         if migrated.seeded:
             self.report_consumption_history_restarted()
-        # Before the trackers, so the first meter sample of the session already
-        # finds its zone's detector in place.
-        self._rebuild_leak_detectors()
         self._schedule_triggers()
         self._start_trackers()
         self.accountant.start()
+        # After the accountant, which owns which meter serves which scope. No
+        # sample can be missed in between: every call from here to the end of
+        # setup is synchronous, and a ledger publishes nothing until its first
+        # tick or state event.
+        self._rebuild_leak_detectors()
         self.watchdog.start()
         self.sentinel.start()
         self._refresh_notification_issues()
@@ -215,9 +217,12 @@ class IrrigationRuntime:
             if zone_id in self.session.active_runs:
                 await self.session.async_stop_all(reason="zone_removed", manual=False)
             self.state.drop_zone(zone_id)
-        self._rebuild_leak_detectors()
         self._schedule_triggers()
         self._track_flow_sensors()  # a repointed or new meter, watched at once
+        # After _track_flow_sensors, which rebuilds the ledgers: the detectors
+        # ask the accountant which scopes still have a meter, and asking before
+        # would answer from the configuration that has just been replaced.
+        self._rebuild_leak_detectors()
         self.sentinel.start()  # re-arm at the (possibly new) sentinel time
         self.state.schedule_save()
         # Signal the platforms to add/remove entities when the zone set OR any
@@ -1249,6 +1254,7 @@ class IrrigationRuntime:
         dropped.
         """
         scopes = self.leak_scopes()
+        metered = self.accountant.metered_scopes()
         for scope in list(self._leak_detectors):
             if scope not in scopes:
                 self._leak_detectors.pop(scope).stop()
@@ -1257,7 +1263,7 @@ class IrrigationRuntime:
             if detector is None:
                 detector = LeakDetector(self, scope)
                 self._leak_detectors[scope] = detector
-            detector.start()
+            detector.start(has_meter=scope in metered)
 
     def leak_detector(self, scope: str) -> LeakDetector | None:
         """The detector for a scope, or None when the scope names nothing.
@@ -1312,10 +1318,14 @@ class IrrigationRuntime:
             ", ".join(sorted(state.sources)),
         )
 
-    def on_leak_cleared(self, scope: str) -> None:
-        """The last source withdrew. Task 8 attaches the clearing notice."""
+    def on_leak_cleared(self, scope: str, state: LeakState) -> None:
+        """The last source withdrew. Task 8 attaches the clearing notice.
+
+        ``state`` is the alarm as it was immediately before clearing, so the
+        event says what kind of leak has ended rather than only that one has.
+        """
         _LOGGER.warning("Leak alarm cleared on %s", self._leak_subject(scope))
-        self._fire_leak_event(scope, LeakState(), "cleared")
+        self._fire_leak_event(scope, state, "cleared")
         self.dispatch_update()
 
     def _fire_leak_event(self, scope: str, state: LeakState, phase: str) -> None:
