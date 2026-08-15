@@ -150,10 +150,11 @@ holding the same fact would be a second thing that could drift from it.
     reading), `mixed` when the zone has some of each — e.g. a meter that
     only became usable partway through the zone's history, or that drops
     out intermittently. `none` when the zone holds no litres *and* can
-    never accrue any: neither a meter resolves for it nor a
-    `nominal_flow_lpm` is set, so there is nothing to integrate and no
-    estimate to book. Judged on configuration, not on live meter state, so
-    it does not flap with a momentarily unavailable sensor.
+    never accrue any: no meter resolves for it and its `nominal_flow_lpm`
+    is unset **or zero** (the schema allows `0`, and a zero nominal books
+    nothing), so there is nothing to integrate and no estimate to book.
+    Judged on configuration, not on live meter state, so it does not flap
+    with a momentarily unavailable sensor.
   - `today_l` / `month_l` (float): the same-zone total sliced to today and
     to the calendar month-to-date. Both are read from the daily history
     that `add_water` writes in the same call that increments the
