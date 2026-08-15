@@ -176,6 +176,8 @@ class ZoneConfig:
     flow_sensor_unit: str | None
     nominal_flow_lpm: float | None
     flow_tolerance_pct: float
+    leak_sensor: str | None
+    water_supply_sensor: str | None
     area_m2: float | None
     adjustment_pct: float
     order: int
@@ -197,6 +199,8 @@ class ZoneConfig:
             flow_tolerance_pct=float(
                 data.get(const.CONF_FLOW_TOLERANCE_PCT, const.DEFAULT_FLOW_TOLERANCE_PCT)
             ),
+            leak_sensor=data.get(const.CONF_LEAK_SENSOR),
+            water_supply_sensor=data.get(const.CONF_WATER_SUPPLY_SENSOR),
             area_m2=data.get(const.CONF_AREA_M2),
             adjustment_pct=float(data.get(const.CONF_ADJUSTMENT_PCT, const.DEFAULT_ADJUSTMENT_PCT)),
             order=int(data.get(const.CONF_ORDER, const.DEFAULT_ORDER)),

@@ -1909,3 +1909,44 @@ async def test_set_weather_sources_can_clear_just_the_line_meter_unit(
     )
     assert entry.options["line_flow_sensor"] == "sensor.line"
     assert "line_flow_sensor_unit" not in entry.options
+
+
+async def test_update_zone_stores_the_leak_and_supply_sensors(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    freezer.move_to(START)
+    park = MockValvePark(hass)
+    park.add("valve.a")
+    mock_weather(hass)
+    entry = await setup_hub(hass, [zone_data("Alpha", "valve.a")])
+    runtime = entry.runtime_data
+    zone_id = runtime.zone_ids[0]
+
+    await hass.services.async_call(
+        DOMAIN,
+        "update_zone",
+        {
+            "zone_id": zone_id,
+            "leak_sensor": "binary_sensor.a_leak",
+            "water_supply_sensor": "binary_sensor.a_supply",
+        },
+        blocking=True,
+    )
+
+    config = runtime.zones[zone_id].config
+    assert config.leak_sensor == "binary_sensor.a_leak"
+    assert config.water_supply_sensor == "binary_sensor.a_supply"
+
+
+async def test_a_zone_without_the_new_keys_still_loads(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    """Backward compatibility: existing subentries have neither key."""
+    freezer.move_to(START)
+    park = MockValvePark(hass)
+    park.add("valve.a")
+    mock_weather(hass)
+    entry = await setup_hub(hass, [zone_data("Alpha", "valve.a")])
+    config = entry.runtime_data.zones[entry.runtime_data.zone_ids[0]].config
+    assert config.leak_sensor is None
+    assert config.water_supply_sensor is None

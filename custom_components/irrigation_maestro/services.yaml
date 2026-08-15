@@ -467,6 +467,18 @@ update_zone:
           step: 1
           unit_of_measurement: "%"
           mode: box
+    leak_sensor:
+      example: binary_sensor.garden_zone_1_leak
+      selector:
+        entity:
+          domain: binary_sensor
+          device_class: moisture
+    water_supply_sensor:
+      example: binary_sensor.garden_water_supply
+      selector:
+        entity:
+          domain: binary_sensor
+          device_class: problem
     adjustment_pct:
       example: 100
       selector:

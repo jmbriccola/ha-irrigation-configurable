@@ -110,6 +110,8 @@ ATTR_FLOW_SENSOR: Final = "flow_sensor"
 ATTR_FLOW_SENSOR_UNIT: Final = "flow_sensor_unit"
 ATTR_NOMINAL_FLOW_LPM: Final = "nominal_flow_lpm"
 ATTR_FLOW_TOLERANCE_PCT: Final = "flow_tolerance_pct"
+ATTR_LEAK_SENSOR: Final = "leak_sensor"
+ATTR_WATER_SUPPLY_SENSOR: Final = "water_supply_sensor"
 ATTR_ADJUSTMENT_PCT: Final = "adjustment_pct"
 ATTR_INTERVAL_DAYS: Final = "interval_days"
 ATTR_COMPATIBILITY_GROUP: Final = "compatibility_group"
@@ -311,6 +313,8 @@ _UPDATE_ZONE_SCHEMA = vol.Schema(
         vol.Optional(ATTR_FLOW_TOLERANCE_PCT): vol.All(
             vol.Coerce(float), vol.Range(min=1, max=100)
         ),
+        vol.Optional(ATTR_LEAK_SENSOR): cv.string,
+        vol.Optional(ATTR_WATER_SUPPLY_SENSOR): cv.string,
         vol.Optional(ATTR_ADJUSTMENT_PCT): vol.All(vol.Coerce(int), vol.Range(min=10, max=300)),
         vol.Optional(ATTR_ORDER): vol.All(vol.Coerce(int), vol.Range(min=1, max=1000)),
         vol.Optional(ATTR_COMPATIBILITY_GROUP): cv.string,
@@ -471,6 +475,8 @@ _ZONE_PATCH_KEYS: Final = {
     ATTR_FLOW_SENSOR: const.CONF_FLOW_SENSOR,
     ATTR_NOMINAL_FLOW_LPM: const.CONF_NOMINAL_FLOW_LPM,
     ATTR_FLOW_TOLERANCE_PCT: const.CONF_FLOW_TOLERANCE_PCT,
+    ATTR_LEAK_SENSOR: const.CONF_LEAK_SENSOR,
+    ATTR_WATER_SUPPLY_SENSOR: const.CONF_WATER_SUPPLY_SENSOR,
     ATTR_ADJUSTMENT_PCT: const.CONF_ADJUSTMENT_PCT,
     ATTR_ORDER: const.CONF_ORDER,
     ATTR_COMPATIBILITY_GROUP: const.CONF_COMPATIBILITY_GROUP,
