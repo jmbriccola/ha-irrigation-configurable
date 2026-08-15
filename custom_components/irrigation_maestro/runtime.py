@@ -11,6 +11,7 @@ import asyncio
 import logging
 from dataclasses import replace
 from datetime import datetime, timedelta
+from functools import partial
 from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
@@ -97,6 +98,10 @@ _LEAK_SOURCE_PHRASES = {
 #: water is GONE. "on" is the problem, which is the opposite of how the
 #: entity's name reads, and the mistake everyone makes on the first attempt.
 _SUPPLY_MISSING = "on"
+#: And the reading that means it is there. Named separately, and checked
+#: for explicitly, because "not missing" is a third thing: an unavailable
+#: sensor is neither.
+_SUPPLY_PRESENT = "off"
 _SKIP_NOTICE_DEBOUNCE_S = 5
 _TEMP_TRACK_MINUTES = 10
 _INDEFINITE = datetime(2999, 1, 1, tzinfo=dt_util.UTC)
@@ -132,12 +137,16 @@ class IrrigationRuntime:
         self.sentinel = Sentinel(self)
         self.accountant = WaterAccountant(self)
         self._leak_detectors: dict[str, LeakDetector] = {}
-        #: Zones whose supply sensor is currently saying the water is gone.
-        #: Memory only, and edge detection only: it decides whether a
-        #: transition has to be announced, never whether a cycle may start --
-        #: that question is answered from live state every time it is asked.
-        self._supply_missing: set[str] = set()
+        #: Zones whose outage has been ANNOUNCED -- confirmed, notified and
+        #: carrying a repair notice. Memory only, and edge detection only:
+        #: it decides whether a transition still has to be said out loud,
+        #: never whether a cycle may start. That question is answered from
+        #: live state every time it is asked.
+        self._supply_announced: set[str] = set()
         self._supply_tracker_unsub: CALLBACK_TYPE | None = None
+        #: One per zone whose window is running: nothing else fires when a
+        #: confirmation window merely runs out.
+        self._supply_wake_unsubs: dict[str, CALLBACK_TYPE] = {}
         self._session_lock = asyncio.Lock()
         self._ledger: dict[tuple[str, str], list[datetime]] = {}
         self._trigger_unsubs: list[CALLBACK_TYPE] = []
@@ -210,6 +219,7 @@ class IrrigationRuntime:
         if self._supply_tracker_unsub is not None:
             self._supply_tracker_unsub()
             self._supply_tracker_unsub = None
+        self._cancel_supply_wakes()
         if self._skip_flush_unsub is not None:
             self._skip_flush_unsub()
             self._skip_flush_unsub = None
@@ -1777,16 +1787,29 @@ class IrrigationRuntime:
         again -- the safe direction, since we do not know how long the supply
         has been out and must not withhold water on a guess.
 
-        ``require_water_supply`` switches the whole gate off, because a flaky
-        sensor must not be able to stop the system without appeal.
+        ``require_water_supply`` switches this gate off, because a flaky sensor
+        must not be able to stop the system without appeal. It does not switch
+        off the repair notice or its notification: those report a condition,
+        and a user who has chosen to keep watering through it is still entitled
+        to know it is there.
 
-        Deliberately the only thing the confirmation window governs. Explaining
+        The window is shared with that notice and with nothing else. Explaining
         a zero-flow interrupt (see SessionRunner) reads ``water_supply_missing``
         directly: that describes an event that has already happened, and the
         reading at that moment is the evidence for it.
         """
-        if not self.hub.require_water_supply:
-            return False
+        return self.hub.require_water_supply and self._water_supply_confirmed(zone_id)
+
+    def _water_supply_confirmed(self, zone_id: str) -> bool:
+        """Has the outage stood long enough to be asserted as a present fact?
+
+        The bar for saying "the supply is out", whether the saying withholds
+        water (the gate above) or merely tells the user (the repair notice and
+        its notification). Both assert the same present fact, so both need the
+        same evidence; only the diagnosis of an interruption that has already
+        happened is exempt, because there the reading at that moment IS the
+        evidence and a window would blur a precise answer into a generic one.
+        """
         state = self._water_supply_alarm(zone_id)
         if state is None:
             return False
@@ -1808,6 +1831,28 @@ class IrrigationRuntime:
             return None
         state = self.hass.states.get(sensor)
         return state if state is not None and state.state == _SUPPLY_MISSING else None
+
+    def _water_supply_restored(self, zone_id: str) -> bool:
+        """Evidence that an announced outage is over. Silence is not evidence.
+
+        Two things qualify: the sensor saying the water is there, and the
+        sensor being de-configured -- the user's own statement, and the only
+        thing that could ever take down a notice raised by a source they have
+        since removed.
+
+        ``unavailable``, ``unknown`` and an entity that has vanished do NOT
+        qualify, and this is the whole reason the check is written as "reads
+        present" rather than "does not read missing". A sensor going quiet is
+        not the water coming back, and a notice withdrawn on silence would
+        assert exactly that -- while the message announcing it would be false
+        at the instant it was sent.
+        """
+        zone = self.zones.get(zone_id)
+        sensor = zone.config.water_supply_sensor if zone else None
+        if not sensor:
+            return True
+        state = self.hass.states.get(sensor)
+        return state is not None and state.state == _SUPPLY_PRESENT
 
     def _water_supply_entities(self) -> list[str]:
         """Every configured supply sensor, de-duplicated, in a stable order."""
@@ -1838,11 +1883,12 @@ class IrrigationRuntime:
             self._supply_tracker_unsub = async_track_state_change_event(
                 self.hass, entity_ids, self._on_water_supply_sensor
             )
-        for zone_id in list(self._supply_missing - set(self.zones)):
+        self._cancel_supply_wakes()
+        for zone_id in list(self._supply_announced - set(self.zones)):
             # A zone that has left the configuration cannot clear its own
             # notice: nothing subscribes for it any more and nothing will ever
             # evaluate it again. This is the only place it can be taken down.
-            self._supply_missing.discard(zone_id)
+            self._supply_announced.discard(zone_id)
             ir.async_delete_issue(self.hass, DOMAIN, self._water_supply_issue_id(zone_id))
         for zone_id in self.zones:
             self._evaluate_water_supply(zone_id)
@@ -1860,73 +1906,117 @@ class IrrigationRuntime:
             self._evaluate_water_supply(zone_id)
 
     def _evaluate_water_supply(self, zone_id: str) -> None:
-        """Announce the transition, and hold a repair notice while it lasts.
+        """Announce a confirmed outage, and take the notice down when it ends.
 
         A supply anomaly, not a leak: it goes on the anomaly channel and gets
-        its own repair. Routing it through the leak event would count an
-        outage as a leak in every automation that consumes that stream, and
-        the two are opposites -- one is water where it should not be, the
-        other is no water at all.
+        its own repair. Routing it through the leak event would count an outage
+        as a leak in every automation that consumes that stream, and the two
+        are opposites -- one is water where it should not be, the other is no
+        water at all.
 
-        Deliberately NOT gated on the confirmation window. That window governs
-        one thing, withholding water, because withholding it is the expensive
-        mistake; saying what a sensor reports is cheap, reversible, and the
-        notice comes down by the same path the moment the water returns.
+        Announced only once the outage has been confirmed, on the same window
+        that gates the refusal to start. Both assert "the supply is out" as a
+        present fact, so both need the same evidence: a sensor flapping every
+        half minute would otherwise produce a notification pair every half
+        minute, which is the alarm fatigue the rest of this feature's design
+        exists to prevent.
+
+        Withdrawn promptly, with no window at all, because the water returning
+        is itself the evidence -- and withdrawn only on evidence: see
+        ``_water_supply_restored``.
         """
-        missing = self.water_supply_missing(zone_id)
-        was_missing = zone_id in self._supply_missing
-        if missing == was_missing:
+        self._cancel_supply_wake(zone_id)
+        announced = zone_id in self._supply_announced
+        state = self._water_supply_alarm(zone_id)
+        if state is None:
+            if announced and self._water_supply_restored(zone_id):
+                self._withdraw_water_supply(zone_id)
             return
-        issue_id = self._water_supply_issue_id(zone_id)
-        if missing:
-            self._supply_missing.add(zone_id)
-            _LOGGER.warning("No water supply reported for %s", self._zone_name(zone_id))
-            ir.async_create_issue(
-                self.hass,
-                DOMAIN,
-                issue_id,
-                is_fixable=False,
-                severity=ir.IssueSeverity.WARNING,
-                translation_key="water_supply_missing",
-                translation_placeholders={"zone": self._zone_name(zone_id)},
-            )
+        if announced:
+            return  # already said, and a standing condition says it once
+        elapsed_s = (dt_util.utcnow() - state.last_changed).total_seconds()
+        remaining_s = self.hub.water_supply_confirm_s - elapsed_s
+        if remaining_s <= 0:
+            self._announce_water_supply(zone_id)
+            return
+        # Nothing else fires when the window merely runs out -- the sensor has
+        # already made the only state change it is going to make -- so ask to
+        # be woken exactly then and judge again from live state.
+        self._supply_wake_unsubs[zone_id] = async_call_later(
+            self.hass, remaining_s, partial(self._on_supply_wake, zone_id)
+        )
+
+    @callback
+    def _on_supply_wake(self, zone_id: str, _now: datetime) -> None:
+        self._supply_wake_unsubs.pop(zone_id, None)
+        self._evaluate_water_supply(zone_id)
+
+    def _cancel_supply_wake(self, zone_id: str) -> None:
+        unsub = self._supply_wake_unsubs.pop(zone_id, None)
+        if unsub is not None:
+            unsub()
+
+    def _cancel_supply_wakes(self) -> None:
+        for unsub in self._supply_wake_unsubs.values():
+            unsub()
+        self._supply_wake_unsubs.clear()
+
+    def _announce_water_supply(self, zone_id: str) -> None:
+        name = self._zone_name(zone_id)
+        self._supply_announced.add(zone_id)
+        _LOGGER.warning("No water supply reported for %s", name)
+        ir.async_create_issue(
+            self.hass,
+            DOMAIN,
+            self._water_supply_issue_id(zone_id),
+            is_fixable=False,
+            severity=ir.IssueSeverity.WARNING,
+            translation_key="water_supply_missing",
+            translation_placeholders={"zone": name},
+        )
+        gate = (
+            " No new cycle starts for this zone until the water returns."
+            if self.hub.require_water_supply
+            else " Cycles still start: the water-supply gate is switched off."
+        )
+        self._notify_water_supply(
+            f"{name}: no water supply -- the zone's sensor reports the water is gone.{gate}"
+        )
+
+    def _withdraw_water_supply(self, zone_id: str) -> None:
+        """The notice comes down, and the message says which of the two ended it.
+
+        A sensor the user removed is not the water coming back, and one
+        message for both would be false in the second case -- the same defect
+        the leak notices were corrected for.
+        """
+        name = self._zone_name(zone_id)
+        self._supply_announced.discard(zone_id)
+        _LOGGER.warning("The no-water condition has ended for %s", name)
+        ir.async_delete_issue(self.hass, DOMAIN, self._water_supply_issue_id(zone_id))
+        zone = self.zones.get(zone_id)
+        if zone is not None and zone.config.water_supply_sensor:
+            ended = f"{name}: the water supply is back."
         else:
-            self._supply_missing.discard(zone_id)
-            _LOGGER.warning("The water supply is back for %s", self._zone_name(zone_id))
-            ir.async_delete_issue(self.hass, DOMAIN, issue_id)
+            ended = (
+                f"{name}: the water-supply sensor has been removed, so the "
+                "missing supply is no longer reported."
+            )
+        resumed = (
+            " Cycles are no longer refused for lack of water."
+            if self.hub.require_water_supply
+            else ""
+        )
+        self._notify_water_supply(f"{ended}{resumed}")
+
+    def _notify_water_supply(self, message: str) -> None:
+        """One supply notice. The callers are callbacks; they cannot await."""
         self.entry.async_create_background_task(
             self.hass,
-            self.notify_anomaly(self._water_supply_message(zone_id, missing=missing)),
+            self.notify_anomaly(message),
             name="irrigation_maestro_water_supply",
         )
         self.dispatch_update()
-
-    def _water_supply_message(self, zone_id: str, *, missing: bool) -> str:
-        """True at the instant it is sent, which the gate's two states decide.
-
-        A message announcing a block is false while the confirmation window is
-        still running, and a message promising one is false once it has already
-        elapsed -- which it can have, for a sensor that has been asserting for
-        an hour when the user first points a zone at it.
-        """
-        name = self._zone_name(zone_id)
-        if not missing:
-            resumed = (
-                " Cycles are no longer refused for lack of water."
-                if self.hub.require_water_supply
-                else ""
-            )
-            return f"{name}: the water supply is back.{resumed}"
-        if not self.hub.require_water_supply:
-            gate = " Cycles still start: the water-supply gate is switched off."
-        elif self.water_supply_block_active(zone_id):
-            gate = " No new cycle starts for this zone until the water returns."
-        else:
-            gate = (
-                f" If it is still missing after {self.hub.water_supply_confirm_s} s, "
-                "no new cycle starts for this zone until the water returns."
-            )
-        return f"{name}: no water supply -- the zone's sensor reports the water is gone.{gate}"
 
     @staticmethod
     def _water_supply_issue_id(zone_id: str) -> str:
