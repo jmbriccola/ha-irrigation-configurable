@@ -33,7 +33,7 @@ config entry).
 | `zone_state`        | sensor   | `idle` \| `queued` \| `watering` \| `soaking` \| `paused` \| `suspended` \| `disabled` | `zone_name`, `order`, `adjustment_pct` (float, 10–300), `degraded` (list of keys, see below), `run_started_at` (ISO, while watering), `run_duration_min` (frozen total), `run_planned_runs` (soak split list), `active_cycle_id`, `suspended_until` (ISO or null), `cycles` (list, see below) |
 | `zone_next_run`     | sensor   | ISO timestamp or unavailable | `cycle_id`, `cycle_name` |
 | `zone_last_outcome` | sensor   | `completed` \| `skipped` \| `interrupted` \| `cancelled` \| `none` | `reason_key` (see keys), `finished_at` (ISO), `cycle_id`, `duration_min`, `volume_l` |
-| `zone_water_total`  | sensor   | liters (float), `device_class: water`, `state_class: total_increasing` | `estimated` (bool), `source` (`measured` \| `nominal` \| `mixed` \| `none`), `today_l` (float), `month_l` (float), `meter_entity` (entity id or null) — see "Water accounting sensors" below |
+| `zone_water_total`  | sensor   | liters (float), `device_class: water`, `state_class: total_increasing` | `estimated` (bool), `source` (`measured` \| `nominal` \| `mixed` \| `none`), `today_l` (float), `month_l` (float), `meter_entity` (entity id or null), `last_gap_at` (ISO or null) — see "Water accounting sensors" below |
 | `zone_enabled`      | switch   | on/off | — |
 | `cycle_enabled`     | switch   | on/off (one per cycle) | `cycle_id`, `cycle_name` |
 | `zone_order`        | number   | int | — |
@@ -165,6 +165,21 @@ holding the same fact would be a second thing that could drift from it.
     its own `flow_sensor` if it has one, else the hub's `line_flow_sensor`,
     else `null` (nominal-only). Matches the meter identified by the
     `no_flow_meter` / `line_meter_shared` `degraded` keys on `zone_state`.
+  - `last_gap_at` (ISO or `null`): the end of the most recent interval that
+    went **unobserved while this zone was watering** — its meter was
+    unavailable, or its unit stopped resolving. `null` until it happens.
+    Attributed exactly as litres are, so a gap while the zone's valve was
+    shut belongs to the unattributed scope and never reaches this attribute.
+    It exists because the litres alone cannot distinguish "no water used"
+    from "no water seen": a gap is recorded as **zero litres** (no
+    interpolation, which would invent water; no counted zero, which would
+    assert that none passed), so without this stamp a six-hour outage looks
+    exactly like a quiet afternoon. Persisted with the counters, so it
+    survives a restart; the seconds behind it live in the daily history's
+    `gap_s`. The card is not required to render it — as of 3.3.0 it does
+    not. Refreshed on the same throttle as the rest of the sample path (at
+    most once a minute), so during a long outage it can trail the store by
+    up to that much.
 - **`hub_unattributed_water`** — litres a meter measured that no zone
   claimed; the entity's state is the grand total across every scope.
   - `closed_l` (float): the subset of the total measured while every

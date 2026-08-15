@@ -295,19 +295,30 @@ class RuntimeState:
         day: date,
         estimated: bool,
         gap_s: float = 0.0,
+        gap_at: datetime | None = None,
     ) -> None:
         """Credit litres to a zone: cumulative and daily, in one transaction.
 
         One writer for both, so the cumulative and the "today"/"this month"
         projections derived from the daily history cannot diverge.
+
+        ``gap_s`` seconds of the same interval went unobserved, and are booked
+        with the litres for exactly that reason: a gap yields no litres at
+        all, so a call carrying only a gap is normal and must still be
+        recorded. ``gap_at`` stamps ``last_gap_at`` when there is one --
+        passed in rather than read from a clock here, so this stays the one
+        module with no clock of its own, and so the stamp is the interval's
+        own instant rather than whenever the write happened to land.
         """
         if liters <= 0 and gap_s <= 0:
             return
         zones = self._water["zones"]
-        entry = zones.setdefault(zone_id, {"total_l": 0.0, "estimated_l": 0.0})
+        entry = zones.setdefault(zone_id, {"total_l": 0.0, "estimated_l": 0.0, "last_gap_at": None})
         entry["total_l"] = float(entry["total_l"]) + max(liters, 0.0)
         if estimated:
             entry["estimated_l"] = float(entry["estimated_l"]) + max(liters, 0.0)
+        if gap_s > 0 and gap_at is not None:
+            entry["last_gap_at"] = gap_at.isoformat()
         self._water["daily"] = metering.roll_into_day(
             self._water["daily"],
             day.isoformat(),
@@ -318,27 +329,33 @@ class RuntimeState:
         )
 
     def add_unattributed(
-        self, scope: str, liters: float, *, day: date, valves_closed: bool
+        self, scope: str, liters: float, *, day: date, valves_closed: bool, gap_s: float = 0.0
     ) -> None:
         """Credit litres no zone claimed, splitting off the all-closed subset.
 
         total_l includes line priming during master pre-open, which happens
         every cycle and is not a leak. closed_l is the subset seen with every
         managed valve closed, and is the only part leak detection reads.
+
+        ``gap_s`` is the unobserved part of the same interval, recorded here
+        when nothing was watering -- a gap follows the litres' own attribution
+        rule, and with no claimant it belongs to the scope that would have
+        received the water. It reaches the daily history only: no bucket
+        carries a ``last_gap_at``, because no entity reports one for a scope.
         """
-        if liters <= 0:
+        if liters <= 0 and gap_s <= 0:
             return
         entry = self._water["unattributed"].setdefault(scope, {"total_l": 0.0, "closed_l": 0.0})
-        entry["total_l"] = float(entry["total_l"]) + liters
+        entry["total_l"] = float(entry["total_l"]) + max(liters, 0.0)
         if valves_closed:
-            entry["closed_l"] = float(entry["closed_l"]) + liters
+            entry["closed_l"] = float(entry["closed_l"]) + max(liters, 0.0)
         self._water["daily"] = metering.roll_into_day(
             self._water["daily"],
             day.isoformat(),
             metering.UNATTRIBUTED_KEY,
             liters,
             estimated=False,
-            gap_s=0.0,
+            gap_s=gap_s,
             closed_l=liters if valves_closed else 0.0,
         )
 
@@ -347,6 +364,18 @@ class RuntimeState:
 
     def zone_water_estimated(self, zone_id: str) -> float:
         return float(self._water["zones"].get(zone_id, {}).get("estimated_l", 0.0))
+
+    def zone_last_gap_at(self, zone_id: str) -> str | None:
+        """ISO instant of the last interval this zone's meter went unread.
+
+        Stored beside the zone's counters rather than derived from the daily
+        history, which keeps seconds per day and not when they fell. Read with
+        ``get``: a zone whose counters were written before 3.3.0 gained the
+        field simply has none, and never having had a gap reads the same way
+        -- ``None``, not a false zero.
+        """
+        raw = self._water["zones"].get(zone_id, {}).get("last_gap_at")
+        return str(raw) if raw else None
 
     def unattributed_total(self, scope: str | None = None) -> float:
         buckets = self._water["unattributed"]

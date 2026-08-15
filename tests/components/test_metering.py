@@ -1,11 +1,12 @@
 """The per-meter ledger: continuous integration, gaps, unit semantics."""
 
 from datetime import timedelta
+from typing import Any
 
 import pytest
 from custom_components.irrigation_maestro.accounting import MeterLedger, MeterSample
 from custom_components.irrigation_maestro.const import DOMAIN
-from custom_components.irrigation_maestro.engine.metering import HUB_SCOPE
+from custom_components.irrigation_maestro.engine.metering import HUB_SCOPE, UNATTRIBUTED_KEY
 from custom_components.irrigation_maestro.flow import FlowSensorReader
 from freezegun.api import FrozenDateTimeFactory
 from homeassistant.core import HomeAssistant
@@ -252,6 +253,107 @@ async def test_a_raising_listener_does_not_stop_its_peers(
         assert received  # the second subscriber still got its sample
     finally:
         ledger.stop()
+
+
+def _zone_day(runtime: Any, zone_id: str) -> dict[str, Any]:
+    """Today's daily-history record for one zone: litres, est, gap_s, closed_l."""
+    return runtime.state.daily_water()[dt_util.now().date().isoformat()][zone_id]
+
+
+async def _water_through_an_outage(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory, *, outage_s: float
+) -> tuple[Any, str]:
+    """Run a zone on its own meter, with the meter away for ``outage_s``.
+
+    The outage is 100 s, not a round two minutes, on purpose: FlowMonitor's
+    zero-flow guard judges 120 s windows, so a window can never fall entirely
+    inside the outage however the trigger and the ticks line up. This test is
+    about what accounting records, not about the guard.
+    """
+    freezer.move_to(START)
+    park = MockValvePark(hass)
+    park.add("valve.a")
+    hass.states.async_set("sensor.flow", "10", {"unit_of_measurement": "L/min"})
+    mock_weather(hass)
+    entry = await setup_hub(
+        hass, [zone_data("Alpha", "valve.a", minutes=20, flow_sensor="sensor.flow")]
+    )
+    runtime = entry.runtime_data
+    zone_id = runtime.zone_ids[0]
+
+    await advance(hass, freezer, 31 * 60)
+    assert hass.states.get("valve.a").state == "open"
+    await advance(hass, freezer, 60, step=10.0)  # a minute nobody could miss
+    if outage_s:
+        hass.states.async_set("sensor.flow", "unavailable", {"unit_of_measurement": "L/min"})
+        await advance(hass, freezer, outage_s, step=10.0)
+        hass.states.async_set("sensor.flow", "10", {"unit_of_measurement": "L/min"})
+    await advance(hass, freezer, 60, step=10.0)
+    return runtime, zone_id
+
+
+async def test_a_meter_outage_mid_cycle_leaves_a_gap_on_the_zones_day(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    """The litres it did measure, plus how long it measured nothing.
+
+    A gap contributes zero litres by design -- no interpolation, and no zero,
+    which would assert that no water passed. Recording the seconds is the only
+    thing that keeps the shortfall legible: without it this day is
+    indistinguishable from a day with a healthy meter that simply saw less
+    water, which is exactly the reading the spec's gap rule exists to make
+    possible.
+    """
+    runtime, zone_id = await _water_through_an_outage(hass, freezer, outage_s=100)
+
+    record = _zone_day(runtime, zone_id)
+    assert record["l"] > 15  # ~2 minutes at 10 L/min, either side of the outage
+    assert 90 <= record["gap_s"] <= 130
+    # The same fact on the entity the card and the user read, not only in the
+    # history behind it.
+    assert runtime.state.zone_last_gap_at(zone_id) is not None
+
+
+async def test_a_healthy_day_of_the_same_length_records_no_gap(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    """The control: gap_s must mean "unobserved", not "elapsed"."""
+    runtime, zone_id = await _water_through_an_outage(hass, freezer, outage_s=0)
+
+    record = _zone_day(runtime, zone_id)
+    assert record["l"] > 15
+    assert record["gap_s"] == 0.0
+    assert runtime.state.zone_last_gap_at(zone_id) is None
+
+
+async def test_a_gap_with_nobody_watering_lands_on_the_unattributed_scope(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    """A gap follows the litres' own attribution rule, claimants or none.
+
+    Nothing is open here, so there is no zone to charge -- and no litres
+    either, which is precisely the path _on_sample's "nothing accrued" early
+    return used to swallow whole.
+    """
+    freezer.move_to(START)
+    park = MockValvePark(hass)
+    park.add("valve.a")
+    hass.states.async_set("sensor.flow", "unavailable", {"unit_of_measurement": "L/min"})
+    mock_weather(hass)
+    entry = await setup_hub(
+        hass, [zone_data("Alpha", "valve.a", minutes=10, flow_sensor="sensor.flow")]
+    )
+    runtime = entry.runtime_data
+    zone_id = runtime.zone_ids[0]
+
+    # Well before the 05:30 trigger: the meter is away and nothing is watering.
+    await advance(hass, freezer, 300, step=10.0)
+
+    assert runtime.state.unattributed_total() == 0.0  # a gap is not water
+    unattributed = _zone_day(runtime, UNATTRIBUTED_KEY)
+    assert unattributed["l"] == 0.0
+    assert unattributed["gap_s"] >= 200
+    assert zone_id not in runtime.state.daily_water()[dt_util.now().date().isoformat()]
 
 
 async def test_litres_go_to_the_zone_whose_valve_is_open(
