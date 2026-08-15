@@ -277,6 +277,11 @@ class HubConfig:
     consumption_action: str = const.BUDGET_ACTION_NOTIFY
     consumption_reduce_pct: int = const.DEFAULT_BUDGET_REDUCE_PCT
     curve_templates: dict[str, Any] = field(default_factory=dict)
+    leak_action: str = const.LEAK_ACTION_CLOSE
+    leak_threshold_lpm: float = const.DEFAULT_LEAK_THRESHOLD_LPM
+    leak_confirm_s: int = const.DEFAULT_LEAK_CONFIRM_S
+    leak_repeat_min: int = const.DEFAULT_LEAK_REPEAT_MIN
+    require_water_supply: bool = const.DEFAULT_REQUIRE_WATER_SUPPLY
 
     @classmethod
     def from_options(cls, options: dict[str, Any]) -> Self:
@@ -345,6 +350,19 @@ class HubConfig:
                 budget.get(const.CONF_BUDGET_REDUCE_PCT, const.DEFAULT_BUDGET_REDUCE_PCT)
             ),
             curve_templates=dict(options.get(const.CONF_CURVE_TEMPLATES, {})),
+            leak_action=str(options.get(const.CONF_LEAK_ACTION, const.LEAK_ACTION_CLOSE)),
+            leak_threshold_lpm=float(
+                options.get(const.CONF_LEAK_THRESHOLD_LPM, const.DEFAULT_LEAK_THRESHOLD_LPM)
+            ),
+            leak_confirm_s=int(
+                options.get(const.CONF_LEAK_CONFIRM_S, const.DEFAULT_LEAK_CONFIRM_S)
+            ),
+            leak_repeat_min=int(
+                options.get(const.CONF_LEAK_REPEAT_MIN, const.DEFAULT_LEAK_REPEAT_MIN)
+            ),
+            require_water_supply=bool(
+                options.get(const.CONF_REQUIRE_WATER_SUPPLY, const.DEFAULT_REQUIRE_WATER_SUPPLY)
+            ),
         )
 
     @property

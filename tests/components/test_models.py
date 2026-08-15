@@ -309,3 +309,31 @@ def test_the_hub_carries_the_line_meter_unit_override() -> None:
         }
     )
     assert hub.line_flow_sensor_unit == "m³/h"
+
+
+def test_the_leak_settings_default_to_the_values_checked_against_real_plumbing() -> None:
+    """0.5 L/min over 5 unbroken minutes, repeated every 6 h, and close by default."""
+    hub = HubConfig.from_options({"weather_entity": "weather.x"})
+    assert hub.leak_threshold_lpm == 0.5
+    assert hub.leak_confirm_s == 300
+    assert hub.leak_repeat_min == 360
+    assert hub.leak_action == "close"
+    assert hub.require_water_supply is True
+
+
+def test_the_leak_settings_are_read_from_the_hub_options() -> None:
+    hub = HubConfig.from_options(
+        {
+            "weather_entity": "weather.x",
+            "leak_action": "close_and_block",
+            "leak_threshold_lpm": 1.25,
+            "leak_confirm_s": 600,
+            "leak_repeat_min": 30,
+            "require_water_supply": False,
+        }
+    )
+    assert hub.leak_action == "close_and_block"
+    assert hub.leak_threshold_lpm == 1.25
+    assert hub.leak_confirm_s == 600
+    assert hub.leak_repeat_min == 30
+    assert hub.require_water_supply is False

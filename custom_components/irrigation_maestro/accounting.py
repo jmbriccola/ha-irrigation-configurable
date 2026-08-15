@@ -444,7 +444,7 @@ class WaterAccountant:
             # The interval about to open starts now, at whatever is watering
             # this instant -- there is no earlier sample to have captured it.
             self._pending_claimants[entity_id] = self._claimant_snapshot(entity_id)
-            self._pending_valves_closed[entity_id] = self._all_valves_closed()
+            self._pending_valves_closed[entity_id] = self.all_valves_closed()
             ledger.start()
 
     def _resolved_meters(self) -> dict[str, str | None]:
@@ -532,7 +532,7 @@ class WaterAccountant:
             for zone in self._claimants(entity_id)
         ]
 
-    def _all_valves_closed(self) -> bool:
+    def all_valves_closed(self) -> bool:
         """Every managed valve, master included, reports closed.
 
         ``all(is_closed)``, never ``not any(is_open)``: valves.py separates
@@ -544,6 +544,15 @@ class WaterAccountant:
         input to leak detection, persisted from 3.3.0 onward. An uncertain
         valve claims nothing and contributes no leak evidence either, which
         is the only honest reading of "we do not know".
+
+        Public because leak detection's source 2 is defined in terms of it and
+        must consume this one definition rather than write a second copy. The
+        answer travels to LeakDetector.note_flow as a parameter -- it belongs
+        to the interval the sample closed, not to the instant it fired -- so
+        the value the litres were attributed by is the value the leak is
+        judged by. This branch's most expensive lesson was the same predicate
+        written in seven places, one of which drifted; there is one, and this
+        is it.
         """
         return all(controller.is_closed for controller in self._runtime.all_valve_controllers())
 
@@ -588,7 +597,28 @@ class WaterAccountant:
         # instant, not stranded on whoever was watering before a zero-litres
         # gap (unit unknown, or simply no elapsed time).
         self._pending_claimants[entity_id] = self._claimant_snapshot(entity_id)
-        self._pending_valves_closed[entity_id] = self._all_valves_closed()
+        self._pending_valves_closed[entity_id] = self.all_valves_closed()
+        # Leak detection's source 2, fed from the interval this sample just
+        # closed -- the same litres, the same claimants and the same
+        # valves-closed answer that decide closed_l below, not a second reading
+        # of the meter. ``valves_closed`` alone is passed because it already
+        # implies an empty claimant list: both were captured in the same
+        # instant, and if every managed valve reports closed then no zone on
+        # this meter can have had an open one.
+        #
+        # Before the "nothing accrued" return on purpose. A sample carrying no
+        # litres over a measured interval is precisely the evidence that flow
+        # has STOPPED, and it is what makes post-cycle drainage harmless; a
+        # detector that never saw it would keep a window open on water that
+        # ended minutes ago.
+        detector = self._runtime.leak_detector(self._scope_for(entity_id))
+        if detector is not None:
+            detector.note_flow(
+                liters=liters,
+                measured_s=sample.measured_s,
+                elapsed_s=sample.elapsed_s,
+                all_closed=valves_closed,
+            )
         # A gap is exactly the case this guard used to swallow: it produces no
         # litres at all, so a "nothing accrued" early return would drop the
         # one record that makes an outage visible. RuntimeState.add_water and

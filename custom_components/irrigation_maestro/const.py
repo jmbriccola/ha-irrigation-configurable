@@ -37,6 +37,16 @@ CONF_ENGINE: Final = "engine"
 CONF_NOTIFICATIONS: Final = "notifications"
 CONF_CONSUMPTION_BUDGET: Final = "consumption_budget"
 CONF_CURVE_TEMPLATES: Final = "curve_templates"
+CONF_LEAK_ACTION: Final = "leak_action"
+CONF_LEAK_THRESHOLD_LPM: Final = "leak_threshold_lpm"
+CONF_LEAK_CONFIRM_S: Final = "leak_confirm_s"
+CONF_LEAK_REPEAT_MIN: Final = "leak_repeat_min"
+CONF_REQUIRE_WATER_SUPPLY: Final = "require_water_supply"
+
+# What the component does when a zone's leak alarm goes active.
+LEAK_ACTION_NOTIFY: Final = "notify"
+LEAK_ACTION_CLOSE: Final = "close"
+LEAK_ACTION_CLOSE_AND_BLOCK: Final = "close_and_block"
 
 # Restrictions keys (hub-level and zone override)
 CONF_ALLOWED_WEEKDAYS: Final = "allowed_weekdays"
@@ -166,6 +176,23 @@ DEFAULT_ORDER: Final = 100
 DEFAULT_ADJUSTMENT_PCT: Final = 100
 DEFAULT_FLOW_TOLERANCE_PCT: Final = 25
 DEFAULT_BUDGET_REDUCE_PCT: Final = 50
+
+#: Sustained flow below this, with everything shut, is drip and drainage.
+#: Checked against the author's own plumbing.
+DEFAULT_LEAK_THRESHOLD_LPM: Final = 0.5
+#: How long that flow must persist. The window counts only seconds the meter
+#: actually measured, and resets whenever flow drops below the threshold or a
+#: valve stops reporting closed -- so post-cycle drainage cannot reach it: it
+#: would have to run above threshold for the whole of it, which is not
+#: drainage. One mechanism instead of a threshold plus a separate blanking
+#: window after each close.
+DEFAULT_LEAK_CONFIRM_S: Final = 300
+#: How often a leak that will not go away says so again. Long, because the
+#: alarm is a standing condition and a reminder every few minutes is noise.
+DEFAULT_LEAK_REPEAT_MIN: Final = 360
+#: A missing water supply blocks the start of a cycle by default: with no water
+#: the cycle waters nothing anyway, so blocking costs the garden nothing.
+DEFAULT_REQUIRE_WATER_SUPPLY: Final = True
 
 # Runtime -----------------------------------------------------------------
 
