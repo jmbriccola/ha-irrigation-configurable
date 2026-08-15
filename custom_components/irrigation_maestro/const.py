@@ -210,10 +210,15 @@ DEFAULT_REQUIRE_WATER_SUPPLY: Final = True
 #: refused. Deliberately shorter than DEFAULT_LEAK_CONFIRM_S, because the two
 #: mistakes cost different amounts: a false leak alarm shuts valves and shouts,
 #: while a false supply block withholds water that -- if the sensor is right --
-#: was never going to arrive. And erring the other way is cheap too: a window
-#: too long merely lets the cycle start, and the zero-flow guard interrupts it
-#: a few minutes later with the same diagnosis. The two behaviours degrade into
-#: each other rather than contradicting.
+#: was never going to arrive. And erring the other way is cheap too, WHERE A
+#: METER RESOLVES: a window too long merely lets the cycle start, and the
+#: zero-flow guard interrupts it a few minutes later with the same diagnosis,
+#: so the two behaviours degrade into each other rather than contradicting.
+#: On a zone with no meter there is no guard -- session.py builds no
+#: FlowMonitor without a ledger -- so nothing catches the dry run and the
+#: window is the only thing standing between a supply outage and ten minutes
+#: of watering nothing. Which is an argument for the default being short, not
+#: for it being zero: the flaky-reading case is just as real there.
 #:
 #: Measured against the sensor's own last_changed, so nothing is tracked and
 #: nothing can drift. After a restart a restored state's last_changed is the
