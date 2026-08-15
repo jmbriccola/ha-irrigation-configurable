@@ -790,6 +790,65 @@ async def test_editing_a_running_meters_override_does_not_deafen_its_monitor(
     assert runtime.state.zone_water_total(zone_id) > total_at_edit
 
 
+async def test_removing_a_running_meter_from_the_config_lets_the_run_finish(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    """A meter deleted mid-cycle must not interrupt the cycle it was watching.
+
+    Retargeting fixed the changed-meter case, but a meter whose entity leaves
+    the configuration entirely was still stopped -- and stop() clears the
+    listeners, including the running FlowMonitor's. The monitor holds the
+    ledger object and never re-resolves it, so its litres froze while its own
+    unit_known stayed True: `blind` stayed False, the periodic delta was zero,
+    and inside ZERO_FLOW_GRACE_S the zero-flow guard interrupted a healthy run
+    as no_flow. The ledger is now retired instead -- one farewell sample with
+    no unit -- and the monitor's own unit-lost rule takes it from there: it
+    goes blind, the guard stops judging, and the run ends on its duration.
+
+    The repair that farewell sample provokes is cleared with the ledger: the
+    entity is out of the configuration, so a standing "unit unknown" warning
+    about it could never be acted on.
+    """
+    freezer.move_to(START)
+    park = MockValvePark(hass)
+    park.add("valve.a")
+    hass.states.async_set("sensor.flow", "10", {"unit_of_measurement": "L/min"})
+    mock_weather(hass)
+    entry = await setup_hub(
+        hass, [zone_data("Alpha", "valve.a", minutes=10, flow_sensor="sensor.flow")]
+    )
+    runtime = entry.runtime_data
+    zone_id = runtime.zone_ids[0]
+
+    await advance(hass, freezer, 31 * 60)
+    assert hass.states.get("valve.a").state == "open"
+    await advance(hass, freezer, 60, step=10.0)
+    measured = runtime.state.zone_water_total(zone_id)
+    assert measured > 0.0
+
+    # The meter leaves the configuration while its zone is watering. No line
+    # meter stands behind it, so nothing resolves for this zone any more.
+    subentry = entry.subentries[zone_id]
+    hass.config_entries.async_update_subentry(
+        entry, subentry, data={**subentry.data, "flow_sensor": ""}
+    )
+    await hass.async_block_till_done()
+
+    assert runtime.accountant.ledger_for(runtime.zones[zone_id]) is None
+
+    # Well past two ZERO_FLOW_GRACE_S windows, and past the cycle's end.
+    await advance(hass, freezer, 11 * 60, step=10.0)
+
+    outcome = runtime.state.last_outcome(zone_id)
+    assert outcome["result"] == "completed"
+    assert outcome["reason_key"] != "no_flow"
+    # Litres already measured stay measured, and no estimate is booked on top
+    # of them: the run did have a usable unit while it lasted.
+    assert runtime.state.zone_water_total(zone_id) >= measured
+    assert runtime.state.zone_water_estimated(zone_id) == 0.0
+    assert ir.async_get(hass).async_get_issue(DOMAIN, "flow_unit_unknown_sensor.flow") is None
+
+
 async def test_a_stuck_open_valve_keeps_claiming_its_water_after_close_fails(
     hass: HomeAssistant, freezer: FrozenDateTimeFactory
 ) -> None:
