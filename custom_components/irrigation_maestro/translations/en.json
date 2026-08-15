@@ -96,6 +96,14 @@
     }
   },
   "entity": {
+    "binary_sensor": {
+      "hub_leak": {
+        "name": "System leak"
+      },
+      "zone_leak": {
+        "name": "Leak"
+      }
+    },
     "sensor": {
       "hub_water_budget": {
         "name": "Water budget"

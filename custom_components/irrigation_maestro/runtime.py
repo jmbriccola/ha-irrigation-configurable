@@ -1357,6 +1357,39 @@ class IrrigationRuntime:
         detector = self._leak_detectors.get(scope)
         return detector.state if detector is not None else LeakState()
 
+    def leak_sources_configured(self, scope: str) -> bool:
+        """Could anything here ever raise a leak alarm on this scope?
+
+        Configuration only, and that is the whole point rather than an
+        oversight. The obvious alternative -- asking whether a source is
+        answering right NOW, as ``zone_flow_meter_usable`` does -- describes a
+        source that has gone quiet, not one that is gone, and LeakDetector
+        deliberately holds an alarm through exactly that silence: neither
+        source withdraws on ``unavailable``. A liveness-based answer would
+        therefore say "nothing here can tell you anything" at the very moment
+        the component is telling the user something, which is the one state
+        where being believed matters.
+
+        Both halves are the sources' own gates, read where each already lives
+        rather than re-derived. Source 1 is subscribed only when the zone
+        declares a ``leak_sensor``, by truthiness because update_zone stores
+        "" for a cleared key. Source 2 only ever speaks for a scope some
+        ledger reports for, which is ``metered_scopes`` -- the same set
+        ``_rebuild_leak_detectors`` hands each detector as ``has_meter``, so a
+        scope this call says is unsourced is precisely a scope whose sources
+        have just been withdrawn. A hub scope has no zone and so no leak
+        sensor, leaving flow as its only possible half.
+
+        Consumed by the leak binary sensors, which report ``unavailable``
+        rather than ``off`` when it is False: ``device_class: problem`` gives
+        ``off`` the meaning "there is no problem", and a scope with no source
+        has established no such thing.
+        """
+        zone = self.zones.get(scope)
+        if zone is not None and zone.config.leak_sensor:
+            return True
+        return scope in self.accountant.metered_scopes()
+
     def _leak_subject(self, scope: str) -> str:
         """Who an alarm is about, for a log line: a zone's name, or the system.
 

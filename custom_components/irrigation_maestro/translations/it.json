@@ -96,6 +96,14 @@
     }
   },
   "entity": {
+    "binary_sensor": {
+      "hub_leak": {
+        "name": "Perdita di sistema"
+      },
+      "zone_leak": {
+        "name": "Perdita"
+      }
+    },
     "sensor": {
       "hub_water_budget": {
         "name": "Bilancio idrico"
