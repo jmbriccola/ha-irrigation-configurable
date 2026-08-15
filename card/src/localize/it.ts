@@ -125,6 +125,8 @@ export const it: Record<keyof typeof en, string> = {
   "reason.no_flow": "Nessun flusso d'acqua rilevato",
   "reason.flow_out_of_range": "Flusso fuori dai limiti",
   "reason.close_failed": "Chiusura della valvola non riuscita",
+  "reason.leak": "Bloccata da un allarme perdita",
+  "reason.no_water_supply": "Mancanza d'acqua",
   "reason.watchdog": "Chiusa dal watchdog di sicurezza",
   "reason.zone_removed": "Zona rimossa",
   "reason.shutdown": "Integrazione arrestata",

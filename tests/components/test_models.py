@@ -319,6 +319,9 @@ def test_the_leak_settings_default_to_the_values_checked_against_real_plumbing()
     assert hub.leak_repeat_min == 360
     assert hub.leak_action == "close"
     assert hub.require_water_supply is True
+    # Shorter than the leak window on purpose: a false block withholds water
+    # that was not coming anyway, while a false leak alarm shuts valves.
+    assert hub.water_supply_confirm_s == 180
 
 
 def test_the_leak_settings_are_read_from_the_hub_options() -> None:
@@ -330,6 +333,7 @@ def test_the_leak_settings_are_read_from_the_hub_options() -> None:
             "leak_confirm_s": 600,
             "leak_repeat_min": 30,
             "require_water_supply": False,
+            "water_supply_confirm_s": 45,
         }
     )
     assert hub.leak_action == "close_and_block"
@@ -337,6 +341,7 @@ def test_the_leak_settings_are_read_from_the_hub_options() -> None:
     assert hub.leak_confirm_s == 600
     assert hub.leak_repeat_min == 30
     assert hub.require_water_supply is False
+    assert hub.water_supply_confirm_s == 45
 
 
 def test_an_unknown_leak_action_falls_back_to_the_default() -> None:
@@ -356,6 +361,7 @@ def test_an_unknown_leak_action_falls_back_to_the_default() -> None:
         ("leak_threshold_lpm", "leak_threshold_lpm", 0.5),
         ("leak_confirm_s", "leak_confirm_s", 300),
         ("leak_repeat_min", "leak_repeat_min", 360),
+        ("water_supply_confirm_s", "water_supply_confirm_s", 180),
     ],
 )
 def test_a_negative_leak_tunable_falls_back_to_the_default(
@@ -365,7 +371,8 @@ def test_a_negative_leak_tunable_falls_back_to_the_default(
 
     The detector would alarm instantly and permanently on a value the user
     almost certainly typed by accident, so it is corrected at parse time rather
-    than acted on.
+    than acted on. The supply window fails the same way from the other side: a
+    negative one would refuse every cycle on the first flicker of the sensor.
     """
     hub = HubConfig.from_options({"weather_entity": "weather.x", key: -5})
     assert getattr(hub, attribute) == expected
@@ -373,15 +380,17 @@ def test_a_negative_leak_tunable_falls_back_to_the_default(
 
 def test_zero_stays_legal_for_every_leak_tunable() -> None:
     """Each zero is a meaningful choice, not a mistake: any flow at all, no
-    waiting, no reminders."""
+    waiting, no reminders, and a supply sensor believed on its first reading."""
     hub = HubConfig.from_options(
         {
             "weather_entity": "weather.x",
             "leak_threshold_lpm": 0,
             "leak_confirm_s": 0,
             "leak_repeat_min": 0,
+            "water_supply_confirm_s": 0,
         }
     )
     assert hub.leak_threshold_lpm == 0.0
     assert hub.leak_confirm_s == 0
     assert hub.leak_repeat_min == 0
+    assert hub.water_supply_confirm_s == 0

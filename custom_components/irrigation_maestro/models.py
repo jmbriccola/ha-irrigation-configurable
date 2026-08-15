@@ -313,6 +313,7 @@ class HubConfig:
     leak_confirm_s: int = const.DEFAULT_LEAK_CONFIRM_S
     leak_repeat_min: int = const.DEFAULT_LEAK_REPEAT_MIN
     require_water_supply: bool = const.DEFAULT_REQUIRE_WATER_SUPPLY
+    water_supply_confirm_s: int = const.DEFAULT_WATER_SUPPLY_CONFIRM_S
 
     @classmethod
     def from_options(cls, options: dict[str, Any]) -> Self:
@@ -402,6 +403,14 @@ class HubConfig:
             ),
             require_water_supply=bool(
                 options.get(const.CONF_REQUIRE_WATER_SUPPLY, const.DEFAULT_REQUIRE_WATER_SUPPLY)
+            ),
+            water_supply_confirm_s=int(
+                _non_negative(
+                    options.get(
+                        const.CONF_WATER_SUPPLY_CONFIRM_S, const.DEFAULT_WATER_SUPPLY_CONFIRM_S
+                    ),
+                    const.DEFAULT_WATER_SUPPLY_CONFIRM_S,
+                )
             ),
         )
 

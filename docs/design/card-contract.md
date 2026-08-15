@@ -494,7 +494,11 @@ Skip/outcome `reason_key` values: `out_of_season`, `precipitation`,
 `skip_today_requested`, `consumption_budget`, plus cancellation/interruption
 causes: `valves_busy`, `valve_unavailable`, `open_failed`,
 `foreign_valve_open`, `manual_intervention` (also used for manual stop-all),
-`no_flow`, `watchdog`, `zone_removed`, `shutdown`, `cancelled`.
+`no_flow`, `watchdog`, `zone_removed`, `shutdown`, `cancelled`, `leak` (a
+confirmed leak alarm under the `close_and_block` action refused the start),
+`no_water_supply` (the zone's water-supply sensor reports no water — a refused
+start once the outage has been confirmed, and also the reason a zero-flow
+interrupt carries when that sensor explains it).
 Anomaly-only keys (fired in `anomaly` events, not as run outcomes):
 `flow_out_of_range`, `close_failed`. A restart leaves no per-cycle outcome
 by design — the startup watchdog closes valves and the sentinel flags the

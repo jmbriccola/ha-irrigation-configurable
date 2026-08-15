@@ -55,6 +55,10 @@ REASON_NO_FLOW = "no_flow"
 REASON_CLOSE_FAILED = "close_failed"
 REASON_WATCHDOG = "watchdog"
 REASON_LEAK = "leak"
+#: Not a leak: the third thing a zone's sensors can say about water is that
+#: there is none. It both refuses a start and explains a zero-flow interrupt,
+#: which are the same fact reached from either side of the valve opening.
+REASON_NO_WATER_SUPPLY = "no_water_supply"
 
 _GATHER_WINDOW_S = 2.0
 
@@ -804,6 +808,17 @@ class SessionRunner:
             self._record(segment, RESULT_SKIPPED, REASON_LEAK)
             return
 
+        # No water behind the valve, confirmed for long enough to be believed.
+        # In the same gate block and for the same reasons: every path reaches
+        # it before a valve opens, a running segment is not stopped, and a
+        # manual run is not exempt -- asking by hand does not conjure water
+        # into the pipe. Blocking costs the garden nothing, because with no
+        # water the cycle waters nothing either way; what it saves is a
+        # pointless actuation and an outcome that says why.
+        if runtime.water_supply_block_active(segment.zone_id):
+            self._record(segment, RESULT_SKIPPED, REASON_NO_WATER_SUPPLY)
+            return
+
         # Calendar forbidden windows: never start inside one; truncate to
         # avoid overrunning into one; slide queued work to the next slot.
         restrictions = self._restrictions(zone)
@@ -906,6 +921,26 @@ class SessionRunner:
             )
             return
         if watering_result == "no_flow":
+            # Prefer the specific diagnosis when the zone has a sensor able to
+            # give one. Deliberately NOT gated on the confirmation window that
+            # governs a refused start: this explains an interruption that has
+            # already happened, and the sensor's reading at that moment is the
+            # evidence for why. Gating it would swap a specific diagnosis for a
+            # generic one and gain nothing -- the cycle is over either way.
+            #
+            # Only the reason changes: the outcome, the notification channel
+            # and the aggregation are the generic diagnosis's, because this is
+            # the same physical event and it must not move channel depending on
+            # whether the zone happens to have a supply sensor.
+            if runtime.water_supply_missing(segment.zone_id):
+                self._record(
+                    segment, RESULT_INTERRUPTED, REASON_NO_WATER_SUPPLY, minutes=allowed_min
+                )
+                await runtime.notify_anomaly(
+                    f"No flow while watering {segment.run.zone_name}: the zone's "
+                    "supply sensor reports no water. Cycle interrupted."
+                )
+                return
             self._record(segment, RESULT_INTERRUPTED, REASON_NO_FLOW, minutes=allowed_min)
             await runtime.notify_anomaly(
                 f"No flow detected while watering {segment.run.zone_name}; cycle interrupted."

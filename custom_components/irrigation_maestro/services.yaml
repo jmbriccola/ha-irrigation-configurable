@@ -665,6 +665,10 @@ set_valve_safety:
       example: true
       selector:
         boolean:
+    water_supply_confirm_s:
+      example: 180
+      selector:
+        number: { min: 0, max: 3600, step: 1, unit_of_measurement: s, mode: box }
 
 set_concurrency:
   fields:

@@ -710,6 +710,10 @@
         "require_water_supply": {
           "name": "Require the water supply",
           "description": "Refuse to start a cycle for a zone whose water-supply sensor reports no water. With no water the cycle waters nothing anyway, so blocking costs the garden nothing."
+        },
+        "water_supply_confirm_s": {
+          "name": "Water-supply confirmation",
+          "description": "Seconds the supply must have been reported missing before a cycle start is refused, so that a single flaky reading cannot withhold water. It does not delay the diagnosis of a cycle the zero-flow guard has already interrupted, which names the missing supply straight away. After a restart the clock starts again, because how long the water has been gone is not knowable."
         }
       }
     },
@@ -912,6 +916,10 @@
     "leak_system_flow": {
       "title": "Possible leak in the irrigation system",
       "description": "A flow meter measured water for longer than the confirmation window while every managed valve reported closed. That meter does not belong to a single zone, so which zone is leaking genuinely cannot be told -- only that the system is losing water. Check the line and each valve in turn. This notice stays until the meter reports the water has stopped; the notification is read and forgotten, this is not. If the leak action is set to \"close and block\", no new cycle starts for the zones behind that meter while this notice is present."
+    },
+    "water_supply_missing": {
+      "title": "No water supply for {zone}",
+      "description": "The water-supply sensor of zone {zone} reports that the water is gone. That sensor has a \"problem\" device class, so \"on\" means the problem is present -- no water -- however its name reads. This is not a leak: nothing is escaping, there is simply nothing to water with. Check the tap, the mains pressure and any upstream shut-off. Unless the water-supply requirement has been switched off, no new cycle starts for this zone once the outage has lasted the confirmation window, so that a single flaky reading cannot withhold water; a cycle that starts anyway is interrupted by the zero-flow guard a few minutes later, which then names the missing supply as the reason. This notice goes as soon as the sensor reports water again, or the sensor is removed from the zone."
     },
     "leak_action_invalid": {
       "title": "Unrecognised leak action",
