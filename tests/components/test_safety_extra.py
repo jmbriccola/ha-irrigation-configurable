@@ -1037,3 +1037,27 @@ async def test_flow_in_range_reports_nothing(
 
     assert range_checks, "_check_range never ran -- the test observed nothing"
     assert reported == []
+
+
+async def test_closing_an_already_closed_valve_leaves_no_ledger_entry(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    """A command that cannot actuate must not arm a ledger entry.
+
+    The entry only exists to tell our own transition apart from a manual one.
+    One that never gets consumed sits there for its whole TTL and absorbs the
+    next genuine manual close, silently disarming surveillance.
+    """
+    freezer.move_to(START)
+    park = MockValvePark(hass)
+    park.add("valve.a")
+    mock_weather(hass)
+    entry = await setup_hub(hass, [zone_data("Alpha", "valve.a", minutes=10)])
+    runtime = entry.runtime_data
+    runner = runtime.session
+
+    assert hass.states.get("valve.a").state == "closed"
+    assert await runner._close_valve(runtime.zones[runtime.zone_ids[0]].valve) is True
+
+    # Nothing was armed, so a real manual close is still detectable.
+    assert runtime.ledger_consume("valve.a", "close") is False
