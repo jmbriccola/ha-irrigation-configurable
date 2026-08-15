@@ -999,6 +999,37 @@ async def test_a_zone_that_can_record_nothing_says_so(
     )
 
 
+async def test_a_nominal_of_zero_records_nothing_and_says_so(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    """A nominal rate of 0 is "records nothing", not "measured 0 L".
+
+    The service schema takes any `nominal_flow_lpm >= 0`, and a zone with no
+    meter and a nominal of exactly 0 books nothing: record_estimate returns on
+    non-positive litres. Testing the nominal with `is None` therefore left
+    such a zone claiming `source: "measured"` at 0 L -- a measurement that
+    will never happen, from a meter that does not exist.
+    """
+    freezer.move_to(START)
+    park = MockValvePark(hass)
+    park.add("valve.a")
+    mock_weather(hass)
+    entry = await setup_hub(
+        hass, [zone_data("Zeroed", "valve.a", minutes=10, nominal_flow_lpm=0.0)]
+    )
+    zone_id = entry.runtime_data.zone_ids[0]
+
+    assert role_state(hass, "zone_water_total", zone_id=zone_id).attributes["source"] == "none"
+
+    # And it really does record nothing: a full cycle later, still nothing --
+    # which is exactly why "measured" would have been a false claim.
+    await advance(hass, freezer, 31 * 60)
+    await advance(hass, freezer, 11 * 60)
+
+    assert entry.runtime_data.state.zone_water_total(zone_id) == 0.0
+    assert role_state(hass, "zone_water_total", zone_id=zone_id).attributes["source"] == "none"
+
+
 async def test_meter_entity_is_none_when_no_meter_resolves(
     hass: HomeAssistant, freezer: FrozenDateTimeFactory
 ) -> None:

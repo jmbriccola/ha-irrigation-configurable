@@ -450,20 +450,23 @@ class ZoneWaterTotalSensor(MaestroZoneEntity, SensorEntity):
         estimated = state.zone_water_estimated(self._zone_id)
         today = dt_util.now().date()
         config = self.zone_config
-        # A zone with neither a resolvable meter nor a nominal flow rate can
-        # record nothing at all: there is nothing to integrate, and
-        # add_consumption returns before booking an estimate. Calling that
+        # A zone with neither a resolvable meter nor a usable nominal flow
+        # rate can record nothing at all: there is nothing to integrate, and
+        # record_estimate returns on non-positive litres. Calling that
         # "measured" describes a measurement that will never happen, so it
-        # gets its own value. Judged on configuration, not on live meter
-        # state, so the answer cannot flap with a momentarily unavailable
-        # sensor -- and only while the zone holds no litres, so a zone whose
-        # nominal was cleared after the fact still reports the provenance of
-        # what it actually accrued.
+        # gets its own value. Falsy, not `is None`: update_zone's schema takes
+        # any nominal_flow_lpm >= 0, and a nominal of exactly 0 books nothing
+        # either -- such a zone records nothing just as surely as one with no
+        # nominal at all, and must not claim otherwise. Judged on
+        # configuration, not on live meter state, so the answer cannot flap
+        # with a momentarily unavailable sensor -- and only while the zone
+        # holds no litres, so a zone whose nominal was cleared after the fact
+        # still reports the provenance of what it actually accrued.
         if (
             total <= 0
             and config is not None
             and not runtime.zone_has_flow_meter(config)
-            and config.nominal_flow_lpm is None
+            and not config.nominal_flow_lpm
         ):
             source = "none"
         elif estimated <= 0:
