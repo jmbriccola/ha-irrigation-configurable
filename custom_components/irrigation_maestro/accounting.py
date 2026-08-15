@@ -156,6 +156,47 @@ class MeterLedger:
         self._unsubs.clear()
         self._listeners.clear()
 
+    def retire(self) -> None:
+        """Stop for good, after telling subscribers the meter has gone.
+
+        Called instead of ``stop()`` when the entity has left the
+        configuration entirely. ``stop()`` alone clears the listeners, which
+        silently deafens a live ``FlowMonitor``: it holds this object, never
+        re-resolves it, and would see no further samples while its own
+        ``unit_known`` stayed True -- so its ``blind`` test stays False, its
+        delta is zero, and inside ZERO_FLOW_GRACE_S the zero-flow guard
+        interrupts a perfectly healthy run as ``no_flow``.
+
+        One final sample carrying ``lpm=None`` fixes that with the monitor's
+        own machinery instead of a registry of monitors: the unit-lost
+        transition makes it blind, the guard stops judging, and the run
+        finishes on its duration. Which is the honest reading -- from the
+        run's point of view the meter has become unreadable, exactly the case
+        that rule already covers.
+
+        Deliberately not folded into ``stop()``: a ledger shutting down
+        normally (Home Assistant stopping, the entry unloading) must not start
+        publishing a sample it never published before.
+        """
+        now = dt_util.utcnow()
+        self._integrate(now)
+        elapsed_s, measured_s = self._drain()
+        self.unit_known = False
+        self._last_lpm = 0.0
+        self._last_available = False
+        self._publish(
+            MeterSample(
+                at=now,
+                lpm=None,
+                available=False,
+                total_l=self.total_l,
+                elapsed_s=elapsed_s,
+                measured_s=measured_s,
+                unit_recovered=False,
+            )
+        )
+        self.stop()
+
     def retarget(self, reader: FlowSensorReader) -> None:
         """Read the same entity under a new unit override, from here forward.
 
@@ -346,8 +387,11 @@ class WaterAccountant:
         object, same monotonic total, same subscribers.
 
         Only a ledger whose entity disappeared from the configuration is
-        stopped and dropped. Everything else -- the ledger, its running total,
-        and every subscription on it -- is left exactly as it was.
+        dropped -- and it is *retired*, not merely stopped, so a monitor still
+        watching it is told the meter has gone rather than left waiting for
+        samples that will never come (see MeterLedger.retire). Everything else
+        -- the ledger, its running total, and every subscription on it -- is
+        left exactly as it was.
         """
         resolved = self._resolved_meters()
         for entity_id in list(self._ledgers):
@@ -364,8 +408,18 @@ class WaterAccountant:
                     # next sample and judge that interval by the wrong
                     # claimants.
                 continue  # unaffected or retargeted: subscribers keep running
+            # This accountant's own subscription goes first, so the farewell
+            # sample below reaches the monitors and nothing else: its litres
+            # are the interval retire() just closed, and crediting them here
+            # after _last_totals has been dropped two lines down would book
+            # the meter's whole cumulative total as one delta.
             self._unsubs.pop(entity_id)()
-            self._ledgers.pop(entity_id).stop()
+            self._ledgers.pop(entity_id).retire()
+            # The entity is out of the configuration, so a standing "unit
+            # unknown" repair about it can no longer be acted on -- and
+            # retire() itself provokes one, since a monitor watching this
+            # meter reads the farewell sample as the unit being lost.
+            self._runtime.clear_flow_unit_unknown(entity_id)
             self._overrides.pop(entity_id, None)
             # A stale entry here would make a later ledger on the same entity
             # -- one built after the meter returns to the configuration --
