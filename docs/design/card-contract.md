@@ -22,6 +22,7 @@ config entry).
 | `hub_session`       | sensor   | `idle` \| `evaluating` \| `running` | `queue`: ordered list of `{zone_id, zone_name, cycle_id, duration_min, state}`; `started_at` (ISO); `active_zone_id` |
 | `hub_consumption_left` | sensor | liters left (float) or unavailable | `budget_liters`, `used_liters`, `unattributed_liters`, `period_start`, `action` — entity always exists; unavailable when no budget is configured |
 | `hub_unattributed_water` | sensor | liters (float), `device_class: water`, `state_class: total_increasing` | `closed_l` (float), `per_scope` (`{scope: liters}`, only scopes with water > 0; scope is a `zone_id` or `"__hub__"`) — see "Water accounting sensors" below |
+| `hub_leak`          | binary_sensor | `on` = a leak is confirmed for the system scope, `device_class: problem`; **unavailable** when no source could ever raise it | `sources`, `since`, `describing_source` — see "Leak entities" below |
 | `hub_pause`         | switch   | on = globally paused           | — |
 | `hub_evaluate`      | button   | press = evaluate now           | — |
 | `hub_stop_all`      | button   | press = stop everything        | — |
@@ -34,6 +35,7 @@ config entry).
 | `zone_next_run`     | sensor   | ISO timestamp or unavailable | `cycle_id`, `cycle_name` |
 | `zone_last_outcome` | sensor   | `completed` \| `skipped` \| `interrupted` \| `cancelled` \| `none` | `reason_key` (see keys), `finished_at` (ISO), `cycle_id`, `duration_min`, `volume_l` |
 | `zone_water_total`  | sensor   | liters (float), `device_class: water`, `state_class: total_increasing` | `estimated` (bool), `source` (`measured` \| `nominal` \| `mixed` \| `none`), `today_l` (float), `month_l` (float), `meter_entity` (entity id or null), `last_gap_at` (ISO or null) — see "Water accounting sensors" below |
+| `zone_leak`         | binary_sensor | `on` = a leak is confirmed for this zone, `device_class: problem`; **unavailable** when no source could ever raise it | `sources`, `since`, `describing_source` — see "Leak entities" below |
 | `zone_enabled`      | switch   | on/off | — |
 | `cycle_enabled`     | switch   | on/off (one per cycle) | `cycle_id`, `cycle_name` |
 | `zone_order`        | number   | int | — |
@@ -217,6 +219,62 @@ holding the same fact would be a second thing that could drift from it.
     was measured on a meter that serves exactly one zone, `"__hub__"` when
     it was measured on a meter serving more than one zone (or none).
     Scopes with zero litres are omitted.
+
+### Leak entities (`zone_leak`, `hub_leak`)
+
+One `binary_sensor` per **leak scope**, mirroring the detector exactly: one
+for every zone, plus one for the hub scope — water measured on a meter that
+serves more than one zone (or none), where which zone leaks is unanswerable
+but whether the *system* leaks is not. There is deliberately **no single
+summary entity**: an automation that closes the mains needs to know which
+zone to shut, and a summary cannot say.
+
+`device_class: problem`, so `on` means "a leak is confirmed on this scope"
+in the vocabulary Home Assistant already renders and automates on. The
+alarm is the detector's own: one alarm per scope however many sources agree,
+raised only after the confirmation window, and held through a source going
+silent (an unreadable meter or a flat sensor battery withdraws nothing).
+
+**`unavailable` is a first-class state here, and it is not an error.** A
+scope with no leak sensor configured and no meter reporting for it has
+established nothing, and `off` under `device_class: problem` asserts *there
+is no problem* — a claim such a scope cannot make. So the entity is
+unavailable exactly while no source could ever raise its alarm, and becomes
+available the moment one is configured (no reload). Two consequences worth
+stating, because they are easy to get backwards:
+
+- Availability answers **"could this ever tell me something"**, never "is a
+  source answering right now". An entity holding an alarm never goes
+  unavailable because its meter dropped out or its sensor went quiet — that
+  would retract a live warning at the moment it matters most.
+- A card rendering a leak badge must therefore treat `unavailable` as
+  *"not covered"* (the same declared absence `capabilities.leak_detection:
+  "unavailable"` reports), not as `off` and not as a fault.
+- **Discovery caveat:** Home Assistant publishes no extra state attributes at
+  all while an entity is unavailable, `maestro_role` included — so the
+  attribute walk at the top of this document does not see an unavailable leak
+  entity. A card must therefore treat *"no leak entity for this zone"* and
+  *"its leak entity is unavailable"* as the same thing, which they are: both
+  mean nothing here could raise a leak alarm. Do not read the absence as an
+  error, and do not fall back to matching entity ids to find it.
+
+Attributes, on both:
+
+- `sources` (list of strings, sorted): which sources are contributing
+  **right now** — `"valve_sensor"` (the zone's own leak sensor said so) and
+  `"no_flow_closed"` (water measured while every managed valve reported
+  closed). Not the same as which one raised the alarm: a source can withdraw
+  while the alarm stands on another. Empty while `off`.
+- `since` (ISO or `null`): when the alarm was **confirmed**, which is not
+  when the water started, and no surface may present it as such — a source
+  withdrawing and returning yields a fresh one.
+- `describing_source` (string or `null`): the source whose evidence a
+  description should cite — the first one to notice while it is still
+  contributing, a surviving source otherwise. It is what the Repairs notice
+  is keyed on, so a card showing both agrees with what the user is reading
+  at the same moment. The *first* source is not published here; it is
+  carried by the `irrigation_maestro_leak` event (below), which is where an
+  automation that cares about provenance reads it.
 
 ### Zone capabilities (`zone_state.capabilities`)
 
@@ -481,8 +539,18 @@ automations, YAML-driven setups, or bulk changes:
 `irrigation_maestro_<event>` with `event` one of: `session_started`,
 `session_finished`, `cycle_started`, `cycle_finished`, `cycle_skipped`,
 `cycle_interrupted`, `cycle_cancelled`, `anomaly`, `watchdog`, `sentinel`,
-`session_overrun`, `consumption_budget`. Payload always includes `zone_id`,
-`zone_name`, `cycle_id` where applicable, plus `reason_key` for skips.
+`session_overrun`, `consumption_budget`, `leak`. Payload always includes
+`zone_id`, `zone_name`, `cycle_id` where applicable, plus `reason_key` for
+skips.
+
+`irrigation_maestro_leak` is the exception to that shape, because a leak is
+scoped rather than zoned: it carries `scope` (a `zone_id` or `"__hub__"`),
+`zone_id` (`null` for a hub-scope alarm, so an automation reading it cannot
+address a zone that was never implicated), `state` (`active` | `cleared`),
+`first_source` and `sources`. It fires **once** per alarm and once when it
+clears — a second source agreeing is not a second alarm, and the repeat
+reminder fires no event at all. The live state of the same alarm is the
+`zone_leak` / `hub_leak` entity above.
 
 ## Localizable keys (card must translate, en + it)
 
