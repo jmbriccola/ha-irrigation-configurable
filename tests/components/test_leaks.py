@@ -2551,3 +2551,147 @@ async def test_the_repair_follows_the_evidence_when_the_first_source_withdraws(
     # A re-description is not a new alarm.
     assert after.since == raised.since
     assert len(_bodies(sent)) == 1
+
+
+# The valve that closes itself -----------------------------------------------
+#
+# The reference hardware closes its own valve when it detects no flow, which
+# surveillance reads as a manual close: one firmware decision aborted every
+# zone and armed the manual-stop block. The exemption is narrow on purpose --
+# the watering zone's OWN valve, and hard evidence from its OWN supply sensor
+# -- because without evidence there is no telling firmware from a hand on the
+# switch.
+
+
+async def test_a_self_closing_valve_is_not_manual_intervention(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    """The SWV closes itself when it detects no flow; do not fight it.
+
+    Treated as a legitimate closure: the run ends with no_water_supply, the
+    other zones carry on, and the manual-stop block is not armed.
+
+    The window that governs refusing a START is deliberately not consulted
+    here. The firmware closes the moment it sees no flow, so demanding minutes
+    of prior confirmation would defeat the exemption in exactly the case it
+    exists for -- hence a 3600 s window and an exemption that still applies.
+    """
+    freezer.move_to(START)
+    park = MockValvePark(hass)
+    park.add("valve.a")
+    park.add("valve.b")
+    _supply(hass, "off")
+    mock_weather(hass)
+    sent = _notify_target(hass)
+    entry = await setup_hub(
+        hass,
+        [
+            zone_data(
+                "Alpha",
+                "valve.a",
+                minutes=10,
+                order=1,
+                water_supply_sensor="binary_sensor.a_supply",
+            ),
+            zone_data("Beta", "valve.b", minutes=3, order=2),
+        ],
+        {
+            "water_supply_confirm_s": 3600,
+            "notifications": {
+                "cancelled": {"enabled": True, "services": ["phone"]},
+                "anomaly": {"enabled": True, "services": ["phone"]},
+            },
+        },
+    )
+    runtime = entry.runtime_data
+    alpha, beta = runtime.zone_ids
+
+    await advance(hass, freezer, 31 * 60)
+    assert hass.states.get("valve.a").state == "open"
+
+    # The valve's own firmware closes it because the supply failed.
+    _supply(hass, "on")
+    park.force_state("valve.a", "closed")
+    await advance(hass, freezer, 30, step=5.0)
+
+    assert runtime.water_supply_block_active(alpha) is False  # ungated, and proved so
+    outcome = runtime.state.last_outcome(alpha)
+    assert outcome is not None
+    assert outcome["result"] == "interrupted"
+    assert outcome["reason_key"] == "no_water_supply"
+    assert runtime.state.manual_stop_at is None  # the block was not armed
+
+    # And the zone nothing implicated waters its full run.
+    await advance(hass, freezer, 6 * 60)
+    assert ("open_valve", "valve.b") in park.commands
+    beta_outcome = runtime.state.last_outcome(beta)
+    assert beta_outcome is not None
+    assert beta_outcome["result"] == "completed"
+
+    # One message for one event, and it carries the same reason the outcome
+    # does. Both channels the path could speak on are enabled, so the absence
+    # of a second body is the assertion: the outage itself belongs to the
+    # supply's own notice, which under a 3600 s window has nothing to say yet.
+    assert _bodies(sent) == ["Cycle not completed (no_water_supply): Alpha."]
+
+
+async def test_an_unledgered_close_without_supply_evidence_still_aborts(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    """No sensor, no exemption. The manual-intervention guarantee is not weakened
+    where the evidence to weaken it is absent."""
+    freezer.move_to(START)
+    park = MockValvePark(hass)
+    park.add("valve.a")
+    mock_weather(hass)
+    entry = await setup_hub(hass, [zone_data("Alpha", "valve.a", minutes=10)])
+    await advance(hass, freezer, 31 * 60)
+    assert hass.states.get("valve.a").state == "open"
+
+    park.force_state("valve.a", "closed")
+    await advance(hass, freezer, 30, step=5.0)
+
+    runtime = entry.runtime_data
+    outcome = runtime.state.last_outcome(runtime.zone_ids[0])
+    assert outcome is not None
+    assert outcome["reason_key"] == "manual_intervention"
+    assert runtime.state.manual_stop_at is not None
+
+
+@pytest.mark.parametrize("reading", ["unavailable", "unknown", "off"])
+async def test_an_unavailable_supply_sensor_grants_no_exemption(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory, reading: str
+) -> None:
+    """Only ``on`` is evidence. Everything else falls through to the abort.
+
+    ``off`` is there for the same reason as the two silences: it is the state
+    of a healthy supply, and a valve closing under one is a hand on the switch
+    as far as anything here can tell.
+    """
+    freezer.move_to(START)
+    park = MockValvePark(hass)
+    park.add("valve.a")
+    _supply(hass, reading)
+    mock_weather(hass)
+    entry = await setup_hub(
+        hass,
+        [
+            zone_data(
+                "Alpha",
+                "valve.a",
+                minutes=10,
+                water_supply_sensor="binary_sensor.a_supply",
+            )
+        ],
+    )
+    await advance(hass, freezer, 31 * 60)
+    assert hass.states.get("valve.a").state == "open"
+
+    park.force_state("valve.a", "closed")
+    await advance(hass, freezer, 30, step=5.0)
+
+    runtime = entry.runtime_data
+    outcome = runtime.state.last_outcome(runtime.zone_ids[0])
+    assert outcome is not None
+    assert outcome["reason_key"] == "manual_intervention"
+    assert runtime.state.manual_stop_at is not None

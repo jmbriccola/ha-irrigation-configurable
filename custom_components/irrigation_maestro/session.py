@@ -309,6 +309,11 @@ class SessionRunner:
         self._surveillance_unsub: CALLBACK_TYPE | None = None
         self._recorded: set[tuple[str, str]] = set()
         self._pending_cancel_notices: dict[str, list[str]] = {}
+        # One entry per zone currently in its watering wait, so a callback
+        # outside ``_water`` can end that wait with a chosen result. Registered
+        # and removed by ``_water`` itself, which is what makes "is this zone
+        # watering right now" the same question as "is there a finisher".
+        self._segment_finishers: dict[str, Callable[[str], None]] = {}
 
     # Public surface --------------------------------------------------------
 
@@ -534,7 +539,14 @@ class SessionRunner:
             return
         if self._stopping:
             return
-        expected_open = {self._runtime.zones[zone_id].valve.entity_id for zone_id in self._active}
+        # Both questions below are answered from this one mapping, so the set
+        # of expected valves and the zone a valve belongs to cannot drift
+        # apart. The master is in the set and not in the mapping, which is
+        # exactly the difference the exemption turns on.
+        active_valves = {
+            self._runtime.zones[zone_id].valve.entity_id: zone_id for zone_id in self._active
+        }
+        expected_open = set(active_valves)
         master = self._runtime.hub.master_valve
         if master is not None and self._master_open:
             expected_open.add(master)
@@ -542,7 +554,51 @@ class SessionRunner:
         if is_open and entity_id not in expected_open:
             self._trigger_manual_abort(REASON_FOREIGN_VALVE)
         elif is_closed and entity_id in expected_open:
+            zone_id = active_valves.get(entity_id)
+            if zone_id is not None and self._runtime.water_supply_missing(zone_id):
+                # The valve's own firmware closes it when it detects no flow
+                # (the SWV's automatic no-water closure). Fighting that would
+                # abort every zone over a legitimate, self-diagnosed stop.
+                #
+                # Deliberately narrow: only the watering zone's OWN valve, and
+                # only on hard evidence from its OWN supply sensor. Without a
+                # sensor there is no way to tell the firmware from a hand on the
+                # switch, and the manual-intervention guarantee is not weakened
+                # where the evidence to weaken it is absent.
+                #
+                # The raw predicate, never the gated one: the confirmation
+                # window governs refusing a START, and the firmware closes the
+                # moment it sees no flow, so waiting it out here would defeat
+                # the exemption in precisely the case it exists for.
+                self._end_segment_no_supply(zone_id)
+                return
             self._trigger_manual_abort(REASON_MANUAL)
+
+    @callback
+    def _end_segment_no_supply(self, zone_id: str) -> None:
+        """End this zone's watering now, with the specific reason.
+
+        Chosen rather than left to the zero-flow guard, which is not a fallback
+        everywhere: ``_water`` builds its FlowMonitor only for a zone whose
+        meter resolves, so an installation with neither a zone meter nor a hub
+        line meter has no zero-flow guard at all -- and that is the likeliest
+        installation to arrive here, since a supply contact is cheap and
+        per-zone meters are not. There, ending the segment is not merely
+        tidier and earlier: it is the only thing that ever ends it, and the
+        alternative is a run standing its full length behind a shut valve.
+        Where a meter does exist, the guard would reach the same conclusion
+        within its grace window, later and by a different route. One
+        terminating path, chosen, instead of one late and one absent.
+
+        A zone in ``_active`` that is not watering yet -- waiting for the
+        valves to be free, settling, opening -- has registered no finisher and
+        has no wait to end. The exemption still holds, because the evidence is
+        the same and the firmware is as entitled to close then as later; the
+        segment simply reaches its own outcome by its own path.
+        """
+        finisher = self._segment_finishers.get(zone_id)
+        if finisher is not None:
+            finisher(REASON_NO_WATER_SUPPLY)
 
     @callback
     def _trigger_manual_abort(self, reason: str) -> None:
@@ -946,6 +1002,19 @@ class SessionRunner:
                 f"No flow detected while watering {segment.run.zone_name}; cycle interrupted."
             )
             return
+        if watering_result == REASON_NO_WATER_SUPPLY:
+            # The zone's valve closed itself for want of water (see
+            # _on_valve_change): the same fact as the diagnosis just above,
+            # about the same zone, reached from the other side of the valve --
+            # so it lands in the same outcome, with the same reason.
+            #
+            # No anomaly is pushed on top of it. The interruption already
+            # travels with this reason, in the outcome and in the not-completed
+            # notice _record groups; the outage itself is what the supply's own
+            # notice reports, once it stands confirmed. Anything said here
+            # would be a second telling of one of those two.
+            self._record(segment, RESULT_INTERRUPTED, REASON_NO_WATER_SUPPLY, minutes=allowed_min)
+            return
         if not close_ok:
             await runtime.report_close_failure(valve.entity_id, segment.run.zone_name)
 
@@ -1011,9 +1080,14 @@ class SessionRunner:
         started = dt_util.utcnow()
         liters = 0.0
         had_usable_unit = False
+        # Registered as late as possible and dropped in the same `finally` as
+        # the monitor: a finisher outliving its wait would resolve a future
+        # belonging to nothing, or to the zone's next segment.
+        self._segment_finishers[segment.zone_id] = _finish
         try:
             await self._race(future)
         finally:
+            self._segment_finishers.pop(segment.zone_id, None)
             # monitor.stop() belongs here, not after the try: a CancelledError
             # out of _race must not skip it, or it leaves a ledger
             # subscription and a self-rearming periodic-check timer chain
