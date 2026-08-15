@@ -1,4 +1,4 @@
-"""One leak alarm per zone, from sources that may see the same event twice.
+"""One leak alarm per scope, from sources that may see the same event twice.
 
 Source 1 is the valve's own sensor; source 2 is flow measured while every
 managed valve reports closed, which only this component can check because only
@@ -9,10 +9,22 @@ one notification. Which source noticed first is kept, because "the valve told
 me" and "I measured it" are different diagnostic facts at equal alarm, and on
 hardware without the firmware alarm only one of them can ever fire first.
 
+A *scope* is a zone id, or HUB_SCOPE for water no zone can be blamed for. It is
+the same key the unattributed bucket is organised by, and for the same reason:
+a meter serving two zones cannot say which of them leaks, but it can say the
+system does, and that alarm must exist. Keying leak detection by zone instead
+would have left every shared-line-meter installation with no source 2 at all
+while the documentation promised one.
+
 Anything this module reports about source 1 has to be true for BOTH readings of
 ``moisture``: "the valve of zone X reports a leak", never "water detected on
 the ground". On other hardware that device class really is a ground probe, and
-either wording is false for half of all installations.
+either wording is false for half of all installations. That difference is not
+only about wording: a ground probe under a sprinkler is wet every time its own
+zone waters, so source 1 is gated on that zone's own valve reporting closed and
+shares source 2's confirmation window. On SWV the gate costs nothing -- that
+firmware only speaks while it is shut -- and on probe hardware it removes an
+alarm on every single cycle.
 
 Source 3, the water supply, is not a leak and is not handled here.
 """
@@ -28,8 +40,7 @@ from homeassistant.helpers.event import async_call_later, async_track_state_chan
 from homeassistant.util import dt as dt_util
 
 if TYPE_CHECKING:
-    from .models import ZoneConfig
-    from .runtime import IrrigationRuntime
+    from .runtime import IrrigationRuntime, ZoneRuntime
 
 #: The valve said so.
 SOURCE_VALVE_SENSOR: Final = "valve_sensor"
@@ -42,7 +53,7 @@ _STATE_NO_LEAK: Final = "off"
 
 @dataclass(frozen=True, slots=True)
 class LeakState:
-    """One zone's alarm. One alarm, however many sources agree."""
+    """One scope's alarm. One alarm, however many sources agree."""
 
     active: bool = False
     since: datetime | None = None
@@ -52,11 +63,16 @@ class LeakState:
 
 
 class LeakDetector:
-    """Watches one zone's sources and keeps a single alarm state.
+    """Watches one scope's sources and keeps a single alarm state.
 
-    Per zone, and resolved from that zone's own configuration and its own
-    meter: a mixed installation where one zone has a leak sensor and another
-    has only a meter must behave correctly for each.
+    Resolved from that scope's own configuration and its own meter: a mixed
+    installation where one zone has a leak sensor, another has only a meter and
+    a third shares the line must behave correctly for each.
+
+    Source 2 applies to every scope, because every scope can have a meter
+    reporting for it. Source 1 applies to a zone scope only: a leak sensor
+    belongs to a particular valve, and there is no hub-level equivalent to
+    resolve -- so a HUB_SCOPE detector simply never subscribes to one.
 
     Memory only, deliberately. The confirmation window and the alarm both
     restart from nothing after a Home Assistant restart, which is the safe
@@ -66,9 +82,9 @@ class LeakDetector:
     including a sensor that is already reporting one when we start.
     """
 
-    def __init__(self, runtime: IrrigationRuntime, zone_id: str) -> None:
+    def __init__(self, runtime: IrrigationRuntime, scope: str) -> None:
         self._runtime = runtime
-        self._zone_id = zone_id
+        self._scope = scope
         self.state = LeakState()
         #: Seconds of flow above the threshold, with every managed valve
         #: closed, that the meter actually MEASURED since the last reset.
@@ -78,39 +94,49 @@ class LeakDetector:
         self._above_threshold_s = 0.0
         self._unsubs: list[CALLBACK_TYPE] = []
         self._repeat_unsub: CALLBACK_TYPE | None = None
+        self._sensor_wake_unsub: CALLBACK_TYPE | None = None
 
     # Lifecycle --------------------------------------------------------------
 
     def start(self) -> None:
-        """Subscribe to the zone's leak sensor and read where it stands.
+        """Subscribe to source 1's inputs and read where they stand.
 
         Idempotent, and safe to call again after a configuration change: the
-        subscription is rebuilt against whatever sensor the zone declares now,
-        while the alarm itself survives. An edit to an unrelated setting must
-        not silently clear a live alarm, exactly as WaterAccountant.rebuild
-        refuses to drop a ledger it did not have to touch.
+        subscriptions are rebuilt against whatever the zone declares now, while
+        the alarm itself survives. An edit to an unrelated setting must not
+        silently clear a live alarm, exactly as WaterAccountant.rebuild refuses
+        to drop a ledger it did not have to touch. Nor does it restart a
+        confirmation window in progress: source 1's elapsed time is derived
+        from the entities' own ``last_changed``, never from a clock of ours
+        that a rebuild would reset.
         """
         self._unsubscribe_sources()
-        config = self._config
-        sensor = config.leak_sensor if config else None
-        if not sensor:
+        zone = self._zone
+        sensor = zone.config.leak_sensor if zone else None
+        if zone is None or not sensor:
             # Truthiness, not ``is not None``: update_zone stores "" as a way
             # of clearing the key, and subscribing to that would bind a
-            # listener to nothing.
+            # listener to nothing. A HUB_SCOPE detector lands here too -- it
+            # has no zone, so it has no leak sensor and no valve of its own.
             return
+        # The valve matters as much as the sensor: source 1 only counts while
+        # this zone's own valve reports closed, so a valve transition can start
+        # or invalidate a confirmation window without the sensor moving at all.
         self._unsubs.append(
-            async_track_state_change_event(self._runtime.hass, [sensor], self._on_leak_sensor)
+            async_track_state_change_event(
+                self._runtime.hass, [sensor, zone.valve.entity_id], self._on_source_1_input
+            )
         )
         # A sensor ALREADY reporting a leak when we start would otherwise never
         # be noticed: it has no further state change left to make. That is the
         # leak which began while Home Assistant was down -- the one the user
         # most needs to be told about.
-        state = self._runtime.hass.states.get(sensor)
-        self._judge_sensor(None if state is None else state.state)
+        self._evaluate_valve_sensor()
 
     def stop(self) -> None:
         self._unsubscribe_sources()
         self._cancel_repeat()
+        self._cancel_sensor_wake()
 
     def _unsubscribe_sources(self) -> None:
         for unsub in self._unsubs:
@@ -118,35 +144,97 @@ class LeakDetector:
         self._unsubs.clear()
 
     @property
-    def _config(self) -> ZoneConfig | None:
-        zone = self._runtime.zones.get(self._zone_id)
-        return zone.config if zone else None
+    def _zone(self) -> ZoneRuntime | None:
+        """The zone this scope names, or None for HUB_SCOPE."""
+        return self._runtime.zones.get(self._scope)
 
     # Source 1: the valve's own sensor ----------------------------------------
 
     @callback
-    def _on_leak_sensor(self, event: Event[EventStateChangedData]) -> None:
-        new_state = event.data["new_state"]
-        self._judge_sensor(None if new_state is None else new_state.state)
+    def _on_source_1_input(self, _event: Event[EventStateChangedData]) -> None:
+        self._evaluate_valve_sensor()
 
-    def _judge_sensor(self, value: str | None) -> None:
-        """``on`` raises, ``off`` withdraws, anything else says nothing.
+    def _evaluate_valve_sensor(self) -> None:
+        """Re-judge source 1 from the current sensor and valve states.
 
-        "unavailable" and "unknown" are not "no leak". A sensor that cannot be
-        read has not told us the leak stopped, and withdrawing the alarm on its
-        silence would assert exactly that.
+        ``on`` raises, ``off`` withdraws, anything else says nothing --
+        "unavailable" and "unknown" are not "no leak", and withdrawing the
+        alarm on a sensor's silence would assert exactly that.
+
+        A raise additionally needs THIS ZONE'S valve to report closed, and the
+        pair to have stood that way for ``leak_confirm_s``. Deliberately this
+        zone's valve and not every valve: all-closed would mute a legitimate
+        SWV alarm on zone A merely because zone B happens to be watering, which
+        is precisely when a seeping A is most worth knowing about. And
+        deliberately confirmed rather than instant, because on hardware where
+        ``moisture`` is a real ground probe the probe under a sprinkler is wet
+        for the whole of its own zone's cycle.
+
+        The elapsed time is read from the two entities' own ``last_changed``
+        rather than a timer of ours, so it needs no state to keep honest: the
+        window starts at whichever happened later, the sensor asserting or the
+        valve closing. A cycle that ends with the probe still wet therefore
+        starts counting at the close, not at the moment the probe went wet.
+        After a restart both timestamps are the restore, so the window restarts
+        -- the same safe direction as everything else here.
         """
-        if value == _STATE_LEAK:
-            self._raise(SOURCE_VALVE_SENSOR)
-        elif value == _STATE_NO_LEAK:
+        self._cancel_sensor_wake()
+        zone = self._zone
+        sensor = zone.config.leak_sensor if zone else None
+        if zone is None or not sensor:
+            return
+        state = self._runtime.hass.states.get(sensor)
+        value = None if state is None else state.state
+        if value == _STATE_NO_LEAK:
             self._withdraw(SOURCE_VALVE_SENSOR)
+            return
+        if state is None or value != _STATE_LEAK:
+            return
+        closed_since = self._valve_closed_since(zone)
+        if closed_since is None:
+            # Watering, travelling, or unreachable. Not evidence of a leak --
+            # and not evidence against one either, so an alarm already raised
+            # stands: a valve opening does not prove a leak stopped.
+            return
+        confirm_s = self._runtime.hub.leak_confirm_s
+        elapsed_s = (dt_util.utcnow() - max(state.last_changed, closed_since)).total_seconds()
+        if elapsed_s >= confirm_s:
+            self._raise(SOURCE_VALVE_SENSOR)
+            return
+        # Nothing else will fire when the window merely runs out, so ask to be
+        # woken exactly then and judge again from live state.
+        self._sensor_wake_unsub = async_call_later(
+            self._runtime.hass, confirm_s - elapsed_s, self._on_sensor_wake
+        )
+
+    def _valve_closed_since(self, zone: ZoneRuntime) -> datetime | None:
+        """When this zone's valve last became closed, or None if it is not.
+
+        ``is_closed``, so an uncertain valve answers None: valves.py treats a
+        travelling or unavailable valve as busy and never as free, and a leak
+        alarm must not be confirmed against a position nobody can vouch for.
+        """
+        if not zone.valve.is_closed:
+            return None
+        state = self._runtime.hass.states.get(zone.valve.entity_id)
+        return None if state is None else state.last_changed
+
+    @callback
+    def _on_sensor_wake(self, _now: datetime) -> None:
+        self._sensor_wake_unsub = None
+        self._evaluate_valve_sensor()
+
+    def _cancel_sensor_wake(self) -> None:
+        if self._sensor_wake_unsub is not None:
+            self._sensor_wake_unsub()
+            self._sensor_wake_unsub = None
 
     # Source 2: flow with everything shut -------------------------------------
 
     def note_flow(
         self, *, liters: float, measured_s: float, elapsed_s: float, all_closed: bool
     ) -> None:
-        """Feed source 2 with one closed interval of the zone's own meter.
+        """Feed source 2 with one closed interval of this scope's meter.
 
         Called once per meter sample by WaterAccountant, with the figures of
         the interval that sample just closed -- the same interval, judged by
@@ -161,13 +249,19 @@ class LeakDetector:
         either -- the only honest reading of "we do not know", and one a
         second copy of the predicate would eventually lose.
 
+        Every managed valve, not just this scope's: water moving anywhere in
+        the system while one zone waters is that zone's water until proven
+        otherwise, and this source exists precisely to judge the system at
+        rest. Source 1 is the one that narrows to a single valve, because it
+        has a single valve's own report to go on.
+
         Litres over measured seconds, never the sample's ``lpm``: that field
         is the instantaneous reading opening the NEXT interval, and flow.py
         reports a known-unit meter that has gone unavailable as ``lpm=0.0``,
         which an alarm must not read as "no water passed". The pair used here
         cannot say that -- an unmeasured interval carries no seconds at all.
 
-        The four verdicts, and why each is what it is:
+        The verdicts, and why each is what it is:
 
         * nothing happened (no elapsed time) -- leave everything alone;
         * something was open -- reset the window. Water through an open valve
@@ -230,7 +324,7 @@ class LeakDetector:
             sources=frozenset({source}),
         )
         self._arm_repeat()
-        self._runtime.on_leak_raised(self._zone_id, self.state)
+        self._runtime.on_leak_raised(self._scope, self.state)
 
     def _withdraw(self, source: str) -> None:
         if not self.state.active or source not in self.state.sources:
@@ -250,7 +344,7 @@ class LeakDetector:
             return
         self.state = LeakState()
         self._cancel_repeat()
-        self._runtime.on_leak_cleared(self._zone_id)
+        self._runtime.on_leak_cleared(self._scope)
 
     # The reminder ------------------------------------------------------------
 
@@ -275,7 +369,7 @@ class LeakDetector:
         self._repeat_unsub = None
         if not self.state.active:
             return
-        self._runtime.on_leak_repeated(self._zone_id, self.state)
+        self._runtime.on_leak_repeated(self._scope, self.state)
         self._arm_repeat()
 
     def _cancel_repeat(self) -> None:

@@ -13,6 +13,7 @@ they converge into a single alarm.
 from typing import Any
 
 import pytest
+from custom_components.irrigation_maestro.engine.metering import HUB_SCOPE
 from custom_components.irrigation_maestro.leak import (
     SOURCE_NO_FLOW_CLOSED,
     SOURCE_VALVE_SENSOR,
@@ -26,6 +27,10 @@ from .test_session import START, advance, mock_weather, setup_hub, zone_data
 #: The confirmation window is 300 s and a quiet meter is sampled every 30 s, so
 #: 310 s is the first advance that can contain ten measured samples.
 _PAST_CONFIRM_S = 310
+#: For a window that starts partway through a test rather than at setup, where
+#: the meter's 30 s cadence no longer lines up with the window's own start and
+#: up to one whole sample can fall outside it.
+_WELL_PAST_CONFIRM_S = 400
 
 
 def _leak_events(hass: HomeAssistant) -> list[dict[str, Any]]:
@@ -65,7 +70,9 @@ async def test_a_leak_sensor_already_on_at_startup_is_noticed(
 
     Subscribing to transitions alone would ignore it forever, which is exactly
     the "capability declared, alarm silently never fires" failure this feature
-    exists to remove.
+    exists to remove. It is confirmed rather than instant: after a restart both
+    timestamps are the restore, so the window runs from start-up -- the safe
+    direction, since we cannot know how long it had been asserting.
     """
     freezer.move_to(START)
     park = MockValvePark(hass)
@@ -76,6 +83,8 @@ async def test_a_leak_sensor_already_on_at_startup_is_noticed(
         hass, [zone_data("Alpha", "valve.a", leak_sensor="binary_sensor.a_leak")]
     )
     runtime = entry.runtime_data
+
+    await advance(hass, freezer, _PAST_CONFIRM_S, step=10.0)
 
     assert runtime.leak_state(runtime.zone_ids[0]).active is True
 
@@ -94,9 +103,110 @@ async def test_an_unreadable_leak_sensor_says_nothing(
     )
     runtime = entry.runtime_data
 
-    await advance(hass, freezer, 120, step=10.0)
+    await advance(hass, freezer, 600, step=10.0)
 
     assert runtime.leak_state(runtime.zone_ids[0]).active is False
+
+
+async def test_a_probe_wet_while_its_own_zone_waters_never_alarms(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    """The ground-probe reading of "moisture", and the alarm-fatigue failure.
+
+    On SONOFF SWV the sensor means "water is passing while I am closed", so it
+    only ever speaks with its valve shut and the gate costs nothing. On
+    hardware where the same device class is a real ground probe, the probe
+    under a sprinkler is wet for the whole of its own zone's cycle -- so
+    without the gate the integration would raise a leak alarm on every single
+    watering, which is how a panel becomes something people ignore.
+    """
+    freezer.move_to(START)
+    park = MockValvePark(hass)
+    park.add("valve.a")
+    hass.states.async_set("binary_sensor.a_leak", "off", {"device_class": "moisture"})
+    mock_weather(hass)
+    entry = await setup_hub(
+        hass, [zone_data("Alpha", "valve.a", minutes=10, leak_sensor="binary_sensor.a_leak")]
+    )
+    runtime = entry.runtime_data
+    events = _leak_events(hass)
+    # The zone is watering and its own probe goes wet, exactly as it does on
+    # every cycle. (After setup, so the watchdog's startup close-all is done.)
+    park.force_state("valve.a", "open")
+    hass.states.async_set("binary_sensor.a_leak", "on", {"device_class": "moisture"})
+
+    await advance(hass, freezer, 900, step=10.0)
+
+    assert runtime.leak_state(runtime.zone_ids[0]).active is False
+    assert events == []
+
+
+async def test_the_source_1_window_starts_at_the_close_not_at_the_wetting(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    """A probe wet since mid-cycle has not been "wet while shut" for any of it.
+
+    The window runs from whichever came later, the sensor asserting or the
+    valve closing -- so a cycle that ends with the probe already wet starts
+    counting at the close. Reading the sensor's own timestamp alone would
+    confirm instantly at every close, which is the same every-cycle alarm the
+    gate exists to remove.
+    """
+    freezer.move_to(START)
+    park = MockValvePark(hass)
+    park.add("valve.a")
+    hass.states.async_set("binary_sensor.a_leak", "off", {"device_class": "moisture"})
+    mock_weather(hass)
+    entry = await setup_hub(
+        hass, [zone_data("Alpha", "valve.a", minutes=10, leak_sensor="binary_sensor.a_leak")]
+    )
+    runtime = entry.runtime_data
+    zone_id = runtime.zone_ids[0]
+    park.force_state("valve.a", "open")
+    hass.states.async_set("binary_sensor.a_leak", "on", {"device_class": "moisture"})
+    await advance(hass, freezer, 600, step=10.0)
+
+    park.force_state("valve.a", "closed")
+    await advance(hass, freezer, 120, step=10.0)
+    # Ten minutes wet, but only two of them shut.
+    assert runtime.leak_state(zone_id).active is False
+
+    await advance(hass, freezer, 240, step=10.0)
+    assert runtime.leak_state(zone_id).active is True
+
+
+async def test_source_1_is_gated_on_its_own_valve_not_on_every_valve(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    """Zone B watering must not mute zone A's own valve alarm.
+
+    All-closed would be the wrong gate here: a valve that reports a leak while
+    a different zone is watering is exactly when a seeping seat is most worth
+    knowing about, and the SWV alarm is a statement about its own valve alone.
+    """
+    freezer.move_to(START)
+    park = MockValvePark(hass)
+    park.add("valve.a")
+    park.add("valve.b")
+    hass.states.async_set("binary_sensor.a_leak", "off", {"device_class": "moisture"})
+    mock_weather(hass)
+    entry = await setup_hub(
+        hass,
+        [
+            zone_data("Alpha", "valve.a", minutes=10, leak_sensor="binary_sensor.a_leak"),
+            zone_data("Beta", "valve.b", minutes=10, order=200),
+        ],
+    )
+    runtime = entry.runtime_data
+    alpha = runtime.zone_ids[0]
+    park.force_state("valve.b", "open")  # a different zone is watering
+    hass.states.async_set("binary_sensor.a_leak", "on", {"device_class": "moisture"})
+
+    await advance(hass, freezer, _PAST_CONFIRM_S, step=10.0)
+
+    assert hass.states.get("valve.b").state == "open"
+    assert runtime.leak_state(alpha).active is True
+    assert runtime.leak_state(alpha).first_source == SOURCE_VALVE_SENSOR
 
 
 async def test_flow_with_every_valve_closed_alone_raises_the_alarm(
@@ -276,12 +386,15 @@ async def test_the_first_source_survives_the_second_arriving(
     """Same two sources, opposite order: "the valve told me" must stay first.
 
     Which one noticed is a diagnostic fact even at equal alarm, and on hardware
-    without the firmware alarm only one of them can ever fire first.
+    without the firmware alarm only one of them can ever fire first. The meter
+    is dry until the sensor has confirmed, so the order is the test's and not
+    the scheduler's -- both windows are leak_confirm_s long and starting them
+    together would decide first_source by whichever timer happened to fire.
     """
     freezer.move_to(START)
     park = MockValvePark(hass)
     park.add("valve.a")
-    hass.states.async_set("sensor.flow", "2.0", {"unit_of_measurement": "L/min"})
+    hass.states.async_set("sensor.flow", "0.0", {"unit_of_measurement": "L/min"})
     hass.states.async_set("binary_sensor.a_leak", "on", {"device_class": "moisture"})
     mock_weather(hass)
     entry = await setup_hub(
@@ -299,23 +412,29 @@ async def test_the_first_source_survives_the_second_arriving(
     events = _leak_events(hass)
 
     await advance(hass, freezer, _PAST_CONFIRM_S, step=10.0)
+    assert runtime.leak_state(runtime.zone_ids[0]).first_source == SOURCE_VALVE_SENSOR
+
+    hass.states.async_set("sensor.flow", "2.0", {"unit_of_measurement": "L/min"})
+    await advance(hass, freezer, _WELL_PAST_CONFIRM_S, step=10.0)
 
     state = runtime.leak_state(runtime.zone_ids[0])
     assert state.first_source == SOURCE_VALVE_SENSOR
     assert state.sources == {SOURCE_VALVE_SENSOR, SOURCE_NO_FLOW_CLOSED}
-    # The alarm was already raised during setup, before this listener existed:
-    # what matters is that the second source added none of its own.
-    assert [event for event in events if event["state"] == "active"] == []
+    assert len([event for event in events if event["state"] == "active"]) == 1
 
 
 async def test_one_source_withdrawing_leaves_the_other_alarm_standing(
     hass: HomeAssistant, freezer: FrozenDateTimeFactory
 ) -> None:
-    """One alarm, two sources: losing one of them is not the end of the leak."""
+    """One alarm, two sources: losing one of them is not the end of the leak.
+
+    Staggered for the same reason as the previous test: the sensor confirms
+    first against a dry meter, then the flow starts.
+    """
     freezer.move_to(START)
     park = MockValvePark(hass)
     park.add("valve.a")
-    hass.states.async_set("sensor.flow", "2.0", {"unit_of_measurement": "L/min"})
+    hass.states.async_set("sensor.flow", "0.0", {"unit_of_measurement": "L/min"})
     hass.states.async_set("binary_sensor.a_leak", "on", {"device_class": "moisture"})
     mock_weather(hass)
     entry = await setup_hub(
@@ -333,6 +452,10 @@ async def test_one_source_withdrawing_leaves_the_other_alarm_standing(
     zone_id = runtime.zone_ids[0]
 
     await advance(hass, freezer, _PAST_CONFIRM_S, step=10.0)
+    hass.states.async_set("sensor.flow", "2.0", {"unit_of_measurement": "L/min"})
+    await advance(hass, freezer, _WELL_PAST_CONFIRM_S, step=10.0)
+    assert runtime.leak_state(zone_id).sources == {SOURCE_VALVE_SENSOR, SOURCE_NO_FLOW_CLOSED}
+
     hass.states.async_set("binary_sensor.a_leak", "off", {"device_class": "moisture"})
     await advance(hass, freezer, 60, step=10.0)
 
@@ -507,6 +630,74 @@ async def test_each_zone_is_judged_by_its_own_sources(
     assert runtime.leak_state(beta).active is False
 
 
+async def test_a_shared_line_meter_raises_one_alarm_for_the_system(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    """Two zones behind one meter: which of them leaks is unanswerable.
+
+    Whether the SYSTEM leaks is not, and that alarm has to exist. Keying
+    detection by zone left every shared-line-meter installation with no source
+    2 at all, while the documentation promised that a flow meter was enough --
+    a false claim about a safety feature. One alarm on the hub scope, named
+    honestly, rather than none and rather than one per zone.
+    """
+    freezer.move_to(START)
+    park = MockValvePark(hass)
+    park.add("valve.a")
+    park.add("valve.b")
+    hass.states.async_set("sensor.line", "2.0", {"unit_of_measurement": "L/min"})
+    mock_weather(hass)
+    entry = await setup_hub(
+        hass,
+        [zone_data("Alpha", "valve.a"), zone_data("Beta", "valve.b", order=200)],
+        {"line_flow_sensor": "sensor.line"},
+    )
+    runtime = entry.runtime_data
+    alpha, beta = runtime.zone_ids
+    events = _leak_events(hass)
+
+    await advance(hass, freezer, _PAST_CONFIRM_S, step=10.0)
+
+    assert runtime.leak_state(HUB_SCOPE).active is True
+    assert runtime.leak_state(HUB_SCOPE).first_source == SOURCE_NO_FLOW_CLOSED
+    # No zone is implicated, because none can be.
+    assert runtime.leak_state(alpha).active is False
+    assert runtime.leak_state(beta).active is False
+    active = [event for event in events if event["state"] == "active"]
+    assert len(active) == 1
+    assert active[0]["scope"] == HUB_SCOPE
+    assert active[0]["zone_id"] is None
+
+
+async def test_a_line_meter_serving_one_zone_still_names_that_zone(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    """The hub scope is for the unanswerable case, not a blanket fallback.
+
+    With a single zone behind the line meter the question does have an answer,
+    and the alarm must give it rather than retreat to "somewhere in the system".
+    """
+    freezer.move_to(START)
+    park = MockValvePark(hass)
+    park.add("valve.a")
+    hass.states.async_set("sensor.line", "2.0", {"unit_of_measurement": "L/min"})
+    mock_weather(hass)
+    entry = await setup_hub(
+        hass, [zone_data("Alpha", "valve.a")], {"line_flow_sensor": "sensor.line"}
+    )
+    runtime = entry.runtime_data
+    zone_id = runtime.zone_ids[0]
+    events = _leak_events(hass)
+
+    await advance(hass, freezer, _PAST_CONFIRM_S, step=10.0)
+
+    assert runtime.leak_state(zone_id).active is True
+    assert runtime.leak_state(HUB_SCOPE).active is False
+    active = [event for event in events if event["state"] == "active"]
+    assert len(active) == 1
+    assert active[0]["zone_id"] == zone_id
+
+
 async def test_an_unrelated_config_change_does_not_clear_a_live_alarm(
     hass: HomeAssistant, freezer: FrozenDateTimeFactory
 ) -> None:
@@ -526,6 +717,7 @@ async def test_an_unrelated_config_change_does_not_clear_a_live_alarm(
     )
     runtime = entry.runtime_data
     zone_id = runtime.zone_ids[0]
+    await advance(hass, freezer, _PAST_CONFIRM_S, step=10.0)
     raised_at = runtime.leak_state(zone_id).since
     events = _leak_events(hass)
 
@@ -537,6 +729,35 @@ async def test_an_unrelated_config_change_does_not_clear_a_live_alarm(
     # The same alarm, not a fresh one wearing the same name.
     assert state.since == raised_at
     assert events == []
+
+
+async def test_a_config_change_does_not_restart_a_confirmation_window(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    """Source 1's elapsed time comes from the entities, not from a clock of ours.
+
+    So a rebuild in the middle of a window resumes it rather than resetting it.
+    A user editing settings while a leak is confirming would otherwise postpone
+    the alarm every time they saved.
+    """
+    freezer.move_to(START)
+    park = MockValvePark(hass)
+    park.add("valve.a")
+    hass.states.async_set("binary_sensor.a_leak", "on", {"device_class": "moisture"})
+    mock_weather(hass)
+    entry = await setup_hub(
+        hass, [zone_data("Alpha", "valve.a", leak_sensor="binary_sensor.a_leak")]
+    )
+    runtime = entry.runtime_data
+
+    await advance(hass, freezer, 200, step=10.0)
+    hass.config_entries.async_update_entry(entry, options={**entry.options, "settle_pause_s": 45})
+    await hass.async_block_till_done()
+    assert runtime.leak_state(runtime.zone_ids[0]).active is False
+
+    await advance(hass, freezer, 150, step=10.0)
+
+    assert runtime.leak_state(runtime.zone_ids[0]).active is True
 
 
 async def test_a_removed_zone_takes_its_alarm_with_it(
@@ -557,6 +778,7 @@ async def test_a_removed_zone_takes_its_alarm_with_it(
     )
     runtime = entry.runtime_data
     beta = runtime.zone_ids[1]
+    await advance(hass, freezer, _PAST_CONFIRM_S, step=10.0)
     assert runtime.leak_state(beta).active is True
 
     hass.config_entries.async_remove_subentry(entry, beta)
@@ -585,7 +807,9 @@ async def test_a_persistent_leak_repeats_on_its_own_interval(
     await setup_hub(
         hass,
         [zone_data("Alpha", "valve.a", leak_sensor="binary_sensor.a_leak")],
-        {"leak_repeat_min": 5},
+        # A short confirmation window so the reminder, not the confirmation,
+        # is what this test measures.
+        {"leak_repeat_min": 5, "leak_confirm_s": 30},
     )
 
     with caplog.at_level("WARNING"):
