@@ -21,6 +21,7 @@ import logging
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from datetime import datetime, timedelta
+from functools import partial
 from typing import TYPE_CHECKING, Any
 
 from homeassistant.core import CALLBACK_TYPE, Event, EventStateChangedData, callback
@@ -61,6 +62,18 @@ REASON_LEAK = "leak"
 REASON_NO_WATER_SUPPLY = "no_water_supply"
 
 _GATHER_WINDOW_S = 2.0
+
+#: How long an unledgered close waits for its zone's supply sensor to speak
+#: before the close is judged (see ``_defer_supply_decision``).
+#:
+#: The valve's state and the supply sensor's are two entities of one device,
+#: reported separately, and nothing orders them: a same-device burst lands
+#: inside a second, while a report whose first acknowledgement is lost waits on
+#: the radio's own retries and arrives seconds later. Five seconds is past that
+#: and under anything a person waiting at the valve would notice. It is not a
+#: setting: the number is a property of the transport, not of the garden, and
+#: this design has enough knobs.
+_SUPPLY_EVIDENCE_GRACE_S = 5.0
 
 PHASE_WAITING = "waiting"
 PHASE_SETTLING = "settling"
@@ -314,6 +327,9 @@ class SessionRunner:
         # and removed by ``_water`` itself, which is what makes "is this zone
         # watering right now" the same question as "is there a finisher".
         self._segment_finishers: dict[str, Callable[[str], None]] = {}
+        # Closes whose verdict is waiting for evidence that may still arrive.
+        # One per zone, cancelled with surveillance itself.
+        self._pending_supply_decisions: dict[str, CALLBACK_TYPE] = {}
 
     # Public surface --------------------------------------------------------
 
@@ -520,6 +536,11 @@ class SessionRunner:
         if self._surveillance_unsub is not None:
             self._surveillance_unsub()
             self._surveillance_unsub = None
+        # Surveillance's own deferred work dies with it: a verdict on a close
+        # is meaningless once there is no session left to abort, and this is
+        # the single teardown -- reached from ``_run``'s finally on every exit,
+        # including the cancellation that entry unload and reload produce.
+        self._cancel_supply_decisions()
 
     @callback
     def _on_valve_change(self, event: Event[EventStateChangedData]) -> None:
@@ -543,6 +564,13 @@ class SessionRunner:
         # of expected valves and the zone a valve belongs to cannot drift
         # apart. The master is in the set and not in the mapping, which is
         # exactly the difference the exemption turns on.
+        #
+        # Keyed by entity id, so two zones configured on ONE valve entity
+        # collapse to the last of them -- inherited from the set this replaced,
+        # which collapsed them too, but now load-bearing for a safety decision:
+        # the exemption would consult that zone's sensor and end that zone's
+        # run alone. Left as it is deliberately; it needs a topology nothing in
+        # the component asks for.
         active_valves = {
             self._runtime.zones[zone_id].valve.entity_id: zone_id for zone_id in self._active
         }
@@ -555,24 +583,105 @@ class SessionRunner:
             self._trigger_manual_abort(REASON_FOREIGN_VALVE)
         elif is_closed and entity_id in expected_open:
             zone_id = active_valves.get(entity_id)
-            if zone_id is not None and self._runtime.water_supply_missing(zone_id):
-                # The valve's own firmware closes it when it detects no flow
-                # (the SWV's automatic no-water closure). Fighting that would
-                # abort every zone over a legitimate, self-diagnosed stop.
-                #
-                # Deliberately narrow: only the watering zone's OWN valve, and
-                # only on hard evidence from its OWN supply sensor. Without a
-                # sensor there is no way to tell the firmware from a hand on the
-                # switch, and the manual-intervention guarantee is not weakened
-                # where the evidence to weaken it is absent.
-                #
-                # The raw predicate, never the gated one: the confirmation
-                # window governs refusing a START, and the firmware closes the
-                # moment it sees no flow, so waiting it out here would defeat
-                # the exemption in precisely the case it exists for.
-                self._end_segment_no_supply(zone_id)
-                return
+            if zone_id is not None:
+                if self._runtime.water_supply_missing(zone_id):
+                    # The valve's own firmware closes it when it detects no flow
+                    # (the SWV's automatic no-water closure). Fighting that would
+                    # abort every zone over a legitimate, self-diagnosed stop.
+                    #
+                    # Deliberately narrow: only the watering zone's OWN valve,
+                    # and only on hard evidence from its OWN supply sensor.
+                    # Without a sensor there is no way to tell the firmware from
+                    # a hand on the switch, and the manual-intervention
+                    # guarantee is not weakened where the evidence to weaken it
+                    # is absent.
+                    #
+                    # The raw predicate, never the gated one: the confirmation
+                    # window governs refusing a START, and the firmware closes
+                    # the moment it sees no flow, so waiting it out here would
+                    # defeat the exemption in precisely the case it exists for.
+                    self._end_segment_no_supply(zone_id)
+                    return
+                if self._runtime.water_supply_sensor(zone_id) is not None:
+                    # The evidence exists but has not arrived. The valve's state
+                    # and its supply sensor are two entities of one device,
+                    # reported separately and in no guaranteed order, so judging
+                    # on the reading available in this instant would abort the
+                    # whole session whenever the close happens to be read first
+                    # -- intermittently, which reads as a flaky bug rather than
+                    # a missing feature.
+                    self._defer_supply_decision(zone_id)
+                    return
+                # No sensor: no evidence can arrive, so there is nothing to wait
+                # for and the guarantee below is untouched. This is what keeps
+                # the delay bounded to installations that asked for it.
             self._trigger_manual_abort(REASON_MANUAL)
+
+    @callback
+    def _defer_supply_decision(self, zone_id: str) -> None:
+        """Hold the verdict on this close until its evidence could have arrived.
+
+        What it costs, plainly: a genuine manual close on a zone that HAS a
+        supply sensor is answered ``_SUPPLY_EVIDENCE_GRACE_S`` later than it
+        used to be, and the other zones water for those seconds. A hand on a
+        valve is not a race against seconds, and it is a hand that was stopping
+        those zones anyway. What it buys is that the firmware's own no-water
+        closure stops depending on which of two reports the radio delivers
+        first.
+
+        One wait per zone, never extended: a second close arriving inside the
+        window is the same premise, and re-arming would let a flapping valve
+        postpone the verdict indefinitely. The wait already re-reads live state
+        when it ends, so nothing is lost by keeping the first.
+        """
+        if zone_id in self._pending_supply_decisions:
+            return
+        self._pending_supply_decisions[zone_id] = async_call_later(
+            self._runtime.hass,
+            _SUPPLY_EVIDENCE_GRACE_S,
+            partial(self._decide_supply_close, zone_id),
+        )
+
+    @callback
+    def _decide_supply_close(self, zone_id: str, _now: datetime) -> None:
+        """Judge the deferred close from live state, whatever it now says.
+
+        Evidence first, and only then the question of what is left to act on:
+        an outage confirmed a second before the segment ended is still the
+        right diagnosis, and ``_end_segment_no_supply`` is a no-op when there
+        is no wait to end -- so this path reaches exactly the same answer as
+        the immediate one, in every phase.
+
+        Without evidence, the abort fires only while the premise it was
+        deferred on still holds: the session is running, the zone is still
+        active, and its valve is still shut. A valve that reopened inside the
+        window, or a run that has since ended, has left nothing to abort ON --
+        the observation has expired, and aborting on an expired observation is
+        acting on stale information. The cost is a manual close in the last
+        seconds of a run, on a zone with a supply sensor, going unanswered; the
+        next zone opens, and the next close is judged on its own merits with
+        the block armed then. The guarantee degrades by seconds, not by cases.
+
+        The first check is defence in depth: ``_stop_surveillance`` cancels
+        every pending decision, so a fire into a dead session should not be
+        reachable at all.
+        """
+        self._pending_supply_decisions.pop(zone_id, None)
+        if self._stopping or not self.active:
+            return
+        if self._runtime.water_supply_missing(zone_id):
+            self._end_segment_no_supply(zone_id)
+            return
+        zone = self._runtime.zones.get(zone_id)
+        if zone is None or zone_id not in self._active or not zone.valve.is_closed:
+            return
+        self._trigger_manual_abort(REASON_MANUAL)
+
+    @callback
+    def _cancel_supply_decisions(self) -> None:
+        for unsub in self._pending_supply_decisions.values():
+            unsub()
+        self._pending_supply_decisions.clear()
 
     @callback
     def _end_segment_no_supply(self, zone_id: str) -> None:
