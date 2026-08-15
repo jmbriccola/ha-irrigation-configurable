@@ -146,12 +146,18 @@ water:                # 3.3.0: replaced the standalone monthly counter
   carried_over: {period_start: date_iso, liters: float}      # one-period opening balance
 ```
 
-`gap_s` is **live**: it is the seconds of that day, for that key, during which
-the meter could not be read — `MeterSample.elapsed_s` minus `measured_s`,
-computed in `WaterAccountant._on_sample` and accumulated by
-`engine.metering.roll_into_day`. So the daily history *can* be asked "how much
-of this window was unobserved?", and a day that answers `0.0` really was
-watched end to end. A gap yields **no litres at all** (§1.4: no interpolation,
+`gap_s` is **live**: for one day and one key it is the seconds in which the
+meter could not be read *while that key was the one the litres would have gone
+to* — `MeterSample.elapsed_s` minus `measured_s`, computed in
+`WaterAccountant._on_sample` and accumulated by
+`engine.metering.roll_into_day`. Read it for exactly that and no more: `0.0`
+means "no unreadable interval was attributed to this key", **not** "this day
+was fully observed". A zone idle through an outage keeps a clean `gap_s`
+because those seconds went to `__unattributed__`, where its water would have
+gone; and time in which the integration was not running at all (a restart —
+the ledger resumes with `_last_at = now`) is recorded nowhere, deliberately,
+since inventing it would be as wrong as double-counting it.
+A gap yields **no litres at all** (§1.4: no interpolation,
 which would invent water; no counted zero, which would assert that none
 passed), so `_on_sample` deliberately does not return early on non-positive
 litres — a gap-only call is the normal shape of an outage, and
