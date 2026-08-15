@@ -287,7 +287,7 @@ export const it: Record<keyof typeof en, string> = {
   "notify.retry": "Riprova",
   "notify.mute_title": "Non riceverai nessuna notifica",
   "notify.mute_body":
-    "Nessun evento essenziale arriva a qualcuno: una chiusura forzata, un'anomalia, un'irrigazione interrotta o un programma mancato passerebbero inosservati.",
+    "Nessun evento essenziale arriva a qualcuno: una chiusura forzata, un'anomalia, un'irrigazione interrotta, un programma mancato o una perdita d'acqua passerebbero inosservati.",
   "notify.partial_body": "Questi eventi essenziali non ti arriveranno: {events}.",
   "notify.configure": "Configura ora",
   "notify.step_recipients": "Chi le riceve",

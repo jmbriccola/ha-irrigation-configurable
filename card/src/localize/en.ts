@@ -284,7 +284,7 @@ export const en = {
   "notify.retry": "Try again",
   "notify.mute_title": "You will not receive any notification",
   "notify.mute_body":
-    "No essential event reaches anyone: a forced valve closure, an anomaly, an interrupted run or a missed program would pass unnoticed.",
+    "No essential event reaches anyone: a forced valve closure, an anomaly, an interrupted run, a missed program or a water leak would pass unnoticed.",
   "notify.partial_body": "These essential events will not reach you: {events}.",
   "notify.configure": "Configure now",
   "notify.step_recipients": "Who receives them",
