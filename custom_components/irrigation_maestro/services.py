@@ -29,6 +29,7 @@ from homeassistant.helpers import config_validation as cv
 from homeassistant.util import dt as dt_util
 
 from . import const
+from .capabilities import resolve_zone_capabilities
 from .const import DOMAIN, SUBENTRY_TYPE_ZONE
 from .engine.calendar import ProgramCalendar
 from .engine.curves import CurveError, CurveKind, interpolate, validate_points
@@ -78,6 +79,7 @@ SERVICE_SET_NOTIFICATIONS: Final = "set_notifications"
 SERVICE_SET_PROGRAM_ADVANCED: Final = "set_program_advanced"
 SERVICE_TEST_NOTIFICATION: Final = "test_notification"
 SERVICE_NOTIFICATION_STATUS: Final = "notification_status"
+SERVICE_DISCOVER_ZONE_SENSORS: Final = "discover_zone_sensors"
 
 ATTR_ZONE_ID: Final = "zone_id"
 ATTR_CYCLE_ID: Final = "cycle_id"
@@ -321,6 +323,7 @@ _UPDATE_ZONE_SCHEMA = vol.Schema(
     }
 )
 _REMOVE_ZONE_SCHEMA = vol.Schema({vol.Required(ATTR_ZONE_ID): cv.string})
+_DISCOVER_ZONE_SENSORS_SCHEMA = vol.Schema({vol.Required(ATTR_ZONE_ID): cv.string})
 
 _SET_WEATHER_SOURCES_SCHEMA = vol.Schema(
     {
@@ -1355,6 +1358,28 @@ async def _async_notification_status(call: ServiceCall) -> ServiceResponse:
     return {**status.as_dict(), "available_services": available}
 
 
+async def _async_discover_zone_sensors(call: ServiceCall) -> ServiceResponse:
+    """What the zone's valve device offers, for the panel to pre-fill with.
+
+    Server-side because the frontend cannot do it: the card's HomeAssistant
+    object exposes states only -- no entity or device registry, and a state's
+    attributes never carry a device_id. Read-only: this reports candidates,
+    it never writes them -- only update_zone changes what a zone acts on.
+    """
+    runtime = _runtime(call.hass)
+    zone_id: str = call.data[ATTR_ZONE_ID]
+    _require_zone(runtime, zone_id)
+    caps = resolve_zone_capabilities(call.hass, runtime.zones[zone_id].config)
+    return {
+        "leak_sensor": caps.leak_sensor,
+        "water_supply_sensor": caps.water_supply_sensor,
+        "leak_candidate": caps.leak_candidate,
+        "supply_candidate": caps.supply_candidate,
+        "leak_detection": caps.leak_detection,
+        "water_supply": caps.water_supply,
+    }
+
+
 async def _async_set_session_limits(call: ServiceCall) -> None:
     _patch_hub_options(call, _SESSION_LIMIT_KEYS)
 
@@ -1533,6 +1558,13 @@ def async_setup_services(hass: HomeAssistant) -> None:
         SERVICE_NOTIFICATION_STATUS,
         _async_notification_status,
         _EMPTY_SCHEMA,
+        supports_response=SupportsResponse.ONLY,
+    )
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_DISCOVER_ZONE_SENSORS,
+        _async_discover_zone_sensors,
+        _DISCOVER_ZONE_SENSORS_SCHEMA,
         supports_response=SupportsResponse.ONLY,
     )
     hass.services.async_register(

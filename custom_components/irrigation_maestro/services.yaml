@@ -740,6 +740,14 @@ test_notification:
 
 notification_status:
 
+discover_zone_sensors:
+  fields:
+    zone_id:
+      required: true
+      example: 1b2f3c4d5e6f
+      selector:
+        text:
+
 set_program_advanced:
   fields:
     zone_id:

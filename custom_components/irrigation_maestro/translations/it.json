@@ -792,6 +792,16 @@
     "notification_status": {
       "name": "Stato notifiche",
       "description": "Riferisce quali eventi notificano, verso quali destinatari, quali destinatari non esistono più e se il sistema è muto."
+    },
+    "discover_zone_sensors": {
+      "name": "Rileva sensori della zona",
+      "description": "Riporta il sensore di perdita e quello di alimentazione idrica già configurati per una zona, più qualsiasi sensore corrispondente trovato sul dispositivo della sua valvola. Un sensore trovato è solo un suggerimento: ha effetto solo una volta salvato con update_zone.",
+      "fields": {
+        "zone_id": {
+          "name": "Zona",
+          "description": "La zona da analizzare."
+        }
+      }
     }
   },
   "issues": {
