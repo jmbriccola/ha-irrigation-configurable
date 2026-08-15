@@ -15,6 +15,7 @@ from homeassistant.helpers import entity_registry as er
 from homeassistant.util import dt as dt_util
 
 from .mocks import MockValvePark
+from .test_capabilities import _valve_with_siblings
 from .test_session import START, advance, mock_weather, setup_hub, zone_data
 
 
@@ -725,6 +726,114 @@ async def test_a_zone_with_an_empty_flow_sensor_falls_through_to_the_line_meter(
     state = role_state(hass, "zone_state", zone_id)
     assert state is not None
     assert "no_flow_meter" not in state.attributes["degraded"]
+
+
+async def test_zone_state_declares_its_capabilities(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    """A mixed installation: each zone reports its own hardware, not the hub's."""
+    freezer.move_to(START)
+    valve = _valve_with_siblings(hass)
+    park = MockValvePark(hass)
+    park.add(valve)
+    park.add("valve.plain")
+    hass.states.async_set("sensor.flow", "5", {"unit_of_measurement": "L/min"})
+    mock_weather(hass)
+    entry = await setup_hub(
+        hass,
+        [
+            zone_data(
+                "Vasi",
+                valve,
+                flow_sensor="sensor.flow",
+                leak_sensor="binary_sensor.swv1_b1",
+            ),
+            zone_data("Plain", "valve.plain", nominal_flow_lpm=5.0),
+        ],
+    )
+    runtime = entry.runtime_data
+    equipped = role_state(hass, "zone_state", zone_id=runtime.zone_ids[0])
+    bare = role_state(hass, "zone_state", zone_id=runtime.zone_ids[1])
+    assert equipped is not None
+    assert bare is not None
+
+    # Configured explicitly, and measured through a live, unit-resolving meter.
+    assert equipped.attributes["capabilities"]["leak_detection"] == "configured"
+    assert equipped.attributes["capabilities"]["water_supply"] == "candidate_available"
+    assert equipped.attributes["capabilities"]["water_accounting"] == "measured"
+    # No sibling on this device, no meter -- but a nominal rate still estimates.
+    assert bare.attributes["capabilities"]["leak_detection"] == "unavailable"
+    assert bare.attributes["capabilities"]["water_supply"] == "unavailable"
+    assert bare.attributes["capabilities"]["water_accounting"] == "estimated"
+
+
+async def test_water_accounting_is_unavailable_with_no_meter_and_no_nominal_flow(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    """The same verdict zone_water_total's own `source: none` reaches for a
+    zone that can never accrue litres -- nothing to integrate, no estimate."""
+    freezer.move_to(START)
+    park = MockValvePark(hass)
+    park.add("valve.a")
+    mock_weather(hass)
+    entry = await setup_hub(hass, [zone_data("Alpha", "valve.a")])
+    zone_id = entry.runtime_data.zone_ids[0]
+
+    state = role_state(hass, "zone_state", zone_id)
+    assert state is not None
+    assert state.attributes["capabilities"]["water_accounting"] == "unavailable"
+
+
+async def test_water_accounting_is_unavailable_when_the_configured_meters_unit_is_unresolvable(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    freezer.move_to(START)
+    park = MockValvePark(hass)
+    park.add("valve.a")
+    hass.states.async_set("sensor.flow", "7.5")  # no unit declared
+    mock_weather(hass)
+    entry = await setup_hub(hass, [zone_data("Alpha", "valve.a", flow_sensor="sensor.flow")])
+    zone_id = entry.runtime_data.zone_ids[0]
+
+    state = role_state(hass, "zone_state", zone_id)
+    assert state is not None
+    assert state.attributes["capabilities"]["water_accounting"] == "unavailable"
+
+
+async def test_a_configured_sensor_that_has_vanished_is_distinguishable_from_a_healthy_one(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    """ "Configured" alone cannot tell a present sensor from one that vanished
+    (a Zigbee re-pair): capabilities.py deliberately does not downgrade it --
+    that is right for a module that only records intent. The distinction has
+    to live here, in the degraded list, or a vanished sensor reads exactly
+    like a healthy one and the user believes they are covered."""
+    freezer.move_to(START)
+    valve = _valve_with_siblings(hass)
+    park = MockValvePark(hass)
+    park.add(valve)
+    park.add("valve.b")
+    mock_weather(hass)
+    entry = await setup_hub(
+        hass,
+        [
+            zone_data("Healthy", valve, leak_sensor="binary_sensor.swv1_b1"),
+            zone_data("Ghost", "valve.b", leak_sensor="binary_sensor.does_not_exist"),
+        ],
+    )
+    runtime = entry.runtime_data
+    healthy = role_state(hass, "zone_state", zone_id=runtime.zone_ids[0])
+    ghost = role_state(hass, "zone_state", zone_id=runtime.zone_ids[1])
+    assert healthy is not None
+    assert ghost is not None
+
+    # Both read "configured": capabilities.py records the user's choice
+    # verbatim, vanished entity or not.
+    assert healthy.attributes["capabilities"]["leak_detection"] == "configured"
+    assert ghost.attributes["capabilities"]["leak_detection"] == "configured"
+    # Only the vanished one is flagged, and only here.
+    assert "leak_sensor_missing" not in healthy.attributes["degraded"]
+    assert "leak_sensor_missing" in ghost.attributes["degraded"]
 
 
 async def test_the_zone_water_sensor_is_a_statistics_grade_total(

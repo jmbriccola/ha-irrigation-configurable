@@ -12,12 +12,14 @@ from typing import Any
 from homeassistant.components.sensor import SensorDeviceClass, SensorEntity, SensorStateClass
 from homeassistant.const import UnitOfPrecipitationDepth, UnitOfTemperature, UnitOfVolume
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers import sun
 from homeassistant.helpers.entity import Entity
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from homeassistant.util import dt as dt_util
 
 from . import IrrigationConfigEntry
+from .capabilities import resolve_zone_capabilities
 from .const import TRIGGER_KIND_SUN, TRIGGER_KIND_TIME
 from .engine.calendar import calendar_allows
 from .engine.curves import CurveKind
@@ -241,6 +243,7 @@ class ZoneStateSensor(MaestroZoneEntity, SensorEntity):
             "degraded": self._degraded(),
             "suspended_until": suspended.isoformat() if suspended else None,
             "cycles": [self._cycle_dict(cycle) for cycle in config.cycles],
+            "capabilities": self._capabilities(config),
         }
         active = runtime.session.active_runs.get(self._zone_id)
         if active is not None:
@@ -300,7 +303,64 @@ class ZoneStateSensor(MaestroZoneEntity, SensorEntity):
         snapshot = runtime.weather.last_snapshot
         if snapshot is not None and not snapshot.hourly:
             degraded.append("no_hourly_forecast")
+        # capabilities.py reports "configured" for a chosen sensor even after
+        # it vanishes -- deliberately, since that module only records intent
+        # and downgrading it would let the panel offer to overwrite a
+        # deliberate choice during, say, a Zigbee re-pair. But a configured
+        # sensor that no longer exists must still be visible as such
+        # somewhere, or "configured" quietly becomes an alarm that will never
+        # fire again. This is that somewhere.
+        if config.leak_sensor and not self._entity_known(config.leak_sensor):
+            degraded.append("leak_sensor_missing")
+        if config.water_supply_sensor and not self._entity_known(config.water_supply_sensor):
+            degraded.append("water_supply_sensor_missing")
         return degraded
+
+    def _entity_known(self, entity_id: str) -> bool:
+        """A registry entry or a live state -- either proves it still exists.
+
+        Registry first, mirroring capabilities._device_class_of's own
+        reasoning: the registry answer is valid before an entity has ever
+        posted a state, the normal case for Zigbee/MQTT right after a
+        restart, so checking live state alone would flag a healthy,
+        not-yet-reported sensor as vanished.
+        """
+        if er.async_get(self.hass).async_get(entity_id) is not None:
+            return True
+        return self.hass.states.get(entity_id) is not None
+
+    def _capabilities(self, config: ZoneConfig) -> dict[str, str]:
+        """What this zone can do, resolved per zone rather than per hub.
+
+        In a mixed installation one zone has the sensor and another does
+        not, and each must report accordingly -- that is the point of the
+        whole model. "candidate_available" means the hardware could do it
+        and has not been told to: an invitation in the card, not an alarm.
+
+        water_accounting comes from the meter (zone_has_flow_meter /
+        zone_flow_meter_usable), not from capabilities.py, which knows
+        nothing about flow. The two runtime calls are deliberately separate:
+        zone_has_flow_meter is configuration only, so a momentarily
+        unavailable sensor cannot flip it; zone_flow_meter_usable reads live
+        state, so a meter whose unit cannot be resolved right now correctly
+        degrades. A zone with neither a resolvable meter nor a usable
+        nominal rate reports "unavailable" -- the same verdict
+        zone_water_total's own `source: none` reaches for it, and by the
+        same configuration-only test, so the two never disagree.
+        """
+        runtime = self._runtime
+        caps = resolve_zone_capabilities(self.hass, config)
+        if not runtime.zone_has_flow_meter(config):
+            accounting = "estimated" if config.nominal_flow_lpm else "unavailable"
+        elif runtime.zone_flow_meter_usable(runtime.zones[config.zone_id]):
+            accounting = "measured"
+        else:
+            accounting = "unavailable"
+        return {
+            "water_accounting": accounting,
+            "leak_detection": caps.leak_detection,
+            "water_supply": caps.water_supply,
+        }
 
 
 class ZoneNextRunSensor(MaestroZoneEntity, SensorEntity):
