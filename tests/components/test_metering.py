@@ -722,14 +722,14 @@ async def test_deleting_the_sole_zone_on_a_meter_keeps_the_hub_sensor_monotonic(
 ) -> None:
     """A zone deletion must not walk hub_unattributed_water backwards.
 
-    _scope_for keys the unattributed bucket by zone id whenever exactly one
+    scope_for keys the unattributed bucket by zone id whenever exactly one
     zone resolves to that meter, and hub_unattributed_water sums every scope --
     so popping the departing zone's bucket dropped a total_increasing sensor's
     state. HA's recorder reads a drop below 90% as a meter reset and re-adds
     the post-drop value to the long-term sum, permanently inflating the Water
     dashboard with no way for the user to correct it.
 
-    This also walks _scope_for's own HUB_SCOPE branch on the deletion path: no
+    This also walks scope_for's own HUB_SCOPE branch on the deletion path: no
     zone resolves to the line meter afterwards, so the water that keeps
     flowing lands in exactly the bucket the merge went to.
     """
@@ -752,7 +752,7 @@ async def test_deleting_the_sole_zone_on_a_meter_keeps_the_hub_sensor_monotonic(
     )
 
     # Well before the 05:30 trigger, so nothing is watering. Exactly one zone
-    # resolves to the line meter, so _scope_for books the litres under its id.
+    # resolves to the line meter, so scope_for books the litres under its id.
     await advance(hass, freezer, 300, step=10.0)
     scoped = runtime.state.unattributed_total(zone_id)
     assert scoped > 0.0

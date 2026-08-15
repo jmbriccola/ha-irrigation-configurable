@@ -253,7 +253,7 @@ class RuntimeState:
         # the rest.
         self._water["zones"].pop(zone_id, None)
         # One line down, the same reasoning, and the opposite conclusion. This
-        # bucket is keyed by zone id (_scope_for names the sole zone on a
+        # bucket is keyed by zone id (scope_for names the sole zone on a
         # meter) but it backs a *hub* entity: hub_unattributed_water sums every
         # scope. Popping it would drop that total_increasing sensor from
         # 1000 L to 200 L, and HA's recorder reads a drop below 90% as a meter
@@ -262,7 +262,7 @@ class RuntimeState:
         # do to correct it. So the scope is merged into HUB_SCOPE instead: the
         # water flowed, and it now belongs to no zone, which is exactly what
         # __hub__ means. Further unattributed water on that meter lands in the
-        # same bucket, since _scope_for finds no owner for it either.
+        # same bucket, since scope_for finds no owner for it either.
         departing = self._water["unattributed"].pop(zone_id, None)
         if departing is not None:
             hub = self._water["unattributed"].setdefault(
