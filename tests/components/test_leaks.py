@@ -2473,3 +2473,81 @@ async def test_a_superseded_confirmation_window_leaves_no_timer_behind(
     await advance(hass, freezer, 30, step=10.0)
     assert _pending_supply_wakes(hass) == 1
     assert set(runtime._supply_wake_unsubs) == {zone_id}
+
+
+async def test_the_repair_follows_the_evidence_when_the_first_source_withdraws(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    """A zone with no meter must not stand accused on flow evidence.
+
+    first_source is written once and never revisited, which is right while it
+    still contributes -- re-describing a standing alarm every time a second
+    source joins would churn a notice for no new fact. But source 2 withdraws
+    when its meter leaves the configuration, and the alarm can survive on
+    source 1: the notice then described flow measurement for a zone that can no
+    longer measure flow, and promised to clear "until the meter is removed",
+    which is precisely what had just happened. A wrong diagnosis is worse than
+    a wrong promise, because it sends the user to look at the wrong thing.
+
+    It is a change of description, not a new alarm: no second notification, and
+    the alarm keeps the moment it was confirmed.
+    """
+    freezer.move_to(START)
+    park = MockValvePark(hass)
+    park.add("valve.a")
+    hass.states.async_set("sensor.flow", "2.0", {"unit_of_measurement": "L/min"})
+    hass.states.async_set("binary_sensor.a_leak", "off", {"device_class": "moisture"})
+    mock_weather(hass)
+    sent = _notify_target(hass)
+    entry = await setup_hub(
+        hass,
+        [
+            zone_data(
+                "Alpha",
+                "valve.a",
+                at="23:00",
+                flow_sensor="sensor.flow",
+                leak_sensor="binary_sensor.a_leak",
+            )
+        ],
+        _LEAK_NOTIFICATIONS,
+    )
+    runtime = entry.runtime_data
+    zone_id = runtime.zone_ids[0]
+    registry = ir.async_get(hass)
+
+    # Source 2 raises first, so the notice is keyed to flow evidence.
+    await advance(hass, freezer, _PAST_CONFIRM_S, step=10.0)
+    raised = runtime.leak_state(zone_id)
+    assert raised.first_source == SOURCE_NO_FLOW_CLOSED
+    issue = registry.async_get_issue(DOMAIN, f"leak_{zone_id}")
+    assert issue is not None
+    assert issue.translation_key == "leak_zone_flow"
+
+    # Source 1 joins. Nothing about the description changes: the source it
+    # cites is still contributing.
+    hass.states.async_set("binary_sensor.a_leak", "on", {"device_class": "moisture"})
+    await advance(hass, freezer, _PAST_CONFIRM_S, step=10.0)
+    assert runtime.leak_state(zone_id).sources == {SOURCE_NO_FLOW_CLOSED, SOURCE_VALVE_SENSOR}
+    issue = registry.async_get_issue(DOMAIN, f"leak_{zone_id}")
+    assert issue is not None
+    assert issue.translation_key == "leak_zone_flow"
+    assert len(_bodies(sent)) == 1
+
+    # The meter leaves the configuration while the valve sensor holds the
+    # alarm up.
+    await _reconfigure_zone(hass, entry, zone_id, flow_sensor="")
+    await advance(hass, freezer, 60, step=10.0)
+
+    after = runtime.leak_state(zone_id)
+    assert after.active is True
+    assert after.sources == {SOURCE_VALVE_SENSOR}
+    # The historical fact is untouched: who noticed first does not change.
+    assert after.first_source == SOURCE_NO_FLOW_CLOSED
+    # What changes is what the notice says, because the evidence changed.
+    issue = registry.async_get_issue(DOMAIN, f"leak_{zone_id}")
+    assert issue is not None
+    assert issue.translation_key == "leak_zone_valve_sensor"
+    # A re-description is not a new alarm.
+    assert after.since == raised.since
+    assert len(_bodies(sent)) == 1

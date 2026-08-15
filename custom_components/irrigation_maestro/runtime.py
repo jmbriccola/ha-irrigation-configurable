@@ -1381,15 +1381,7 @@ class IrrigationRuntime:
             "Leak alarm raised on %s by %s", self._leak_subject(scope), state.first_source
         )
         self._fire_leak_event(scope, state, "active")
-        ir.async_create_issue(
-            self.hass,
-            DOMAIN,
-            self._leak_issue_id(scope),
-            is_fixable=False,
-            severity=ir.IssueSeverity.ERROR,
-            translation_key=self._leak_translation_key(scope, state),
-            translation_placeholders=self._leak_placeholders(scope),
-        )
+        self._create_leak_issue(scope, state)
         self._notify_leak(
             EVENT_LEAK, title=_LEAK_TITLE, message=self._leak_raised_message(scope, state)
         )
@@ -1433,6 +1425,53 @@ class IrrigationRuntime:
         )
         self.dispatch_update()
 
+    def on_leak_sources_changed(self, scope: str, state: LeakState) -> None:
+        """A source stopped contributing, and the alarm survived on another.
+
+        Not a new alarm and not the end of one, so it fires no event, sends no
+        notification, and touches neither ``since`` nor the reminder cadence --
+        that timer is armed in ``LeakDetector._raise`` and re-armed only by its
+        own expiry, and nothing here goes near it. What can change is the
+        DESCRIPTION, and only when the source the standing text cites is the
+        one that has gone quiet: see ``LeakState.describing_source``.
+
+        Deleted and recreated rather than updated in place. Home Assistant's
+        ``async_create_issue`` upserts, but the upsert preserves both the
+        issue's creation time and its DISMISSAL -- so a notice the user
+        dismissed under the old diagnosis would stay dismissed under the new
+        one, and the correction they most need to read is the one they would
+        never see. It reads as new because it genuinely is new evidence.
+
+        Guarded on the key actually changing, so a source merely joining (which
+        cannot change the description while the first one still contributes)
+        costs nothing.
+        """
+        if not state.active:
+            return
+        issue_id = self._leak_issue_id(scope)
+        existing = ir.async_get(self.hass).async_get_issue(DOMAIN, issue_id)
+        if existing is None or existing.translation_key != self._leak_translation_key(scope, state):
+            _LOGGER.warning(
+                "Leak alarm on %s now rests on %s; re-describing the repair notice",
+                self._leak_subject(scope),
+                ", ".join(sorted(state.sources)),
+            )
+            ir.async_delete_issue(self.hass, DOMAIN, issue_id)
+            self._create_leak_issue(scope, state)
+        self.dispatch_update()
+
+    def _create_leak_issue(self, scope: str, state: LeakState) -> None:
+        """The one place a leak repair notice is built."""
+        ir.async_create_issue(
+            self.hass,
+            DOMAIN,
+            self._leak_issue_id(scope),
+            is_fixable=False,
+            severity=ir.IssueSeverity.ERROR,
+            translation_key=self._leak_translation_key(scope, state),
+            translation_placeholders=self._leak_placeholders(scope),
+        )
+
     def _notify_leak(self, event: str, *, title: str, message: str) -> None:
         """Push one leak notice. The hooks are callbacks; this cannot await."""
         self.entry.async_create_background_task(
@@ -1458,11 +1497,20 @@ class IrrigationRuntime:
 
         A hub scope has no leak sensor to resolve -- ``LeakDetector`` never
         subscribes to one without a zone -- so its only reachable source is
-        flow, and it takes the system template whatever ``first_source`` says.
+        flow, and it takes the system template whatever the sources say.
+
+        Keyed on ``describing_source``, not on ``first_source``: the template
+        names a sensor and tells the user what makes the notice go away, so it
+        has to describe evidence that still exists. ``first_source`` remains
+        the honest answer to "who noticed first" -- it is what the leak event
+        carries -- but a zone whose meter has been removed while its valve
+        sensor holds the alarm up would otherwise keep a template about flow
+        measurement, promising to clear when the meter is removed, which is
+        exactly what already happened.
         """
         if scope == HUB_SCOPE:
             return "leak_system_flow"
-        if state.first_source == SOURCE_VALVE_SENSOR:
+        if state.describing_source == SOURCE_VALVE_SENSOR:
             return "leak_zone_valve_sensor"
         return "leak_zone_flow"
 
@@ -1500,7 +1548,10 @@ class IrrigationRuntime:
                 "every valve reports closed. The meter that measured it does not "
                 "belong to a single zone, so which zone is leaking cannot be told."
             )
-        elif state.first_source == SOURCE_VALVE_SENSOR:
+        elif state.describing_source == SOURCE_VALVE_SENSOR:
+            # Same rule as the repair template, and identical to first_source
+            # at the only moment this is sent: a description cites evidence
+            # that exists, so the two must not diverge if this is ever reused.
             detail = (
                 f"{self._zone_name(scope)}: possible leak -- the valve of this zone "
                 "reports a leak while it is closed."
