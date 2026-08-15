@@ -73,4 +73,21 @@ lasciato esito.
 - Notifiche per evento verso i tuoi servizi `notify.*`, aggregate (una sola
   per motivo condiviso).
 
+## L'acqua
+
+- Il flusso viene integrato **in continuo**, non solo durante un ciclo: due
+  sensori nuovi, **Acqua totale** per zona (con i litri di oggi e del mese
+  come attributi) e **Acqua non attribuita** sull'hub, per l'acqua che
+  nessuna zona ha reclamato. Entrambi entrano nelle statistiche di Home
+  Assistant e nella **dashboard Acqua**.
+- Una zona **senza flussometro** compare lì lo stesso: i suoi litri sono
+  stimati come portata nominale × minuti e sono marcati come stimati.
+- **Aggiorni dalla 3.2.x?** La catena di helper costruita a mano — l'helper
+  `integration` che faceva i litri, l'`utility_meter` che li tagliava per
+  giorno e per mese, i template sensor che li dividevano per zona — è ora
+  ridondante e si può cancellare. Lo storico precedente non viene importato,
+  per scelta: i nuovi sensori partono da zero e il vecchio contatore mensile
+  vale una volta sola come saldo di apertura del periodo. Dettagli in
+  [istruzioni.md](istruzioni.md) §7.
+
 Istruzioni complete: [istruzioni.md](istruzioni.md).

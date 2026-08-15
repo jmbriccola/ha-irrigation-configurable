@@ -206,7 +206,97 @@ Il pannello e la card della dashboard leggono e scrivono gli stessi
 programmi: usa l'uno, l'altra, o entrambi — non serve migrare nulla. La card
 (§5 sopra) continua a funzionare esattamente come oggi.
 
-## 7. Risoluzione dei problemi
+## 7. L'acqua: sensori, dashboard e aggiornamento dalla 3.2.x
+
+Dalla 3.3.0 il flusso letto da un flussometro viene integrato **in continuo**,
+non più soltanto mentre un ciclo è in corso: una valvola che gocciola, un
+rubinetto aperto a mano o un ciclo finito male ora si vedono. I litri vanno
+alla zona la cui **valvola risulta aperta** — non alla zona che il ciclo dice
+di stare irrigando: durante la conferma di apertura, durante la pre-apertura
+della master e soprattutto quando una chiusura fallisce le due cose non
+coincidono, e la valvola aperta è il fatto fisico.
+
+Ne nascono due sensori:
+
+- **Acqua totale** (`zone_water_total`, uno per zona) — i litri complessivi
+  della zona, da sempre. Come attributi porta `today_l` e `month_l` (oggi e
+  mese in corso, ricavati dallo stesso storico giornaliero che alimenta il
+  totale, quindi non possono discordare da esso), `estimated` e `source`
+  (`measured`, `nominal`, `mixed`, `none`: come sono stati ottenuti quei
+  litri), `meter_entity` (il flussometro che effettivamente alimenta la zona:
+  il suo, altrimenti quello di linea, altrimenti nessuno) e `last_gap_at`.
+- **Acqua non attribuita** (`hub_unattributed_water`, sull'hub) — i litri che
+  un flussometro ha misurato senza che nessuna zona li reclamasse. Il totale
+  comprende il riempimento della linea durante la pre-apertura della master,
+  che è acqua reale di nessuna zona e non è una perdita; l'attributo
+  `closed_l` è il solo sottoinsieme misurato mentre **ogni** valvola gestita
+  risultava chiusa, ed è quello che conta come indizio di perdita.
+
+Entrambi dichiarano `device_class: water` e `state_class: total_increasing`:
+è ciò che li fa registrare nelle statistiche a lungo termine di Home
+Assistant e li rende utilizzabili nella **dashboard Acqua**. Per questo
+nessuno dei due ha un'entità gemella "oggi" o "questo mese" — quelle cifre le
+produce già il motore delle statistiche, e una seconda entità con lo stesso
+dato sarebbe una seconda cosa che può sbagliare.
+
+Un flussometro che non si può leggere — non disponibile, o con l'unità di
+misura non più riconoscibile — non produce litri: interpolare inventerebbe
+acqua, e contare zero affermerebbe che non ne è passata, cosa che di un
+intervallo non osservato nessuno può affermare. Al suo posto viene registrato
+quanto è durato il buco, attribuito come lo sarebbero stati i litri: alle
+zone che stavano irrigando, o all'acqua non attribuita se non ne stava
+irrigando nessuna. `last_gap_at` sul sensore della zona dice quando è finito
+l'ultimo buco capitato **mentre quella zona irrigava** (vuoto finché non
+capita). Senza quel dato un'interruzione di sei ore sarebbe indistinguibile
+da un pomeriggio tranquillo.
+
+### Aggiornare dalla 3.2.x: la catena costruita a mano si può cancellare
+
+Se accanto all'integrazione tenevi la solita catena di helper per contare
+l'acqua, ora è ridondante:
+
+- l'helper **`integration`** (somma di Riemann) che trasformava i L/min del
+  flussometro in litri;
+- l'**`utility_meter`** che tagliava quel totale in cicli giornalieri e
+  mensili;
+- i **template sensor** che lo suddividevano per zona.
+
+Li sostituiscono i due sensori qui sopra più le statistiche di Home
+Assistant. Cancellali quando ti sei convinto che i nuovi sensori leggono
+quello che ti aspetti: cancellarli è il senso di questa release.
+
+Lo storico **non** viene importato. I nuovi sensori partono da zero al
+momento dell'aggiornamento, e il vecchio contatore mensile dei consumi viene
+riportato una sola volta come saldo di apertura del periodo in corso, così il
+budget continua a valere fino a fine mese (se un saldo da riportare c'era,
+una segnalazione in Riparazioni te lo dice, una volta sola). È una scelta
+deliberata, non un limite da aggirare: i dati precedenti non contano
+abbastanza da giustificare un travaso che mescolerebbe litri misurati e litri
+stimati sotto un'indicazione di provenienza di cui non ci si potrebbe più
+fidare.
+
+### Zone senza flussometro
+
+Una zona che non ha un flussometro — né il suo né quello di linea — pubblica
+comunque il suo sensore dell'acqua e compare comunque nella dashboard Acqua,
+accanto alle zone misurate. I suoi litri sono **stimati** a fine ciclo come
+**portata nominale (L/min) × minuti** e sono marcati come tali: attributo
+`estimated: true`, `source` `nominal` (o `mixed`, se in passato la zona ha
+avuto anche letture vere), badge *stimato* nella riga della card e
+contrassegno giorno per giorno nello storico. Escluderla è stato valutato e
+scartato: la tendenza di lungo periodo di una zona è più utile con un
+contributo stimato che con un buco silenzioso, purché sia dichiarato — e qui
+è dichiarato in più modi, non in uno solo.
+
+Serve però la **portata nominale** della zona (**✎ Modifica zona →
+Avanzate**, §6). Senza flussometro e senza portata nominale non si registra
+nulla, e il sensore lo dice con `source: "none"` invece di spacciare per
+misura uno zero. Da ricordare inoltre che su una zona stimata l'acqua che
+scorre **fuori** dai cicli è invisibile per costruzione: per quella zona la
+rilevazione dell'acqua non attribuita — e quindi delle perdite — non è
+disponibile.
+
+## 8. Risoluzione dei problemi
 
 - **Un ciclo non è partito e nessuno ti ha avvisato** → la sentinella
   giornaliera (default 12:00) notifica e apre una segnalazione in
