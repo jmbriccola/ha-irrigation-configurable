@@ -121,29 +121,29 @@ class LeakDetector:
         self._sensor_wake_unsub: CALLBACK_TYPE | None = None
 
     @property
-    def confirming(self) -> bool:
-        """Is a confirmation window in flight for this scope right now?
+    def flow_evidence_pending(self) -> bool:
+        """Has source 2 measured suspect flow it has not yet resolved?
 
         Read-only, and the only thing in this module that exists for a
         consumer rather than for the alarm: the leak entity may not conclude
-        "no problem" while evidence is still accumulating here, and the two
-        clocks are not commensurable -- this one counts MEASURED seconds and
-        sensor-plus-valve time, the entity's counts wall clock. Asking is the
-        only way to line them up.
+        "no problem" while this is True, and it cannot see these seconds for
+        itself. Its own clock is wall time; this one counts MEASURED seconds
+        with every valve shut, and the two are not commensurable -- an
+        unmeasured interval stops this without stopping that.
 
-        Source 1 is in flight exactly while its wake is armed: that handle
-        exists only for the interval between an asserting sensor over a closed
-        valve and the moment the pair has stood long enough. Source 2 is in
-        flight while measured above-threshold seconds are on the books but
-        have not yet reached ``leak_confirm_s`` -- ``note_flow`` resets that
-        count to zero on the two readings that end a window (below threshold,
-        or a valve open), so a non-zero count means one is running.
+        Held evidence, not a running countdown. ``note_flow`` zeroes the count
+        only on a READING that ends the window (flow below the threshold), and
+        on a valve opening, which says the water is watering rather than that
+        it stopped. Everything else -- an unreadable meter above all -- leaves
+        the seconds on the books, exactly as an alarm survives a source going
+        silent one level up.
 
-        Deliberately not "could a window start": a dry meter and a quiet
-        sensor are not confirming anything, which is what lets a healthy
-        installation settle rather than wait for ever.
+        Source 1's half of the same question is not here: whether that sensor's
+        last reading was the leak state is visible from the state machine, and
+        the runtime watches those readings already. This module answers only
+        what only it can see.
         """
-        return self._sensor_wake_unsub is not None or self._above_threshold_s > 0.0
+        return self._above_threshold_s > 0.0
 
     # Lifecycle --------------------------------------------------------------
 
