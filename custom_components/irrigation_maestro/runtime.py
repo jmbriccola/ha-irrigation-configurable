@@ -1605,8 +1605,13 @@ class IrrigationRuntime:
                 "That recovers a valve left open by a command that never landed; it "
                 "cannot stop water passing a valve already shut."
             )
+        # Present tense, and no undertaking about how long it will last. The
+        # block follows the alarm AND the configured action, and the action is
+        # a setting the user can change while the alarm still stands -- so a
+        # message promising the block for the alarm's whole duration is one
+        # they can falsify from the settings page a minute later.
         blocked = (
-            " No new cycle starts for the zones concerned while the alarm lasts."
+            " No new cycle starts for the zones concerned."
             if action == LEAK_ACTION_CLOSE_AND_BLOCK
             else ""
         )
