@@ -144,7 +144,14 @@ describe("buildSaveCalls", () => {
       services: ["mobile_app_pixel"],
     });
     expect(calls[1]).toEqual({
-      events: ["skipped", "cancelled", "completed", "session_overrun", "consumption_budget"],
+      events: [
+        "leak",
+        "skipped",
+        "cancelled",
+        "completed",
+        "session_overrun",
+        "consumption_budget",
+      ],
       enabled: false,
     });
   });
@@ -185,7 +192,7 @@ describe("buildSaveCalls", () => {
     const calls = buildSaveCalls({ recipients: ["phone"], events: [], priorities: {} });
     expect(calls).toHaveLength(1);
     expect(calls[0]!.enabled).toBe(false);
-    expect(calls[0]!.events).toHaveLength(9);
+    expect(calls[0]!.events).toHaveLength(10);
   });
 });
 

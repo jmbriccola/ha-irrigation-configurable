@@ -737,7 +737,7 @@
         },
         "priority": {
           "name": "Priorità",
-          "description": "Alta aggiunge segnali di urgenza compresi dalle app mobili. Predefinita alta per watchdog, anomalia, sentinella e interruzione."
+          "description": "Alta aggiunge segnali di urgenza compresi dalle app mobili. Predefinita alta per watchdog, anomalia, sentinella, interruzione e perdita d'acqua."
         }
       }
     },
@@ -855,7 +855,7 @@
     },
     "notifications_silent": {
       "title": "Irrigation Maestro non ti avviserà",
-      "description": "Nessuno degli eventi che un impianto di irrigazione non dovrebbe mai perdere — guasto di una valvola, anomalia di portata, irrigazione non eseguita, ciclo interrotto — raggiunge qualcuno. Se il watchdog chiude d'autorità una valvola o un ciclo non parte, nessuno lo saprà. Apri Irrigazione → Impostazioni → Notifiche per configurarle."
+      "description": "Nessuno degli eventi che un impianto di irrigazione non dovrebbe mai perdere — guasto di una valvola, anomalia di portata, irrigazione non eseguita, ciclo interrotto, perdita d'acqua — raggiunge qualcuno. Se il watchdog chiude d'autorità una valvola o un ciclo non parte, nessuno lo saprà. Apri Irrigazione → Impostazioni → Notifiche per configurarle."
     },
     "notify_target_missing": {
       "title": "Destinatario delle notifiche non più esistente",

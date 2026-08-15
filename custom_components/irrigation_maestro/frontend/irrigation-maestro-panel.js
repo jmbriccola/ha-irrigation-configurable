@@ -848,6 +848,7 @@ const ae = {
   "notify.test_message": "Test notification. If you can read this, this recipient works.",
   "notify.event_watchdog": "Watchdog",
   "notify.event_anomaly": "Anomaly",
+  "notify.event_leak": "Leak",
   "notify.event_skipped": "Cycle skipped",
   "notify.event_interrupted": "Cycle interrupted",
   "notify.event_cancelled": "Cycle cancelled",
@@ -1181,6 +1182,7 @@ const ae = {
   "notify.test_message": "Notifica di prova. Se riesci a leggere questo messaggio, il destinatario funziona.",
   "notify.event_watchdog": "Watchdog",
   "notify.event_anomaly": "Anomalia",
+  "notify.event_leak": "Perdita d'acqua",
   "notify.event_skipped": "Ciclo saltato",
   "notify.event_interrupted": "Ciclo interrotto",
   "notify.event_cancelled": "Ciclo annullato",
@@ -4131,6 +4133,7 @@ U("imc-zone-editor", k);
 const rs = ["critical", "operational", "informational"], Ot = [
   "watchdog",
   "anomaly",
+  "leak",
   "skipped",
   "interrupted",
   "cancelled",
@@ -4203,6 +4206,7 @@ function hs(n) {
 const ms = {
   watchdog: "notify.event_watchdog",
   anomaly: "notify.event_anomaly",
+  leak: "notify.event_leak",
   skipped: "notify.event_skipped",
   interrupted: "notify.event_interrupted",
   cancelled: "notify.event_cancelled",

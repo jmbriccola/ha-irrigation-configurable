@@ -16,8 +16,10 @@ from custom_components.irrigation_maestro.notify import (
     EVENT_COMPLETED,
     EVENT_GROUPS,
     EVENT_INTERRUPTED,
+    EVENT_LEAK,
     EVENT_SENTINEL,
     EVENT_WATCHDOG,
+    GROUP_CRITICAL,
     PRIORITY_HIGH,
     PRIORITY_NORMAL,
     Notifier,
@@ -37,9 +39,12 @@ def test_the_groups_partition_every_event() -> None:
     assert len(grouped) == len(set(grouped))  # no event in two groups
 
 
-def test_the_essential_events_are_the_four_an_irrigation_system_cannot_miss() -> None:
+def test_the_essential_events_are_the_five_an_irrigation_system_cannot_miss() -> None:
+    # Grew from four to five with the leak event (Task 6): this assertion is
+    # meant to fail the moment ESSENTIAL_EVENTS' membership changes, so it was
+    # updated deliberately here rather than loosened.
     assert ESSENTIAL_EVENTS == frozenset(  # noqa: SIM300
-        {EVENT_WATCHDOG, EVENT_ANOMALY, EVENT_SENTINEL, EVENT_INTERRUPTED}
+        {EVENT_WATCHDOG, EVENT_ANOMALY, EVENT_SENTINEL, EVENT_INTERRUPTED, EVENT_LEAK}
     )
     assert ESSENTIAL_EVENTS <= set(ALL_EVENTS)  # noqa: SIM300
 
@@ -316,3 +321,21 @@ async def test_fixing_one_repair_condition_leaves_the_other_standing(hass: HomeA
     assert registry.async_get_issue(DOMAIN, "notifications_enabled_without_target") is None
     assert registry.async_get_issue(DOMAIN, "notifications_silent") is not None
     assert entry.options["notifications"]["interrupted"]["enabled"] is False
+
+
+def test_leak_is_critical_and_essential() -> None:
+    """Water damage is not an informational event.
+
+    ESSENTIAL_EVENTS is deliberately not one of the display groups: it drives
+    the defaults the wizard proposes, the default high priority, the
+    missing-recipient repair and the definition of "mute". leak belongs in
+    both, and that is not duplication.
+    """
+    assert EVENT_LEAK in GROUP_CRITICAL
+    assert EVENT_LEAK in ESSENTIAL_EVENTS
+    assert default_priority(EVENT_LEAK) == PRIORITY_HIGH
+
+
+def test_leak_enabled_without_a_recipient_is_rejected() -> None:
+    status = evaluate_notifications({"leak": {"enabled": True, "services": []}})
+    assert "leak" in status.enabled_without_target

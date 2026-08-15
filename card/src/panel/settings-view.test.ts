@@ -297,6 +297,7 @@ describe("the notifications section", () => {
         {
           events: [
             "anomaly",
+            "leak",
             "skipped",
             "interrupted",
             "cancelled",

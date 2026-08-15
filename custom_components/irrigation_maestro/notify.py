@@ -31,9 +31,10 @@ EVENT_WATCHDOG: Final = "watchdog"
 EVENT_SENTINEL: Final = "sentinel"
 EVENT_SESSION_OVERRUN: Final = "session_overrun"
 EVENT_CONSUMPTION_BUDGET: Final = "consumption_budget"
+EVENT_LEAK: Final = "leak"
 
 #: Presentation only: the three severity groups the wizard browses by.
-GROUP_CRITICAL: Final = (EVENT_WATCHDOG, EVENT_ANOMALY)
+GROUP_CRITICAL: Final = (EVENT_WATCHDOG, EVENT_ANOMALY, EVENT_LEAK)
 GROUP_OPERATIONAL: Final = (EVENT_SKIPPED, EVENT_INTERRUPTED, EVENT_CANCELLED)
 GROUP_INFORMATIONAL: Final = (
     EVENT_COMPLETED,
@@ -53,7 +54,7 @@ ALL_EVENTS: Final = GROUP_CRITICAL + GROUP_OPERATIONAL + GROUP_INFORMATIONAL
 #: wizard proposes, the events whose default priority is high, the events whose
 #: vanished recipient raises a repair issue, and the definition of "mute".
 ESSENTIAL_EVENTS: Final = frozenset(
-    {EVENT_WATCHDOG, EVENT_ANOMALY, EVENT_SENTINEL, EVENT_INTERRUPTED}
+    {EVENT_WATCHDOG, EVENT_ANOMALY, EVENT_SENTINEL, EVENT_INTERRUPTED, EVENT_LEAK}
 )
 
 _GROUP_OF: Final = {event: group for group, events in EVENT_GROUPS.items() for event in events}

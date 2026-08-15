@@ -77,7 +77,7 @@ engine:                                # every §2 parameter, with reset-to-defa
   stale_weather_policy: "fail_open" | "fail_closed" = "fail_open"
 notifications:
   events: {completed | skipped | interrupted | cancelled | anomaly | watchdog |
-           sentinel | session_overrun | consumption_budget:
+           leak | sentinel | session_overrun | consumption_budget:
              {enabled: bool, services: [str], priority: normal|high}}
 consumption_budget:
   liters_per_month: float | None

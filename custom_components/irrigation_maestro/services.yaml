@@ -674,11 +674,12 @@ set_notifications:
             - cancelled
             - anomaly
             - watchdog
+            - leak
             - sentinel
             - session_overrun
             - consumption_budget
     events:
-      example: '["watchdog", "anomaly", "sentinel", "interrupted"]'
+      example: '["watchdog", "anomaly", "sentinel", "interrupted", "leak"]'
       selector:
         select:
           multiple: true
@@ -689,6 +690,7 @@ set_notifications:
             - cancelled
             - anomaly
             - watchdog
+            - leak
             - sentinel
             - session_overrun
             - consumption_budget
@@ -726,6 +728,7 @@ test_notification:
             - cancelled
             - anomaly
             - watchdog
+            - leak
             - sentinel
             - session_overrun
             - consumption_budget
