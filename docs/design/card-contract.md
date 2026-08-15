@@ -251,33 +251,44 @@ one of three string values:
     entity id to offer wiring it up, call the `discover_zone_sensors`
     service (below).
 - **`water_accounting`** — judged from the zone's flow meter and nominal
-  rate, not from `capabilities.py` (which knows nothing about flow). Two
-  runtime calls feed it, deliberately kept separate because they serve
-  different callers: `zone_has_flow_meter` is configuration only (a
-  momentarily unavailable sensor must not fail an edit), `zone_flow_meter_usable`
-  reads live state, at plan time and here.
-  - `measured`: a meter is **configured** (`zone_has_flow_meter`) and it
-    currently resolves a unit (`zone_flow_meter_usable`).
-  - `estimated`: **no meter is configured at all**, but `nominal_flow_lpm`
-    is set and nonzero, so litres are booked from nominal flow × minutes
-    every run.
-  - `unavailable`: either no meter is configured and no nominal rate is set
-    (unset or `0` — nothing to integrate, nothing to estimate, the same
-    verdict `zone_water_total`'s own `source: "none"` reaches for the
-    identical zone, and judged the same config-only way, so it cannot flap
-    with a momentarily unavailable sensor) — **or** a meter is configured
-    but its unit does not currently resolve, regardless of `nominal_flow_lpm`.
-    That second case is a live-state read (the same live check
-    `flow_unit_unknown` in `degraded` uses, so the two track together) and
-    intentionally does **not** mirror what the accounting engine books for
-    an individual run: `add_consumption` falls back to the nominal
-    estimate whenever the meter is unusable, configured or not, so a
-    zone's litres can keep accruing (and `zone_water_total`'s `source` can
-    read `nominal`/`mixed`) while its declared `water_accounting` reads
-    `unavailable`. That is deliberate here: a configured meter that is not
-    currently readable is a fault to surface and fix (mirroring
-    `flow_unit_unknown`), not a mode to reassure the user about — a silent
-    "estimated" would undersell a meter that stopped working.
+  rate, not from `capabilities.py` (which knows nothing about flow), and
+  deliberately in the same order `zone_water_total`'s own `source` uses —
+  a usable meter first, the nominal fallback second — so the two agree by
+  construction rather than by coincidence:
+  - `measured`: `zone_flow_meter_usable` confirms a meter is configured
+    **and** its unit currently resolves. (This one runtime call already
+    covers "no meter at all": it returns `False` whenever no meter entity
+    resolves for the zone, so no separate `zone_has_flow_meter` check is
+    needed or used here.)
+  - `estimated`: the meter is not usable right now — no meter is
+    configured, or one is but its unit does not currently resolve — **and**
+    `nominal_flow_lpm` is set and nonzero, so litres are still being
+    booked every run from nominal flow × minutes (`add_consumption`'s own
+    fallback, which triggers on exactly this condition — an unusable
+    meter, configured or not — so this value and what is actually being
+    recorded never disagree).
+  - `unavailable`: the meter is not usable right now **and** no nominal
+    rate is set (unset or `0`) — nothing is being recorded at all. Reached
+    the same way `zone_water_total`'s own `source: "none"` reaches it for
+    the identical, never-had-anything zone.
+
+  **`water_accounting` and `source` describe different things and can
+  legitimately differ, but must never contradict each other about whether
+  accounting is happening right now.** `source` is retrospective — what
+  the litres a zone has *already accrued* are made of, so it can read
+  `"mixed"` — while `water_accounting` is a statement about the zone's
+  capability *right now*. A zone can show `water_accounting: "measured"`
+  today while `zone_water_total.source` still reads `"mixed"` from a spell
+  of estimation last week; that is not a disagreement, because `source`
+  is not describing the present moment. What must never happen is
+  `water_accounting: "unavailable"` while the zone's litres are visibly
+  still climbing (`source: "nominal"` or `"mixed"`) — that combination
+  claims nothing is being recorded while something plainly is, and it was
+  exactly this repo's earlier defect: checking `zone_has_flow_meter`
+  (configuration only) ahead of the live usability check made a zone with
+  a broken-but-configured meter and a nominal fallback report
+  `"unavailable"` while `add_consumption` silently booked the nominal
+  estimate underneath it.
 
 **"Configured and missing" is not a fourth `capabilities` value.**
 `capabilities.py` reports `configured` for a sensor the user chose even
