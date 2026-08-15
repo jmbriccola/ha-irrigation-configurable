@@ -241,19 +241,41 @@ ways, because `off` under `device_class: problem` asserts *there is no
 problem* and neither case can claim that:
 
 1. **No source.** No leak sensor is configured for the zone and no meter
-   reports for the scope, so nothing could ever raise the alarm. It becomes
-   available the moment a source is configured — no reload.
-2. **Not watched long enough yet.** For one confirmation window
-   (`leak_confirm_s`, default 300 s) after the scope's detector starts, the
-   entity is unavailable. The alarm lives in memory only and is deliberately
-   not persisted, so at start-up every scope begins with no alarm and a
-   confirmation window that has not run: for that window we have not
-   established that there is no leak, only that we have just started looking.
-   After it, `off` means what it says — a leak present since start-up would
-   have been confirmed within exactly that window. The window is **per
-   scope**, timed from when that scope's detector starts, so a zone added
-   later serves its own rather than inheriting an elapsed one, and a reload
-   is a start-up like any other.
+   reports for the scope, so nothing could ever raise the alarm. Configuring
+   one takes effect without a reload — it then serves the window in rule 2,
+   exactly as it would have at start-up.
+2. **Not watched long enough yet.** The entity is unavailable until its scope
+   has been observed for one confirmation window (`leak_confirm_s`, default
+   300 s). The alarm lives in memory only and is deliberately not persisted,
+   so at start-up every scope begins with no alarm and a window that has not
+   run: for that window we have not established that there is no leak, only
+   that we have just started looking. After it, `off` means what it says — a
+   leak present throughout the window would have been confirmed inside it.
+
+   The window is **per scope**, and it is measured over a period in which the
+   evidence could actually have been seen: it starts at **the first moment one
+   of that scope's sources reports something usable** (never earlier than the
+   integration itself, which is not watching before it loads). A source that
+   comes up 60 s late would
+   otherwise be credited with 60 s of watching it did not do — and 240 s of
+   evidence under a 300 s bar is a leak still unconfirmed at the instant we
+   would publish `off`. "Usable" is strict on purpose: `on`/`off` from a leak
+   sensor (not `unknown` from a device that has paired and not yet spoken),
+   and a meter reading that is both numeric **and** in a resolvable unit (a
+   meter with no unit publishes numbers and contributes no measured seconds
+   at all). A zone added later, and a zone that gains its first source later,
+   both serve a full window from that moment; a reload is a start-up like any
+   other.
+
+   **The cost, stated plainly:** a configured source that never reports
+   anything usable leaves its entity unavailable indefinitely. That is the
+   honest answer — the alternative is to publish "there is no problem" on
+   behalf of a device that has never spoken. Two of the three reasons have a
+   signal of their own in `zone_state.degraded` and a card should send the
+   user there: `leak_sensor_missing` (the sensor no longer exists) and
+   `flow_unit_unknown` (the meter's unit will not resolve). The third — a
+   sensor that exists and has simply never reported — has no separate signal
+   today; the unavailable leak entity is it.
 
 Four consequences worth stating, because they are easy to get backwards:
 
@@ -262,7 +284,10 @@ Four consequences worth stating, because they are easy to get backwards:
   unavailable because its meter dropped out or its sensor went quiet — that
   would retract a live warning at the moment it matters most. An alarm that
   is already standing is published immediately, start-up window or not: rule
-  2 withholds a *silence*, never an answer we already hold.
+  2 withholds a *silence*, never an answer we already hold. Nor does a source
+  falling silent **after** its window has run take the entity back to
+  `unavailable`: the window asks whether the scope has had a fair look, and it
+  has had one.
 - **The start-up window is what makes the obvious automation pair safe.**
   "Leak → close the mains" plus "leak cleared → reopen it" means a `to: "off"`
   trigger, and a restart during a live leak must not fire it. It does not: the
@@ -276,8 +301,11 @@ Four consequences worth stating, because they are easy to get backwards:
   not say which of the two reasons applies, and a card that needs to tell them
   apart must read `zone_state.capabilities.leak_detection`: `"unavailable"`
   there is the declared absence of a source (reason 1), while `"configured"`
-  alongside an unavailable leak entity is the start-up window (reason 2) and
-  resolves by itself within `leak_confirm_s`.
+  alongside an unavailable leak entity is reason 2 — a window that resolves by
+  itself within `leak_confirm_s` of the source reporting, and does not resolve
+  at all while it never does (check `degraded` for
+  `leak_sensor_missing` / `flow_unit_unknown` first; if neither is there, the
+  source exists and has not yet spoken).
 - **Discovery caveat:** Home Assistant publishes no extra state attributes at
   all while an entity is unavailable, `maestro_role` included — so the
   attribute walk at the top of this document does not see an unavailable leak

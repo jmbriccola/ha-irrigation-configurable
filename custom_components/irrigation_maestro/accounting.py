@@ -571,6 +571,45 @@ class WaterAccountant:
         """
         return {self.scope_for(entity_id) for entity_id in self._ledgers}
 
+    def scope_entity_ids(self, scope: str) -> list[str]:
+        """Which running ledgers report for this scope, by entity id.
+
+        ``metered_scopes`` answers whether a scope has a meter at all; this
+        answers which one, for a caller that has to look at the meter itself
+        rather than at the fact of its existence. Both derive from the same
+        ledgers through the same ``scope_for``, so neither can name a meter the
+        other would route elsewhere.
+        """
+        return [entity_id for entity_id in self._ledgers if self.scope_for(entity_id) == scope]
+
+    def scope_is_measuring(self, scope: str) -> bool:
+        """Is a meter reporting for this scope producing usable readings NOW?
+
+        Stronger than "the meter exists", and deliberately so: a meter whose
+        unit cannot be resolved publishes a number every tick and contributes
+        no measured seconds at all, so source 2 can never confirm anything from
+        it. ``unit_known`` alone is not enough either -- a meter that has gone
+        unavailable still declares its unit, while measuring nothing.
+
+        Read through this accountant's own override map rather than through a
+        reader the caller builds, because the override is what makes a unit
+        resolvable at all and it lives here: a meter that is only readable
+        BECAUSE the user declared its unit must count as measuring.
+
+        Not the same question as ``metered_scopes``, and never a substitute for
+        it. This one is live and may flip with the sensor; the other is
+        configuration and does not. Availability must not be built on this --
+        see IrrigationRuntime.leak_state_established for which of the two goes
+        where and why.
+        """
+        for entity_id in self.scope_entity_ids(scope):
+            reading = FlowSensorReader(
+                self._runtime.hass, entity_id, self._overrides.get(entity_id)
+            ).read()
+            if reading.unit_known and reading.available:
+                return True
+        return False
+
     def scope_for(self, entity_id: str) -> str:
         """Whose leak this would be: the sole zone on this meter, or the hub.
 
