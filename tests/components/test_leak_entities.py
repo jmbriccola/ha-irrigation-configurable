@@ -168,9 +168,13 @@ async def test_a_scope_with_no_source_is_unavailable_rather_than_off(
     until a source exists.
 
     The second half is the point of the first: availability follows the
-    configuration live, so wiring a leak sensor to a zone that had none makes
-    its entity start answering immediately -- the entity being unavailable is
-    never a state a restart is needed to leave.
+    configuration live, so wiring a leak sensor to a zone that had none is
+    answered without a reload -- though not instantly, and deliberately. That
+    zone has been watched by nothing at all up to this moment, so its window
+    starts when the source does, exactly as it does at start-up. A window
+    counted from the detector's age would let a sensor configured at ten in
+    the morning take the entity from ``unavailable`` straight to ``off``,
+    having observed nothing.
 
     The third step then pins what a source is: evidence reporting for THIS
     scope, not a meter existing anywhere in the installation.
@@ -196,6 +200,12 @@ async def test_a_scope_with_no_source_is_unavailable_rather_than_off(
 
     assert entry.state is ConfigEntryState.LOADED
     assert entry.runtime_data is runtime  # in place, not reloaded
+    # A source now exists, and its window starts here rather than at the
+    # detector's birth: nothing was watching this zone before this instant.
+    assert _leak_entity(hass, entry, zone_id).state == "unavailable"
+
+    await advance(hass, freezer, _PAST_CONFIRM_S, step=10.0)
+
     assert _leak_entity(hass, entry, zone_id).state == "off"
     # The zone's sensor says nothing about the shared line, so the hub scope
     # is still without a source of its own.
@@ -500,6 +510,120 @@ async def test_a_scope_says_nothing_until_it_has_watched_for_a_full_window(
     assert _leak_entity(hass, entry, zone_id).state == "off"
 
 
+async def test_a_source_that_reports_late_starts_the_window_late(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    """The window measures observation, not elapsed time since boot.
+
+    A Zigbee sensor a minute late leaves four minutes of evidence under a five
+    minute bar, so a leak present since start-up is still unconfirmed at the
+    instant a detector-timed window would have us publish ``off`` -- and that
+    boot transition, ``unavailable`` to ``off``, is itself the clearing edge
+    that reopens a mains valve. Timed from the source's first usable report,
+    those minutes are actually watched.
+
+    The sensor starts at ``unknown``, which is what a device that has paired
+    and not yet spoken looks like, and is exactly the state a "has it
+    reported" test written against the state machine's contents would get
+    wrong.
+    """
+    freezer.move_to(START)
+    park = MockValvePark(hass)
+    park.add("valve.a")
+    hass.states.async_set("binary_sensor.a_leak", *_moisture("unknown"))
+    mock_weather(hass)
+    entry = await setup_hub(
+        hass, [zone_data("Alpha", "valve.a", leak_sensor="binary_sensor.a_leak")]
+    )
+    zone_id = entry.runtime_data.zone_ids[0]
+
+    await advance(hass, freezer, 60, step=10.0)
+    hass.states.async_set("binary_sensor.a_leak", *_moisture("off"))
+
+    # A window counted from the detector would be over here; this one has 60 s
+    # of it still to run, because that is how long nothing was reporting.
+    await advance(hass, freezer, 260, step=10.0)
+    assert _leak_entity(hass, entry, zone_id).state == "unavailable"
+
+    await advance(hass, freezer, 60, step=10.0)
+
+    assert _leak_entity(hass, entry, zone_id).state == "off"
+
+
+async def test_a_configured_source_that_never_reports_never_says_off(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    """The cost of the rule, and it is the honest answer rather than a bug.
+
+    A sensor that has been configured and has never once said ``on`` or ``off``
+    leaves the entity unavailable for as long as that lasts -- an hour here,
+    indefinitely in principle. The alternative is to publish "there is no
+    problem" on behalf of a device that has never spoken, which is the claim
+    this whole entity refuses to make.
+
+    Worth being exact about where the reason shows, because this case is the
+    one with the least of it: a sensor that has VANISHED is reported as
+    ``leak_sensor_missing`` in ``zone_state.degraded``, and a meter whose unit
+    will not resolve as ``flow_unit_unknown`` -- but a sensor that exists and
+    has never spoken is neither of those, and this entity's ``unavailable`` is
+    the only thing that says so.
+    """
+    freezer.move_to(START)
+    park = MockValvePark(hass)
+    park.add("valve.a")
+    hass.states.async_set("binary_sensor.a_leak", *_moisture("unknown"))
+    mock_weather(hass)
+    entry = await setup_hub(
+        hass, [zone_data("Alpha", "valve.a", leak_sensor="binary_sensor.a_leak")]
+    )
+    zone_id = entry.runtime_data.zone_ids[0]
+
+    await advance(hass, freezer, 3600, step=60.0)
+
+    assert _leak_entity(hass, entry, zone_id).state == "unavailable"
+    # Configured, so the entity exists and the scope counts as covered; it is
+    # the reporting that has not happened.
+    assert entry.runtime_data.leak_sources_configured(zone_id) is True
+
+
+async def test_a_meter_with_no_resolvable_unit_never_starts_the_window(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    """A source "reports" only when it reports something USABLE, and the two
+    readings of that word differ here.
+
+    This meter publishes a fresh number every tick, so any test of "has this
+    source reported anything" passes -- and it contributes no measured seconds
+    at all, because litres cannot be derived from a unit nobody can name. Source
+    2 can never confirm from it, so a window counted against it would be five
+    minutes of watching nothing, ending in an ``off`` no reading supports.
+
+    The stricter reading is taken deliberately: this is the same trap
+    ``zone_flow_meter_usable`` set once already at one level down, where it
+    asks about the unit and not about the reading.
+    """
+    freezer.move_to(START)
+    park = MockValvePark(hass)
+    park.add("valve.a")
+    hass.states.async_set("sensor.flow", "2.0")  # no unit_of_measurement
+    mock_weather(hass)
+    entry = await setup_hub(hass, [zone_data("Alpha", "valve.a", flow_sensor="sensor.flow")])
+    runtime = entry.runtime_data
+    zone_id = runtime.zone_ids[0]
+
+    await advance(hass, freezer, 900, step=10.0)
+    hass.states.async_set("sensor.flow", "3.0")
+    await advance(hass, freezer, 900, step=10.0)
+
+    assert _leak_entity(hass, entry, zone_id).state == "unavailable"
+
+    # Name the unit and the same meter starts saying something.
+    hass.states.async_set("sensor.flow", "0.0", {"unit_of_measurement": "L/min"})
+    await advance(hass, freezer, _PAST_CONFIRM_S, step=10.0)
+
+    assert _leak_entity(hass, entry, zone_id).state == "off"
+
+
 async def test_the_start_up_window_arms_one_timer_and_leaves_none_behind(
     hass: HomeAssistant, freezer: FrozenDateTimeFactory
 ) -> None:
@@ -511,12 +635,17 @@ async def test_the_start_up_window_arms_one_timer_and_leaves_none_behind(
     it must not survive an unload, which is the leak nothing black-box can
     see. A zone added after the first window has closed re-arms it exactly
     once, for itself.
+
+    Both sensors report from the start, because a window only begins once its
+    source has: a scope waiting on a sensor that has never spoken arms no
+    timer at all, which is a different (and correct) zero.
     """
     freezer.move_to(START)
     park = MockValvePark(hass)
     park.add("valve.a")
     park.add("valve.b")
     hass.states.async_set("binary_sensor.a_leak", *_moisture("off"))
+    hass.states.async_set("binary_sensor.b_leak", *_moisture("off"))
     mock_weather(hass)
     entry = await setup_hub(
         hass, [zone_data("Alpha", "valve.a", leak_sensor="binary_sensor.a_leak")]

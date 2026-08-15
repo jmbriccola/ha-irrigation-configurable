@@ -83,10 +83,11 @@ class _MaestroLeakEntity(MaestroEntity, BinarySensorEntity):
         """Has this scope established anything for us to publish?
 
         Two ways it has not, and both must read ``unavailable`` rather than
-        ``off``: no source that could ever raise the alarm, and a source that
-        has not been watched for a full confirmation window yet -- the state
-        every scope is in for ``leak_confirm_s`` after start-up, since the
-        detector holds its alarm in memory only. ``device_class: problem``
+        ``off``: no source that could ever raise the alarm, and a scope that
+        has not yet been WATCHED for a full confirmation window -- the state
+        every scope is in until one of its sources has been reporting for
+        ``leak_confirm_s``, since the detector holds its alarm in memory only
+        and starts each time with nothing. ``device_class: problem``
         gives ``off`` the meaning "there is no problem", and neither state has
         established anything of the sort. A message claiming it is read by a
         person who can doubt it; an entity claiming it is read by an
@@ -99,9 +100,9 @@ class _MaestroLeakEntity(MaestroEntity, BinarySensorEntity):
         silence rather than withdrawing on it -- so an availability that
         tracked liveness would retract a live warning at the moment it matters
         most. ``leak_state_established`` answers from the configuration and
-        from how long we have been watching, never from whether a source is
-        currently speaking, and an alarm already standing is publishable
-        whatever either says.
+        from how long the scope has been watched, never from whether a source
+        is speaking now: once a window has run, silence does not re-open it,
+        and an alarm already standing is published whatever either says.
         """
         return self._runtime.leak_state_established(self._leak_scope)
 
