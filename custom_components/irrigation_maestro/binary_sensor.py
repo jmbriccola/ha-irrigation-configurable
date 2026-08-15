@@ -80,23 +80,30 @@ class _MaestroLeakEntity(MaestroEntity, BinarySensorEntity):
 
     @property
     def available(self) -> bool:
-        """Is there any source here that could ever raise this alarm?
+        """Has this scope established anything for us to publish?
 
-        A scope with no leak sensor and no meter must not report ``off``:
-        ``device_class: problem`` gives ``off`` the meaning "there is no
-        problem", and such a scope has established nothing of the sort. A
-        message claiming that is read by a person who can doubt it; an entity
-        claiming it is read by an automation that cannot.
+        Two ways it has not, and both must read ``unavailable`` rather than
+        ``off``: no source that could ever raise the alarm, and a source that
+        has not been watched for a full confirmation window yet -- the state
+        every scope is in for ``leak_confirm_s`` after start-up, since the
+        detector holds its alarm in memory only. ``device_class: problem``
+        gives ``off`` the meaning "there is no problem", and neither state has
+        established anything of the sort. A message claiming it is read by a
+        person who can doubt it; an entity claiming it is read by an
+        automation that cannot, and whose natural "leak cleared -> reopen the
+        mains" rule triggers on exactly that edge.
 
-        The question is "could this ever tell me something", NOT "is a source
-        answering this second". A meter that has gone unreadable and a leak
-        sensor whose battery is flat are both silent, and the detector holds
-        its alarm through exactly that silence rather than withdrawing on it
-        -- so an availability that tracked liveness would retract a live
-        warning at the moment it matters most. ``leak_sources_configured``
-        answers from the configuration alone, for that reason.
+        What it must NOT ask is "is a source answering this second". A meter
+        that has gone unreadable and a leak sensor whose battery is flat are
+        both silent, and the detector holds its alarm through exactly that
+        silence rather than withdrawing on it -- so an availability that
+        tracked liveness would retract a live warning at the moment it matters
+        most. ``leak_state_established`` answers from the configuration and
+        from how long we have been watching, never from whether a source is
+        currently speaking, and an alarm already standing is publishable
+        whatever either says.
         """
-        return self._runtime.leak_sources_configured(self._leak_scope)
+        return self._runtime.leak_state_established(self._leak_scope)
 
     def _role_attributes(self) -> dict[str, Any]:
         """Enough to act on, without restating the entity's own state.

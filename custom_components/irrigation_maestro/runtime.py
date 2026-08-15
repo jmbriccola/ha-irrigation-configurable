@@ -94,6 +94,15 @@ _LEAK_SOURCE_PHRASES = {
     SOURCE_VALVE_SENSOR: "the valve's own sensor",
     SOURCE_NO_FLOW_CLOSED: "flow measured with every valve closed",
 }
+#: A moment added to the end of every scope's start-up observation window, so
+#: that a source confirming evidence which PREDATES our start is heard before
+#: we conclude silence. Both windows are ``leak_confirm_s`` long and both begin
+#: at start-up, so without it they end in the same instant and the entity can
+#: publish "off" in the same tick as the alarm it is about to publish -- a
+#: clearing edge for an automation, out of a tie between two timers. A property
+#: of how the two clocks line up, not of the plumbing, hence a constant and not
+#: a setting.
+_LEAK_OBSERVATION_GRACE_S = 1.0
 #: The reading of a ``device_class: problem`` supply sensor that means the
 #: water is GONE. "on" is the problem, which is the opposite of how the
 #: entity's name reads, and the mistake everyone makes on the first attempt.
@@ -137,6 +146,13 @@ class IrrigationRuntime:
         self.sentinel = Sentinel(self)
         self.accountant = WaterAccountant(self)
         self._leak_detectors: dict[str, LeakDetector] = {}
+        #: When each scope's detector began watching. Not a second copy of the
+        #: alarm's own clock: this one answers "have we looked for long enough
+        #: to be entitled to say no", which nothing else records, because the
+        #: detector's own state cannot distinguish "no leak" from "not yet
+        #: looked". See ``leak_state_established``.
+        self._leak_observing_since: dict[str, datetime] = {}
+        self._leak_observation_unsub: CALLBACK_TYPE | None = None
         #: Zones whose outage has been ANNOUNCED -- confirmed, notified and
         #: carrying a repair notice. Memory only, and edge detection only:
         #: it decides whether a transition still has to be said out loud,
@@ -216,6 +232,8 @@ class IrrigationRuntime:
         for detector in self._leak_detectors.values():
             detector.stop()
         self._leak_detectors.clear()
+        self._leak_observing_since.clear()
+        self._cancel_leak_observation_wake()
         if self._supply_tracker_unsub is not None:
             self._supply_tracker_unsub()
             self._supply_tracker_unsub = None
@@ -1312,6 +1330,10 @@ class IrrigationRuntime:
         for scope in list(self._leak_detectors):
             if scope not in scopes:
                 self._leak_detectors.pop(scope).stop()
+                # With the detector, so a zone id reused later starts its
+                # observation window from its own arrival rather than
+                # inheriting the elapsed time of the zone that had that id.
+                self._leak_observing_since.pop(scope, None)
                 # A dropped detector never withdraws -- stop() only cancels its
                 # subscriptions -- so this is the only place its Repairs issue
                 # can ever be deleted. Without it, removing a zone that was
@@ -1322,7 +1344,15 @@ class IrrigationRuntime:
             if detector is None:
                 detector = LeakDetector(self, scope)
                 self._leak_detectors[scope] = detector
+                # Only for a detector that did not exist a moment ago. A
+                # surviving scope keeps its start, for the same reason it keeps
+                # its alarm and its half-run confirmation window: a
+                # configuration change is not a gap in observation, and
+                # restarting the clock on every unrelated edit would blind the
+                # entity for five minutes each time.
+                self._leak_observing_since[scope] = dt_util.utcnow()
             detector.start(has_meter=scope in metered)
+        self._arm_leak_observation_wake()
         self._reconcile_leak_issues()
 
     def _reconcile_leak_issues(self) -> None:
@@ -1357,6 +1387,103 @@ class IrrigationRuntime:
         detector = self._leak_detectors.get(scope)
         return detector.state if detector is not None else LeakState()
 
+    def leak_state_established(self, scope: str) -> bool:
+        """Has this scope an answer worth publishing at all?
+
+        Three states, and only the third is publishable:
+
+        * an alarm is standing -- publishable, always and immediately. An
+          answer is an answer whenever it arrives, and withholding one we
+          already hold would retract a live warning;
+        * no source could ever raise one -- see ``leak_sources_configured``;
+        * a source exists but this scope has not been watched for a full
+          confirmation window yet.
+
+        The third is the one this method exists for, and it is the second
+        state's own logic one step further along. ``LeakDetector`` keeps its
+        alarm in memory only, so at start-up every scope begins with no alarm
+        and a confirmation window that has not run: for the first
+        ``leak_confirm_s`` we have not established that there is no leak, we
+        have only just started looking. Publishing ``off`` there is the same
+        unsupported assertion, and worse in its consequences than anywhere
+        else -- the natural automation pair is "leak -> close the mains" and
+        "leak cleared -> reopen it", and the second has a ``to: "off"``
+        trigger. A restart during a live leak would fire it and put the water
+        back on, because we told it the leak had stopped when in truth we had
+        forgotten. A transition into ``unavailable`` fires no such trigger.
+
+        Bounded deliberately: one window per scope per start, measured from
+        when that scope's detector began watching, so a zone added later
+        serves its own window rather than inheriting an elapsed one. After it,
+        ``off`` means what it says -- a leak present since start-up would have
+        been confirmed within exactly that window by either source.
+
+        Not persistence in disguise. A restored alarm can be stale, fixed
+        while the system was down; this is about not speaking before we know,
+        not about remembering.
+        """
+        if self.leak_state(scope).active:
+            return True
+        if not self.leak_sources_configured(scope):
+            return False
+        return self._leak_observation_remaining_s(scope) <= 0.0
+
+    def _leak_observation_remaining_s(self, scope: str) -> float:
+        """Seconds left before this scope has watched for a full window.
+
+        ``inf`` for a scope with no detector at all: it is not watching, so
+        the wait has not started rather than finished. Reachable only for a
+        scope that names nothing, which no entity reports for.
+
+        The grace is part of the measure and not only of the wake, so a
+        dispatch arriving from anywhere else in the same instant answers the
+        same way the wake would: see ``_LEAK_OBSERVATION_GRACE_S``.
+        """
+        started = self._leak_observing_since.get(scope)
+        if started is None:
+            return float("inf")
+        elapsed_s = (dt_util.utcnow() - started).total_seconds()
+        return self.hub.leak_confirm_s + _LEAK_OBSERVATION_GRACE_S - elapsed_s
+
+    def _arm_leak_observation_wake(self) -> None:
+        """Wake once, when the earliest scope's observation window closes.
+
+        Nothing else fires when a window merely runs out. An entity with a
+        quiet leak sensor and no meter receives no update for hours, so
+        without this it would sit at ``unavailable`` long after it was
+        entitled to answer -- the same reason the water-supply window has a
+        wake of its own.
+
+        One timer for the whole set rather than one per scope: the windows are
+        the same length and every scope at start-up begins together, so N
+        timers would fire in the same event-loop pass and dispatch N identical
+        updates. Re-armed by its own expiry for whichever scope is next, and
+        re-armed by every rebuild, which is also how a changed
+        ``leak_confirm_s`` is picked up.
+        """
+        self._cancel_leak_observation_wake()
+        pending = [
+            remaining
+            for scope in self._leak_detectors
+            if (remaining := self._leak_observation_remaining_s(scope)) > 0.0
+        ]
+        if not pending:
+            return
+        self._leak_observation_unsub = async_call_later(
+            self.hass, min(pending), self._on_leak_observation_wake
+        )
+
+    @callback
+    def _on_leak_observation_wake(self, _now: datetime) -> None:
+        self._leak_observation_unsub = None
+        self.dispatch_update()
+        self._arm_leak_observation_wake()
+
+    def _cancel_leak_observation_wake(self) -> None:
+        if self._leak_observation_unsub is not None:
+            self._leak_observation_unsub()
+            self._leak_observation_unsub = None
+
     def leak_sources_configured(self, scope: str) -> bool:
         """Could anything here ever raise a leak alarm on this scope?
 
@@ -1380,8 +1507,8 @@ class IrrigationRuntime:
         have just been withdrawn. A hub scope has no zone and so no leak
         sensor, leaving flow as its only possible half.
 
-        Consumed by the leak binary sensors, which report ``unavailable``
-        rather than ``off`` when it is False: ``device_class: problem`` gives
+        One half of ``leak_state_established``, which is what the leak binary
+        sensors publish as availability: ``device_class: problem`` gives
         ``off`` the meaning "there is no problem", and a scope with no source
         has established no such thing.
         """

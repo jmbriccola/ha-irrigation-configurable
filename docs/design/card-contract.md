@@ -22,7 +22,7 @@ config entry).
 | `hub_session`       | sensor   | `idle` \| `evaluating` \| `running` | `queue`: ordered list of `{zone_id, zone_name, cycle_id, duration_min, state}`; `started_at` (ISO); `active_zone_id` |
 | `hub_consumption_left` | sensor | liters left (float) or unavailable | `budget_liters`, `used_liters`, `unattributed_liters`, `period_start`, `action` — entity always exists; unavailable when no budget is configured |
 | `hub_unattributed_water` | sensor | liters (float), `device_class: water`, `state_class: total_increasing` | `closed_l` (float), `per_scope` (`{scope: liters}`, only scopes with water > 0; scope is a `zone_id` or `"__hub__"`) — see "Water accounting sensors" below |
-| `hub_leak`          | binary_sensor | `on` = a leak is confirmed for the system scope, `device_class: problem`; **unavailable** when no source could ever raise it | `sources`, `since`, `describing_source` — see "Leak entities" below |
+| `hub_leak`          | binary_sensor | `on` = a leak is confirmed for the system scope, `device_class: problem`; **unavailable** when no source could ever raise it, and for one confirmation window after start-up | `sources`, `since`, `describing_source` — see "Leak entities" below |
 | `hub_pause`         | switch   | on = globally paused           | — |
 | `hub_evaluate`      | button   | press = evaluate now           | — |
 | `hub_stop_all`      | button   | press = stop everything        | — |
@@ -35,7 +35,7 @@ config entry).
 | `zone_next_run`     | sensor   | ISO timestamp or unavailable | `cycle_id`, `cycle_name` |
 | `zone_last_outcome` | sensor   | `completed` \| `skipped` \| `interrupted` \| `cancelled` \| `none` | `reason_key` (see keys), `finished_at` (ISO), `cycle_id`, `duration_min`, `volume_l` |
 | `zone_water_total`  | sensor   | liters (float), `device_class: water`, `state_class: total_increasing` | `estimated` (bool), `source` (`measured` \| `nominal` \| `mixed` \| `none`), `today_l` (float), `month_l` (float), `meter_entity` (entity id or null), `last_gap_at` (ISO or null) — see "Water accounting sensors" below |
-| `zone_leak`         | binary_sensor | `on` = a leak is confirmed for this zone, `device_class: problem`; **unavailable** when no source could ever raise it | `sources`, `since`, `describing_source` — see "Leak entities" below |
+| `zone_leak`         | binary_sensor | `on` = a leak is confirmed for this zone, `device_class: problem`; **unavailable** when no source could ever raise it, and for one confirmation window after start-up | `sources`, `since`, `describing_source` — see "Leak entities" below |
 | `zone_enabled`      | switch   | on/off | — |
 | `cycle_enabled`     | switch   | on/off (one per cycle) | `cycle_id`, `cycle_name` |
 | `zone_order`        | number   | int | — |
@@ -235,21 +235,49 @@ alarm is the detector's own: one alarm per scope however many sources agree,
 raised only after the confirmation window, and held through a source going
 silent (an unreadable meter or a flat sensor battery withdraws nothing).
 
-**`unavailable` is a first-class state here, and it is not an error.** A
-scope with no leak sensor configured and no meter reporting for it has
-established nothing, and `off` under `device_class: problem` asserts *there
-is no problem* — a claim such a scope cannot make. So the entity is
-unavailable exactly while no source could ever raise its alarm, and becomes
-available the moment one is configured (no reload). Two consequences worth
-stating, because they are easy to get backwards:
+**`unavailable` is a first-class state here, and it is not an error.** It
+means *this scope has established nothing*, which happens in exactly two
+ways, because `off` under `device_class: problem` asserts *there is no
+problem* and neither case can claim that:
+
+1. **No source.** No leak sensor is configured for the zone and no meter
+   reports for the scope, so nothing could ever raise the alarm. It becomes
+   available the moment a source is configured — no reload.
+2. **Not watched long enough yet.** For one confirmation window
+   (`leak_confirm_s`, default 300 s) after the scope's detector starts, the
+   entity is unavailable. The alarm lives in memory only and is deliberately
+   not persisted, so at start-up every scope begins with no alarm and a
+   confirmation window that has not run: for that window we have not
+   established that there is no leak, only that we have just started looking.
+   After it, `off` means what it says — a leak present since start-up would
+   have been confirmed within exactly that window. The window is **per
+   scope**, timed from when that scope's detector starts, so a zone added
+   later serves its own rather than inheriting an elapsed one, and a reload
+   is a start-up like any other.
+
+Four consequences worth stating, because they are easy to get backwards:
 
 - Availability answers **"could this ever tell me something"**, never "is a
   source answering right now". An entity holding an alarm never goes
   unavailable because its meter dropped out or its sensor went quiet — that
-  would retract a live warning at the moment it matters most.
-- A card rendering a leak badge must therefore treat `unavailable` as
-  *"not covered"* (the same declared absence `capabilities.leak_detection:
-  "unavailable"` reports), not as `off` and not as a fault.
+  would retract a live warning at the moment it matters most. An alarm that
+  is already standing is published immediately, start-up window or not: rule
+  2 withholds a *silence*, never an answer we already hold.
+- **The start-up window is what makes the obvious automation pair safe.**
+  "Leak → close the mains" plus "leak cleared → reopen it" means a `to: "off"`
+  trigger, and a restart during a live leak must not fire it. It does not: the
+  entity publishes `unavailable`, never `off`, until it has watched long
+  enough, and a transition into `unavailable` fires no `to: "off"` trigger.
+  Persisting the alarm instead was considered and rejected — a restored alarm
+  can be stale, fixed while the system was down — so the evidence is re-earned
+  and `since` moves forward across a restart.
+- A card rendering a leak badge must treat `unavailable` as *"nothing
+  established"*, never as `off` and never as a fault. The entity itself does
+  not say which of the two reasons applies, and a card that needs to tell them
+  apart must read `zone_state.capabilities.leak_detection`: `"unavailable"`
+  there is the declared absence of a source (reason 1), while `"configured"`
+  alongside an unavailable leak entity is the start-up window (reason 2) and
+  resolves by itself within `leak_confirm_s`.
 - **Discovery caveat:** Home Assistant publishes no extra state attributes at
   all while an entity is unavailable, `maestro_role` included — so the
   attribute walk at the top of this document does not see an unavailable leak
@@ -574,7 +602,13 @@ missing outcome.
 
 Zone/session states and degraded keys above are localizable too, as are the
 `capabilities` values (`measured`, `estimated`, `configured`,
-`candidate_available`, `unavailable`).
+`candidate_available`, `unavailable`) and the leak source keys
+`valve_sensor` / `no_flow_closed`, which reach the card as raw values in
+`zone_leak` / `hub_leak`'s `sources` and `describing_source` attributes and
+in the `leak` event's `first_source`. Word them as *observations*, never as
+conclusions — `valve_sensor` is "the valve's own sensor reports a leak" for
+both readings of a `moisture` sensor, and must never become "water detected
+on the ground", which is false on the reference hardware.
 
 ## The sidebar panel (`irrigation-maestro-panel`)
 
