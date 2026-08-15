@@ -54,18 +54,22 @@ class MeterSample:
     available: bool
     #: The meter's cumulative litres after this step. Monotonic.
     total_l: float
-    #: Seconds of the interval just closed that were actually measured. Zero
-    #: across a gap (unit unknown, or the meter unavailable) rather than
-    #: interpolated, so accounting can report a gap instead of silently
-    #: treating it as zero flow.
+    #: Wall-clock seconds the closed interval spanned, measured or not.
+    #: Published beside ``measured_s`` so a subscriber can tell how much of
+    #: the interval went unobserved without keeping a clock of its own -- the
+    #: difference of the two is the gap ``WaterAccountant._on_sample`` books
+    #: into the daily history.
+    elapsed_s: float
+    #: How much of ``elapsed_s`` was actually measured. Zero across a gap
+    #: (unit unknown, or the meter unavailable) rather than interpolated, so
+    #: accounting can report a gap instead of silently treating it as zero
+    #: flow.
     #:
-    #: Computed and published, but as of 3.3.0 it has NO consumer: nothing
-    #: forwards it into the daily history's gap_s, which is therefore
-    #: permanently 0.0 (see roll_into_day). Wiring it up is 3.4.0 work and is
-    #: more than passing an argument -- _on_sample returns early on
-    #: non-positive litres, which is exactly the case a gap produces. Until
-    #: then, do not read the daily history's gap_s as "how much of this window
-    #: was unobserved": it will answer zero for a six-hour outage.
+    #: Both fields accumulate across an integration that closed an interval
+    #: without publishing one -- ``retarget`` does exactly that -- so they
+    #: always describe the same span and their difference stays honest: a
+    #: retarget mid-outage must not turn the outage into a measured window,
+    #: nor a measured window into a phantom gap.
     #:
     #: For accounting only in any case -- the zero-flow guard
     #: (FlowMonitor) does NOT read this field: its blind condition is
@@ -100,6 +104,12 @@ class MeterLedger:
         self._last_at: datetime | None = None
         self._last_lpm = 0.0
         self._last_available = False
+        # Seconds closed by _integrate but not yet published on a sample. Both
+        # are drained onto the next MeterSample, so an interval closed without
+        # a sample of its own (retarget) still reaches accounting -- measured
+        # or missing, whichever it was.
+        self._pending_elapsed_s = 0.0
+        self._pending_measured_s = 0.0
         self._listeners: list[Callable[[MeterSample], None]] = []
         self._unsubs: list[CALLBACK_TYPE] = []
 
@@ -136,6 +146,11 @@ class MeterLedger:
 
     def stop(self) -> None:
         self._integrate(dt_util.utcnow())
+        # Drained and discarded: the interval just closed keeps the total
+        # honest, but there is no sample left to publish its seconds on, and
+        # leaving them pending would hand them to the first sample of a
+        # restarted ledger as if that ledger had observed them.
+        self._drain()
         for unsub in self._unsubs:
             unsub()
         self._unsubs.clear()
@@ -155,7 +170,10 @@ class MeterLedger:
         while it ran -- the same left-Riemann rule _integrate applies
         everywhere else. Those litres are published on the next sample rather
         than here, so they are attributed to whoever the interval started
-        with, exactly as an untouched ledger would have attributed them.
+        with, exactly as an untouched ledger would have attributed them. Its
+        seconds ride along in the pending counters for the same reason: a
+        retarget in the middle of an outage must not erase the outage, and one
+        in the middle of a healthy window must not invent a gap.
 
         A retarget that resolves a previously-unknown unit is itself a
         recovery, but this method has no MeterSample to publish it on. The
@@ -180,8 +198,8 @@ class MeterLedger:
     def _on_tick(self, _now: datetime) -> None:
         self._sample()
 
-    def _integrate(self, now: datetime) -> float:
-        """Close the open interval; returns the seconds that were measured.
+    def _integrate(self, now: datetime) -> None:
+        """Close the open interval, recording how long it was and how much of it counted.
 
         Litres accrue only when the previous reading was both unit-resolvable
         and available. An unknown unit freezes the total at the last certain
@@ -189,39 +207,57 @@ class MeterLedger:
         plausible number that is silently wrong is worse than a declared
         absence -- and counting zero would assert that no water passed, which
         we have no right to assert.
+
+        The seconds go into the pending counters rather than a return value:
+        an interval can be closed without a sample to carry it (retarget), and
+        the next sample must still report the whole span it covers.
         """
         if self._last_at is None:
             self._last_at = now
-            return 0.0
+            return
         elapsed_s = max((now - self._last_at).total_seconds(), 0.0)
         self._last_at = now
+        self._pending_elapsed_s += elapsed_s
         # `not self.unit_known` is redundant today -- flow.py already forces
         # `available=False` whenever the unit is unknown, so the second half
         # of this guard alone would already catch it. Kept as defense in
         # depth so this guard does not quietly depend on that flow.py
         # invariant holding forever.
         if not self.unit_known or not self._last_available:
-            return 0.0
+            return
+        self._pending_measured_s += elapsed_s
         self.total_l += accumulate(self._last_lpm, elapsed_s)
-        return elapsed_s
+
+    def _drain(self) -> tuple[float, float]:
+        """The elapsed and measured seconds closed since the last sample."""
+        elapsed_s, measured_s = self._pending_elapsed_s, self._pending_measured_s
+        self._pending_elapsed_s = 0.0
+        self._pending_measured_s = 0.0
+        return elapsed_s, measured_s
 
     def _sample(self) -> None:
         now = dt_util.utcnow()
-        measured_s = self._integrate(now)
+        self._integrate(now)
+        elapsed_s, measured_s = self._drain()
         reading = self._reader.read()
         recovered = (reading.unit_known and not self.unit_known) or self._pending_unit_recovery
         self._pending_unit_recovery = False
         self.unit_known = reading.unit_known
         self._last_lpm = reading.lpm or 0.0
         self._last_available = reading.available
-        sample = MeterSample(
-            at=now,
-            lpm=reading.lpm,
-            available=reading.available,
-            total_l=self.total_l,
-            measured_s=measured_s,
-            unit_recovered=recovered,
+        self._publish(
+            MeterSample(
+                at=now,
+                lpm=reading.lpm,
+                available=reading.available,
+                total_l=self.total_l,
+                elapsed_s=elapsed_s,
+                measured_s=measured_s,
+                unit_recovered=recovered,
+            )
         )
+
+    def _publish(self, sample: MeterSample) -> None:
         for listener in list(self._listeners):
             try:
                 listener(sample)
@@ -468,6 +504,14 @@ class WaterAccountant:
     def _on_sample(self, entity_id: str, sample: MeterSample) -> None:
         liters = sample.total_l - self._last_totals.get(entity_id, 0.0)
         self._last_totals[entity_id] = sample.total_l
+        # The part of the interval nobody observed: elapsed minus measured,
+        # both of them the ledger's own figures for the same span. A gap
+        # contributes zero litres by design (no interpolation invents water,
+        # and a zero would assert that none passed), so recording it is the
+        # only way the shortfall stays legible -- without it a day with a
+        # six-hour outage reads exactly like a day with a healthy meter and
+        # no watering.
+        gap_s = max(sample.elapsed_s - sample.measured_s, 0.0)
         # Attribute the interval that just closed to who was watering at its
         # START (captured by the previous sample), not at this sample's own
         # instant: a run's tail -- up to one tick's worth, integrated after
@@ -489,7 +533,11 @@ class WaterAccountant:
         # gap (unit unknown, or simply no elapsed time).
         self._pending_claimants[entity_id] = self._claimant_snapshot(entity_id)
         self._pending_valves_closed[entity_id] = self._all_valves_closed()
-        if liters <= 0:
+        # A gap is exactly the case this guard used to swallow: it produces no
+        # litres at all, so a "nothing accrued" early return would drop the
+        # one record that makes an outage visible. RuntimeState.add_water and
+        # add_unattributed apply the same both-or-nothing test.
+        if liters <= 0 and gap_s <= 0:
             return
         day = dt_util.as_local(sample.at).date()
         state = self._runtime.state
@@ -499,9 +547,17 @@ class WaterAccountant:
                 liters,
                 day=day,
                 valves_closed=valves_closed,
+                gap_s=gap_s,
             )
         elif len(claimants) == 1:
-            state.add_water(claimants[0][0], liters, day=day, estimated=False)
+            state.add_water(
+                claimants[0][0],
+                liters,
+                day=day,
+                estimated=False,
+                gap_s=gap_s,
+                gap_at=sample.at,
+            )
         else:
             weights = [nominal for _, nominal in claimants]
             # Equal shares as soon as ANY claimant lacks a nominal, not only
@@ -520,6 +576,13 @@ class WaterAccountant:
                     liters * weight / total_weight,
                     day=day,
                     estimated=False,
+                    # The litres are shared out; the gap is not. It is a
+                    # duration, not a quantity: every zone on this meter was
+                    # unobserved for the whole of it, so each one records the
+                    # whole of it. Splitting it would tell each zone it was
+                    # half-watched, which is true of neither.
+                    gap_s=gap_s,
+                    gap_at=sample.at,
                 )
         if not self._due_to_persist(sample.at):
             return

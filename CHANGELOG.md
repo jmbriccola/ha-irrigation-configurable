@@ -37,6 +37,15 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
   from the same per-zone daily history that backs its cumulative state.
 - **A per-zone daily water history**, kept for 730 days, backs the totals
   above and the derived monthly budget below.
+- **A meter that cannot be read is recorded as a gap, never as zero.** An
+  unavailable meter — or one whose unit stops resolving — contributes no
+  litres: interpolating would invent water, and counting a zero would assert
+  that none passed, which nobody can assert of an interval nobody saw. What
+  the day records instead is how many seconds went unobserved, attributed
+  exactly as litres are (to whichever zones were watering, else to the
+  unattributed scope), plus `last_gap_at` on `zone_water_total` — the
+  instant of that zone's most recent unobserved interval, persisted with its
+  counters. Without it a six-hour outage would read as a quiet afternoon.
 - **The monthly consumption budget is now derived**, not a standalone
   counter: the carried-over opening balance (see "Behaviour changes") plus
   the per-zone daily sum for the period, computed fresh on every read.

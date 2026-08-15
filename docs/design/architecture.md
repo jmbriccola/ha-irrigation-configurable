@@ -140,23 +140,31 @@ suspended_until: {zone_subentry_id: iso_ts}
 paused_until:   {zone_subentry_id | "__global__": iso_ts}
 last_outcome:  {zone_subentry_id: {result, reason_key, at, cycle_id, minutes, liters}}
 water:                # 3.3.0: replaced the standalone monthly counter
-  zones:        {zone_subentry_id: {total_l: float, estimated_l: float}}
+  zones:        {zone_subentry_id: {total_l: float, estimated_l: float, last_gap_at: iso_ts | None}}
   unattributed: {scope: {total_l: float, closed_l: float}}   # scope: zone_id | "__hub__"
   daily:        {date_iso: {zone_subentry_id | "__unattributed__": {l, est, gap_s, closed_l}}}
   carried_over: {period_start: date_iso, liters: float}      # one-period opening balance
 ```
 
-`gap_s` is **reserved and always 0.0 in 3.3.0.** The field is written and
-accumulated (`engine.metering.roll_into_day`), but nothing feeds it: its only
-possible source, `MeterSample.measured_s`, has no consumer, and every
-production `add_water` / `add_unattributed` call passes zero. Do **not** ask
-the daily history "how much of this window was unobserved?" — it will answer
-zero for a six-hour outage, and a blind window would read as evidence of no
-leak. Wiring it is 3.4.0 work and is more than an added argument:
-`WaterAccountant._on_sample` returns early on non-positive litres, which is
-exactly what a gap produces. The `last_gap_at` attribute the design spec
-(§1.4) asks for on `zone_water_total` is **not implemented** either, and is
-deferred to 3.4.0 with it.
+`gap_s` is **live**: it is the seconds of that day, for that key, during which
+the meter could not be read — `MeterSample.elapsed_s` minus `measured_s`,
+computed in `WaterAccountant._on_sample` and accumulated by
+`engine.metering.roll_into_day`. So the daily history *can* be asked "how much
+of this window was unobserved?", and a day that answers `0.0` really was
+watched end to end. A gap yields **no litres at all** (§1.4: no interpolation,
+which would invent water; no counted zero, which would assert that none
+passed), so `_on_sample` deliberately does not return early on non-positive
+litres — a gap-only call is the normal shape of an outage, and
+`add_water`/`add_unattributed` return only when litres *and* `gap_s` are both
+non-positive. Attribution is the litres' own: to the claimants of the
+interval's start, or to the unattributed scope when there were none — and the
+whole gap goes to each claimant rather than being split, because it is a
+duration, not a quantity. `last_gap_at` (design spec §1.4) is the same fact's
+instant, kept per zone beside the counters because the daily history knows how
+many seconds fell but not when; `zone_water_total` publishes it. Zone entries
+written before this release simply lack the key and read as `None`
+(`STORAGE_VERSION` stays 1). Unattributed scopes carry no `last_gap_at`: no
+entity reports one for a scope.
 
 Date-keyed dicts make midnight rotation trivial and restart-safe (no rotation
 automation: values are keyed by the day they belong to; old keys are pruned).

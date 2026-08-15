@@ -54,12 +54,12 @@ def roll_into_day(
     field callers patch onto the returned dict after the fact.
 
     ``gap_s`` accumulates the same way, clamped at zero: seconds of that day
-    that were NOT observed, summed across every call for the key. It is
-    reserved, not live -- as of 3.3.0 every production caller passes 0.0 (see
-    MeterSample.measured_s, which has no consumer), so the stored value is
-    always 0.0 and must not be read as evidence that a day was fully
-    observed. Feeding it is deferred to 3.4.0 along with the ``last_gap_at``
-    the spec asks for.
+    that were NOT observed for this key, summed across every call. It is fed
+    from ``MeterSample`` -- elapsed minus measured -- so a day that reads
+    ``gap_s: 0.0`` really was watched end to end, and one that spent six hours
+    with an unreadable meter says so instead of looking like a quiet day.
+    A gap carries no litres by construction, so a call with ``liters == 0``
+    and a positive ``gap_s`` is ordinary rather than a no-op.
     """
     updated: DailyLitres = {existing_day: dict(keys) for existing_day, keys in daily.items()}
     day_record = updated.setdefault(day, {})

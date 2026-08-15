@@ -484,6 +484,13 @@ class ZoneWaterTotalSensor(MaestroZoneEntity, SensorEntity):
                 state.zone_water_for_period(self._zone_id, today.replace(day=1), today), 1
             ),
             "meter_entity": runtime.resolved_meter_entity(config) if config else None,
+            # When this zone's litres last stopped being observed while it was
+            # watering: the meter went unavailable, or its unit stopped
+            # resolving. None until it happens. It reads from the store, so it
+            # survives a restart exactly as the counters beside it do -- and
+            # it is the one figure that separates "no water used" from "no
+            # water seen", which the litres alone cannot say.
+            "last_gap_at": state.zone_last_gap_at(self._zone_id),
         }
 
 
