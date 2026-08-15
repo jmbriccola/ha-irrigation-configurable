@@ -54,12 +54,15 @@ def roll_into_day(
     field callers patch onto the returned dict after the fact.
 
     ``gap_s`` accumulates the same way, clamped at zero: seconds of that day
-    that were NOT observed for this key, summed across every call. It is fed
-    from ``MeterSample`` -- elapsed minus measured -- so a day that reads
-    ``gap_s: 0.0`` really was watched end to end, and one that spent six hours
-    with an unreadable meter says so instead of looking like a quiet day.
-    A gap carries no litres by construction, so a call with ``liters == 0``
-    and a positive ``gap_s`` is ordinary rather than a no-op.
+    in which the meter could not be read while this key was the one the litres
+    would have gone to, summed across every call. It is fed from
+    ``MeterSample`` -- elapsed minus measured -- by the accountant, which
+    decides whose gap it is exactly as it decides whose litres. So ``0.0``
+    says "nothing unreadable was attributed to this key", not "this day was
+    fully observed": a zone idle through an outage keeps a clean ``gap_s``
+    while UNATTRIBUTED_KEY carries the seconds. A gap carries no litres by
+    construction, so a call with ``liters == 0`` and a positive ``gap_s`` is
+    ordinary rather than a no-op.
     """
     updated: DailyLitres = {existing_day: dict(keys) for existing_day, keys in daily.items()}
     day_record = updated.setdefault(day, {})
