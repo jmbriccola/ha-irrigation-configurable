@@ -652,19 +652,25 @@ class SessionRunner:
         is no wait to end -- so this path reaches exactly the same answer as
         the immediate one, in every phase.
 
-        Without evidence, the abort fires only while the premise it was
-        deferred on still holds: the session is running, the zone is still
-        active, and its valve is still shut. A valve that reopened inside the
-        window, or a run that has since ended, has left nothing to abort ON --
-        the observation has expired, and aborting on an expired observation is
-        acting on stale information. The cost is a manual close in the last
-        seconds of a run, on a zone with a supply sensor, going unanswered; the
-        next zone opens, and the next close is judged on its own merits with
-        the block armed then. The guarantee degrades by seconds, not by cases.
+        Without evidence, five seconds of silence from a sensor that would have
+        spoken is itself the answer: the firmware closes BECAUSE the water is
+        gone, and a zone with a supply sensor is a zone whose sensor would have
+        said so. What is left is a hand, and the abort is what a hand asked
+        for. Nor can an ordinary end-of-run close arrive here: we close that
+        valve ourselves and the command is ledgered, so whatever reaches this
+        point is a valve shutting when nobody asked it to.
 
-        The first check is defence in depth: ``_stop_surveillance`` cancels
-        every pending decision, so a fire into a dead session should not be
-        reachable at all.
+        So the verdict outlives the SEGMENT. The block stops the queue, not the
+        segment: the segment is over either way, it did complete, and it keeps
+        saying so -- what the hand wanted stopped is the cycle, and the next
+        zone is exactly what is about to open.
+
+        It does not outlive the SESSION, and it does not survive the valve
+        coming back. With no session there is no queue to stop; with the valve
+        open again the premise the close was deferred on describes nothing, and
+        aborting a run whose valve is physically fine would be acting on stale
+        information. The session check is belt to ``_stop_surveillance``'s
+        braces, which cancels every pending verdict outright.
         """
         self._pending_supply_decisions.pop(zone_id, None)
         if self._stopping or not self.active:
@@ -673,7 +679,7 @@ class SessionRunner:
             self._end_segment_no_supply(zone_id)
             return
         zone = self._runtime.zones.get(zone_id)
-        if zone is None or zone_id not in self._active or not zone.valve.is_closed:
+        if zone is None or not zone.valve.is_closed:
             return
         self._trigger_manual_abort(REASON_MANUAL)
 

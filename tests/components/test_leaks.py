@@ -10,6 +10,7 @@ meter, not a ground probe -- so the tests that matter most are the ones proving
 they converge into a single alarm.
 """
 
+from datetime import timedelta
 from typing import Any
 
 import pytest
@@ -19,7 +20,10 @@ from custom_components.irrigation_maestro.leak import (
     SOURCE_NO_FLOW_CLOSED,
     SOURCE_VALVE_SENSOR,
 )
-from custom_components.irrigation_maestro.session import _SUPPLY_EVIDENCE_GRACE_S
+from custom_components.irrigation_maestro.session import (
+    _SUPPLY_EVIDENCE_GRACE_S,
+    PHASE_WATERING,
+)
 from freezegun.api import FrozenDateTimeFactory
 from homeassistant.config_entries import ConfigSubentry
 from homeassistant.core import HomeAssistant, ServiceCall
@@ -2846,17 +2850,25 @@ async def test_a_valve_that_comes_back_inside_the_grace_is_not_judged(
     assert outcome["result"] == "completed"
 
 
-async def test_a_deferred_verdict_never_aborts_a_run_that_has_already_ended(
+async def test_a_verdict_outlives_the_segment_it_was_armed_for(
     hass: HomeAssistant, freezer: FrozenDateTimeFactory
 ) -> None:
-    """The other expiry of the same premise: the run it was armed for is over.
+    """A hand on the valve stops the queue, even in a run's last seconds.
 
-    Constructed rather than raced into, deliberately. Reaching this state in
-    real time needs the close to land inside the last few seconds of a segment,
-    and a verdict pinned on a coincidence of seconds is how latently flaky
-    tests entered this suite before. What is asserted is the verdict itself: a
-    session that is still running is not aborted over a close on a zone whose
-    run has already recorded its outcome.
+    The close is deferred, the segment ends inside the grace, and the verdict
+    comes due with nothing left to interrupt. It fires anyway: the block stops
+    the QUEUE, not the segment, and five seconds of silence from a sensor that
+    would have spoken is exactly what tells a hand from the firmware -- the
+    firmware closes BECAUSE the water is gone. An ordinary end-of-run close
+    cannot arrive here at all, since we close that valve ourselves and the
+    command is ledgered.
+
+    The completed run keeps saying it completed, asserted against a copy taken
+    before the abort so an outcome rewritten in place could not pass.
+
+    The landing point is read from the run rather than guessed: pinning a
+    verdict on a coincidence of seconds is how latently flaky tests entered
+    this suite before.
     """
     freezer.move_to(START)
     park = MockValvePark(hass)
@@ -2870,30 +2882,46 @@ async def test_a_deferred_verdict_never_aborts_a_run_that_has_already_ended(
             zone_data(
                 "Alpha",
                 "valve.a",
-                minutes=1,
+                minutes=10,
                 order=1,
                 water_supply_sensor="binary_sensor.a_supply",
             ),
-            zone_data("Beta", "valve.b", minutes=10, order=2),
+            zone_data("Beta", "valve.b", minutes=3, order=2),
         ],
     )
     runtime = entry.runtime_data
     alpha, beta = runtime.zone_ids
 
-    # Alpha finishes its minute; Beta is watering by now.
-    await advance(hass, freezer, 34 * 60)
-    alpha_outcome = runtime.state.last_outcome(alpha)
-    assert alpha_outcome is not None
-    assert alpha_outcome["result"] == "completed"
-    assert hass.states.get("valve.b").state == "open"
+    await advance(hass, freezer, 31 * 60)
+    run = runtime.session.active_runs[alpha]
+    assert run.phase == PHASE_WATERING
+    assert run.started_at is not None
 
-    runtime.session._decide_supply_close(alpha, dt_util.utcnow())
-    await hass.async_block_till_done()
+    # Two seconds short of this segment's own end, whatever the phases before
+    # it took, so the close is deferred and the run finishes inside the grace.
+    ends_at = run.started_at + timedelta(minutes=run.duration_min)
+    await advance(hass, freezer, (ends_at - dt_util.utcnow()).total_seconds() - 2, step=1.0)
+    park.force_state("valve.a", "closed")
+    assert _pending_supply_decisions(hass) == 1
 
-    assert runtime.state.manual_stop_at is None
-    assert hass.states.get("valve.b").state == "open"
-    assert runtime.state.last_outcome(beta) is None
-    assert runtime.state.last_outcome(alpha) == alpha_outcome
+    # Past the end of the run, still inside the grace.
+    await advance(hass, freezer, 2.5, step=1.0)
+    completed = runtime.state.last_outcome(alpha)
+    assert completed is not None
+    assert completed["result"] == "completed"
+    completed = dict(completed)
+    assert runtime.state.manual_stop_at is None  # not judged yet
+
+    await advance(hass, freezer, _SUPPLY_EVIDENCE_GRACE_S * 4, step=1.0)
+
+    # The queue stops.
+    assert runtime.state.manual_stop_at is not None
+    assert ("open_valve", "valve.b") not in park.commands
+    beta_outcome = runtime.state.last_outcome(beta)
+    assert beta_outcome is not None
+    assert beta_outcome["result"] != "completed"
+    # And the segment that did finish is left exactly as it was.
+    assert runtime.state.last_outcome(alpha) == completed
 
 
 async def test_unloading_the_entry_leaves_no_verdict_armed(
