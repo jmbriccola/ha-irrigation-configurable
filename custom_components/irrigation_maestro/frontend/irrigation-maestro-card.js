@@ -41,7 +41,7 @@ const _t = (n) => new et(typeof n == "string" ? n : n + "", void 0, we), Y = (n,
   for (const i of e.cssRules) t += i.cssText;
   return _t(t);
 })(n) : n;
-const { is: gt, defineProperty: ft, getOwnPropertyDescriptor: vt, getOwnPropertyNames: yt, getOwnPropertySymbols: bt, getPrototypeOf: xt } = Object, _e = globalThis, qe = _e.trustedTypes, $t = qe ? qe.emptyScript : "", wt = _e.reactiveElementPolyfillSupport, te = (n, e) => n, de = { toAttribute(n, e) {
+const { is: ft, defineProperty: gt, getOwnPropertyDescriptor: vt, getOwnPropertyNames: yt, getOwnPropertySymbols: bt, getPrototypeOf: xt } = Object, _e = globalThis, qe = _e.trustedTypes, $t = qe ? qe.emptyScript : "", wt = _e.reactiveElementPolyfillSupport, te = (n, e) => n, de = { toAttribute(n, e) {
   switch (e) {
     case Boolean:
       n = n ? $t : null;
@@ -69,7 +69,7 @@ const { is: gt, defineProperty: ft, getOwnPropertyDescriptor: vt, getOwnProperty
       }
   }
   return t;
-} }, ze = (n, e) => !gt(n, e), Re = { attribute: !0, type: String, converter: de, reflect: !1, useDefault: !1, hasChanged: ze };
+} }, ze = (n, e) => !ft(n, e), Re = { attribute: !0, type: String, converter: de, reflect: !1, useDefault: !1, hasChanged: ze };
 Symbol.metadata ??= /* @__PURE__ */ Symbol("metadata"), _e.litPropertyMetadata ??= /* @__PURE__ */ new WeakMap();
 let W = class extends HTMLElement {
   static addInitializer(e) {
@@ -81,7 +81,7 @@ let W = class extends HTMLElement {
   static createProperty(e, t = Re) {
     if (t.state && (t.attribute = !1), this._$Ei(), this.prototype.hasOwnProperty(e) && ((t = Object.create(t)).wrapped = !0), this.elementProperties.set(e, t), !t.noAccessor) {
       const i = /* @__PURE__ */ Symbol(), o = this.getPropertyDescriptor(e, i, t);
-      o !== void 0 && ft(this.prototype, e, o);
+      o !== void 0 && gt(this.prototype, e, o);
     }
   }
   static getPropertyDescriptor(e, t, i) {
@@ -267,8 +267,8 @@ const St = (n, e) => {
     const r = n[l];
     let u, _, h = -1, m = 0;
     for (; m < r.length && (a.lastIndex = m, _ = a.exec(r), _ !== null); ) m = a.lastIndex, a === J ? _[1] === "!--" ? a = He : _[1] !== void 0 ? a = Le : _[2] !== void 0 ? (ot.test(_[2]) && (o = RegExp("</" + _[2], "g")), a = D) : _[3] !== void 0 && (a = D) : a === D ? _[0] === ">" ? (a = o ?? J, h = -1) : _[1] === void 0 ? h = -2 : (h = a.lastIndex - _[2].length, u = _[1], a = _[3] === void 0 ? D : _[3] === '"' ? Be : je) : a === Be || a === je ? a = D : a === He || a === Le ? a = J : (a = D, o = void 0);
-    const g = a === D && n[l + 1].startsWith("/>") ? " " : "";
-    s += a === J ? r + zt : h >= 0 ? (i.push(u), r.slice(0, h) + tt + r.slice(h) + P + g) : r + P + (h === -2 ? l : g);
+    const f = a === D && n[l + 1].startsWith("/>") ? " " : "";
+    s += a === J ? r + zt : h >= 0 ? (i.push(u), r.slice(0, h) + tt + r.slice(h) + P + f) : r + P + (h === -2 ? l : f);
   }
   return [st(n, s + (n[t] || "<?>") + (e === 2 ? "</svg>" : e === 3 ? "</math>" : "")), i];
 };
@@ -285,14 +285,14 @@ class ne {
     for (; (o = F.nextNode()) !== null && r.length < l; ) {
       if (o.nodeType === 1) {
         if (o.hasAttributes()) for (const h of o.getAttributeNames()) if (h.endsWith(tt)) {
-          const m = _[a++], g = o.getAttribute(h).split(P), x = /([.?@])?(.*)/.exec(m);
-          r.push({ type: 1, index: s, name: x[2], strings: g, ctor: x[1] === "." ? Ct : x[1] === "?" ? Mt : x[1] === "@" ? Et : me }), o.removeAttribute(h);
+          const m = _[a++], f = o.getAttribute(h).split(P), x = /([.?@])?(.*)/.exec(m);
+          r.push({ type: 1, index: s, name: x[2], strings: f, ctor: x[1] === "." ? Ct : x[1] === "?" ? Mt : x[1] === "@" ? Et : me }), o.removeAttribute(h);
         } else h.startsWith(P) && (r.push({ type: 6, index: s }), o.removeAttribute(h));
         if (ot.test(o.tagName)) {
           const h = o.textContent.split(P), m = h.length - 1;
           if (m > 0) {
             o.textContent = ue ? ue.emptyScript : "";
-            for (let g = 0; g < m; g++) o.append(h[g], ie()), F.nextNode(), r.push({ type: 2, index: ++s });
+            for (let f = 0; f < m; f++) o.append(h[f], ie()), F.nextNode(), r.push({ type: 2, index: ++s });
             o.append(h[m], ie());
           }
         }
@@ -541,7 +541,7 @@ const qt = {
   show_controls: !0,
   compact: !1
 };
-function f(n) {
+function g(n) {
   if (typeof n == "number" && Number.isFinite(n)) return n;
   if (typeof n == "string" && n.trim() !== "") {
     const e = Number(n);
@@ -609,7 +609,7 @@ function at(n) {
   const o = [...t.values()];
   for (const s of o) {
     const a = s.state?.attributes ?? {};
-    s.name = v(a.zone_name) ?? v(s.state?.attributes.friendly_name) ?? s.zoneId, s.order = f(a.order) ?? f(s.orderNumber?.state) ?? Number.MAX_SAFE_INTEGER;
+    s.name = v(a.zone_name) ?? v(s.state?.attributes.friendly_name) ?? s.zoneId, s.order = g(a.order) ?? g(s.orderNumber?.state) ?? Number.MAX_SAFE_INTEGER;
   }
   return o.sort(
     (s, a) => s.order - a.order || s.name.localeCompare(a.name)
@@ -621,16 +621,16 @@ function Ut(n) {
 function Ht(n) {
   const e = n.zone_water_total;
   if (!e) return null;
-  const t = f(e.state);
+  const t = g(e.state);
   return t === void 0 ? null : {
     total: t,
-    today: f(e.attributes.today_l) ?? 0,
-    month: f(e.attributes.month_l) ?? 0,
+    today: g(e.attributes.today_l) ?? 0,
+    month: g(e.attributes.month_l) ?? 0,
     estimated: !!e.attributes.estimated
   };
 }
 function Lt(n) {
-  return f(n.state?.attributes?.adjustment_pct) ?? 100;
+  return g(n.state?.attributes?.adjustment_pct) ?? 100;
 }
 const M = {
   // Card-level messages
@@ -923,6 +923,7 @@ const M = {
   "notify.test_message": "Test notification. If you can read this, this recipient works.",
   "notify.event_watchdog": "Watchdog",
   "notify.event_anomaly": "Anomaly",
+  "notify.event_leak": "Leak",
   "notify.event_skipped": "Cycle skipped",
   "notify.event_interrupted": "Cycle interrupted",
   "notify.event_cancelled": "Cycle cancelled",
@@ -1256,6 +1257,7 @@ const M = {
   "notify.test_message": "Notifica di prova. Se riesci a leggere questo messaggio, il destinatario funziona.",
   "notify.event_watchdog": "Watchdog",
   "notify.event_anomaly": "Anomalia",
+  "notify.event_leak": "Perdita d'acqua",
   "notify.event_skipped": "Ciclo saltato",
   "notify.event_interrupted": "Ciclo interrotto",
   "notify.event_cancelled": "Ciclo annullato",
@@ -1302,13 +1304,13 @@ const M = {
   "program_editor.volume_safety_timeout": "Timeout di sicurezza volumetrico",
   "program_editor.volume_safety_timeout_hint": "Minuti dopo i quali una corsa a volume si ferma anche se il flussometro non ha raggiunto il target.",
   "settings.advanced_note": "Parametri avanzati (motore, sicurezza, notifiche) → Impostazioni"
-}, ge = {
+}, fe = {
   en: M,
   it: jt
 };
 function rt(n) {
   const t = (n?.locale?.language ?? n?.language ?? "en").toLowerCase().split(/[-_]/)[0] ?? "en";
-  return t in ge ? t : "en";
+  return t in fe ? t : "en";
 }
 function Bt(n, e) {
   return e ? n.replace(/\{(\w+)\}/g, (t, i) => {
@@ -1317,15 +1319,15 @@ function Bt(n, e) {
   }) : n;
 }
 function c(n, e, t) {
-  const i = ge[n] ?? M;
+  const i = fe[n] ?? M;
   return Bt(i[e] ?? M[e], t);
 }
 function Z(n, e, t) {
-  const i = `${e}.${t}`, o = ge[n] ?? M, s = M;
+  const i = `${e}.${t}`, o = fe[n] ?? M, s = M;
   return o[i] ?? s[i] ?? t;
 }
 function Vt(n, e) {
-  const t = ge[n] ?? M, i = M;
+  const t = fe[n] ?? M, i = M;
   for (const o of ["queue_state", "zone_state", "outcome"]) {
     const s = `${o}.${e}`, a = t[s] ?? i[s];
     if (a !== void 0) return a;
@@ -1372,31 +1374,31 @@ function Zt(n, e) {
   }), Ge.set(e, i)), i.format(t);
 }
 function U(n, e = 1) {
-  const t = f(n);
+  const t = g(n);
   if (t !== void 0)
     return t.toFixed(e).replace(/\.0+$/, (i) => e > 0 ? "" : i);
 }
 function Gt(n) {
-  const e = f(n);
+  const e = g(n);
   if (e !== void 0) return e;
   if (n && typeof n == "object") {
     const t = n;
-    return f(t.duration_min) ?? f(t.duration) ?? f(t.minutes);
+    return g(t.duration_min) ?? g(t.duration) ?? g(t.minutes);
   }
 }
 function Qt(n, e) {
-  const t = v(n.run_started_at), i = f(n.run_duration_min);
+  const t = v(n.run_started_at), i = g(n.run_duration_min);
   if (!t || i === void 0 || i <= 0)
     return;
   const o = Date.parse(t);
   if (Number.isNaN(o)) return;
   const s = (e - o) / 6e4, a = xe(s / i, 0, 1), l = Math.max(0, Math.ceil(i - s)), r = [], u = n.run_planned_runs;
   if (Array.isArray(u) && u.length > 1) {
-    const _ = u.map(Gt).filter((m) => m !== void 0 && m > 0), h = _.reduce((m, g) => m + g, 0);
+    const _ = u.map(Gt).filter((m) => m !== void 0 && m > 0), h = _.reduce((m, f) => m + f, 0);
     if (_.length > 1 && h > 0) {
       let m = 0;
-      for (let g = 0; g < _.length - 1; g += 1)
-        m += _[g] ?? 0, r.push(m / h);
+      for (let f = 0; f < _.length - 1; f += 1)
+        m += _[f] ?? 0, r.push(m / h);
     }
   }
   return { fraction: a, remainingMin: l, segmentBounds: r };
@@ -1411,7 +1413,7 @@ function Yt(n, e) {
     const i = c(
       e,
       n.event === "sunrise" ? "trigger.sunrise" : "trigger.sunset"
-    ), o = f(n.offset_s) ?? 0;
+    ), o = g(n.offset_s) ?? 0;
     if (o === 0) return i;
     const s = o < 0 ? "−" : "+";
     return `${i} ${s} ${Kt(o)}`;
@@ -1428,7 +1430,7 @@ function ct(n) {
   const e = [];
   for (const t of n) {
     if (!Array.isArray(t) || t.length < 2) continue;
-    const i = f(t[0]), o = f(t[1]);
+    const i = g(t[0]), o = g(t[1]);
     i !== void 0 && o !== void 0 && e.push([i, o]);
   }
   return [...e].sort((t, i) => t[0] - i[0]);
@@ -1471,11 +1473,11 @@ const j = 150, B = 44, le = 6, Ke = 6, Me = class Me extends k {
   render() {
     const e = this.curve, t = ct(e?.points);
     if (t.length === 0) return d;
-    const i = f(e?.min), o = f(e?.max), s = t.map((y) => y[0]), a = t.map((y) => y[1]);
+    const i = g(e?.min), o = g(e?.max), s = t.map((y) => y[0]), a = t.map((y) => y[1]);
     i !== void 0 && a.push(i), o !== void 0 && a.push(o);
     let l = Math.min(...s), r = Math.max(...s), u = Math.min(...a), _ = Math.max(...a);
     r - l < 1e-9 && (l -= 1, r += 1), _ - u < 1e-9 && (u -= 1, _ += 1);
-    const h = (y) => le + (y - l) / (r - l) * (j - 2 * le), m = (y) => B - Ke - (y - u) / (_ - u) * (B - 2 * Ke), g = t.map((y, ve) => `${ve === 0 ? "M" : "L"}${h(y[0]).toFixed(1)},${m(y[1]).toFixed(1)}`).join(" "), x = (y, ve) => R`
+    const h = (y) => le + (y - l) / (r - l) * (j - 2 * le), m = (y) => B - Ke - (y - u) / (_ - u) * (B - 2 * Ke), f = t.map((y, ve) => `${ve === 0 ? "M" : "L"}${h(y[0]).toFixed(1)},${m(y[1]).toFixed(1)}`).join(" "), x = (y, ve) => R`
       <line
         class="clamp"
         x1="0" x2="${j}"
@@ -1494,7 +1496,7 @@ const j = 150, B = 44, le = 6, Ke = 6, Me = class Me extends k {
       >
         ${i !== void 0 ? x(i, String(i)) : d}
         ${o !== void 0 ? x(o, String(o)) : d}
-        <path class="line" d="${g}"></path>
+        <path class="line" d="${f}"></path>
         ${t.map(
       (y) => R`<circle class="dot" r="2"
             cx="${h(y[0]).toFixed(1)}" cy="${m(y[1]).toFixed(1)}"></circle>`
@@ -1597,7 +1599,7 @@ const N = 320, O = 170, C = 34, q = 12, ee = 16, V = 24, Ye = 5, Xe = 40, Je = 2
   }
   _seedFromCycle() {
     const e = this.cycle?.curve, t = ct(e?.points);
-    t.length !== 0 && (this._points = t, this._min = f(e?.min) ?? 1, this._max = f(e?.max) ?? 120, this._kind = e?.kind === "volume" ? "volume" : "duration", this._error = null);
+    t.length !== 0 && (this._points = t, this._min = g(e?.min) ?? 1, this._max = g(e?.max) ?? 120, this._kind = e?.kind === "volume" ? "volume" : "duration", this._error = null);
   }
   /** What this curve actually delivers IN THIS ZONE: the raw shape times
    *  `zoneAdjustmentPct`, then the clamps — same order as `curve_value`
@@ -1658,12 +1660,12 @@ const N = 320, O = 170, C = 34, q = 12, ee = 16, V = 24, Ye = 5, Xe = 40, Je = 2
     const l = this._pointerViewY(i, a, t), r = this._axis().top / (O - ee - V), u = (h) => {
       const m = i.getScreenCTM();
       if (!m) return;
-      const g = this._pointerViewY(i, m, h) - l;
+      const f = this._pointerViewY(i, m, h) - l;
       this._points = be(
         this._points,
         e,
         o[0],
-        li(s, g, r)
+        li(s, f, r)
       ), this._error = null;
     }, _ = () => {
       window.removeEventListener("pointermove", u), window.removeEventListener("pointerup", _);
@@ -1857,9 +1859,9 @@ const N = 320, O = 170, C = 34, q = 12, ee = 16, V = 24, Ye = 5, Xe = 40, Je = 2
    */
   _renderGraph(e) {
     const t = this._axisMin(), i = this._axisMax(), o = [];
-    for (let g = t; g <= i; g += 1)
-      o.push([this._sx(g), this._sy(dt(this._points, g))]);
-    const s = o.map((g, x) => `${x === 0 ? "M" : "L"}${g[0].toFixed(1)},${g[1].toFixed(1)}`).join(" "), a = this.weightedTemp, l = a !== void 0 && !Number.isNaN(a) && a >= t && a <= i, r = this._sy(this._min), u = this._sy(this._max), _ = Math.min(r, u), h = Math.abs(u - r), m = this._unit();
+    for (let f = t; f <= i; f += 1)
+      o.push([this._sx(f), this._sy(dt(this._points, f))]);
+    const s = o.map((f, x) => `${x === 0 ? "M" : "L"}${f[0].toFixed(1)},${f[1].toFixed(1)}`).join(" "), a = this.weightedTemp, l = a !== void 0 && !Number.isNaN(a) && a >= t && a <= i, r = this._sy(this._min), u = this._sy(this._max), _ = Math.min(r, u), h = Math.abs(u - r), m = this._unit();
     return R`
       <svg viewBox="0 0 ${N} ${O}">
         <rect class="clamp-band" x=${C} y=${_.toFixed(1)}
@@ -1874,8 +1876,8 @@ const N = 320, O = 170, C = 34, q = 12, ee = 16, V = 24, Ye = 5, Xe = 40, Je = 2
               <text class="today-text" x=${this._sx(a)} y=${ee - 4} text-anchor="middle">${c(e, "editor.graph.today", { temp: Math.round(a) })}</text>` : d}
         <path class="curve" d=${s}></path>
         ${this._points.map(
-      (g, x) => R`<circle class="handle" r="7"
-            cx=${this._sx(g[0]).toFixed(1)} cy=${this._sy(g[1]).toFixed(1)}
+      (f, x) => R`<circle class="handle" r="7"
+            cx=${this._sx(f[0]).toFixed(1)} cy=${this._sy(f[1]).toFixed(1)}
             @pointerdown=${(A) => this._startDrag(x, A)}></circle>`
     )}
       </svg>
@@ -2332,7 +2334,7 @@ const Ne = class Ne extends k {
   _renderCycle(e) {
     const t = this.language, i = this.zone, o = v(e.cycle_id), s = i?.cycleSwitches.find(
       (E) => v(E.attributes.cycle_id) === o
-    ), a = s ? s.state === "on" : e.enabled !== !1, l = Yt(e.trigger, t), r = e.curve, u = f(r?.min), _ = f(r?.max), h = c(
+    ), a = s ? s.state === "on" : e.enabled !== !1, l = Yt(e.trigger, t), r = e.curve, u = g(r?.min), _ = g(r?.max), h = c(
       t,
       r?.kind === "volume" ? "curve.unit_volume" : "curve.unit_duration"
     ), m = [];
@@ -2341,12 +2343,12 @@ const Ne = class Ne extends k {
     ), _ !== void 0 && m.push(
       `${c(t, "curve.clamp_max")} ${_} ${h}`
     );
-    const g = !!o && this._editingCycle === o, x = o ? p`<button
+    const f = !!o && this._editingCycle === o, x = o ? p`<button
           class="link-btn"
-          @click=${() => this._editingCycle = g ? void 0 : o}
+          @click=${() => this._editingCycle = f ? void 0 : o}
         >
           ${c(t, "editor.edit_curve")}
-        </button>` : d, A = g ? p`<imc-curve-editor
+        </button>` : d, A = f ? p`<imc-curve-editor
           .language=${t}
           .cycle=${e}
           .weightedTemp=${this.weightedTemp}
@@ -2788,18 +2790,18 @@ Ce([
   b({ type: Boolean })
 ], K.prototype, "hasPauseSwitch");
 X("imc-global-controls", K);
-var mi = Object.defineProperty, fe = (n, e, t, i) => {
+var mi = Object.defineProperty, ge = (n, e, t, i) => {
   for (var o = void 0, s = n.length - 1, a; s >= 0; s--)
     (a = n[s]) && (o = a(e, t, o) || o);
   return o && mi(e, t, o), o;
 };
-const gi = [
+const fi = [
   "idle",
   "evaluating",
   "running"
 ];
-function fi(n) {
-  return !!n && gi.includes(n);
+function gi(n) {
+  return !!n && fi.includes(n);
 }
 const Te = class Te extends k {
   constructor() {
@@ -2951,7 +2953,7 @@ const Te = class Te extends k {
   /* Render fragments                                              */
   /* ------------------------------------------------------------ */
   _renderHeader(e, t) {
-    const i = e.hub, o = T(i.waterBudget) ? void 0 : f(i.waterBudget?.state), s = T(i.skipThreshold) ? void 0 : f(i.skipThreshold?.state);
+    const i = e.hub, o = T(i.waterBudget) ? void 0 : g(i.waterBudget?.state), s = T(i.skipThreshold) ? void 0 : g(i.skipThreshold?.state);
     let a = d;
     if (o !== void 0 || s !== void 0) {
       const x = Math.max(o ?? 0, s ?? 0, 1e-3), A = xe((o ?? 0) / x, 0, 1), E = s !== void 0 ? xe(s / x, 0, 1) : void 0, y = o !== void 0 && s !== void 0 && o >= s;
@@ -2978,7 +2980,7 @@ const Te = class Te extends k {
         </div>
       `;
     }
-    const l = i.weightedTemp, r = T(l) ? void 0 : f(l?.state), u = l?.attributes.stale_weather === !0, _ = i.session?.state, h = fi(_) ? _ : void 0, m = i.pauseSwitch?.state === "on", g = T(i.consumptionLeft) ? void 0 : f(i.consumptionLeft?.state);
+    const l = i.weightedTemp, r = T(l) ? void 0 : g(l?.state), u = l?.attributes.stale_weather === !0, _ = i.session?.state, h = gi(_) ? _ : void 0, m = i.pauseSwitch?.state === "on", f = T(i.consumptionLeft) ? void 0 : g(i.consumptionLeft?.state);
     return p`
       <div class="header">
         ${a}
@@ -3008,12 +3010,12 @@ const Te = class Te extends k {
                 <ha-icon icon="mdi:pause" style="--mdc-icon-size:14px"></ha-icon>
                 ${c(t, "header.global_pause")}
               </span>` : d}
-          ${g !== void 0 ? p`<span
+          ${f !== void 0 ? p`<span
                 class="chip"
                 title=${c(t, "header.consumption_left")}
               >
                 <ha-icon icon="mdi:counter" style="--mdc-icon-size:14px"></ha-icon>
-                ${U(g, 0)} L
+                ${U(f, 0)} L
               </span>` : d}
         </div>
       </div>
@@ -3031,7 +3033,7 @@ const Te = class Te extends k {
       <div class="queue">
         <div class="queue-title">${c(t, "queue.title")}</div>
         ${o.map((a, l) => {
-      const r = v(a.state), u = s !== void 0 && a.zone_id === s || r === "watering" || r === "running", _ = f(a.duration_min);
+      const r = v(a.state), u = s !== void 0 && a.zone_id === s || r === "watering" || r === "running", _ = g(a.duration_min);
       return p`
             <div class="queue-item ${u ? "active" : ""}">
               <span class="queue-index">${l + 1}.</span>
@@ -3081,7 +3083,7 @@ const Te = class Te extends k {
                   .now=${this._now}
                   .compact=${e.compact === !0}
                   .showControls=${e.show_controls !== !1}
-                  .weightedTemp=${f(o.hub.weightedTemp?.state)}
+                  .weightedTemp=${g(o.hub.weightedTemp?.state)}
                 ></imc-zone-row>
               `
     )}
@@ -3249,16 +3251,16 @@ Te.styles = Y`
     }
   `;
 let L = Te;
-fe([
+ge([
   b({ attribute: !1 })
 ], L.prototype, "hass");
-fe([
+ge([
   z()
 ], L.prototype, "_config");
-fe([
+ge([
   z()
 ], L.prototype, "_now");
-fe([
+ge([
   z()
 ], L.prototype, "_error");
 X("irrigation-maestro-card", L);

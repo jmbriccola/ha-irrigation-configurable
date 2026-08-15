@@ -15,6 +15,7 @@ export const NOTIFY_GROUP_ORDER = ["critical", "operational", "informational"] a
 export const ALL_EVENT_ORDER: readonly string[] = [
   "watchdog",
   "anomaly",
+  "leak",
   "skipped",
   "interrupted",
   "cancelled",

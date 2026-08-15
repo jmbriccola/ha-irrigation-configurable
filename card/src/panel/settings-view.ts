@@ -125,6 +125,7 @@ export interface NotificationTestDetail {
 const EVENT_LABEL_KEYS: Record<string, TranslationKey> = {
   watchdog: "notify.event_watchdog",
   anomaly: "notify.event_anomaly",
+  leak: "notify.event_leak",
   skipped: "notify.event_skipped",
   interrupted: "notify.event_interrupted",
   cancelled: "notify.event_cancelled",
@@ -185,7 +186,7 @@ function eventLabel(lang: string, event: string): string {
  * configured — and `buildSaveCalls` sends the field only for those. Every
  * other event falls back to what the backend reports, which for an
  * unconfigured event IS `default_priority(event)`: high for watchdog,
- * anomaly, sentinel and interrupted. Pre-filling the map to make rendering
+ * anomaly, sentinel, interrupted and leak. Pre-filling the map to make rendering
  * simpler would turn those defaults into explicit stored values and shadow
  * them permanently.
  */

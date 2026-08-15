@@ -179,11 +179,11 @@ e le impostazioni quotidiane dell'hub, tutto in un unico posto.
    davvero — mai digitati, ciascuno con un pulsante di invio di prova — gli
    eventi si scelgono per preset (*Consigliato*, *Solo critici*, *Tutto*) su
    tre gruppi di gravità apribili, con un chip di priorità per evento, poi
-   un riepilogo da salvare; i quattro eventi che un impianto di irrigazione
+   un riepilogo da salvare; i cinque eventi che un impianto di irrigazione
    non dovrebbe mai perdere — watchdog, anomalia, sentinella, ciclo
-   interrotto — arrivano già preselezionati; i salti con lo stesso motivo
-   producono comunque una sola notifica aggregata). Due cassetti
-   **Avanzate**, chiusi per default, contengono il resto: **sessione e
+   interrotto, perdita d'acqua — arrivano già preselezionati; i salti con
+   lo stesso motivo producono comunque una sola notifica aggregata). Due
+   cassetti **Avanzate**, chiusi per default, contengono il resto: **sessione e
    sicurezza** (durata massima di sessione, orario must-finish-by, attesa
    valvole libere, finestra di blocco dopo uno stop manuale, pausa di
    assestamento tra zone, orario della sentinella) e **valvole e

@@ -477,8 +477,15 @@ async def test_notification_status_says_mute_when_nothing_is_configured(
         DOMAIN, "notification_status", {}, blocking=True, return_response=True
     )
     assert response["verdict"] == "silent"
-    assert sorted(response["recommended"]) == ["anomaly", "interrupted", "sentinel", "watchdog"]
-    assert len(response["events"]) == 9
+    # ESSENTIAL_EVENTS grew from four to five with the leak event (Task 6).
+    assert sorted(response["recommended"]) == [
+        "anomaly",
+        "interrupted",
+        "leak",
+        "sentinel",
+        "watchdog",
+    ]
+    assert len(response["events"]) == 10
 
 
 async def test_notification_status_lists_the_discovered_recipients(hass: HomeAssistant) -> None:

@@ -320,6 +320,7 @@ export const en = {
   "notify.test_message": "Test notification. If you can read this, this recipient works.",
   "notify.event_watchdog": "Watchdog",
   "notify.event_anomaly": "Anomaly",
+  "notify.event_leak": "Leak",
   "notify.event_skipped": "Cycle skipped",
   "notify.event_interrupted": "Cycle interrupted",
   "notify.event_cancelled": "Cycle cancelled",

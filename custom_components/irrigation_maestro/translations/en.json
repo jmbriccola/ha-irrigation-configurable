@@ -737,7 +737,7 @@
         },
         "priority": {
           "name": "Priority",
-          "description": "High adds urgency hints understood by mobile app targets. Defaults to high for watchdog, anomaly, sentinel and interrupted."
+          "description": "High adds urgency hints understood by mobile app targets. Defaults to high for watchdog, anomaly, sentinel, interrupted and leak."
         }
       }
     },
@@ -855,7 +855,7 @@
     },
     "notifications_silent": {
       "title": "Irrigation Maestro will not notify you",
-      "description": "None of the events an irrigation system should never miss — valve failure, flow anomaly, irrigation not executed, interrupted cycle — reaches anyone. If the watchdog force-closes a valve or a cycle never runs, nobody is told. Open Irrigazione → Settings → Notifications to set this up."
+      "description": "None of the events an irrigation system should never miss — valve failure, flow anomaly, irrigation not executed, interrupted cycle, water leak — reaches anyone. If the watchdog force-closes a valve or a cycle never runs, nobody is told. Open Irrigazione → Settings → Notifications to set this up."
     },
     "notify_target_missing": {
       "title": "Notification recipient no longer exists",
