@@ -38,6 +38,7 @@ from .engine.model import SessionEvaluation, SkipReason
 from .engine.planner import PlannedRun, build_session_plan
 from .engine.scheduling import split_soak
 from .flow import CANONICAL_UNIT, FlowSensorReader
+from .leak import LeakDetector, LeakState
 from .models import CycleConfig, HubConfig, ZoneConfig
 from .notify import (
     EVENT_ANOMALY,
@@ -45,6 +46,7 @@ from .notify import (
     EVENT_COMPLETED,
     EVENT_CONSUMPTION_BUDGET,
     EVENT_INTERRUPTED,
+    EVENT_LEAK,
     EVENT_SENTINEL,
     EVENT_SESSION_OVERRUN,
     EVENT_SKIPPED,
@@ -109,6 +111,7 @@ class IrrigationRuntime:
         self.watchdog = Watchdog(self)
         self.sentinel = Sentinel(self)
         self.accountant = WaterAccountant(self)
+        self._leak_detectors: dict[str, LeakDetector] = {}
         self._session_lock = asyncio.Lock()
         self._ledger: dict[tuple[str, str], list[datetime]] = {}
         self._trigger_unsubs: list[CALLBACK_TYPE] = []
@@ -146,6 +149,9 @@ class IrrigationRuntime:
             self.state.schedule_save()
         if migrated.seeded:
             self.report_consumption_history_restarted()
+        # Before the trackers, so the first meter sample of the session already
+        # finds its zone's detector in place.
+        self._rebuild_leak_detectors()
         self._schedule_triggers()
         self._start_trackers()
         self.accountant.start()
@@ -168,6 +174,9 @@ class IrrigationRuntime:
             self._flow_tracker_unsub()
             self._flow_tracker_unsub = None
         self.accountant.stop()
+        for detector in self._leak_detectors.values():
+            detector.stop()
+        self._leak_detectors.clear()
         if self._skip_flush_unsub is not None:
             self._skip_flush_unsub()
             self._skip_flush_unsub = None
@@ -205,6 +214,7 @@ class IrrigationRuntime:
             if zone_id in self.session.active_runs:
                 await self.session.async_stop_all(reason="zone_removed", manual=False)
             self.state.drop_zone(zone_id)
+        self._rebuild_leak_detectors()
         self._schedule_triggers()
         self._track_flow_sensors()  # a repointed or new meter, watched at once
         self.sentinel.start()  # re-arm at the (possibly new) sentinel time
@@ -1204,6 +1214,88 @@ class IrrigationRuntime:
                 "configured again."
             ),
             name="irrigation_maestro_flow_unit_lost",
+        )
+
+    # Leak detection ------------------------------------------------------------------
+
+    def _rebuild_leak_detectors(self) -> None:
+        """One detector per zone, rebuilt by diffing rather than by replacing.
+
+        A detector holds a live alarm and a confirmation window in progress.
+        Dropping and recreating the whole set on every configuration change --
+        even one that touches no leak setting -- would silently clear an active
+        alarm and restart a window that was seconds from confirming, which is
+        the same defect WaterAccountant.rebuild avoids for its ledgers. So a
+        surviving zone keeps its detector and is only told to re-resolve its
+        sources; only a zone that left the configuration is stopped and
+        dropped.
+        """
+        for zone_id in list(self._leak_detectors):
+            if zone_id not in self.zones:
+                self._leak_detectors.pop(zone_id).stop()
+        for zone_id in self.zones:
+            detector = self._leak_detectors.get(zone_id)
+            if detector is None:
+                detector = LeakDetector(self, zone_id)
+                self._leak_detectors[zone_id] = detector
+            detector.start()
+
+    def leak_detector(self, zone_id: str) -> LeakDetector | None:
+        """The detector for a zone, or None when the id names no zone.
+
+        WaterAccountant feeds source 2 through this, keyed by the *scope* of
+        the meter that reported -- which is HUB_SCOPE whenever a meter serves
+        more than one zone. That resolves to None here, on purpose: with two
+        zones behind one meter, "which zone leaks" has no answer, and naming
+        one of them would be a guess presented as a diagnosis. Such an
+        installation keeps source 1 per zone, and its unattributed closed_l
+        stays visible on the hub sensor.
+        """
+        return self._leak_detectors.get(zone_id)
+
+    def leak_state(self, zone_id: str) -> LeakState:
+        """A zone's alarm. A zone with no detector is simply not alarming."""
+        detector = self._leak_detectors.get(zone_id)
+        return detector.state if detector is not None else LeakState()
+
+    def on_leak_raised(self, zone_id: str, state: LeakState) -> None:
+        """The alarm went false -> true, once, for however many sources agree.
+
+        Task 8 attaches the user-facing consequences here: the notification,
+        the Repairs issue that outlives it, and the configured leak_action.
+        """
+        _LOGGER.warning("Zone %s: leak alarm raised by %s", zone_id, state.first_source)
+        self._fire_leak_event(zone_id, state, "active")
+        self.dispatch_update()
+
+    def on_leak_repeated(self, zone_id: str, state: LeakState) -> None:
+        """Still leaking, one leak_repeat_min later.
+
+        No event is fired: an automation consuming the event stream counts
+        alarms, and a reminder is not a second alarm -- that is the whole point
+        of unifying the sources. Task 8 attaches the repeat notification here.
+        """
+        _LOGGER.warning(
+            "Zone %s is still reporting a leak (sources: %s)",
+            zone_id,
+            ", ".join(sorted(state.sources)),
+        )
+
+    def on_leak_cleared(self, zone_id: str) -> None:
+        """The last source withdrew. Task 8 attaches the clearing notice."""
+        _LOGGER.warning("Zone %s: leak alarm cleared", zone_id)
+        self._fire_leak_event(zone_id, LeakState(), "cleared")
+        self.dispatch_update()
+
+    def _fire_leak_event(self, zone_id: str, state: LeakState, phase: str) -> None:
+        self.fire_event(
+            EVENT_LEAK,
+            {
+                "zone_id": zone_id,
+                "state": phase,
+                "first_source": state.first_source,
+                "sources": sorted(state.sources),
+            },
         )
 
     # Consumption -------------------------------------------------------------------
