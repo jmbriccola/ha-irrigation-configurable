@@ -19,10 +19,12 @@ from custom_components.irrigation_maestro.leak import (
     SOURCE_NO_FLOW_CLOSED,
     SOURCE_VALVE_SENSOR,
 )
+from custom_components.irrigation_maestro.session import _SUPPLY_EVIDENCE_GRACE_S
 from freezegun.api import FrozenDateTimeFactory
 from homeassistant.config_entries import ConfigSubentry
 from homeassistant.core import HomeAssistant, ServiceCall
 from homeassistant.helpers import issue_registry as ir
+from homeassistant.util import dt as dt_util
 from homeassistant.util.async_ import get_scheduled_timer_handles
 
 from .mocks import BEHAVIOR_STUCK, MockValvePark
@@ -2561,6 +2563,28 @@ async def test_the_repair_follows_the_evidence_when_the_first_source_withdraws(
 # the watering zone's OWN valve, and hard evidence from its OWN supply sensor
 # -- because without evidence there is no telling firmware from a hand on the
 # switch.
+#
+# The two facts are separate reports from one device, in no guaranteed order,
+# so a close whose zone HAS a supply sensor waits out a short grace before it
+# is judged. Where no sensor exists nothing waits: no evidence could arrive.
+
+
+def _pending_supply_decisions(hass: HomeAssistant) -> int:
+    """How many deferred close verdicts are armed on the event loop.
+
+    Same reach into the loop's own handles, and for the same reason, as
+    _pending_supply_wakes: a timer that outlives its session has no other
+    symptom until it fires, and by then the thing it would judge is gone.
+    """
+    count = 0
+    for handle in get_scheduled_timer_handles(hass.loop):
+        if handle.cancelled() or not handle._args:
+            continue
+        target = getattr(handle._args[-1], "target", None)
+        func = getattr(target, "func", target)
+        if getattr(func, "__name__", None) == "_decide_supply_close":
+            count += 1
+    return count
 
 
 async def test_a_self_closing_valve_is_not_manual_intervention(
@@ -2639,7 +2663,13 @@ async def test_an_unledgered_close_without_supply_evidence_still_aborts(
     hass: HomeAssistant, freezer: FrozenDateTimeFactory
 ) -> None:
     """No sensor, no exemption. The manual-intervention guarantee is not weakened
-    where the evidence to weaken it is absent."""
+    where the evidence to weaken it is absent.
+
+    And no delay either, which is what keeps the grace a bounded weakening
+    rather than a general one: with no sensor configured, no evidence can ever
+    arrive, so there is nothing to wait for and this close is judged in the
+    instant it is read -- exactly as before the grace existed.
+    """
     freezer.move_to(START)
     park = MockValvePark(hass)
     park.add("valve.a")
@@ -2648,14 +2678,19 @@ async def test_an_unledgered_close_without_supply_evidence_still_aborts(
     await advance(hass, freezer, 31 * 60)
     assert hass.states.get("valve.a").state == "open"
 
-    park.force_state("valve.a", "closed")
-    await advance(hass, freezer, 30, step=5.0)
-
     runtime = entry.runtime_data
+    park.force_state("valve.a", "closed")
+    await advance(hass, freezer, _SUPPLY_EVIDENCE_GRACE_S / 2, step=1.0)
+
+    # Judged already, inside the window a zone with a sensor would still be
+    # waiting out, and with nothing armed to judge it later.
+    assert runtime.state.manual_stop_at is not None
+    assert _pending_supply_decisions(hass) == 0
+
+    await advance(hass, freezer, 30, step=5.0)
     outcome = runtime.state.last_outcome(runtime.zone_ids[0])
     assert outcome is not None
     assert outcome["reason_key"] == "manual_intervention"
-    assert runtime.state.manual_stop_at is not None
 
 
 @pytest.mark.parametrize("reading", ["unavailable", "unknown", "off"])
@@ -2667,6 +2702,10 @@ async def test_an_unavailable_supply_sensor_grants_no_exemption(
     ``off`` is there for the same reason as the two silences: it is the state
     of a healthy supply, and a valve closing under one is a hand on the switch
     as far as anything here can tell.
+
+    This is also the mirror of the race below: the zone HAS a sensor, so the
+    verdict is deferred -- and the sensor then says nothing for the whole
+    grace, which must end in the abort with the block armed, not in a pass.
     """
     freezer.move_to(START)
     park = MockValvePark(hass)
@@ -2695,3 +2734,203 @@ async def test_an_unavailable_supply_sensor_grants_no_exemption(
     assert outcome is not None
     assert outcome["reason_key"] == "manual_intervention"
     assert runtime.state.manual_stop_at is not None
+
+
+async def test_a_supply_reported_after_the_close_still_earns_the_exemption(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    """The race, and the reason the grace exists.
+
+    The valve's state and its supply sensor are two entities of one device,
+    reported separately and in no guaranteed order. Judged on the instant, a
+    close read before its evidence aborts the whole session -- and it would do
+    so INTERMITTENTLY, on the same hardware in the same situation, which reads
+    as a flaky bug rather than a missing feature.
+
+    Here the close lands first and the sensor speaks inside the grace, which
+    must reach the same verdict as if they had arrived the other way round.
+    """
+    freezer.move_to(START)
+    park = MockValvePark(hass)
+    park.add("valve.a")
+    park.add("valve.b")
+    _supply(hass, "off")
+    mock_weather(hass)
+    entry = await setup_hub(
+        hass,
+        [
+            zone_data(
+                "Alpha",
+                "valve.a",
+                minutes=10,
+                order=1,
+                water_supply_sensor="binary_sensor.a_supply",
+            ),
+            zone_data("Beta", "valve.b", minutes=3, order=2),
+        ],
+        {"water_supply_confirm_s": 3600},
+    )
+    runtime = entry.runtime_data
+    alpha, beta = runtime.zone_ids
+
+    await advance(hass, freezer, 31 * 60)
+    assert hass.states.get("valve.a").state == "open"
+
+    # The valve reports first, and its sensor has not spoken yet.
+    park.force_state("valve.a", "closed")
+    await advance(hass, freezer, _SUPPLY_EVIDENCE_GRACE_S / 2, step=1.0)
+    assert runtime.state.manual_stop_at is None  # nothing judged yet
+    assert runtime.state.last_outcome(alpha) is None
+    assert _pending_supply_decisions(hass) == 1
+
+    # And now the evidence arrives, inside the window it was given.
+    _supply(hass, "on")
+    await advance(hass, freezer, _SUPPLY_EVIDENCE_GRACE_S * 4, step=1.0)
+
+    outcome = runtime.state.last_outcome(alpha)
+    assert outcome is not None
+    assert outcome["result"] == "interrupted"
+    assert outcome["reason_key"] == "no_water_supply"
+    assert runtime.state.manual_stop_at is None
+    assert _pending_supply_decisions(hass) == 0
+
+    await advance(hass, freezer, 6 * 60)
+    beta_outcome = runtime.state.last_outcome(beta)
+    assert beta_outcome is not None
+    assert beta_outcome["result"] == "completed"
+
+
+async def test_a_valve_that_comes_back_inside_the_grace_is_not_judged(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    """The observation expired, so there is nothing left to judge.
+
+    A close is deferred on one premise -- this zone's valve is shut while it
+    should be open. If the valve is open again when the verdict comes due, that
+    premise no longer describes anything, and aborting a run whose valve is
+    physically fine would be acting on stale information.
+    """
+    freezer.move_to(START)
+    park = MockValvePark(hass)
+    park.add("valve.a")
+    _supply(hass, "off")
+    mock_weather(hass)
+    entry = await setup_hub(
+        hass,
+        [
+            zone_data(
+                "Alpha",
+                "valve.a",
+                minutes=10,
+                water_supply_sensor="binary_sensor.a_supply",
+            )
+        ],
+    )
+    runtime = entry.runtime_data
+    zone_id = runtime.zone_ids[0]
+
+    await advance(hass, freezer, 31 * 60)
+    park.force_state("valve.a", "closed")
+    await advance(hass, freezer, _SUPPLY_EVIDENCE_GRACE_S / 2, step=1.0)
+    park.force_state("valve.a", "open")
+    await advance(hass, freezer, _SUPPLY_EVIDENCE_GRACE_S * 4, step=1.0)
+
+    assert runtime.state.manual_stop_at is None
+    assert runtime.state.last_outcome(zone_id) is None  # still watering
+    assert hass.states.get("valve.a").state == "open"
+
+    # And it finishes the run it never stopped.
+    await advance(hass, freezer, 11 * 60)
+    outcome = runtime.state.last_outcome(zone_id)
+    assert outcome is not None
+    assert outcome["result"] == "completed"
+
+
+async def test_a_deferred_verdict_never_aborts_a_run_that_has_already_ended(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    """The other expiry of the same premise: the run it was armed for is over.
+
+    Constructed rather than raced into, deliberately. Reaching this state in
+    real time needs the close to land inside the last few seconds of a segment,
+    and a verdict pinned on a coincidence of seconds is how latently flaky
+    tests entered this suite before. What is asserted is the verdict itself: a
+    session that is still running is not aborted over a close on a zone whose
+    run has already recorded its outcome.
+    """
+    freezer.move_to(START)
+    park = MockValvePark(hass)
+    park.add("valve.a")
+    park.add("valve.b")
+    _supply(hass, "off")
+    mock_weather(hass)
+    entry = await setup_hub(
+        hass,
+        [
+            zone_data(
+                "Alpha",
+                "valve.a",
+                minutes=1,
+                order=1,
+                water_supply_sensor="binary_sensor.a_supply",
+            ),
+            zone_data("Beta", "valve.b", minutes=10, order=2),
+        ],
+    )
+    runtime = entry.runtime_data
+    alpha, beta = runtime.zone_ids
+
+    # Alpha finishes its minute; Beta is watering by now.
+    await advance(hass, freezer, 34 * 60)
+    alpha_outcome = runtime.state.last_outcome(alpha)
+    assert alpha_outcome is not None
+    assert alpha_outcome["result"] == "completed"
+    assert hass.states.get("valve.b").state == "open"
+
+    runtime.session._decide_supply_close(alpha, dt_util.utcnow())
+    await hass.async_block_till_done()
+
+    assert runtime.state.manual_stop_at is None
+    assert hass.states.get("valve.b").state == "open"
+    assert runtime.state.last_outcome(beta) is None
+    assert runtime.state.last_outcome(alpha) == alpha_outcome
+
+
+async def test_unloading_the_entry_leaves_no_verdict_armed(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    """A pending verdict must not outlive the session that armed it.
+
+    Nothing black-box can see the difference: a stale handle would judge a
+    session that no longer exists, and the guards inside it make that
+    harmless. What grows is the loop's timer list, so the assertion is on that
+    -- and on the block a stale verdict must never arm.
+    """
+    freezer.move_to(START)
+    park = MockValvePark(hass)
+    park.add("valve.a")
+    _supply(hass, "off")
+    mock_weather(hass)
+    entry = await setup_hub(
+        hass,
+        [
+            zone_data(
+                "Alpha",
+                "valve.a",
+                minutes=10,
+                water_supply_sensor="binary_sensor.a_supply",
+            )
+        ],
+    )
+    runtime = entry.runtime_data
+
+    await advance(hass, freezer, 31 * 60)
+    park.force_state("valve.a", "closed")
+    await advance(hass, freezer, _SUPPLY_EVIDENCE_GRACE_S / 2, step=1.0)
+    assert _pending_supply_decisions(hass) == 1
+
+    assert await hass.config_entries.async_unload(entry.entry_id)
+    await hass.async_block_till_done()
+
+    assert _pending_supply_decisions(hass) == 0
+    assert runtime.state.manual_stop_at is None

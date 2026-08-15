@@ -1813,6 +1813,21 @@ class IrrigationRuntime:
 
     # The water supply: source 3, and not a leak ---------------------------------------
 
+    def water_supply_sensor(self, zone_id: str) -> str | None:
+        """This zone's supply sensor entity id, or None where there is none.
+
+        Truthiness, not ``is not None``: ``update_zone`` stores "" as the way of
+        clearing the key, so an empty string means the user has no sensor here.
+
+        One resolver, because "has this zone a supply sensor" and "which sensor"
+        are the same question and were being spelled out separately at every
+        site that asked either. A caller that only needs the first asks
+        ``is not None``.
+        """
+        zone = self.zones.get(zone_id)
+        sensor = zone.config.water_supply_sensor if zone else None
+        return sensor or None
+
     def water_supply_missing(self, zone_id: str) -> bool:
         """True only on hard evidence that the water is gone.
 
@@ -1896,12 +1911,10 @@ class IrrigationRuntime:
         One resolver for both questions above, so "is the water gone" and "how
         long has it been gone" can never be answered from different readings.
         """
-        zone = self.zones.get(zone_id)
-        sensor = zone.config.water_supply_sensor if zone else None
-        if not sensor:
-            # Truthiness, not ``is not None``: update_zone stores "" as the way
-            # of clearing the key, and a zone that says it has no supply sensor
-            # can never be one whose supply is known to be missing.
+        sensor = self.water_supply_sensor(zone_id)
+        if sensor is None:
+            # A zone that says it has no supply sensor can never be one whose
+            # supply is known to be missing.
             return None
         state = self.hass.states.get(sensor)
         return state if state is not None and state.state == _SUPPLY_MISSING else None
@@ -1921,9 +1934,8 @@ class IrrigationRuntime:
         assert exactly that -- while the message announcing it would be false
         at the instant it was sent.
         """
-        zone = self.zones.get(zone_id)
-        sensor = zone.config.water_supply_sensor if zone else None
-        if not sensor:
+        sensor = self.water_supply_sensor(zone_id)
+        if sensor is None:
             return True
         state = self.hass.states.get(sensor)
         return state is not None and state.state == _SUPPLY_PRESENT
@@ -1931,9 +1943,9 @@ class IrrigationRuntime:
     def _water_supply_entities(self) -> list[str]:
         """Every configured supply sensor, de-duplicated, in a stable order."""
         entity_ids: list[str] = []
-        for zone in self.zones.values():
-            sensor = zone.config.water_supply_sensor
-            if sensor and sensor not in entity_ids:
+        for zone_id in self.zones:
+            sensor = self.water_supply_sensor(zone_id)
+            if sensor is not None and sensor not in entity_ids:
                 entity_ids.append(sensor)
         return entity_ids
 
@@ -2070,8 +2082,7 @@ class IrrigationRuntime:
         self._supply_announced.discard(zone_id)
         _LOGGER.warning("The no-water condition has ended for %s", name)
         ir.async_delete_issue(self.hass, DOMAIN, self._water_supply_issue_id(zone_id))
-        zone = self.zones.get(zone_id)
-        if zone is not None and zone.config.water_supply_sensor:
+        if self.water_supply_sensor(zone_id) is not None:
             ended = f"{name}: the water supply is back."
         else:
             ended = (
