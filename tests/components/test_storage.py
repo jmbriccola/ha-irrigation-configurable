@@ -303,7 +303,7 @@ async def test_dropping_a_zone_keeps_its_history_and_moves_its_unattributed_to_t
 
     The per-zone cumulative counter backs an entity that no longer exists, so
     it goes. The unattributed bucket does not, even though it is keyed by zone
-    id: _scope_for names the sole zone on a meter, but the bucket backs the
+    id: scope_for names the sole zone on a meter, but the bucket backs the
     *hub* sensor, which sums every scope. Popping it would make a
     total_increasing sensor go backwards -- and HA's recorder reads a drop
     below 90% as a meter reset, re-adding the post-drop value to the long-term

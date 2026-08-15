@@ -398,6 +398,18 @@ class IrrigationRuntime:
         self._ledger[(entity_id, action)] = fresh
         return True
 
+    def ledger_pending(self, entity_id: str, action: str) -> bool:
+        """Is a command of ours still waiting for the transition that retires it?
+
+        Read-only, and deliberately not folded into ``ledger_expect``: a second
+        entry is correct whenever a second command will produce a second
+        transition. It is wrong only where one transition can retire at most
+        one entry however many commands were sent -- re-closing a valve that
+        two alarms both want closed -- and that caller asks here first.
+        """
+        cutoff = dt_util.utcnow() - timedelta(seconds=_LEDGER_TTL_S)
+        return any(entry >= cutoff for entry in self._ledger.get((entity_id, action), []))
+
     def ledger_discard(self, entity_id: str, action: str) -> None:
         """Drop pending entries for a command that never actuated, so they
         cannot absorb a genuine manual transition later."""
@@ -1485,7 +1497,13 @@ class IrrigationRuntime:
         The timestamp is when detection CONFIRMED the leak, which is not when
         the water started and must never be offered as though it were: the
         alarm is memory-only, so a restart or a de-configure-and-restore yields
-        a fresh one for a leak that never stopped.
+        a fresh one for a leak that never stopped. It carries its date as well
+        as its time, because at the default six-hour interval the second
+        reminder already shows a time a reader would otherwise take for today.
+
+        It carries the action note too. This is the one message a standing
+        alarm keeps sending, so a close_and_block user who reads only reminders
+        would otherwise never be told that cycles are being refused.
         """
         sources = ", ".join(
             _LEAK_SOURCE_PHRASES.get(source, source) for source in sorted(state.sources)
@@ -1493,11 +1511,13 @@ class IrrigationRuntime:
         confirmed = (
             ""
             if state.since is None
-            else f" Confirmed at {dt_util.as_local(state.since):%H:%M} "
+            else f" Confirmed at {dt_util.as_local(state.since):%Y-%m-%d %H:%M} "
             "(when detection confirmed it, not when the water started)."
         )
         subject = "The irrigation system" if scope == HUB_SCOPE else self._zone_name(scope)
-        return f"{subject}: still reporting a leak ({sources}).{confirmed}"
+        return (
+            f"{subject}: still reporting a leak ({sources}).{confirmed} {self._leak_action_note()}"
+        )
 
     def _leak_cleared_message(self, scope: str) -> str:
         """Deliberately says only that the alarm ended.
@@ -1505,37 +1525,67 @@ class IrrigationRuntime:
         An alarm is withdrawn by evidence that the water stopped OR by its last
         source leaving the configuration, and a message claiming the sensor now
         reports no leak would be false in the second case.
+
+        The resume clause is gated on the zones this alarm implicated actually
+        becoming free, not merely on the action being close_and_block. One
+        physical leak on an ordinary topology -- a zone with its own leak
+        sensor behind a shared line meter -- raises a zone alarm AND a hub
+        alarm; the zone's sensor recovering clears only the first, and telling
+        the user cycles resume while the hub alarm still blocks that zone and
+        its neighbours would be false at the instant it is sent. The detector
+        has already reset its state before calling this, so the question is
+        answered against the alarms that remain.
         """
         subject = "The irrigation system" if scope == HUB_SCOPE else self._zone_name(scope)
-        resumed = (
-            " New cycles are allowed again."
-            if self.hub.leak_action == LEAK_ACTION_CLOSE_AND_BLOCK
-            else ""
-        )
-        return f"{subject}: the leak condition has cleared.{resumed}"
+        if self.hub.leak_action != LEAK_ACTION_CLOSE_AND_BLOCK:
+            blocking = ""
+        elif set(self.leak_zone_ids(scope)) & self.leak_blocked_zone_ids():
+            blocking = " New cycles are still blocked by another leak alarm."
+        else:
+            blocking = " New cycles are allowed again."
+        return f"{subject}: the leak condition has cleared.{blocking}"
 
     def _leak_action_note(self) -> str:
-        """What the configured action does, stated as policy and not as a boast.
+        """What the configured action is doing, right now, and nothing more.
 
-        Closing a valve that is already closed is a no-op, and the component
-        cannot stop a leak it detects while idle -- it can only report it and
-        re-assert the closure. Saying so is the point: the user chose this
-        default after being shown the trade-off, and a message implying the
-        water has been dealt with would undo that.
+        Two things it must not claim. Closing a valve that is already closed is
+        a no-op, and the component cannot stop a leak it detects while idle --
+        it can only report it and re-assert the closure; the user chose this
+        default after being shown that trade-off, and a message implying the
+        water has been dealt with would undo it.
+
+        And it must not assert a close that ``async_close_for_leak``
+        deliberately skips. A running session is not an edge case here: it is
+        precisely the scenario the skip exists for, a zone's own sensor
+        alarming while a different zone waters. ``session.active`` is read in
+        the same turn that schedules the attempt, so the message and the action
+        agree about what is being done.
         """
-        if self.hub.leak_action == LEAK_ACTION_CLOSE_AND_BLOCK:
-            return (
-                "Configured action: close and block -- the master and the implicated "
-                "valve are commanded closed again, and no new cycle starts for the "
-                "zones concerned while the alarm lasts."
+        action = self.hub.leak_action
+        if action not in (LEAK_ACTION_CLOSE, LEAK_ACTION_CLOSE_AND_BLOCK):
+            return "Configured action: notify only."
+        prefix = (
+            "Configured action: close and block"
+            if action == LEAK_ACTION_CLOSE_AND_BLOCK
+            else "Configured action: close"
+        )
+        if self.session.active:
+            attempt = (
+                " -- the re-close is skipped because a cycle is running: re-asserting "
+                "the closure would abort a cycle on a zone nothing has implicated."
             )
-        if self.hub.leak_action == LEAK_ACTION_CLOSE:
-            return (
-                "Configured action: close -- the master and the implicated valve are "
-                "commanded closed again. That recovers a valve left open by a command "
-                "that never landed; it cannot stop water passing a valve already shut."
+        else:
+            attempt = (
+                " -- the master and the implicated valve are commanded closed again. "
+                "That recovers a valve left open by a command that never landed; it "
+                "cannot stop water passing a valve already shut."
             )
-        return "Configured action: notify only."
+        blocked = (
+            " No new cycle starts for the zones concerned while the alarm lasts."
+            if action == LEAK_ACTION_CLOSE_AND_BLOCK
+            else ""
+        )
+        return f"{prefix}{attempt}{blocked}"
 
     def _zone_name(self, zone_id: str) -> str:
         zone = self.zones.get(zone_id)
@@ -1583,6 +1633,12 @@ class IrrigationRuntime:
         return blocked
 
     def leak_block_active(self, zone_id: str) -> bool:
+        """Is this zone currently refused a new cycle by a leak alarm?
+
+        The session's own gate. Asked per segment rather than per session, so a
+        zone blocked by an alarm that raised while the queue was running is
+        refused at the moment it would open a valve.
+        """
         return zone_id in self.leak_blocked_zone_ids()
 
     async def async_close_for_leak(self, scope: str) -> None:
@@ -1606,6 +1662,13 @@ class IrrigationRuntime:
         every other close path is: a command to an already-closed valve
         produces no transition, so its entry would sit for the whole TTL and
         absorb the next genuine manual close.
+
+        Guarded on a pending entry for the same reason, one step further out.
+        Two zone alarms can raise in the same turn -- the shared-line topology
+        makes that ordinary -- and both would find the master open and both arm
+        an entry, while the single close that follows can retire only one. The
+        survivor is exactly the trap the ``is_closed`` guard exists to avoid,
+        arriving through a second alarm instead of a second call.
         """
         if self.session.active:
             _LOGGER.warning(
@@ -1617,7 +1680,7 @@ class IrrigationRuntime:
         if self.master_controller is not None:
             controllers.append(self.master_controller)
         for controller in controllers:
-            if controller.is_closed:
+            if controller.is_closed or self.ledger_pending(controller.entity_id, "close"):
                 continue
             self.ledger_expect(controller.entity_id, "close")
             await controller.async_close()

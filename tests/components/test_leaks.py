@@ -1157,7 +1157,12 @@ async def test_the_repeat_notice_restates_the_sources_and_dates_the_confirmation
     source currently reporting rather than only the one that raised the alarm.
     And it dates the CONFIRMATION, never the leak: a de-configure-and-restore
     yields a fresh timestamp, so no message may claim it measures when the
-    water started.
+    water started. The date is spelled out because at the default six-hour
+    interval a bare "05:05" is a time the reader takes for today.
+
+    It carries the action note too. This is the one message a standing alarm
+    keeps sending, so a close_and_block user who reads only reminders would
+    otherwise never learn that cycles are being refused.
     """
     freezer.move_to(START)
     park = MockValvePark(hass)
@@ -1172,11 +1177,12 @@ async def test_the_repeat_notice_restates_the_sources_and_dates_the_confirmation
             zone_data(
                 "Alpha",
                 "valve.a",
+                at="23:00",  # no cycle inside the window this test measures
                 flow_sensor="sensor.flow",
                 leak_sensor="binary_sensor.a_leak",
             )
         ],
-        {**_LEAK_NOTIFICATIONS, "leak_repeat_min": 20},
+        {**_LEAK_NOTIFICATIONS, "leak_repeat_min": 20, "leak_action": "close_and_block"},
     )
 
     await advance(hass, freezer, _PAST_CONFIRM_S, step=10.0)
@@ -1189,7 +1195,8 @@ async def test_the_repeat_notice_restates_the_sources_and_dates_the_confirmation
     body = _bodies(sent)[1]
     assert "the valve's own sensor" in body
     assert "flow measured with every valve closed" in body
-    assert "confirmed" in body.lower()
+    assert "Confirmed at 2026-07-17 05:05" in body
+    assert "No new cycle starts" in body
 
 
 async def test_clearing_sends_the_closing_notice_and_deletes_the_issue(
@@ -1252,39 +1259,40 @@ async def test_a_removed_zone_takes_its_repairs_issue_with_it(
     assert registry.async_get_issue(DOMAIN, f"leak_{beta}") is None
 
 
-async def test_a_leak_issue_left_by_a_previous_run_is_cleared_at_setup(
+async def test_an_alarm_that_ended_while_we_were_down_leaves_no_issue_behind(
     hass: HomeAssistant, freezer: FrozenDateTimeFactory
 ) -> None:
     """The alarm is memory-only; the issue registry is not.
 
-    So an alarm that ended while Home Assistant was down -- or one whose water
-    simply stopped overnight -- would otherwise leave an issue standing for
-    ever, with no alarm behind it and nothing left that could delete it. Setup
-    reconciles the issues with the alarms that actually exist.
+    The restart is walked rather than simulated: a real alarm raises a real
+    issue, the entry is unloaded with both standing, the water stops while we
+    are down, and setup runs again. The alarm does not come back -- by design,
+    a restart is not evidence a leak is still running -- so without the
+    reconciliation the issue would stand for ever with nothing behind it and
+    no path left that could ever delete it.
     """
     freezer.move_to(START)
     park = MockValvePark(hass)
     park.add("valve.a")
+    hass.states.async_set("sensor.flow", "2.0", {"unit_of_measurement": "L/min"})
     mock_weather(hass)
     registry = ir.async_get(hass)
-    entry = await setup_hub(hass, [zone_data("Alpha", "valve.a")])
-    runtime = entry.runtime_data
-    zone_id = runtime.zone_ids[0]
-    ir.async_create_issue(
-        hass,
-        DOMAIN,
-        f"leak_{zone_id}",
-        is_fixable=False,
-        severity=ir.IssueSeverity.ERROR,
-        translation_key="leak_zone_flow",
-        translation_placeholders={"zone": "Alpha"},
-    )
+    entry = await setup_hub(hass, [zone_data("Alpha", "valve.a", flow_sensor="sensor.flow")])
+    zone_id = entry.runtime_data.zone_ids[0]
+    await advance(hass, freezer, _PAST_CONFIRM_S, step=10.0)
     assert registry.async_get_issue(DOMAIN, f"leak_{zone_id}") is not None
 
-    # Any configuration change re-runs the same reconciliation setup does.
-    hass.config_entries.async_update_entry(entry, options={**entry.options, "settle_pause_s": 45})
+    assert await hass.config_entries.async_unload(entry.entry_id)
+    await hass.async_block_till_done()
+    # Down, and the issue survives us -- which is the whole point of an issue.
+    assert registry.async_get_issue(DOMAIN, f"leak_{zone_id}") is not None
+    hass.states.async_set("sensor.flow", "0.0", {"unit_of_measurement": "L/min"})
+
+    assert await hass.config_entries.async_setup(entry.entry_id)
     await hass.async_block_till_done()
 
+    runtime = entry.runtime_data
+    assert runtime.leak_state(zone_id).active is False
     assert registry.async_get_issue(DOMAIN, f"leak_{zone_id}") is None
 
 
@@ -1493,13 +1501,20 @@ async def test_close_and_block_still_refuses_a_manual_run(
         {"leak_confirm_s": 30, "leak_action": "close_and_block"},
     )
     runtime = entry.runtime_data
+    zone_id = runtime.zone_ids[0]
     await advance(hass, freezer, 120, step=10.0)
-    assert runtime.leak_state(runtime.zone_ids[0]).active is True
+    assert runtime.leak_state(zone_id).active is True
 
-    await runtime.async_run_zone(runtime.zone_ids[0])
+    await runtime.async_run_zone(zone_id)
     await advance(hass, freezer, 120, step=10.0)
 
+    # The valve was already closed, so its state proves nothing on its own:
+    # the refusal is what the outcome says, exactly as for a scheduled run.
     assert hass.states.get("valve.a").state == "closed"
+    outcome = runtime.state.last_outcome(zone_id)
+    assert outcome is not None
+    assert outcome["result"] == "skipped"
+    assert outcome["reason_key"] == "leak"
 
 
 async def test_a_hub_alarm_blocks_every_zone_behind_that_meter_and_no_other(
@@ -1539,6 +1554,180 @@ async def test_a_hub_alarm_blocks_every_zone_behind_that_meter_and_no_other(
     assert runtime.leak_state(HUB_SCOPE).active is True
     assert runtime.leak_blocked_zone_ids() == {alpha, beta}
     assert gamma not in runtime.leak_blocked_zone_ids()
+
+
+async def test_a_hub_alarm_on_a_meter_no_zone_claims_blocks_every_zone(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    """The judgement half of the rule, rather than the derivation half.
+
+    Every zone has its own meter and a line meter measures the whole
+    installation on top, so no zone resolves to the meter that raised the
+    alarm. The derived set is empty -- and an empty set would make
+    close_and_block do nothing at all on the one topology where the alarm can
+    point at nobody. That meter sits upstream of every zone, so every zone is
+    blocked.
+    """
+    freezer.move_to(START)
+    park = MockValvePark(hass)
+    park.add("valve.a")
+    park.add("valve.b")
+    hass.states.async_set("sensor.line", "2.0", {"unit_of_measurement": "L/min"})
+    hass.states.async_set("sensor.a_flow", "0.0", {"unit_of_measurement": "L/min"})
+    hass.states.async_set("sensor.b_flow", "0.0", {"unit_of_measurement": "L/min"})
+    mock_weather(hass)
+    entry = await setup_hub(
+        hass,
+        [
+            zone_data("Alpha", "valve.a", flow_sensor="sensor.a_flow"),
+            zone_data("Beta", "valve.b", order=200, flow_sensor="sensor.b_flow"),
+        ],
+        {"line_flow_sensor": "sensor.line", "leak_action": "close_and_block"},
+    )
+    runtime = entry.runtime_data
+    alpha, beta = runtime.zone_ids
+
+    await advance(hass, freezer, _PAST_CONFIRM_S, step=10.0)
+
+    assert runtime.leak_state(HUB_SCOPE).active is True
+    # Each zone's own meter is dry, so neither is accused on its own account.
+    assert runtime.leak_state(alpha).active is False
+    assert runtime.leak_state(beta).active is False
+    assert runtime.leak_zone_ids(HUB_SCOPE) == [alpha, beta]
+    assert runtime.leak_blocked_zone_ids() == {alpha, beta}
+
+
+async def test_two_alarms_raising_together_arm_one_ledger_entry_for_the_master(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    """One transition can retire at most one entry, however many alarms wanted it.
+
+    Two zone alarms confirming in the same turn both find the master open and
+    both would arm a close. The single close that follows retires one, and the
+    survivor sits for its whole TTL where it can absorb the next genuine manual
+    close -- the trap Task 1 was swept for, arriving through a second alarm
+    instead of a second call.
+    """
+    freezer.move_to(START)
+    park = MockValvePark(hass)
+    park.add("valve.a")
+    park.add("valve.b")
+    park.add("valve.master")
+    hass.states.async_set("binary_sensor.a_leak", "off", {"device_class": "moisture"})
+    hass.states.async_set("binary_sensor.b_leak", "off", {"device_class": "moisture"})
+    mock_weather(hass)
+    entry = await setup_hub(
+        hass,
+        [
+            zone_data("Alpha", "valve.a", at="23:00", leak_sensor="binary_sensor.a_leak"),
+            zone_data("Beta", "valve.b", at="23:00", order=200, leak_sensor="binary_sensor.b_leak"),
+        ],
+        {"master_valve": "valve.master", "leak_confirm_s": 30},
+    )
+    runtime = entry.runtime_data
+    park.set_behavior("valve.master", BEHAVIOR_STUCK)
+    park.force_state("valve.master", "open")
+    hass.states.async_set("binary_sensor.a_leak", "on", {"device_class": "moisture"})
+    hass.states.async_set("binary_sensor.b_leak", "on", {"device_class": "moisture"})
+    await hass.async_block_till_done()
+    before = len(park.commands)
+
+    await advance(hass, freezer, 60, step=10.0)
+
+    alpha, beta = runtime.zone_ids
+    assert runtime.leak_state(alpha).active is True
+    assert runtime.leak_state(beta).active is True
+    assert park.commands[before:].count(("close_valve", "valve.master")) == 1
+    assert runtime.ledger_consume("valve.master", "close") is True
+    assert runtime.ledger_consume("valve.master", "close") is False
+
+
+async def test_the_clearing_notice_does_not_promise_cycles_that_are_still_blocked(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    """One physical leak, two scopes, and only one of them recovers.
+
+    A zone with its own leak sensor sitting behind a shared line meter raises
+    a zone alarm from its sensor AND a hub alarm from the meter. The sensor
+    recovering clears the first; the hub alarm still blocks that zone and its
+    neighbour, so "new cycles are allowed again" would be false at the instant
+    it was sent.
+    """
+    freezer.move_to(START)
+    park = MockValvePark(hass)
+    park.add("valve.a")
+    park.add("valve.b")
+    hass.states.async_set("sensor.line", "2.0", {"unit_of_measurement": "L/min"})
+    hass.states.async_set("binary_sensor.a_leak", "on", {"device_class": "moisture"})
+    mock_weather(hass)
+    sent = _notify_target(hass)
+    entry = await setup_hub(
+        hass,
+        [
+            zone_data("Alpha", "valve.a", at="23:00", leak_sensor="binary_sensor.a_leak"),
+            zone_data("Beta", "valve.b", at="23:00", order=200),
+        ],
+        {
+            **_LEAK_NOTIFICATIONS,
+            "line_flow_sensor": "sensor.line",
+            "leak_action": "close_and_block",
+        },
+    )
+    runtime = entry.runtime_data
+    alpha = runtime.zone_ids[0]
+
+    await advance(hass, freezer, _PAST_CONFIRM_S, step=10.0)
+    assert runtime.leak_state(alpha).active is True
+    assert runtime.leak_state(HUB_SCOPE).active is True
+
+    hass.states.async_set("binary_sensor.a_leak", "off", {"device_class": "moisture"})
+    await advance(hass, freezer, 30, step=10.0)
+
+    assert runtime.leak_state(alpha).active is False
+    assert alpha in runtime.leak_blocked_zone_ids()  # the hub alarm still stands
+    cleared = next(body for body in _bodies(sent) if "cleared" in body)
+    assert "allowed again" not in cleared
+    assert "still blocked by another leak alarm" in cleared
+
+
+async def test_the_action_note_does_not_claim_a_re_close_that_was_skipped(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    """The message and the action must agree about what is being done.
+
+    A running session is not an edge case for the skip: it is the scenario the
+    skip exists for. Telling the user the master was re-closed at the exact
+    moment the component chose not to touch it leaves nothing they can see
+    that says otherwise.
+    """
+    freezer.move_to(START)
+    park = MockValvePark(hass)
+    park.add("valve.a")
+    park.add("valve.b")
+    park.add("valve.master")
+    hass.states.async_set("binary_sensor.a_leak", "off", {"device_class": "moisture"})
+    mock_weather(hass)
+    sent = _notify_target(hass)
+    entry = await setup_hub(
+        hass,
+        [
+            zone_data("Alpha", "valve.a", at="23:00", leak_sensor="binary_sensor.a_leak"),
+            zone_data("Beta", "valve.b", minutes=20, order=200),
+        ],
+        {**_LEAK_NOTIFICATIONS, "master_valve": "valve.master", "leak_confirm_s": 30},
+    )
+    runtime = entry.runtime_data
+
+    await advance(hass, freezer, 31 * 60)  # Beta's cycle starts at 05:30
+    assert hass.states.get("valve.b").state == "open"
+    hass.states.async_set("binary_sensor.a_leak", "on", {"device_class": "moisture"})
+
+    await advance(hass, freezer, 120, step=10.0)
+
+    assert runtime.leak_state(runtime.zone_ids[0]).active is True
+    body = _bodies(sent)[0]
+    assert "the re-close is skipped because a cycle is running" in body
+    assert "commanded closed again" not in body
 
 
 async def test_an_unrecognised_leak_action_is_reported_rather_than_silently_defaulted(
