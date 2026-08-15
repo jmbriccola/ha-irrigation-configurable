@@ -2850,6 +2850,127 @@ async def test_a_valve_that_comes_back_inside_the_grace_is_not_judged(
     assert outcome["result"] == "completed"
 
 
+async def test_a_valve_that_goes_silent_inside_the_grace_is_still_judged(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    """Uncertainty aborts. It is the reopen case's boundary, not its neighbour.
+
+    A hand closes the valve and the device then falls off the radio inside the
+    window -- batteries out, power cut, or a flaky link whose last successful
+    report WAS the close. ``is_closed`` and ``is_open`` are both strict, so the
+    difference between them is exactly where ``unavailable`` lands, and this
+    module resolves uncertainty by cancelling rather than by carrying on. Only
+    a valve we can SEE is open retracts the premise.
+    """
+    freezer.move_to(START)
+    park = MockValvePark(hass)
+    park.add("valve.a")
+    _supply(hass, "off")
+    mock_weather(hass)
+    entry = await setup_hub(
+        hass,
+        [
+            zone_data(
+                "Alpha",
+                "valve.a",
+                minutes=10,
+                water_supply_sensor="binary_sensor.a_supply",
+            )
+        ],
+    )
+    runtime = entry.runtime_data
+    zone_id = runtime.zone_ids[0]
+
+    await advance(hass, freezer, 31 * 60)
+    park.force_state("valve.a", "closed")
+    await advance(hass, freezer, _SUPPLY_EVIDENCE_GRACE_S / 2, step=1.0)
+    park.force_state("valve.a", "unavailable")
+    await advance(hass, freezer, _SUPPLY_EVIDENCE_GRACE_S * 4, step=1.0)
+
+    assert runtime.state.manual_stop_at is not None
+    outcome = runtime.state.last_outcome(zone_id)
+    assert outcome is not None
+    assert outcome["reason_key"] == "manual_intervention"
+
+
+@pytest.mark.parametrize("beta_supply", [None, "off"])
+async def test_a_sibling_sensor_never_speaks_for_the_zone_that_closed(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory, beta_supply: str | None
+) -> None:
+    """The first safety property: the zone's OWN sensor, not a sibling's.
+
+    Two zones water together and BETA's valve closes itself. Alpha's sensor is
+    shouting that Alpha has no water, which says nothing whatever about the
+    pipe behind Beta -- they are different taps. Beta must be judged on Beta's
+    evidence, of which there is none in either case here: no sensor at all, or
+    one reporting the water present.
+
+    Parametrized over both because they reach the same verdict by different
+    routes -- no sensor is judged in the instant, a silent one waits out the
+    grace first -- and the property has to hold on both.
+    """
+    freezer.move_to(START)
+    park = MockValvePark(hass)
+    park.add("valve.a")
+    park.add("valve.b")
+    _supply(hass, "on")  # ALPHA's supply is the one that is gone
+    if beta_supply is not None:
+        _supply(hass, beta_supply, entity_id="binary_sensor.b_supply")
+    mock_weather(hass)
+    beta_extra = (
+        {"water_supply_sensor": "binary_sensor.b_supply"} if beta_supply is not None else {}
+    )
+    entry = await setup_hub(
+        hass,
+        [
+            zone_data(
+                "Alpha",
+                "valve.a",
+                minutes=10,
+                order=1,
+                compatibility_group="drip",
+                water_supply_sensor="binary_sensor.a_supply",
+            ),
+            zone_data(
+                "Beta",
+                "valve.b",
+                minutes=10,
+                order=2,
+                compatibility_group="drip",
+                **beta_extra,
+            ),
+        ],
+        {
+            "max_concurrent": 2,
+            "compatibility_groups": ["drip"],
+            # Otherwise Alpha's own outage refuses Alpha's start and the two
+            # zones never water together, which is the whole premise here.
+            "require_water_supply": False,
+        },
+    )
+    runtime = entry.runtime_data
+    alpha, beta = runtime.zone_ids
+
+    await advance(hass, freezer, 32 * 60)
+    assert hass.states.get("valve.a").state == "open"
+    assert hass.states.get("valve.b").state == "open"
+
+    # Beta's valve shuts. Alpha's sensor is the only one saying "no water".
+    park.force_state("valve.b", "closed")
+    await advance(hass, freezer, _SUPPLY_EVIDENCE_GRACE_S * 4, step=1.0)
+
+    assert runtime.state.manual_stop_at is not None
+    beta_outcome = runtime.state.last_outcome(beta)
+    assert beta_outcome is not None
+    assert beta_outcome["reason_key"] == "manual_intervention"
+    # Nor was ALPHA's run ended on Alpha's evidence for Beta's close: it is
+    # interrupted by the abort, as any zone in an aborted session is, and never
+    # carrying the diagnosis that belongs to the other zone's valve.
+    alpha_outcome = runtime.state.last_outcome(alpha)
+    assert alpha_outcome is not None
+    assert alpha_outcome["reason_key"] == "manual_intervention"
+
+
 async def test_a_verdict_outlives_the_segment_it_was_armed_for(
     hass: HomeAssistant, freezer: FrozenDateTimeFactory
 ) -> None:

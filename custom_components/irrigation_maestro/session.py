@@ -567,10 +567,15 @@ class SessionRunner:
         #
         # Keyed by entity id, so two zones configured on ONE valve entity
         # collapse to the last of them -- inherited from the set this replaced,
-        # which collapsed them too, but now load-bearing for a safety decision:
-        # the exemption would consult that zone's sensor and end that zone's
-        # run alone. Left as it is deliberately; it needs a topology nothing in
-        # the component asks for.
+        # which collapsed them too, but now load-bearing for a safety decision.
+        # The exemption would consult the surviving zone's sensor and end that
+        # zone's run alone, leaving the OTHER zone waiting out its full length
+        # behind a physically shut valve: on a meterless install that ends
+        # RESULT_COMPLETED with estimated litres credited, so a false completed
+        # run and false accounting where the old code aborted both. Left as it
+        # is deliberately -- it needs concurrency AND one entity id configured
+        # on two zones, which nothing in the component asks for -- but the cost
+        # is that, not a tidier abort.
         active_valves = {
             self._runtime.zones[zone_id].valve.entity_id: zone_id for zone_id in self._active
         }
@@ -629,10 +634,18 @@ class SessionRunner:
         closure stops depending on which of two reports the radio delivers
         first.
 
-        One wait per zone, never extended: a second close arriving inside the
-        window is the same premise, and re-arming would let a flapping valve
-        postpone the verdict indefinitely. The wait already re-reads live state
+        One wait per zone, never extended: a second close inside the window is
+        the same premise, so the verdict comes due exactly
+        ``_SUPPLY_EVIDENCE_GRACE_S`` after the close that armed it instead of
+        being pushed further out by every bounce. The wait re-reads live state
         when it ends, so nothing is lost by keeping the first.
+
+        That bounds the timer, not the outcome, and the difference is worth
+        being exact about: a valve found confirmed OPEN at the mark is dropped
+        as a retracted premise (see ``_decide_supply_close``) and the next close
+        arms a fresh wait, so a valve flapping in that rhythm can stay unjudged
+        for as long as it flaps. What is left unjudged there is a device that is
+        open every time we look, which is the state the run wanted anyway.
         """
         if zone_id in self._pending_supply_decisions:
             return
@@ -667,10 +680,19 @@ class SessionRunner:
 
         It does not outlive the SESSION, and it does not survive the valve
         coming back. With no session there is no queue to stop; with the valve
-        open again the premise the close was deferred on describes nothing, and
-        aborting a run whose valve is physically fine would be acting on stale
-        information. The session check is belt to ``_stop_surveillance``'s
-        braces, which cancels every pending verdict outright.
+        confirmed OPEN again the premise the close was deferred on describes
+        nothing, and aborting a run whose valve is physically fine would be
+        acting on stale information. The session check is belt to
+        ``_stop_surveillance``'s braces, which cancels every pending verdict
+        outright.
+
+        ``is_open``, and deliberately not ``not is_closed``: both are strict, so
+        the difference between them is exactly where ``unavailable`` and
+        ``unknown`` land. A valve that goes off the radio inside the window --
+        batteries out, power cut, or a link whose last successful report WAS the
+        close -- is uncertainty, and this module resolves uncertainty by
+        cancelling, never by carrying on. Only a valve we can see is open earns
+        the drop.
         """
         self._pending_supply_decisions.pop(zone_id, None)
         if self._stopping or not self.active:
@@ -679,7 +701,7 @@ class SessionRunner:
             self._end_segment_no_supply(zone_id)
             return
         zone = self._runtime.zones.get(zone_id)
-        if zone is None or not zone.valve.is_closed:
+        if zone is None or zone.valve.is_open:
             return
         self._trigger_manual_abort(REASON_MANUAL)
 
@@ -709,7 +731,13 @@ class SessionRunner:
         valves to be free, settling, opening -- has registered no finisher and
         has no wait to end. The exemption still holds, because the evidence is
         the same and the firmware is as entitled to close then as later; the
-        segment simply reaches its own outcome by its own path.
+        segment goes on to open and water, and reaches its own outcome by its
+        own path. That outcome is not necessarily an honest one: with no meter
+        there is nothing to notice a dry run, so it can record RESULT_COMPLETED
+        for a segment that delivered nothing. Narrow -- the close has to land in
+        one of the phases before watering starts -- and not worth a second
+        mechanism, but it should not be read as though the outcome vouched for
+        the water.
         """
         finisher = self._segment_finishers.get(zone_id)
         if finisher is not None:
