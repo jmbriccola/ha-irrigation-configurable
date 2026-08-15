@@ -585,11 +585,15 @@ class WaterAccountant:
     def scope_is_measuring(self, scope: str) -> bool:
         """Is a meter reporting for this scope producing usable readings NOW?
 
-        Stronger than "the meter exists", and deliberately so: a meter whose
-        unit cannot be resolved publishes a number every tick and contributes
-        no measured seconds at all, so source 2 can never confirm anything from
-        it. ``unit_known`` alone is not enough either -- a meter that has gone
-        unavailable still declares its unit, while measuring nothing.
+        Stronger than "the meter exists", and stronger than the test one
+        reaches for first. ``unit_known`` is the wrong question on its own: a
+        meter that has gone unavailable still declares its unit while
+        measuring nothing. ``available`` is the right one, and it is enough by
+        itself -- ``FlowSensorReader`` sets it only on the path that has
+        already resolved a unit and converted a number, so a reading that is
+        available has both. A meter whose unit cannot be resolved publishes a
+        number every tick and contributes no measured seconds at all, and this
+        is what says so.
 
         Read through this accountant's own override map rather than through a
         reader the caller builds, because the override is what makes a unit
@@ -606,7 +610,7 @@ class WaterAccountant:
             reading = FlowSensorReader(
                 self._runtime.hass, entity_id, self._overrides.get(entity_id)
             ).read()
-            if reading.unit_known and reading.available:
+            if reading.available:
                 return True
         return False
 

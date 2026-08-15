@@ -120,6 +120,31 @@ class LeakDetector:
         self._repeat_unsub: CALLBACK_TYPE | None = None
         self._sensor_wake_unsub: CALLBACK_TYPE | None = None
 
+    @property
+    def confirming(self) -> bool:
+        """Is a confirmation window in flight for this scope right now?
+
+        Read-only, and the only thing in this module that exists for a
+        consumer rather than for the alarm: the leak entity may not conclude
+        "no problem" while evidence is still accumulating here, and the two
+        clocks are not commensurable -- this one counts MEASURED seconds and
+        sensor-plus-valve time, the entity's counts wall clock. Asking is the
+        only way to line them up.
+
+        Source 1 is in flight exactly while its wake is armed: that handle
+        exists only for the interval between an asserting sensor over a closed
+        valve and the moment the pair has stood long enough. Source 2 is in
+        flight while measured above-threshold seconds are on the books but
+        have not yet reached ``leak_confirm_s`` -- ``note_flow`` resets that
+        count to zero on the two readings that end a window (below threshold,
+        or a valve open), so a non-zero count means one is running.
+
+        Deliberately not "could a window start": a dry meter and a quiet
+        sensor are not confirming anything, which is what lets a healthy
+        installation settle rather than wait for ever.
+        """
+        return self._sensor_wake_unsub is not None or self._above_threshold_s > 0.0
+
     # Lifecycle --------------------------------------------------------------
 
     def start(self, *, has_meter: bool) -> None:
