@@ -41,6 +41,10 @@ describe("locale parity: en.ts vs it.ts", () => {
  * a rendered outcome and has deliberately never been given a label.
  */
 describe("every reason key the card can render has a label", () => {
+  // `restart` is excluded on purpose, not by oversight: the card contract
+  // states that a restart leaves no per-cycle outcome by design, so the key
+  // cannot reach a rendered outcome and has deliberately never been given a
+  // label. Do not "fix" this by inventing one.
   const RENDERED = REASON_KEYS.filter((key) => key !== "restart");
 
   it.each(RENDERED)("localizes reason.%s in both locales", (key) => {

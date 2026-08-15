@@ -2095,7 +2095,11 @@ async def test_a_zero_flow_interrupt_names_the_missing_supply_at_once(
     assert outcome is not None
     assert outcome["result"] == "interrupted"
     assert outcome["reason_key"] == "no_water_supply"
-    assert any("no water" in body.lower() for body in _bodies(sent))
+    # The notification carries the same diagnosis as the outcome. Handing the
+    # user the generic one here and the specific one in the panel would be the
+    # exact mismatch this branch exists to remove.
+    assert any("supply sensor reports no water" in body for body in _bodies(sent))
+    assert not any("No flow detected" in body for body in _bodies(sent))
 
 
 async def test_a_zero_flow_interrupt_with_water_present_keeps_the_generic_reason(
@@ -2137,10 +2141,15 @@ async def test_a_zero_flow_interrupt_with_water_present_keeps_the_generic_reason
     assert outcome["reason_key"] == "no_flow"
 
 
-async def test_a_missing_supply_raises_a_repair_and_says_so_on_the_anomaly_channel(
+async def test_a_confirmed_outage_raises_a_repair_and_says_so_on_the_anomaly_channel(
     hass: HomeAssistant, freezer: FrozenDateTimeFactory
 ) -> None:
-    """A supply anomaly, not a leak: the notice goes nowhere near the leak event."""
+    """A supply anomaly, not a leak: the notice goes nowhere near the leak event.
+
+    Announced on the same confirmation the refusal uses. Both assert "the
+    supply is out" as a present fact, and an assertion needs the same evidence
+    whether it withholds water or merely tells you about it.
+    """
     freezer.move_to(START)
     park = MockValvePark(hass)
     park.add("valve.a")
@@ -2159,6 +2168,12 @@ async def test_a_missing_supply_raises_a_repair_and_says_so_on_the_anomaly_chann
 
     _supply(hass, "on")
     await hass.async_block_till_done()
+    assert registry.async_get_issue(DOMAIN, f"water_supply_missing_{zone_id}") is None
+    assert _bodies(sent) == []
+
+    # Nothing else fires when the window merely runs out: the sensor has
+    # already made the only state change it is going to make.
+    await advance(hass, freezer, 190, step=30.0)
 
     issue = registry.async_get_issue(DOMAIN, f"water_supply_missing_{zone_id}")
     assert issue is not None
@@ -2188,15 +2203,17 @@ async def test_the_repair_and_a_notice_follow_the_water_back(
     runtime = entry.runtime_data
     zone_id = runtime.zone_ids[0]
     registry = ir.async_get(hass)
+    await advance(hass, freezer, 190, step=30.0)
     assert registry.async_get_issue(DOMAIN, f"water_supply_missing_{zone_id}") is not None
 
+    # No window on the way out: the water returning is itself the evidence.
     _supply(hass, "off")
     await hass.async_block_till_done()
 
     assert registry.async_get_issue(DOMAIN, f"water_supply_missing_{zone_id}") is None
     assert runtime.water_supply_missing(zone_id) is False
     assert len(_bodies(sent)) == 2
-    assert "back" in _bodies(sent)[1]
+    assert "the water supply is back" in _bodies(sent)[1]
 
 
 async def test_a_supply_already_missing_at_startup_is_noticed(
@@ -2222,29 +2239,37 @@ async def test_a_supply_already_missing_at_startup_is_noticed(
     zone_id = runtime.zone_ids[0]
     registry = ir.async_get(hass)
 
-    assert registry.async_get_issue(DOMAIN, f"water_supply_missing_{zone_id}") is not None
+    assert registry.async_get_issue(DOMAIN, f"water_supply_missing_{zone_id}") is None
     assert runtime.water_supply_block_active(zone_id) is False
 
     await advance(hass, freezer, 610, step=60.0)
+    assert registry.async_get_issue(DOMAIN, f"water_supply_missing_{zone_id}") is not None
     assert runtime.water_supply_block_active(zone_id) is True
 
 
 async def test_removing_the_supply_sensor_takes_the_repair_down(
     hass: HomeAssistant, freezer: FrozenDateTimeFactory
 ) -> None:
-    """The user's own statement that the sensor is gone. Nothing else could clear it."""
+    """The user's own statement that the sensor is gone. Nothing else could clear it.
+
+    And it must not be reported as the water coming back, which is a different
+    fact and one nobody has established.
+    """
     freezer.move_to(START)
     park = MockValvePark(hass)
     park.add("valve.a")
     _supply(hass, "on")
     mock_weather(hass)
+    sent = _notify_target(hass)
     entry = await setup_hub(
         hass,
         [zone_data("Alpha", "valve.a", water_supply_sensor="binary_sensor.a_supply")],
+        _SUPPLY_NOTIFICATIONS,
     )
     runtime = entry.runtime_data
     zone_id = runtime.zone_ids[0]
     registry = ir.async_get(hass)
+    await advance(hass, freezer, 190, step=30.0)
     assert registry.async_get_issue(DOMAIN, f"water_supply_missing_{zone_id}") is not None
 
     await _reconfigure_zone(hass, entry, zone_id, water_supply_sensor="")
@@ -2252,6 +2277,8 @@ async def test_removing_the_supply_sensor_takes_the_repair_down(
     assert registry.async_get_issue(DOMAIN, f"water_supply_missing_{zone_id}") is None
     assert runtime.water_supply_missing(zone_id) is False
     assert runtime.water_supply_block_active(zone_id) is False
+    assert "sensor has been removed" in _bodies(sent)[1]
+    assert "back" not in _bodies(sent)[1]
 
 
 async def test_removing_the_zone_takes_the_repair_down(
@@ -2274,6 +2301,7 @@ async def test_removing_the_zone_takes_the_repair_down(
     runtime = entry.runtime_data
     zone_id = runtime.zone_ids[0]
     registry = ir.async_get(hass)
+    await advance(hass, freezer, 190, step=30.0)
     assert registry.async_get_issue(DOMAIN, f"water_supply_missing_{zone_id}") is not None
 
     hass.config_entries.async_remove_subentry(entry, zone_id)
@@ -2299,3 +2327,82 @@ async def test_the_supply_confirmation_window_round_trips_through_the_service(
 
     assert entry.options["water_supply_confirm_s"] == 240
     assert entry.runtime_data.hub.water_supply_confirm_s == 240
+
+
+async def test_a_flapping_supply_sensor_is_never_announced(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    """The confirmation window, on the telling as well as on the withholding.
+
+    A sensor flapping faster than the window would otherwise produce a repair
+    notice and a notification pair per flap -- the alarm fatigue the rest of
+    this feature's anti-noise design exists to prevent, and the reason the leak
+    alarm has a window at all. An outage that outlasts the window gets exactly
+    one of each.
+    """
+    freezer.move_to(START)
+    park = MockValvePark(hass)
+    park.add("valve.a")
+    _supply(hass, "off")
+    mock_weather(hass)
+    sent = _notify_target(hass)
+    entry = await setup_hub(
+        hass,
+        [zone_data("Alpha", "valve.a", at="23:00", water_supply_sensor="binary_sensor.a_supply")],
+        {**_SUPPLY_NOTIFICATIONS, "water_supply_confirm_s": 600},
+    )
+    runtime = entry.runtime_data
+    zone_id = runtime.zone_ids[0]
+    registry = ir.async_get(hass)
+
+    for _ in range(6):
+        _supply(hass, "on")
+        await advance(hass, freezer, 60, step=30.0)
+        _supply(hass, "off")
+        await advance(hass, freezer, 60, step=30.0)
+
+    assert registry.async_get_issue(DOMAIN, f"water_supply_missing_{zone_id}") is None
+    assert _bodies(sent) == []
+
+    _supply(hass, "on")
+    await advance(hass, freezer, 610, step=30.0)
+
+    assert registry.async_get_issue(DOMAIN, f"water_supply_missing_{zone_id}") is not None
+    assert len(_bodies(sent)) == 1
+    assert runtime.water_supply_block_active(zone_id) is True
+
+
+async def test_a_supply_sensor_that_goes_silent_does_not_claim_the_water_is_back(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    """Silence is not evidence, and the two safe directions differ here.
+
+    The block lifts, because withholding water needs positive evidence that
+    there is none. The notice stands, because taking it down would announce
+    that the water is back -- a claim nobody has established, and one that
+    would be false at the instant it was sent.
+    """
+    freezer.move_to(START)
+    park = MockValvePark(hass)
+    park.add("valve.a")
+    _supply(hass, "on")
+    mock_weather(hass)
+    sent = _notify_target(hass)
+    entry = await setup_hub(
+        hass,
+        [zone_data("Alpha", "valve.a", at="23:00", water_supply_sensor="binary_sensor.a_supply")],
+        _SUPPLY_NOTIFICATIONS,
+    )
+    runtime = entry.runtime_data
+    zone_id = runtime.zone_ids[0]
+    registry = ir.async_get(hass)
+    await advance(hass, freezer, 190, step=30.0)
+    assert registry.async_get_issue(DOMAIN, f"water_supply_missing_{zone_id}") is not None
+
+    _supply(hass, "unavailable")
+    await advance(hass, freezer, 190, step=30.0)
+
+    assert registry.async_get_issue(DOMAIN, f"water_supply_missing_{zone_id}") is not None
+    assert len(_bodies(sent)) == 1
+    assert runtime.water_supply_missing(zone_id) is False
+    assert runtime.water_supply_block_active(zone_id) is False
