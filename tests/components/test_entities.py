@@ -800,6 +800,53 @@ async def test_water_accounting_is_unavailable_when_the_configured_meters_unit_i
     assert state.attributes["capabilities"]["water_accounting"] == "unavailable"
 
 
+async def test_water_accounting_agrees_with_source_when_a_configured_meter_is_unusable(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    """Regression: checking zone_has_flow_meter before the live usability
+    check made a zone with a broken meter AND a nominal fallback report
+    "unavailable" while add_consumption silently booked the nominal
+    estimate underneath and zone_water_total's own `source` read "nominal"
+    for the very same zone -- two attributes of one entity disagreeing about
+    whether accounting was happening, which was simply false: it was, in
+    estimated mode. Both must follow the same order now -- a usable meter
+    first, the nominal fallback second -- so they agree by construction.
+
+    (The companion case, the same broken meter with no nominal set, stays
+    "unavailable" and is already covered by
+    test_water_accounting_is_unavailable_when_the_configured_meters_unit_is_unresolvable
+    above.)
+    """
+    freezer.move_to(START)
+    park = MockValvePark(hass)
+    park.add("valve.a")
+    hass.states.async_set("sensor.flow", "7.5")  # no unit declared -- unusable
+    mock_weather(hass)
+    entry = await setup_hub(
+        hass,
+        [
+            zone_data(
+                "Alpha",
+                "valve.a",
+                minutes=10,
+                flow_sensor="sensor.flow",
+                nominal_flow_lpm=7.5,
+            )
+        ],
+    )
+    runtime = entry.runtime_data
+    zone_id = runtime.zone_ids[0]
+    await advance(hass, freezer, 31 * 60)
+    await advance(hass, freezer, 11 * 60)
+
+    state = role_state(hass, "zone_state", zone_id)
+    water = role_state(hass, "zone_water_total", zone_id=zone_id)
+    assert state is not None
+    assert water is not None
+    assert state.attributes["capabilities"]["water_accounting"] == "estimated"
+    assert water.attributes["source"] == "nominal"
+
+
 async def test_a_configured_sensor_that_has_vanished_is_distinguishable_from_a_healthy_one(
     hass: HomeAssistant, freezer: FrozenDateTimeFactory
 ) -> None:

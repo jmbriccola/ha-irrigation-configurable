@@ -337,23 +337,28 @@ class ZoneStateSensor(MaestroZoneEntity, SensorEntity):
         whole model. "candidate_available" means the hardware could do it
         and has not been told to: an invitation in the card, not an alarm.
 
-        water_accounting comes from the meter (zone_has_flow_meter /
-        zone_flow_meter_usable), not from capabilities.py, which knows
-        nothing about flow. The two runtime calls are deliberately separate:
-        zone_has_flow_meter is configuration only, so a momentarily
-        unavailable sensor cannot flip it; zone_flow_meter_usable reads live
-        state, so a meter whose unit cannot be resolved right now correctly
-        degrades. A zone with neither a resolvable meter nor a usable
-        nominal rate reports "unavailable" -- the same verdict
-        zone_water_total's own `source: none` reaches for it, and by the
-        same configuration-only test, so the two never disagree.
+        water_accounting comes from the meter (zone_flow_meter_usable), not
+        from capabilities.py, which knows nothing about flow, and it follows
+        zone_water_total's own `source` ordering on purpose: usable meter
+        first, nominal fallback second, so the two agree by construction
+        rather than by coincidence. Checking zone_has_flow_meter first (a
+        configuration-only test) was tried and rejected: it made a zone with
+        a configured-but-currently-unusable meter and a nominal rate report
+        "unavailable" while add_consumption was silently booking the nominal
+        estimate underneath and zone_water_total.source read "nominal" for
+        the very same zone -- two attributes of the same entity disagreeing
+        about whether accounting was happening, which is false on this
+        field's part: accounting *was* happening, in estimated mode.
+        zone_flow_meter_usable already covers "no meter configured" (it
+        returns False whenever no meter entity resolves), so no separate
+        zone_has_flow_meter check is needed here.
         """
         runtime = self._runtime
         caps = resolve_zone_capabilities(self.hass, config)
-        if not runtime.zone_has_flow_meter(config):
-            accounting = "estimated" if config.nominal_flow_lpm else "unavailable"
-        elif runtime.zone_flow_meter_usable(runtime.zones[config.zone_id]):
+        if runtime.zone_flow_meter_usable(runtime.zones[config.zone_id]):
             accounting = "measured"
+        elif config.nominal_flow_lpm:
+            accounting = "estimated"
         else:
             accounting = "unavailable"
         return {
