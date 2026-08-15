@@ -9,9 +9,11 @@ from typing import Any
 
 import pytest
 from custom_components.irrigation_maestro.const import DOMAIN
+from custom_components.irrigation_maestro.runtime import SIGNAL_UPDATE
 from freezegun.api import FrozenDateTimeFactory
 from homeassistant.core import HomeAssistant, State
 from homeassistant.helpers import entity_registry as er
+from homeassistant.helpers.dispatcher import async_dispatcher_send
 from homeassistant.util import dt as dt_util
 
 from .mocks import MockValvePark
@@ -787,6 +789,8 @@ async def test_water_accounting_is_unavailable_with_no_meter_and_no_nominal_flow
 async def test_water_accounting_is_unavailable_when_the_configured_meters_unit_is_unresolvable(
     hass: HomeAssistant, freezer: FrozenDateTimeFactory
 ) -> None:
+    """Nothing has accrued and nothing currently can: `zone_water_total`'s
+    own `source` must agree at this same zero point, not just `capabilities`."""
     freezer.move_to(START)
     park = MockValvePark(hass)
     park.add("valve.a")
@@ -796,8 +800,38 @@ async def test_water_accounting_is_unavailable_when_the_configured_meters_unit_i
     zone_id = entry.runtime_data.zone_ids[0]
 
     state = role_state(hass, "zone_state", zone_id)
+    water = role_state(hass, "zone_water_total", zone_id=zone_id)
     assert state is not None
+    assert water is not None
     assert state.attributes["capabilities"]["water_accounting"] == "unavailable"
+    assert water.attributes["source"] == "none"
+
+
+async def test_a_zero_nominal_alongside_a_never_usable_meter_also_reads_none(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    """A distinct scenario from the "no nominal at all" case above: a meter
+    is configured but has never resolved a unit, AND `nominal_flow_lpm` is
+    explicitly `0` rather than unset. Falsy either way -- `source` and
+    `capabilities.water_accounting` must agree here too, not just when
+    nominal is unset."""
+    freezer.move_to(START)
+    park = MockValvePark(hass)
+    park.add("valve.a")
+    hass.states.async_set("sensor.flow", "7.5")  # no unit declared -- unusable
+    mock_weather(hass)
+    entry = await setup_hub(
+        hass,
+        [zone_data("Alpha", "valve.a", flow_sensor="sensor.flow", nominal_flow_lpm=0.0)],
+    )
+    zone_id = entry.runtime_data.zone_ids[0]
+
+    state = role_state(hass, "zone_state", zone_id)
+    water = role_state(hass, "zone_water_total", zone_id=zone_id)
+    assert state is not None
+    assert water is not None
+    assert state.attributes["capabilities"]["water_accounting"] == "unavailable"
+    assert water.attributes["source"] == "none"
 
 
 async def test_water_accounting_agrees_with_source_when_a_configured_meter_is_unusable(
@@ -881,6 +915,39 @@ async def test_a_configured_sensor_that_has_vanished_is_distinguishable_from_a_h
     # Only the vanished one is flagged, and only here.
     assert "leak_sensor_missing" not in healthy.attributes["degraded"]
     assert "leak_sensor_missing" in ghost.attributes["degraded"]
+
+
+async def test_a_configured_sensor_is_flagged_missing_once_a_zigbee_repair_removes_it(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    """The actual scenario _entity_known exists for: not an id that never
+    existed (covered above), but a sensor that was present and healthy and
+    then disappeared -- a device deleted, a Zigbee re-pair that assigns the
+    replacement a new entity_id and leaves the old one gone from the
+    registry entirely."""
+    freezer.move_to(START)
+    valve = _valve_with_siblings(hass)
+    park = MockValvePark(hass)
+    park.add(valve)
+    mock_weather(hass)
+    entry = await setup_hub(hass, [zone_data("Vasi", valve, leak_sensor="binary_sensor.swv1_b1")])
+    runtime = entry.runtime_data
+    zone_id = runtime.zone_ids[0]
+
+    before = role_state(hass, "zone_state", zone_id)
+    assert before is not None
+    assert "leak_sensor_missing" not in before.attributes["degraded"]
+
+    er.async_get(hass).async_remove("binary_sensor.swv1_b1")
+    # No listener watches a leak sensor's registry entry (only flow meters
+    # get one, for volume mode and the rescale notice) -- entities do not
+    # poll, so force the same re-render SIGNAL_UPDATE drives in production.
+    async_dispatcher_send(hass, SIGNAL_UPDATE, entry.entry_id)
+    await hass.async_block_till_done()
+
+    after = role_state(hass, "zone_state", zone_id)
+    assert after is not None
+    assert "leak_sensor_missing" in after.attributes["degraded"]
 
 
 async def test_the_zone_water_sensor_is_a_statistics_grade_total(
