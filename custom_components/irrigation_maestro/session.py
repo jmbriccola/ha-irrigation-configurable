@@ -979,6 +979,12 @@ class SessionRunner:
         return future.result(), liters, elapsed_min, had_usable_unit
 
     async def _close_valve(self, valve: ValveController) -> bool:
+        # A valve already closed produces no transition, so a ledger entry
+        # registered here would never be consumed and would sit for its whole
+        # TTL, absorbing the next genuine manual close. runtime.async_close_all_valves
+        # guards the same way -- this made _close_valve the odd one out.
+        if valve.is_closed:
+            return True
         self._runtime.ledger_expect(valve.entity_id, "close")
         await valve.async_close()
         hub = self._runtime.hub
