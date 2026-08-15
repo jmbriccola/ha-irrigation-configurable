@@ -792,6 +792,16 @@
     "notification_status": {
       "name": "Notification status",
       "description": "Reports which events notify, which recipients they reach, which recipients no longer exist, and whether the system is mute."
+    },
+    "discover_zone_sensors": {
+      "name": "Discover zone sensors",
+      "description": "Reports the leak and water-supply sensors already configured for a zone, plus any matching sensor found on its valve's own device. A found sensor is only a suggestion; it takes effect only once saved with update_zone.",
+      "fields": {
+        "zone_id": {
+          "name": "Zone",
+          "description": "The zone to inspect."
+        }
+      }
     }
   },
   "issues": {
