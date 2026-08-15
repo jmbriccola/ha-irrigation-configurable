@@ -23,6 +23,7 @@ from freezegun.api import FrozenDateTimeFactory
 from homeassistant.config_entries import ConfigSubentry
 from homeassistant.core import HomeAssistant, ServiceCall
 from homeassistant.helpers import issue_registry as ir
+from homeassistant.util.async_ import get_scheduled_timer_handles
 
 from .mocks import BEHAVIOR_STUCK, MockValvePark
 from .test_session import START, advance, mock_weather, setup_hub, zone_data
@@ -1781,6 +1782,27 @@ def _supply(hass: HomeAssistant, state: str, entity_id: str = "binary_sensor.a_s
     hass.states.async_set(entity_id, state, {"device_class": "problem"})
 
 
+def _pending_supply_wakes(hass: HomeAssistant) -> int:
+    """How many supply confirmation windows are armed on the event loop.
+
+    Reaches into the loop's own scheduled handles because that is the only
+    place the thing being asserted exists: see the test that uses it. The
+    shape of a handle armed by ``async_call_later`` -- a HassJob as the last
+    argument -- is the same one the test harness's own lingering-timer check
+    reads.
+    """
+    count = 0
+    for handle in get_scheduled_timer_handles(hass.loop):
+        if handle.cancelled() or not handle._args:
+            continue
+        target = getattr(handle._args[-1], "target", None)
+        # Unwrap the functools.partial that carries the zone id.
+        func = getattr(target, "func", target)
+        if getattr(func, "__name__", None) == "_on_supply_wake":
+            count += 1
+    return count
+
+
 async def test_water_supply_polarity_on_means_no_water(
     hass: HomeAssistant, freezer: FrozenDateTimeFactory
 ) -> None:
@@ -2406,3 +2428,46 @@ async def test_a_supply_sensor_that_goes_silent_does_not_claim_the_water_is_back
     assert len(_bodies(sent)) == 1
     assert runtime.water_supply_missing(zone_id) is False
     assert runtime.water_supply_block_active(zone_id) is False
+
+
+async def test_a_superseded_confirmation_window_leaves_no_timer_behind(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    """White-box on purpose: what this prevents has no other symptom.
+
+    A wake left armed after its window has been superseded is inert -- it
+    re-reads live state, and the "already announced" guard swallows whatever
+    it concludes -- so no behaviour misbehaves and no black-box assertion can
+    catch it. What grows is the event loop's timer list, one entry per flap,
+    for as long as Home Assistant runs. So the assertion is on the thing that
+    actually grows.
+    """
+    freezer.move_to(START)
+    park = MockValvePark(hass)
+    park.add("valve.a")
+    _supply(hass, "off")
+    mock_weather(hass)
+    entry = await setup_hub(
+        hass,
+        [zone_data("Alpha", "valve.a", at="23:00", water_supply_sensor="binary_sensor.a_supply")],
+        {"water_supply_confirm_s": 3600},
+    )
+    runtime = entry.runtime_data
+    zone_id = runtime.zone_ids[0]
+
+    _supply(hass, "on")
+    await advance(hass, freezer, 30, step=10.0)
+    assert _pending_supply_wakes(hass) == 1
+
+    # The sensor goes quiet: there is no longer anything to confirm, so the
+    # window it was waiting out has to go with it.
+    _supply(hass, "unavailable")
+    await advance(hass, freezer, 30, step=10.0)
+    assert _pending_supply_wakes(hass) == 0
+
+    # And back. One window, not two: the second must replace the first rather
+    # than join it.
+    _supply(hass, "on")
+    await advance(hass, freezer, 30, step=10.0)
+    assert _pending_supply_wakes(hass) == 1
+    assert set(runtime._supply_wake_unsubs) == {zone_id}

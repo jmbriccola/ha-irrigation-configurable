@@ -709,11 +709,11 @@
         },
         "require_water_supply": {
           "name": "Require the water supply",
-          "description": "Refuse to start a cycle for a zone whose water-supply sensor reports no water. With no water the cycle waters nothing anyway, so blocking costs the garden nothing."
+          "description": "Refuse to start a cycle for a zone whose water-supply sensor reports no water, once the outage has lasted the confirmation window below. With no water the cycle waters nothing anyway, so blocking costs the garden nothing. Switching this off leaves the repair notice and the notification in place: they report a condition, and choosing to water through it is not choosing not to hear about it."
         },
         "water_supply_confirm_s": {
           "name": "Water-supply confirmation",
-          "description": "Seconds the supply must have been reported missing before a cycle start is refused, so that a single flaky reading cannot withhold water. It does not delay the diagnosis of a cycle the zero-flow guard has already interrupted, which names the missing supply straight away. After a restart the clock starts again, because how long the water has been gone is not knowable."
+          "description": "Seconds the supply must have been reported missing before anything acts on it: only once the outage has lasted this long is a cycle start refused, a repair notice raised and a notification sent. A single flaky reading then neither withholds water nor says anything, so a long value postpones being told exactly as much as it postpones the refusal. It does not delay the diagnosis of a cycle the zero-flow guard has already interrupted, which names the missing supply straight away. After a restart the clock starts again, because how long the water has been gone is not knowable."
         }
       }
     },
@@ -919,7 +919,7 @@
     },
     "water_supply_missing": {
       "title": "No water supply for {zone}",
-      "description": "The water-supply sensor of zone {zone} reports that the water is gone. That sensor has a \"problem\" device class, so \"on\" means the problem is present -- no water -- however its name reads. This is not a leak: nothing is escaping, there is simply nothing to water with. Check the tap, the mains pressure and any upstream shut-off. Unless the water-supply requirement has been switched off, no new cycle starts for this zone once the outage has lasted the confirmation window, so that a single flaky reading cannot withhold water; a cycle that starts anyway is interrupted by the zero-flow guard a few minutes later, which then names the missing supply as the reason. This notice goes as soon as the sensor reports water again, or the sensor is removed from the zone."
+      "description": "The water-supply sensor of zone {zone} reports that the water is gone. That sensor has a \"problem\" device class, so \"on\" means the problem is present -- no water -- however its name reads. This is not a leak: nothing is escaping, there is simply nothing to water with. Check the tap, the mains pressure and any upstream shut-off. While the sensor keeps reporting the outage, and unless the water-supply requirement has been switched off, no new cycle starts for this zone -- the refusal waits for the outage to last the confirmation window, so that a single flaky reading cannot withhold water, and a cycle that starts anyway is interrupted by the zero-flow guard a few minutes later, which then names the missing supply as the reason. If instead the sensor itself falls silent -- unavailable or unknown, as a battery or Zigbee device may well do during the very outage it reported -- this notice stays but the refusal lifts, and the two are not in contradiction: silence is no evidence that the water came back, so nothing here may claim it did, while withholding water needs positive evidence that there is none. This notice goes as soon as the sensor reports water again, or the sensor is removed from the zone."
     },
     "leak_action_invalid": {
       "title": "Unrecognised leak action",

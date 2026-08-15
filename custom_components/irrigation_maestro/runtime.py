@@ -1810,11 +1810,29 @@ class IrrigationRuntime:
         happened is exempt, because there the reading at that moment IS the
         evidence and a window would blur a precise answer into a generic one.
         """
+        remaining_s = self._water_supply_remaining_s(zone_id)
+        return remaining_s is not None and remaining_s <= 0
+
+    def _water_supply_remaining_s(self, zone_id: str) -> float | None:
+        """Seconds still to run before this zone's outage may be asserted.
+
+        ``None`` when there is nothing to assert -- no sensor, or a sensor not
+        reporting the water gone. Zero or below means confirmed.
+
+        One expression of the threshold, not two. The announcement needs the
+        remaining seconds anyway, to arm the wake that fires when the window
+        merely runs out, and a second comparison written beside it is a second
+        place for the two answers to drift apart.
+
+        Read from the sensor state's own ``last_changed``, so there is nothing
+        of ours to keep, restart or drift. After a restart a restored state's
+        ``last_changed`` is the restore, so the clock starts again.
+        """
         state = self._water_supply_alarm(zone_id)
         if state is None:
-            return False
+            return None
         elapsed_s = (dt_util.utcnow() - state.last_changed).total_seconds()
-        return elapsed_s >= self.hub.water_supply_confirm_s
+        return self.hub.water_supply_confirm_s - elapsed_s
 
     def _water_supply_alarm(self, zone_id: str) -> State | None:
         """This zone's supply sensor, but only while it reports no water.
@@ -1927,15 +1945,13 @@ class IrrigationRuntime:
         """
         self._cancel_supply_wake(zone_id)
         announced = zone_id in self._supply_announced
-        state = self._water_supply_alarm(zone_id)
-        if state is None:
+        remaining_s = self._water_supply_remaining_s(zone_id)
+        if remaining_s is None:
             if announced and self._water_supply_restored(zone_id):
                 self._withdraw_water_supply(zone_id)
             return
         if announced:
             return  # already said, and a standing condition says it once
-        elapsed_s = (dt_util.utcnow() - state.last_changed).total_seconds()
-        remaining_s = self.hub.water_supply_confirm_s - elapsed_s
         if remaining_s <= 0:
             self._announce_water_supply(zone_id)
             return
@@ -1974,8 +1990,12 @@ class IrrigationRuntime:
             translation_key="water_supply_missing",
             translation_placeholders={"zone": name},
         )
+        # Present tense, and no promise about what happens next. The refusal
+        # ends when the water returns, but it also ends if this sensor simply
+        # goes quiet -- withholding water needs positive evidence that there is
+        # none -- and a snapshot must not undertake to keep refusing.
         gate = (
-            " No new cycle starts for this zone until the water returns."
+            " No new cycle starts for this zone."
             if self.hub.require_water_supply
             else " Cycles still start: the water-supply gate is switched off."
         )
