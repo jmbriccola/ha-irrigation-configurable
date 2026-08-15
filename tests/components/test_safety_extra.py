@@ -521,7 +521,14 @@ async def test_a_unit_lost_mid_cycle_freezes_litres_without_crashing(
     # mid-cycle.
     notices = [event for event in anomalies if "sensor.flow" in event.data["message"]]
     assert len(notices) == 1
-    assert "no longer being used" in notices[0].data["message"]
+    message = notices[0].data["message"]
+    assert "lost its flow readings" in message  # what happened
+    assert "Volume mode and flow anomaly detection are off" in message  # what it costs
+    # And no remedy that only fits one of the two causes. The same transition
+    # is what a meter retired mid-run publishes (MeterLedger.retire), and
+    # "until its unit is set" cannot be done to a sensor that is no longer
+    # configured -- a fix that cannot work is worse than none, mid-cycle.
+    assert "until its unit is set" not in message
 
     runtime = entry.runtime_data
     outcome = runtime.state.last_outcome(runtime.zone_ids[0])
