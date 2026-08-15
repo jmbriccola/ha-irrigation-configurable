@@ -98,8 +98,8 @@ class LeakDetector:
 
     # Lifecycle --------------------------------------------------------------
 
-    def start(self) -> None:
-        """Subscribe to source 1's inputs and read where they stand.
+    def start(self, *, has_meter: bool) -> None:
+        """Re-attach both sources to the configuration as it stands now.
 
         Idempotent, and safe to call again after a configuration change: the
         subscriptions are rebuilt against whatever the zone declares now, while
@@ -109,29 +109,50 @@ class LeakDetector:
         confirmation window in progress: source 1's elapsed time is derived
         from the entities' own ``last_changed``, never from a clock of ours
         that a rebuild would reset.
+
+        A source that has been DE-CONFIGURED is a different matter, and this is
+        the only place either can be noticed. An alarm is withdrawn by evidence
+        that the water stopped, and that evidence arrives through the source
+        itself -- so a source removed while its alarm stands leaves an alarm
+        nothing can ever clear, repeating on its timer until Home Assistant
+        restarts, and (from Task 8) capable of blocking every cycle under
+        ``close_and_block``. Removing the source is the user's own statement,
+        so it withdraws: see ``_evaluate_valve_sensor`` for source 1 and
+        ``has_meter`` here for source 2.
+
+        ``has_meter`` says whether any running ledger still reports for this
+        scope, and must come from WaterAccountant.metered_scopes -- the
+        accountant owns which meter serves whom, including the case that makes
+        this worse than a plain removal: put a second zone behind a zone's
+        meter and its scope becomes HUB_SCOPE, so a stale zone alarm and a
+        fresh hub alarm would otherwise stand together for one physical leak.
         """
         self._unsubscribe_sources()
         zone = self._zone
         sensor = zone.config.leak_sensor if zone else None
-        if zone is None or not sensor:
+        if zone is not None and sensor:
             # Truthiness, not ``is not None``: update_zone stores "" as a way
             # of clearing the key, and subscribing to that would bind a
-            # listener to nothing. A HUB_SCOPE detector lands here too -- it
+            # listener to nothing. A HUB_SCOPE detector never gets here -- it
             # has no zone, so it has no leak sensor and no valve of its own.
-            return
-        # The valve matters as much as the sensor: source 1 only counts while
-        # this zone's own valve reports closed, so a valve transition can start
-        # or invalidate a confirmation window without the sensor moving at all.
-        self._unsubs.append(
-            async_track_state_change_event(
-                self._runtime.hass, [sensor, zone.valve.entity_id], self._on_source_1_input
+            #
+            # The valve matters as much as the sensor: source 1 only counts
+            # while this zone's own valve reports closed, so a valve transition
+            # can start or invalidate a confirmation window without the sensor
+            # moving at all.
+            self._unsubs.append(
+                async_track_state_change_event(
+                    self._runtime.hass, [sensor, zone.valve.entity_id], self._on_source_1_input
+                )
             )
-        )
-        # A sensor ALREADY reporting a leak when we start would otherwise never
-        # be noticed: it has no further state change left to make. That is the
-        # leak which began while Home Assistant was down -- the one the user
-        # most needs to be told about.
+        # Judge source 1 from live state, whether or not it still exists. A
+        # sensor ALREADY reporting a leak when we start would otherwise never
+        # be noticed -- it has no further state change left to make, which is
+        # the leak that began while Home Assistant was down -- and a sensor
+        # just removed would never be withdrawn.
         self._evaluate_valve_sensor()
+        if not has_meter:
+            self._forget_flow()
 
     def stop(self) -> None:
         self._unsubscribe_sources()
@@ -182,6 +203,12 @@ class LeakDetector:
         zone = self._zone
         sensor = zone.config.leak_sensor if zone else None
         if zone is None or not sensor:
+            # No sensor configured any more (or none ever, for a hub scope).
+            # Withdrawn rather than merely unwatched: nothing else will ever
+            # call this again for that source, so a bare return would strand an
+            # alarm raised by a sensor the user has since removed. A no-op when
+            # the source was not among the alarm's own.
+            self._withdraw(SOURCE_VALVE_SENSOR)
             return
         state = self._runtime.hass.states.get(sensor)
         value = None if state is None else state.state
@@ -297,6 +324,23 @@ class LeakDetector:
         if self._above_threshold_s >= hub.leak_confirm_s:
             self._raise(SOURCE_NO_FLOW_CLOSED)
 
+    def _forget_flow(self) -> None:
+        """No ledger reports for this scope any more, so source 2 has gone mute.
+
+        The counterpart of the sensor withdrawal in ``_evaluate_valve_sensor``,
+        and for the same reason: ``note_flow`` is the only path that can ever
+        withdraw ``no_flow_closed``, so a meter removed or repointed away would
+        otherwise leave that source asserted for good.
+
+        Deliberately different from a meter that is merely UNREADABLE, which
+        holds the alarm because absence of evidence is not evidence of absence.
+        Here the user has removed the source: there is no longer any mechanism
+        that could ever produce the evidence, and an alarm that can never clear
+        is worse than one cleared a little eagerly.
+        """
+        self._above_threshold_s = 0.0
+        self._withdraw(SOURCE_NO_FLOW_CLOSED)
+
     # The single alarm --------------------------------------------------------
 
     def _raise(self, source: str) -> None:
@@ -342,9 +386,14 @@ class LeakDetector:
             )
             self._runtime.dispatch_update()
             return
+        cleared = self.state
         self.state = LeakState()
         self._cancel_repeat()
-        self._runtime.on_leak_cleared(self._scope)
+        # The state as it was, not the empty one that replaced it: an
+        # automation (and Task 8's clearing notice) has to be able to say what
+        # kind of leak just ended, and "first_source: null, sources: []" tells
+        # it nothing at all.
+        self._runtime.on_leak_cleared(self._scope, cleared)
 
     # The reminder ------------------------------------------------------------
 

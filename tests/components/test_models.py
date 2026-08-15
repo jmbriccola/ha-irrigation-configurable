@@ -337,3 +337,51 @@ def test_the_leak_settings_are_read_from_the_hub_options() -> None:
     assert hub.leak_confirm_s == 600
     assert hub.leak_repeat_min == 30
     assert hub.require_water_supply is False
+
+
+def test_an_unknown_leak_action_falls_back_to_the_default() -> None:
+    """It must never reach the runtime, where it would silently do nothing.
+
+    Every comparison against the legal set would miss, degrading the default
+    "close" into "notify" without saying so -- the failure being least visible
+    exactly when it matters most.
+    """
+    hub = HubConfig.from_options({"weather_entity": "weather.x", "leak_action": "sound_the_horn"})
+    assert hub.leak_action == "close"
+
+
+@pytest.mark.parametrize(
+    ("key", "attribute", "expected"),
+    [
+        ("leak_threshold_lpm", "leak_threshold_lpm", 0.5),
+        ("leak_confirm_s", "leak_confirm_s", 300),
+        ("leak_repeat_min", "leak_repeat_min", 360),
+    ],
+)
+def test_a_negative_leak_tunable_falls_back_to_the_default(
+    key: str, attribute: str, expected: float
+) -> None:
+    """A negative confirmation window is already over on the first sample.
+
+    The detector would alarm instantly and permanently on a value the user
+    almost certainly typed by accident, so it is corrected at parse time rather
+    than acted on.
+    """
+    hub = HubConfig.from_options({"weather_entity": "weather.x", key: -5})
+    assert getattr(hub, attribute) == expected
+
+
+def test_zero_stays_legal_for_every_leak_tunable() -> None:
+    """Each zero is a meaningful choice, not a mistake: any flow at all, no
+    waiting, no reminders."""
+    hub = HubConfig.from_options(
+        {
+            "weather_entity": "weather.x",
+            "leak_threshold_lpm": 0,
+            "leak_confirm_s": 0,
+            "leak_repeat_min": 0,
+        }
+    )
+    assert hub.leak_threshold_lpm == 0.0
+    assert hub.leak_confirm_s == 0
+    assert hub.leak_repeat_min == 0

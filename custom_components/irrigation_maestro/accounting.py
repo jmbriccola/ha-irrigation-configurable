@@ -556,6 +556,21 @@ class WaterAccountant:
         """
         return all(controller.is_closed for controller in self._runtime.all_valve_controllers())
 
+    def metered_scopes(self) -> set[str]:
+        """Every scope some running ledger currently reports for.
+
+        Leak detection's source 2 can only ever be withdrawn by a reading, and
+        readings arrive through these ledgers -- so a scope missing from this
+        set is one whose source 2 has gone permanently silent and whose alarm
+        must be withdrawn by the configuration change itself, not left standing
+        for ever. Derived from the live ledgers and the same ``_scope_for``
+        that routes the samples, so the two can never disagree about who
+        reports for whom: a zone that gains a second zone behind its meter
+        leaves this set at the same instant its samples start arriving under
+        HUB_SCOPE instead.
+        """
+        return {self._scope_for(entity_id) for entity_id in self._ledgers}
+
     def _scope_for(self, entity_id: str) -> str:
         """Whose leak this would be: the sole zone on this meter, or the hub."""
         owners = [
