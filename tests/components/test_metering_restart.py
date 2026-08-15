@@ -87,10 +87,11 @@ async def test_last_gap_at_survives_a_restart_the_way_the_counters_do(
 
     stamped = runtime.state.zone_last_gap_at(zone_id)
     assert stamped is not None
-    # Present on the entity too, but not necessarily this very instant: the
-    # sample path refreshes entities at most once a minute (_due_to_persist),
-    # so mid-outage it can still be showing an earlier sample of the same
-    # outage. The store is the authority, and it is what the reload reads.
+    # Present on the entity too, but not necessarily the very latest gap: a
+    # gap-only sample refreshes nothing on its own, and a litre-bearing one at
+    # most once a minute, so the entity shows whichever gap the last dispatch
+    # carried. Flow resumed above precisely so that one has happened by now.
+    # The store is the authority, and it is what the reload reads.
     assert role_state(hass, "zone_water_total", zone_id=zone_id).attributes["last_gap_at"]
     await runtime.state.async_save()
 

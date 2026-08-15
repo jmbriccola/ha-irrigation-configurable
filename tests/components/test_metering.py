@@ -356,6 +356,83 @@ async def test_a_gap_with_nobody_watering_lands_on_the_unattributed_scope(
     assert zone_id not in runtime.state.daily_water()[dt_util.now().date().isoformat()]
 
 
+async def test_a_permanently_unreadable_meter_records_its_gap_without_writing(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A dead meter must cost the store nothing, and still be legible.
+
+    FlowSensorReader.read answers "unit unknown" for a *missing* entity too, so
+    a typo'd or deleted flow sensor emits gap-only samples for the life of the
+    install. Before this guard those reached the persist throttle, which would
+    have meant a once-a-minute async_delay_save of the whole state file plus a
+    full dispatch_update, forever, on hardware that is typically a Pi on an SD
+    card -- for a configuration fault whose cost would surface as wear months
+    later and be impossible to trace back to its cause.
+
+    The gap itself must still be recorded: that is the point of the feature and
+    it must not regress. It simply waits for a write that has a reason of its
+    own, gap seconds being the cheapest thing in this store to lose.
+
+    Counting starts just after 05:00 and runs to 05:05, a window with no
+    session and no other writer of this store: daily-maximum temperature
+    tracking is on the ten-minute marks, and the one at 05:00 itself is
+    deliberately left behind the counters rather than allowed to blur an
+    exact-zero assertion. Rain staging is at minute 55 and housekeeping at
+    midnight. So any save counted here came from the sample path.
+    """
+    freezer.move_to(START)
+    park = MockValvePark(hass)
+    park.add("valve.a")
+    mock_weather(hass)
+    # sensor.gone is never given a state: missing, not merely unavailable.
+    entry = await setup_hub(
+        hass, [zone_data("Alpha", "valve.a", minutes=10, flow_sensor="sensor.gone")]
+    )
+    runtime = entry.runtime_data
+    zone_id = runtime.zone_ids[0]
+
+    # Past the 05:00 temperature mark, whose save is nobody's business here.
+    await advance(hass, freezer, 20, step=10.0)
+
+    saves = 0
+    dispatches = 0
+    real_save = runtime.state.schedule_save
+    real_dispatch = runtime.dispatch_update
+
+    def _counted_save() -> None:
+        nonlocal saves
+        saves += 1
+        real_save()
+
+    def _counted_dispatch() -> None:
+        nonlocal dispatches
+        dispatches += 1
+        real_dispatch()
+
+    monkeypatch.setattr(runtime.state, "schedule_save", _counted_save)
+    monkeypatch.setattr(runtime, "dispatch_update", _counted_dispatch)
+
+    await advance(hass, freezer, 280, step=10.0)
+
+    assert saves == 0
+    assert dispatches == 0
+    # Recorded all the same, and attributed like the litres would have been:
+    # nothing is watering, so the seconds are the unattributed scope's.
+    unattributed = _zone_day(runtime, UNATTRIBUTED_KEY)
+    assert unattributed["l"] == 0.0
+    assert unattributed["gap_s"] >= 200
+
+    # And through a cycle, where the zone itself is the claimant: the run is
+    # not interrupted (a meter with no unit leaves the zero-flow guard blind),
+    # the zone's day carries the gap, and last_gap_at is stamped.
+    await advance(hass, freezer, 31 * 60)
+    await advance(hass, freezer, 11 * 60)
+
+    assert runtime.state.last_outcome(zone_id)["result"] == "completed"
+    assert _zone_day(runtime, zone_id)["gap_s"] > 0.0
+    assert runtime.state.zone_last_gap_at(zone_id) is not None
+
+
 async def test_litres_go_to_the_zone_whose_valve_is_open(
     hass: HomeAssistant, freezer: FrozenDateTimeFactory
 ) -> None:
@@ -803,7 +880,8 @@ async def test_removing_a_running_meter_from_the_config_lets_the_run_finish(
     and inside ZERO_FLOW_GRACE_S the zero-flow guard interrupted a healthy run
     as no_flow. The ledger is now retired instead -- one farewell sample with
     no unit -- and the monitor's own unit-lost rule takes it from there: it
-    goes blind, the guard stops judging, and the run ends on its duration.
+    goes blind, the guard stops judging, and the run ends on its own schedule
+    (its duration, or a volume cycle's volume_safety_timeout_min).
 
     The repair that farewell sample provokes is cleared with the ledger: the
     entity is out of the configuration, so a standing "unit unknown" warning

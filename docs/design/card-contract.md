@@ -175,12 +175,25 @@ holding the same fact would be a second thing that could drift from it.
     from "no water seen": a gap is recorded as **zero litres** (no
     interpolation, which would invent water; no counted zero, which would
     assert that none passed), so without this stamp a six-hour outage looks
-    exactly like a quiet afternoon. Persisted with the counters, so it
-    survives a restart; the seconds behind it live in the daily history's
-    `gap_s`. The card is not required to render it — as of 3.3.0 it does
-    not. Refreshed on the same throttle as the rest of the sample path (at
-    most once a minute), so during a long outage it can trail the store by
-    up to that much.
+    exactly like a quiet afternoon. The seconds behind it live in the daily
+    history's `gap_s`. The card is not required to render it — as of 3.3.0
+    it does not.
+    - **Freshness, stated plainly:** a sample that carries *only* a gap
+      updates the accounting in memory but asks for **neither a store write
+      nor an entity refresh** — otherwise a meter that is permanently
+      unreadable (a missing or typo'd entity reads as unit-unknown) would
+      rewrite the whole state file once a minute forever, on hardware that
+      is usually an SD card. So this attribute is published on the next
+      update the integration dispatches **for some other reason**: a
+      litre-bearing sample (at most once a minute, unchanged), a session
+      phase transition or segment end, or the midnight housekeeping. During
+      an outage in which no water is flowing anywhere, that can be hours —
+      the value is recorded, just not yet published. Same for durability:
+      the gap rides along with the next write that has a reason of its own,
+      so an unclean shutdown can lose the most recent gap seconds and a
+      `last_gap_at` that had not been written yet. Deliberate: gap seconds
+      are the cheapest thing this store holds — losing some under-reports
+      an outage, where losing litres would mean a wrong meter reading.
 - **`hub_unattributed_water`** — litres a meter measured that no zone
   claimed; the entity's state is the grand total across every scope.
   - `closed_l` (float): the subset of the total measured while every

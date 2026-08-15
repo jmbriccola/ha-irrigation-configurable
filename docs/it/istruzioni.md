@@ -250,6 +250,16 @@ l'ultimo buco capitato **mentre quella zona irrigava** (vuoto finché non
 capita). Senza quel dato un'interruzione di sei ore sarebbe indistinguibile
 da un pomeriggio tranquillo.
 
+Un dettaglio onesto su quell'attributo: un flussometro illeggibile non fa
+scrivere niente su disco per conto proprio. Sarebbe una riscrittura al minuto,
+per sempre, per un'entità sbagliata o cancellata — e su una scheda SD non è un
+dettaglio. I secondi non osservati viaggiano quindi insieme al primo
+aggiornamento che serve ad altro (litri che arrivano, la fine di un ciclo, la
+manutenzione di mezzanotte). Durante un guasto in cui non scorre acqua da
+nessuna parte l'attributo può restare indietro anche di ore rispetto a quanto
+è già stato registrato: il dato non è perso, semplicemente non è ancora
+pubblicato.
+
 ### Aggiornare dalla 3.2.x: la catena costruita a mano si può cancellare
 
 Se accanto all'integrazione tenevi la solita catena di helper per contare
