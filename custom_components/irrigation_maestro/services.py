@@ -29,7 +29,7 @@ from homeassistant.helpers import config_validation as cv
 from homeassistant.util import dt as dt_util
 
 from . import const
-from .capabilities import resolve_zone_capabilities
+from .capabilities import discover_sibling_sensors, resolve_zone_capabilities
 from .const import DOMAIN, SUBENTRY_TYPE_ZONE
 from .engine.calendar import ProgramCalendar
 from .engine.curves import CurveError, CurveKind, interpolate, validate_points
@@ -1074,9 +1074,10 @@ async def _async_add_zone(call: ServiceCall) -> ServiceResponse:
     entry = _loaded_entry(hass)
     runtime = cast(IrrigationRuntime, entry.runtime_data)
     name: str = call.data[ATTR_NAME]
+    valve_entity: str = call.data[ATTR_VALVE_ENTITY]
     data: dict[str, Any] = {
         const.CONF_ZONE_NAME: name,
-        const.CONF_VALVE_ENTITY: call.data[ATTR_VALVE_ENTITY],
+        const.CONF_VALVE_ENTITY: valve_entity,
         const.CONF_CYCLES: [_default_program(name)],
     }
     if ATTR_AREA_M2 in call.data:
@@ -1094,6 +1095,19 @@ async def _async_add_zone(call: ServiceCall) -> ServiceResponse:
     ]
     data[const.CONF_ORDER] = max(existing_orders, default=const.DEFAULT_ORDER - 1) + 1
     data[const.CONF_ADJUSTMENT_PCT] = const.DEFAULT_ADJUSTMENT_PCT
+
+    # Same convention, for the sensors: detection runs once, here, so a zone
+    # created on hardware that exposes both sensors is covered from birth.
+    # Written server-side rather than accepted as input -- add_zone's schema
+    # has no ALLOW_EXTRA and its whitelist is duplicated in panel.ts and
+    # zone-editor.ts, so an input field would be a three-way change for
+    # nothing gained. A device that exposes nothing gets neither key: absent,
+    # not an empty string.
+    leak_candidate, supply_candidate = discover_sibling_sensors(hass, valve_entity)
+    if leak_candidate:
+        data[const.CONF_LEAK_SENSOR] = leak_candidate
+    if supply_candidate:
+        data[const.CONF_WATER_SUPPLY_SENSOR] = supply_candidate
 
     _validate_zone(data, runtime.hub.curve_templates)
 

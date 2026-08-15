@@ -261,6 +261,56 @@ async def test_the_discovery_service_returns_both_candidates(
     assert response["supply_candidate"] == "binary_sensor.swv1_b2"
 
 
+async def test_add_zone_writes_the_detected_sensors(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    """The creating service writes the defaults (the 3.0.0 convention).
+
+    A zone created on hardware that exposes both sensors is covered from
+    birth, with no extra step and no schema change: they are written, not
+    accepted as input.
+    """
+    freezer.move_to(START)
+    valve = _valve_with_siblings(hass)
+    park = MockValvePark(hass)
+    park.add(valve)
+    park.add("valve.seed")
+    mock_weather(hass)
+    entry = await setup_hub(hass, [zone_data("Seed", "valve.seed")])
+
+    await hass.services.async_call(
+        DOMAIN, "add_zone", {"name": "Vasi", "valve_entity": valve}, blocking=True
+    )
+    runtime = entry.runtime_data
+    created = next(zone.config for zone in runtime.zones.values() if zone.config.name == "Vasi")
+
+    assert created.leak_sensor == "binary_sensor.swv1_b1"
+    assert created.water_supply_sensor == "binary_sensor.swv1_b2"
+
+
+async def test_add_zone_leaves_the_keys_absent_when_nothing_is_detected(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    freezer.move_to(START)
+    park = MockValvePark(hass)
+    park.add("valve.plain")
+    park.add("valve.seed")
+    mock_weather(hass)
+    entry = await setup_hub(hass, [zone_data("Seed", "valve.seed")])
+
+    await hass.services.async_call(
+        DOMAIN,
+        "add_zone",
+        {"name": "Plain", "valve_entity": "valve.plain"},
+        blocking=True,
+    )
+    runtime = entry.runtime_data
+    created = next(zone.config for zone in runtime.zones.values() if zone.config.name == "Plain")
+
+    assert created.leak_sensor is None
+    assert created.water_supply_sensor is None
+
+
 async def test_mixed_installation_resolves_each_zone_independently(
     hass: HomeAssistant, freezer: FrozenDateTimeFactory
 ) -> None:
