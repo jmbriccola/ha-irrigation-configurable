@@ -1,8 +1,11 @@
 """Per-zone capability detection from the entity and device registries.
 
 Structured like test_flow.py, which is the closest existing analogue and is
-itself capability detection in miniature: pure resolution first, then late
-appearance, then config change without reload, then withdrawal.
+itself capability detection in miniature: pure resolution first -- by
+device_class, never by name, including override precedence and the domain
+filter -- then late appearance and withdrawal, proving nothing here is
+cached, then the configured/candidate/unavailable states through the full
+zone and service path.
 """
 
 from custom_components.irrigation_maestro.capabilities import (
@@ -21,9 +24,17 @@ from .test_session import START, mock_weather, setup_hub, zone_data
 
 
 def _valve_with_siblings(
-    hass: HomeAssistant, *, moisture: bool = True, problem: bool = True
+    hass: HomeAssistant, *, moisture: bool = True, problem: bool = True, decoy: bool = False
 ) -> str:
-    """A device carrying a valve plus optionally its two binary sensors."""
+    """A device carrying a valve plus optionally its two binary sensors.
+
+    Sibling object ids are opaque (``swv1_b1``/``swv1_b2``): nothing in the
+    id may hint at its class, or a name-matching implementation would pass
+    these fixtures by accident. ``decoy`` adds a third binary_sensor whose
+    object id *looks* like a leak sensor but carries an unrelated
+    device_class, to prove the opposite -- that a plausible name earns a
+    sensor nothing here.
+    """
     foreign = MockConfigEntry(domain="demo")
     foreign.add_to_hass(hass)
     devices = dr.async_get(hass)
@@ -44,19 +55,31 @@ def _valve_with_siblings(
         entities.async_get_or_create(
             "binary_sensor",
             "demo",
-            "swv1_leak",
+            "swv1_b1",
             device_id=device.id,
-            suggested_object_id="irrigazione_vasi_water_leak",
+            suggested_object_id="swv1_b1",
             original_device_class="moisture",
         )
     if problem:
         entities.async_get_or_create(
             "binary_sensor",
             "demo",
-            "swv1_supply",
+            "swv1_b2",
             device_id=device.id,
-            suggested_object_id="irrigazione_vasi_water_supply",
+            suggested_object_id="swv1_b2",
             original_device_class="problem",
+        )
+    if decoy:
+        # Named like the real thing, classed like nothing this module wants:
+        # a substring matcher on "_water_leak" would grab this instead of the
+        # real (opaquely named) moisture sensor above.
+        entities.async_get_or_create(
+            "binary_sensor",
+            "demo",
+            "swv1_decoy",
+            device_id=device.id,
+            suggested_object_id="irrigazione_vasi_water_leak",
+            original_device_class="battery",
         )
     return "valve.irrigazione_vasi"
 
@@ -64,10 +87,10 @@ def _valve_with_siblings(
 async def test_siblings_are_found_by_device_class_not_by_name(
     hass: HomeAssistant,
 ) -> None:
-    valve = _valve_with_siblings(hass)
+    valve = _valve_with_siblings(hass, decoy=True)
     leak, supply = discover_sibling_sensors(hass, valve)
-    assert leak == "binary_sensor.irrigazione_vasi_water_leak"
-    assert supply == "binary_sensor.irrigazione_vasi_water_supply"
+    assert leak == "binary_sensor.swv1_b1"
+    assert supply == "binary_sensor.swv1_b2"
 
 
 async def test_a_valve_without_siblings_offers_no_candidate(hass: HomeAssistant) -> None:
@@ -79,6 +102,88 @@ async def test_a_valve_with_no_device_at_all_is_handled(hass: HomeAssistant) -> 
     """A valve that is not in the registry must not raise."""
     hass.states.async_set("valve.orphan", "closed")
     assert discover_sibling_sensors(hass, "valve.orphan") == (None, None)
+
+
+async def test_a_user_override_wins_over_the_integrations_original(
+    hass: HomeAssistant,
+) -> None:
+    """The user's own device_class setting is what they meant; the
+    integration's original_device_class is only a fallback."""
+    valve = _valve_with_siblings(hass, moisture=False, problem=False)
+    registry = er.async_get(hass)
+    valve_entry = registry.async_get(valve)
+    assert valve_entry is not None
+    entry = registry.async_get_or_create(
+        "binary_sensor",
+        "demo",
+        "swv1_override",
+        device_id=valve_entry.device_id,
+        suggested_object_id="swv1_override",
+        original_device_class="battery",
+    )
+    registry.async_update_entity(entry.entity_id, device_class="moisture")
+
+    leak, supply = discover_sibling_sensors(hass, valve)
+    assert leak == entry.entity_id
+    assert supply is None
+
+
+async def test_a_sensor_domain_entity_is_never_offered_as_a_candidate(
+    hass: HomeAssistant,
+) -> None:
+    """The domain filter matters as much as the device_class: a `sensor`
+    reporting a moisture level is not a `binary_sensor` alarm."""
+    valve = _valve_with_siblings(hass, moisture=False, problem=False)
+    registry = er.async_get(hass)
+    valve_entry = registry.async_get(valve)
+    assert valve_entry is not None
+    registry.async_get_or_create(
+        "sensor",
+        "demo",
+        "swv1_moisture_pct",
+        device_id=valve_entry.device_id,
+        suggested_object_id="swv1_moisture_level",
+        original_device_class="moisture",
+    )
+    assert discover_sibling_sensors(hass, valve) == (None, None)
+
+
+async def test_a_sibling_that_appears_after_the_first_check_is_found_next_time(
+    hass: HomeAssistant,
+) -> None:
+    """No cache: a Zigbee sibling that joins after the first read is found on
+    the next call -- the same ordering test_flow.py's meters rely on."""
+    valve = _valve_with_siblings(hass, moisture=False, problem=False)
+    assert discover_sibling_sensors(hass, valve) == (None, None)
+
+    registry = er.async_get(hass)
+    valve_entry = registry.async_get(valve)
+    assert valve_entry is not None
+    entry = registry.async_get_or_create(
+        "binary_sensor",
+        "demo",
+        "swv1_b1",
+        device_id=valve_entry.device_id,
+        suggested_object_id="swv1_b1",
+        original_device_class="moisture",
+    )
+
+    leak, supply = discover_sibling_sensors(hass, valve)
+    assert leak == entry.entity_id
+    assert supply is None
+
+
+async def test_a_withdrawn_sibling_stops_being_offered(hass: HomeAssistant) -> None:
+    """Removing the sibling from the registry (a device deleted, a Zigbee
+    re-pair) retires the candidate on the very next read: there is nothing
+    cached to go stale."""
+    valve = _valve_with_siblings(hass, problem=False)
+    leak, _supply = discover_sibling_sensors(hass, valve)
+    assert leak is not None
+
+    er.async_get(hass).async_remove(leak)
+
+    assert discover_sibling_sensors(hass, valve) == (None, None)
 
 
 async def test_capability_is_unavailable_when_nothing_is_found_or_configured(
@@ -116,8 +221,11 @@ async def test_a_configured_sensor_on_another_device_is_accepted(
     assert caps.leak_sensor == "binary_sensor.somewhere_else"
 
 
-async def test_an_unconfigured_zone_with_a_candidate_says_so(hass: HomeAssistant) -> None:
+async def test_an_unconfigured_zone_with_a_candidate_says_so(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
     """ "Your hardware could do this, you have not told it to" is its own state."""
+    freezer.move_to(START)
     valve = _valve_with_siblings(hass)
     park = MockValvePark(hass)
     park.add(valve)
@@ -127,7 +235,7 @@ async def test_an_unconfigured_zone_with_a_candidate_says_so(hass: HomeAssistant
     caps = resolve_zone_capabilities(hass, runtime.zones[runtime.zone_ids[0]].config)
 
     assert caps.leak_detection == "candidate_available"
-    assert caps.leak_candidate == "binary_sensor.irrigazione_vasi_water_leak"
+    assert caps.leak_candidate == "binary_sensor.swv1_b1"
 
 
 async def test_the_discovery_service_returns_both_candidates(
@@ -149,8 +257,8 @@ async def test_the_discovery_service_returns_both_candidates(
         return_response=True,
     )
 
-    assert response["leak_candidate"] == "binary_sensor.irrigazione_vasi_water_leak"
-    assert response["supply_candidate"] == "binary_sensor.irrigazione_vasi_water_supply"
+    assert response["leak_candidate"] == "binary_sensor.swv1_b1"
+    assert response["supply_candidate"] == "binary_sensor.swv1_b2"
 
 
 async def test_mixed_installation_resolves_each_zone_independently(
@@ -181,6 +289,6 @@ async def test_mixed_installation_resolves_each_zone_independently(
     plain_caps = resolve_zone_capabilities(hass, zones_by_valve["valve.plain"])
 
     assert with_caps.leak_detection == "candidate_available"
-    assert with_caps.leak_candidate == "binary_sensor.irrigazione_vasi_water_leak"
+    assert with_caps.leak_candidate == "binary_sensor.swv1_b1"
     assert plain_caps.leak_detection == "unavailable"
     assert plain_caps.leak_candidate is None
