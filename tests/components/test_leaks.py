@@ -1944,8 +1944,10 @@ async def test_a_single_flaky_reading_does_not_withhold_water(
     outage should not cost a pointless valve actuation either. Here the sensor
     asserts two minutes before the trigger under a ten-minute window, so the
     cycle starts -- and if the supply really is gone, the zero-flow guard
-    interrupts it a few minutes later with the specific diagnosis. The two
-    behaviours degrade into each other rather than contradicting.
+    interrupts it a few minutes later with the specific diagnosis, so the two
+    behaviours degrade into each other rather than contradicting. That fallback
+    needs a meter, though: this zone has none, which is exactly the install
+    where the window is the only thing between an outage and a dry cycle.
     """
     freezer.move_to(START)
     park = MockValvePark(hass)
