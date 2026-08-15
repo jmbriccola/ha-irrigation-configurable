@@ -547,6 +547,14 @@
           "name": "Tolleranza di portata (%)",
           "description": "Di quanto la portata reale può discostarsi da quella nominale prima di essere segnalata."
         },
+        "leak_sensor": {
+          "name": "Sensore di perdita",
+          "description": "Un binary_sensor che segnala che la valvola rileva una perdita. A seconda dell'hardware può essere una sonda fisica oppure un allarme derivato dal flussometro della valvola stessa. Lascia vuoto se la valvola non ne ha uno."
+        },
+        "water_supply_sensor": {
+          "name": "Sensore alimentazione idrica",
+          "description": "Un binary_sensor di tipo problem per l'alimentazione idrica di questa zona: acceso significa acqua assente, spento significa acqua disponibile. Lascia vuoto se non è disponibile un sensore del genere."
+        },
         "adjustment_pct": {
           "name": "Correzione (%)",
           "description": "Scala tutti i tempi di irrigazione. 100 significa invariato."

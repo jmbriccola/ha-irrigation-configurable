@@ -547,6 +547,14 @@
           "name": "Flow tolerance (%)",
           "description": "How far the real flow may stray from the nominal value before it's flagged."
         },
+        "leak_sensor": {
+          "name": "Leak sensor",
+          "description": "A binary_sensor reporting that the valve detects a leak. Depending on the hardware this may be a physical probe or an alarm derived from the valve's own flow meter. Leave empty if the valve has none."
+        },
+        "water_supply_sensor": {
+          "name": "Water supply sensor",
+          "description": "A problem binary_sensor for the water supply feeding this zone: on means the supply is missing, off means water is available. Leave empty if there is no such sensor."
+        },
         "adjustment_pct": {
           "name": "Adjustment (%)",
           "description": "Scales every watering time up or down. 100 means unchanged."

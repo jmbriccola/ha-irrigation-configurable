@@ -91,6 +91,19 @@ CONF_FLOW_SENSOR: Final = "flow_sensor"
 CONF_FLOW_SENSOR_UNIT: Final = "flow_sensor_unit"
 CONF_NOMINAL_FLOW_LPM: Final = "nominal_flow_lpm"
 CONF_FLOW_TOLERANCE_PCT: Final = "flow_tolerance_pct"
+#: Optional per-zone binary_sensor with device_class "moisture", reporting a
+#: leak. On some valves this is a physical ground probe; on others (e.g. the
+#: SONOFF SWV) it is an alarm derived from the valve's own internal flow
+#: meter -- "water is passing while I am closed" -- which the integration
+#: platform (ZHA) maps to "moisture" because it is the nearest available
+#: class. Both are valid on different hardware, so any message about this
+#: sensor must be true for both: say "the valve reports a leak", never
+#: "water detected on the ground".
+CONF_LEAK_SENSOR: Final = "leak_sensor"
+#: Optional per-zone binary_sensor with device_class "problem". Its polarity
+#: is inverted relative to the usual reading of the name: "on" means
+#: PROBLEM, i.e. the water supply is missing, not that it is present.
+CONF_WATER_SUPPLY_SENSOR: Final = "water_supply_sensor"
 CONF_AREA_M2: Final = "area_m2"
 CONF_ADJUSTMENT_PCT: Final = "adjustment_pct"
 CONF_ORDER: Final = "order"
