@@ -154,11 +154,16 @@ holding the same fact would be a second thing that could drift from it.
     reading), `mixed` when the zone has some of each — e.g. a meter that
     only became usable partway through the zone's history, or that drops
     out intermittently. `none` when the zone holds no litres *and* can
-    never accrue any: no meter resolves for it and its `nominal_flow_lpm`
-    is unset **or zero** (the schema allows `0`, and a zero nominal books
-    nothing), so there is nothing to integrate and no estimate to book.
-    Judged on configuration, not on live meter state, so it does not flap
-    with a momentarily unavailable sensor.
+    never accrue any right now: no meter is currently usable for it (no
+    meter resolves at all, or one does but its unit does not) and its
+    `nominal_flow_lpm` is unset **or zero** (the schema allows `0`, and a
+    zero nominal books nothing), so there is nothing to integrate and no
+    estimate to book. This is the same live usability check
+    `water_accounting`'s own `"unavailable"` uses (see "Zone capabilities"
+    below), so at zero litres the two agree; it is gated by `total <= 0`,
+    so it cannot flap once real litres exist — a zone whose nominal was
+    cleared after the fact still reports the provenance of what it
+    actually accrued, not `none` retroactively.
   - `today_l` / `month_l` (float): the same-zone total sliced to today and
     to the calendar month-to-date. Both are read from the daily history
     that `add_water` writes in the same call that increments the
@@ -273,22 +278,37 @@ one of three string values:
     the identical, never-had-anything zone.
 
   **`water_accounting` and `source` describe different things and can
-  legitimately differ, but must never contradict each other about whether
-  accounting is happening right now.** `source` is retrospective — what
-  the litres a zone has *already accrued* are made of, so it can read
-  `"mixed"` — while `water_accounting` is a statement about the zone's
-  capability *right now*. A zone can show `water_accounting: "measured"`
-  today while `zone_water_total.source` still reads `"mixed"` from a spell
-  of estimation last week; that is not a disagreement, because `source`
-  is not describing the present moment. What must never happen is
-  `water_accounting: "unavailable"` while the zone's litres are visibly
-  still climbing (`source: "nominal"` or `"mixed"`) — that combination
-  claims nothing is being recorded while something plainly is, and it was
-  exactly this repo's earlier defect: checking `zone_has_flow_meter`
-  (configuration only) ahead of the live usability check made a zone with
-  a broken-but-configured meter and a nominal fallback report
-  `"unavailable"` while `add_consumption` silently booked the nominal
-  estimate underneath it.
+  legitimately differ.** `source` is retrospective — what the litres a
+  zone has *already accrued* are made of — while `water_accounting` is a
+  statement about the zone's capability *right now*. Two examples, both
+  reachable through ordinary use:
+  - A zone can show `water_accounting: "measured"` today while
+    `zone_water_total.source` still reads `"mixed"` from a spell of
+    estimation last week; `source` is not describing the present moment.
+  - A zone accrues litres entirely through the nominal fallback (meter
+    unusable, `nominal_flow_lpm` set), so `source` settles at `"nominal"`.
+    The user then clears `nominal_flow_lpm` to `0` via `update_zone`,
+    meter still unusable: `water_accounting` now correctly reads
+    `"unavailable"` — nothing new will be recorded from here on — while
+    `source` still correctly reads `"nominal"`, because it reports what
+    the litres already on the books are made of, not whether anything is
+    still being added to them (the same "cleared after the fact" behavior
+    `source`'s own definition above documents).
+
+  What the two fields must never do is disagree about **whether new
+  litres are currently accruing**: a zone reading `water_accounting:
+  "unavailable"` cannot be adding to its total, measured or estimated, at
+  that moment — both the live meter path and `add_consumption`'s nominal
+  fallback require exactly the conditions that keep `water_accounting`
+  out of `"unavailable"` to add anything at all. That narrower guarantee
+  is what an earlier defect in this repo actually broke: checking
+  `zone_has_flow_meter` (configuration only) ahead of the live usability
+  check made a zone with a broken-but-configured meter and a nominal
+  fallback report `"unavailable"` while `add_consumption` was silently
+  accruing new litres from the nominal estimate underneath it — new
+  accrual with `water_accounting` insisting none was happening, not
+  merely an old `source` value sitting alongside a new capability
+  reading.
 
 **"Configured and missing" is not a fourth `capabilities` value.**
 `capabilities.py` reports `configured` for a sensor the user chose even
