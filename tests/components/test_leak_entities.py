@@ -39,7 +39,7 @@ from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers import issue_registry as ir
 from homeassistant.util.async_ import get_scheduled_timer_handles
 
-from .mocks import MockValvePark
+from .mocks import BEHAVIOR_STUCK, MockValvePark
 from .test_entities import role_state
 from .test_leaks import _PAST_CONFIRM_S, _WELL_PAST_CONFIRM_S, _reconfigure_zone
 from .test_session import START, advance, mock_weather, setup_hub, zone_data
@@ -993,6 +993,138 @@ async def test_changing_a_scope_s_sources_makes_it_earn_the_window_again(
     await _reconfigure_zone(hass, entry, zone_id, leak_sensor="binary_sensor.spare_leak")
 
     assert _leak_entity(hass, entry, zone_id).state == "unavailable"
+
+
+def _degraded(hass: HomeAssistant, zone_id: str) -> list[str]:
+    """The zone's declared degradations, as the card reads them."""
+    state = role_state(hass, "zone_state", zone_id)
+    assert state is not None
+    return list(state.attributes["degraded"])
+
+
+async def test_a_scope_that_can_never_observe_says_so_in_degraded(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    """An entity silent for ever is indistinguishable from a broken one.
+
+    A meter-only zone whose valve never reports closed can conclude nothing:
+    every interval is discarded as watering, so the window never fills and the
+    leak entity stays unavailable, correctly and permanently. A user cannot
+    tell that refusal from a component that has fallen over, and will assume
+    the second -- so after an hour of idle time unable to conclude, the zone
+    declares why, in the same list that already carries "configured, and here
+    is why it cannot do its job".
+    """
+    freezer.move_to(START)
+    park = MockValvePark(hass)
+    park.add("valve.a", "open")
+    # Stuck open: it ignores the startup close-all and every command after it,
+    # so it never reports closed -- which is what blocks every metered scope,
+    # since a meter's seconds only count with the whole system shut.
+    park.set_behavior("valve.a", BEHAVIOR_STUCK)
+    hass.states.async_set("sensor.flow", "0.0", {"unit_of_measurement": "L/min"})
+    mock_weather(hass)
+    entry = await setup_hub(
+        hass, [zone_data("Alpha", "valve.a", at="23:00", flow_sensor="sensor.flow")]
+    )
+    zone_id = entry.runtime_data.zone_ids[0]
+
+    await advance(hass, freezer, 600, step=60.0)
+
+    # Ten minutes in it is silent but not yet remarkable: an ordinary slow boot
+    # looks exactly like this.
+    assert _leak_entity(hass, entry, zone_id).state == "unavailable"
+    assert "leak_never_observable" not in _degraded(hass, zone_id)
+
+    await advance(hass, freezer, 3600, step=60.0)
+    entry.runtime_data.dispatch_update()
+    await hass.async_block_till_done()
+
+    assert _leak_entity(hass, entry, zone_id).state == "unavailable"
+    assert "leak_never_observable" in _degraded(hass, zone_id)
+    assert "leak_evidence_unresolved" not in _degraded(hass, zone_id)
+
+
+async def test_a_scope_holding_evidence_it_cannot_finish_says_which(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    """The other cause, and it sends the user somewhere else entirely.
+
+    Here something IS reporting a leak and nothing can finish judging it: the
+    sensor asserts, its valve never reports closed. "Nothing is watching" would
+    be the wrong thing to say about a zone whose sensor is shouting, so the two
+    causes are declared separately -- one points at the plumbing, the other at
+    a valve that never reports.
+    """
+    freezer.move_to(START)
+    MockValvePark(hass)  # valve.a exists in the configuration and never reports
+    hass.states.async_set("binary_sensor.a_leak", *_moisture("on"))
+    mock_weather(hass)
+    entry = await setup_hub(
+        hass,
+        [zone_data("Alpha", "valve.a", at="23:00", leak_sensor="binary_sensor.a_leak")],
+    )
+    zone_id = entry.runtime_data.zone_ids[0]
+
+    await advance(hass, freezer, 4000, step=60.0)
+    entry.runtime_data.dispatch_update()
+    await hass.async_block_till_done()
+
+    assert _leak_entity(hass, entry, zone_id).state == "unavailable"
+    assert "leak_evidence_unresolved" in _degraded(hass, zone_id)
+    assert "leak_never_observable" not in _degraded(hass, zone_id)
+
+
+async def test_a_long_watering_session_is_not_a_stall(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    """The refusal that keeps the notice honest: watering is not a fault.
+
+    A zone that is watering cannot conclude anything about leaks, by design --
+    every metered interval with a valve open is discarded. If the stall clock
+    ran through that, every installation with a long session would accuse
+    itself once an hour. It counts idle seconds only, so an hour of watering
+    earns no notice at all, and the zone settles normally once the run ends.
+    """
+    freezer.move_to(START)
+    park = MockValvePark(hass)
+    park.add("valve.a")
+    hass.states.async_set("sensor.flow", "0.0", {"unit_of_measurement": "L/min"})
+    mock_weather(hass)
+    entry = await setup_hub(
+        hass, [zone_data("Alpha", "valve.a", at="23:00", flow_sensor="sensor.flow")]
+    )
+    runtime = entry.runtime_data
+    zone_id = runtime.zone_ids[0]
+
+    # Watering starts immediately, so the zone is still owing its window when
+    # the run begins: a zone that had already settled would never run the stall
+    # clock at all, and this test would prove nothing.
+    await hass.services.async_call(
+        DOMAIN, "run_zone", {"zone_id": zone_id, "duration": 60}, blocking=True
+    )
+    await advance(hass, freezer, 30, step=10.0)  # gather window, then the valve opens
+    assert hass.states.get("valve.a").state == "open"
+    assert runtime.session.active_runs != {}
+    # Water actually flowing while it waters, or the zero-flow guard would cut
+    # the run short and hand this test a much shorter session than it needs.
+    hass.states.async_set("sensor.flow", "5.0", {"unit_of_measurement": "L/min"})
+
+    # Just past the end of the hour-long run: an hour of wall clock has gone by
+    # with this zone unable to conclude anything, and none of it counts.
+    await advance(hass, freezer, 3660, step=30.0)
+    hass.states.async_set("sensor.flow", "0.0", {"unit_of_measurement": "L/min"})
+
+    assert runtime.session.active_runs == {}
+    assert _leak_entity(hass, entry, zone_id).state == "unavailable"
+    assert "leak_never_observable" not in _degraded(hass, zone_id)
+    assert "leak_evidence_unresolved" not in _degraded(hass, zone_id)
+
+    # And it settles a window after the water stops, as any idle zone does.
+    await advance(hass, freezer, _PAST_CONFIRM_S, step=10.0)
+
+    assert _leak_entity(hass, entry, zone_id).state == "off"
+    assert "leak_never_observable" not in _degraded(hass, zone_id)
 
 
 async def test_the_start_up_window_arms_one_timer_and_leaves_none_behind(

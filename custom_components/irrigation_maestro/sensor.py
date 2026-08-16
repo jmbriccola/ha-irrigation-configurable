@@ -314,6 +314,15 @@ class ZoneStateSensor(MaestroZoneEntity, SensorEntity):
             degraded.append("leak_sensor_missing")
         if config.water_supply_sensor and not self._entity_known(config.water_supply_sensor):
             degraded.append("water_supply_sensor_missing")
+        # A leak entity that has been unable to conclude anything for an hour
+        # of idle time says nothing at all, and an entity stuck at
+        # "unavailable" for ever cannot be told from a broken integration. The
+        # refusal is right; leaving the user to guess at it is not, so the
+        # reason is declared here, beside the other "configured, and here is
+        # why it cannot do its job" keys.
+        stall = runtime.leak_observation_stall(self._zone_id)
+        if stall is not None:
+            degraded.append(stall)
         return degraded
 
     def _entity_known(self, entity_id: str) -> bool:
