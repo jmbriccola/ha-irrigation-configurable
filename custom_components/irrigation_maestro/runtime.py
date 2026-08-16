@@ -365,7 +365,7 @@ class IrrigationRuntime:
         if self._skip_flush_unsub is not None:
             self._skip_flush_unsub()
             self._skip_flush_unsub = None
-        await self.state.async_save()
+        await self.async_save_state()
 
     def _build_zones(self) -> None:
         zones: dict[str, ZoneRuntime] = {}
@@ -1097,12 +1097,8 @@ class IrrigationRuntime:
         zone is already gone, which is exactly the None case.
         """
         zone = self.zones.get(zone_id)
-        if zone is None:
-            return None
-        for cycle in zone.config.cycles:
-            if cycle.cycle_id == cycle_id:
-                return cycle.name
-        return None
+        cycle = zone.config.cycle(cycle_id) if zone else None
+        return cycle.name if cycle else None
 
     # Aggregated notifications -------------------------------------------------------
 

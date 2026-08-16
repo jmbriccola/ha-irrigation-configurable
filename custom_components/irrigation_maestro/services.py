@@ -1663,15 +1663,27 @@ async def _async_get_water_history(call: ServiceCall) -> ServiceResponse:
         held = metering.keys_in_range(daily, start, end) - {metering.UNATTRIBUTED_KEY}
         zone_ids = sorted(set(runtime.zones) | held)
 
-    zones = [
-        {
-            "zone_id": zone_id,
-            "zone_name": (runtime.zones[zone_id].config.name if zone_id in runtime.zones else None),
-            "total_l": round(metering.sum_period(daily, start, end, key=zone_id), 3),
-            "days": metering.daily_series(daily, zone_id, start, end),
-        }
-        for zone_id in zone_ids
-    ]
+    zones: list[dict[str, Any]] = []
+    for zone_id in zone_ids:
+        # The total is summed from the series it labels, not computed
+        # independently: a card draws the bars and prints the total beside
+        # them, and two independent computations of one figure are two things
+        # that can disagree. sum_period rounds once over the raw days while
+        # daily_series rounds each day, which diverges by a third of a litre
+        # over a two-year window -- and sum_period is O(days x keys) per zone,
+        # so calling it once per zone is quadratic in zone count for a number
+        # the series already contains.
+        days = metering.daily_series(daily, zone_id, start, end)
+        zones.append(
+            {
+                "zone_id": zone_id,
+                "zone_name": (
+                    runtime.zones[zone_id].config.name if zone_id in runtime.zones else None
+                ),
+                "total_l": round(sum(float(day["l"]) for day in days), 3),
+                "days": days,
+            }
+        )
     zones.sort(key=lambda row: _zone_history_sort_key(runtime, str(row["zone_id"])))
 
     response: dict[str, Any] = {
@@ -1679,6 +1691,14 @@ async def _async_get_water_history(call: ServiceCall) -> ServiceResponse:
         "end": end.isoformat(),
         "retention_days": metering.RETENTION_DAYS,
         "oldest_available": floor.isoformat(),
+        # The oldest day the history actually holds anything for, which is not
+        # oldest_available: that is the retention floor, and between the two
+        # lies a stretch this installation simply was not recording yet. Dense
+        # zeros there are indistinguishable from a fully observed dry day
+        # without this, which is the plausible-but-false reading the series is
+        # dense in order to prevent. get_run_history says the same thing with
+        # oldest_kept.
+        "oldest_recorded": min(daily) if daily else None,
         "truncated_by_retention": truncated,
         "unit": "L",
         "zones": zones,

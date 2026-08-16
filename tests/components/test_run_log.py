@@ -127,6 +127,23 @@ def _runtime(hass: HomeAssistant) -> IrrigationRuntime:
     return entry.runtime_data
 
 
+async def test_program_name_is_none_for_an_unknown_zone_or_program(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    """The write-time lookup record_run_outcome feeds -- no session needed,
+    just the two branches ZoneConfig.cycle() collapses _program_name onto."""
+    freezer.move_to(START)
+    park = MockValvePark(hass)
+    park.add("valve.vasi")
+    mock_weather(hass)
+    entry = await setup_hub(hass, [zone_data("Vasi", "valve.vasi", minutes=1.0)])
+    runtime = entry.runtime_data
+    zone_id = runtime.zone_ids[0]
+
+    assert runtime._program_name("nope", "nope") is None
+    assert runtime._program_name(zone_id, "nope") is None
+
+
 async def test_a_completed_run_lands_in_the_log_with_its_minutes_and_litres(
     hass: HomeAssistant, freezer: FrozenDateTimeFactory
 ) -> None:
@@ -151,7 +168,7 @@ async def test_a_completed_run_lands_in_the_log_with_its_minutes_and_litres(
 async def test_a_skip_records_the_reason_the_component_would_otherwise_forget(
     hass: HomeAssistant, freezer: FrozenDateTimeFactory
 ) -> None:
-    """outcome_log keeps a bare result string for three days. This is the only
+    """outcome_log keeps a bare result string for four days. This is the only
     place the *why* survives."""
     freezer.move_to(START)
     park = MockValvePark(hass)
@@ -212,6 +229,48 @@ async def test_removing_a_zone_leaves_its_runs_with_the_name_it_had(
     entries = _runtime(hass).run_log.entries
     assert len(entries) >= before
     assert entries[0]["zone_name"] == "Vasi"
+
+
+async def test_an_outcome_recorded_inside_the_debounce_survives_a_config_entry_reload(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    """async_shutdown must flush both stores, not just the state one.
+
+    A full Home Assistant stop is safe: Store registers an
+    EVENT_HOMEASSISTANT_FINAL_WRITE listener for it. A config-entry reload --
+    a HACS update, a disable/re-enable, an async_reload -- is not: it runs
+    async_shutdown and nothing else. This records an outcome and reloads with
+    no advance() in between, so the run log's 10-second debounced save has
+    not fired -- exactly the window a real reload can land in. The entry must
+    still be there afterwards, or a reload silently loses it from the run log
+    while it survives in state.outcome_log: two persisted records of one
+    event disagreeing across a restart.
+    """
+    freezer.move_to(START)
+    park = MockValvePark(hass)
+    park.add("valve.vasi")
+    mock_weather(hass)
+    entry = await setup_hub(hass, [zone_data("Vasi", "valve.vasi", minutes=1.0)])
+    runtime = entry.runtime_data
+    zone_id = runtime.zone_ids[0]
+    cycle_id = next(iter(runtime.zones[zone_id].config.cycles)).cycle_id
+
+    runtime.record_run_outcome(
+        zone_id=zone_id,
+        zone_name="Vasi",
+        cycle_id=cycle_id,
+        result="completed",
+        minutes=12,
+        liters=40.0,
+    )
+    assert runtime.run_log.entries, "outcome not recorded before reload"
+
+    await hass.config_entries.async_reload(entry.entry_id)
+    await hass.async_block_till_done()
+
+    reloaded = entry.runtime_data
+    assert reloaded.run_log.entries, "the run log lost its entry across a reload"
+    assert reloaded.run_log.entries[-1]["zone_name"] == "Vasi"
 
 
 async def test_midnight_prunes_the_run_log(
