@@ -4,6 +4,54 @@ All notable changes to this project are documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/).
 
+## [3.5.0] - 2026-08-16
+
+### Read-only history services
+
+- **Two new services, both `supports response: ONLY`.** `get_water_history`
+  returns the per-zone daily water series the component has held since
+  3.3.0 but that a caller could previously only reach through the
+  diagnostics download; `get_run_history` returns every recorded outcome —
+  completed runs and, just as importantly, the ones that were skipped,
+  interrupted or cancelled, each with its `reason_key`. A cycle that never
+  starts leaves no trace anywhere else, and until now neither did a card
+  asking one.
+- **The run log lives in a `Store` of its own.** `RuntimeState` rewrites its
+  whole dict on every `schedule_save()` — a litre-bearing meter sample, a
+  session phase transition, a zone toggle, midnight housekeeping — and the
+  run log reaches roughly 2 MB at its cap. Appending a growing series to
+  that store would multiply write amplification, on what is usually an SD
+  card, for something that changes a handful of times a day. It is instead
+  its own file, its own storage version, loaded and saved independently,
+  with its own persisted `cap_dropped` counter — the only thing that tells
+  a truncated log apart from one that has simply not run long enough, since
+  both have an oldest entry newer than a caller's requested start.
+- **The water series is dense: one point per day, zeros included.** An
+  omitted day would be indistinguishable from a day the component never
+  observed. A day whose meter could not be read is not dropped either: it
+  is recorded as zero litres carrying the seconds that went unobserved
+  (`gap_s`), because interpolating would invent water and counting a plain
+  zero would assert that none passed. `l: 0, gap_s: 0` and `l: 0, gap_s >
+  0` are different sentences, and a card must not draw them the same way.
+- **Unattributed water is never summed into the zones.** `get_water_history`
+  returns it as a sibling of `zones`, never as a member, so summing the
+  zones stays the right operation for a total or a budget. `closed_l` on
+  its days is the subset measured with every managed valve shut — the only
+  figure leak detection reads.
+- **A removed zone keeps its water and its runs.** Both services still
+  return them, with `zone_name: null` and sorted last: deleting a zone's
+  history along with its configuration would rewrite months a user already
+  lived through, over a fact — the water used, the cycles run — that
+  removing the zone does not undo.
+- **The run log starts empty at this upgrade, on purpose.** The sentinel's
+  `outcome_log` — the only outcome record that existed before this branch —
+  keeps three days of bare result strings, with no `reason_key` and no
+  duration, kept purely to answer "did this cycle leave a trace". Inventing
+  plausible `reason_key`s for those three days to seed the new log would be
+  exactly the plausible-but-false number this architecture exists to
+  remove, so `get_run_history` answers truthfully with nothing before the
+  upgrade instant instead of a guess dressed as history.
+
 ## [3.4.0] - 2026-08-16
 
 ### Per-zone leak detection

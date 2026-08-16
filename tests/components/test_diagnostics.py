@@ -10,6 +10,7 @@ is therefore not "the keys exist" but that each value tracks the thing it
 claims to, in a state where a plausible wrong implementation would differ.
 """
 
+from datetime import timedelta
 from typing import Any
 
 from custom_components.irrigation_maestro.const import (
@@ -19,6 +20,7 @@ from custom_components.irrigation_maestro.const import (
 from custom_components.irrigation_maestro.diagnostics import (
     async_get_config_entry_diagnostics,
 )
+from custom_components.irrigation_maestro.engine import runlog
 from custom_components.irrigation_maestro.leak import (
     SOURCE_NO_FLOW_CLOSED,
     SOURCE_VALVE_SENSOR,
@@ -26,6 +28,7 @@ from custom_components.irrigation_maestro.leak import (
 from freezegun.api import FrozenDateTimeFactory
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
+from homeassistant.util import dt as dt_util
 
 from .mocks import MockValvePark
 from .test_leak_entities import _leak_entity, _moisture
@@ -275,3 +278,40 @@ async def test_leak_diagnostics_cover_the_hub_scope_and_a_zone_with_no_source(
     assert zone["state_established"] is False
     assert zone["observation"]["stall"] is None  # sourceless, never a stall
     assert zone["zone_ids"] == [alpha]
+
+
+async def test_diagnostics_carries_a_bounded_tail_of_the_run_log(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    """The full series would bury everything else -- the same reasoning the
+    water daily history already gets in this file."""
+    freezer.move_to(START)
+    park = MockValvePark(hass)
+    park.add("valve.vasi")
+    mock_weather(hass)
+    entry = await setup_hub(hass, [zone_data("Vasi", "valve.vasi", at="23:59")])
+    log = entry.runtime_data.run_log
+    now = dt_util.utcnow()
+    for index in range(60):
+        log.append(
+            runlog.build_entry(
+                at=now - timedelta(minutes=60 - index),
+                zone_id="z1",
+                zone_name="Vasi",
+                program_id="p1",
+                program_name="Mattino",
+                result="completed",
+                reason_key=None,
+                duration_min=1,
+                volume_l=None,
+                partial=False,
+                scheduled=True,
+            )
+        )
+
+    payload = await async_get_config_entry_diagnostics(hass, entry)
+
+    assert payload["run_log"]["count"] == 60
+    assert len(payload["run_log"]["recent"]) == 50
+    assert payload["run_log"]["oldest_kept"] is not None
+    assert payload["run_log"]["newest"] == payload["run_log"]["recent"][-1]["at"]

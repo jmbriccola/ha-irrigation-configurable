@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Final
 
 from homeassistant.components.diagnostics import async_redact_data
 from homeassistant.core import HomeAssistant
@@ -34,6 +34,25 @@ def _water_daily_summary(runtime: Any) -> dict[str, Any]:
     }
 
 
+#: A diagnostics payload is read at a glance. The run log runs to thousands of
+#: entries, and dumping it would bury the configuration, the leak state and the
+#: notification verdict under a series nobody scrolls to -- the same reasoning
+#: _water_daily_summary already gets, one section up.
+_RUN_LOG_TAIL: Final = 50
+
+
+def _run_log_summary(runtime: Any) -> dict[str, Any]:
+    """Counts, the boundaries, and the most recent entries."""
+    entries = runtime.run_log.entries
+    return {
+        "count": len(entries),
+        "cap_dropped": runtime.run_log.cap_dropped,
+        "oldest_kept": runtime.run_log.oldest_at(),
+        "newest": entries[-1]["at"] if entries else None,
+        "recent": entries[-_RUN_LOG_TAIL:],
+    }
+
+
 async def async_get_config_entry_diagnostics(
     hass: HomeAssistant, entry: IrrigationConfigEntry
 ) -> dict[str, Any]:
@@ -49,6 +68,7 @@ async def async_get_config_entry_diagnostics(
             if subentry.subentry_type == SUBENTRY_TYPE_ZONE
         },
         "runtime_state": runtime_state,
+        "run_log": _run_log_summary(runtime),
         # The leak mechanism lives in memory by design, so runtime_state above
         # carries none of it. Read from the runtime's own predicates rather
         # than re-derived here -- see RuntimeManager.leak_diagnostics.

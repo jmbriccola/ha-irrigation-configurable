@@ -633,9 +633,43 @@ due proprietari per la stessa frase. Cosa dice ciascuno:
   produce nessuna risposta.
 
 I motivi di esito che puoi vedere su una zona — `no_water_supply`, `leak`,
-`no_flow` — sono spiegati al §9 qui sotto.
+`no_flow` — sono spiegati al §10 qui sotto.
 
-## 9. Risoluzione dei problemi
+## 9. Storico: consumi ed esecuzioni
+
+Due servizi, richiamabili da **Strumenti per sviluppatori → Azioni**,
+restituiscono quanto il componente conserva senza aprire `.storage`. Nessuno
+dei due scrive nulla.
+
+**Storico dei consumi** (`get_water_history`) restituisce i litri giornalieri
+di ogni zona in un intervallo — un punto per giorno, compresi quelli senza
+consumo: un giorno omesso sarebbe indistinguibile da una zona inesistente. Un
+giorno in cui il flussometro non era leggibile porta i **secondi non
+osservati** invece di un litro inventato, così un buco di misura non
+somiglia a un giorno tranquillo; le zone senza flussometro compaiono
+comunque, con i loro **litri stimati** marcati come tali. L'**acqua non
+attribuita** — misurata ma reclamata da nessuna zona — è restituita accanto
+alle zone, mai al loro interno: sommare le zone resta l'operazione giusta.
+Campi: **Dal** e **Al** delimitano l'intervallo (default: gli ultimi 30
+giorni fino a oggi); **Zone** filtra una o più zone, comprese quelle rimosse
+che conservano ancora acqua nello storico; **Includi l'acqua non attribuita**
+decide se quel blocco compare nella risposta.
+
+**Storico delle esecuzioni** (`get_run_history`) restituisce ogni esito
+registrato — le irrigazioni completate e, non meno importante, quelle
+saltate, interrotte o annullate, ciascuna con il suo motivo: un ciclo che non
+parte non lascia traccia da nessun'altra parte. Oltre a **Dal**, **Al** e
+**Zone**, **Esiti** tiene solo i risultati scelti (vuoto = tutti), e
+**Numero massimo di voci** limita la risposta alle più recenti — la risposta
+stessa dichiara se ha dovuto tagliare.
+
+Entrambi rifiutano un intervallo con **Dal** successivo ad **Al** anziché
+scambiarli in silenzio, e riportano a oggi una data futura in **Al**. Lo
+storico delle esecuzioni riparte da zero con questa versione: il registro
+precedente teneva solo tre giorni di esiti come stringhe nude e senza motivo,
+non abbastanza per ricostruire nulla di onesto.
+
+## 10. Risoluzione dei problemi
 
 - **Un ciclo non è partito e nessuno ti ha avvisato** → la sentinella
   giornaliera (default 12:00) notifica e apre una segnalazione in
