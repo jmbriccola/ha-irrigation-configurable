@@ -551,12 +551,11 @@ def daily_series(daily: DailyLitres, key: str, start: date, end: date) -> list[d
             "date": day.isoformat(),
             "l": round(float(entry.get("l", 0.0)), 3),
         }
+        record["gap_s"] = round(float(entry.get("gap_s", 0.0)), 1)
         if unattributed:
-            record["gap_s"] = round(float(entry.get("gap_s", 0.0)), 1)
             record["closed_l"] = round(float(entry.get("closed_l", 0.0)), 3)
         else:
             record["est"] = bool(entry.get("est", False))
-            record["gap_s"] = round(float(entry.get("gap_s", 0.0)), 1)
         series.append(record)
         day += timedelta(days=1)
     return series
@@ -830,6 +829,17 @@ class RunLogStore:
 
     @property
     def entries(self) -> list[runlog.RunEntry]:
+        """The live list, read-only by contract -- deliberately not a copy.
+
+        RuntimeState.daily_water() next door copies three levels deep so a
+        caller cannot corrupt the live store, and this diverges on purpose. Its
+        innermost records ARE the accumulators, which a caller would naturally
+        add to; a log entry is a finished record that nobody edits. Copying here
+        would put an 8000-entry copy on append(), which runs on every recorded
+        outcome, to defend against a mutation neither consumer performs -- both
+        build fresh dicts from these and never touch them. Do not mutate an
+        entry in place.
+        """
         return cast(list[runlog.RunEntry], self._data["runs"])
 
     @property
@@ -2033,6 +2043,17 @@ Extend the engine import:
 from .engine import metering, runlog
 ```
 
+Import the result vocabulary rather than retyping it (`services.py` already imports `runtime`, which imports `session`; `session` imports neither, so there is no cycle):
+
+```python
+from .session import (
+    RESULT_CANCELLED,
+    RESULT_COMPLETED,
+    RESULT_INTERRUPTED,
+    RESULT_SKIPPED,
+)
+```
+
 Add the constants:
 
 ```python
@@ -2042,10 +2063,17 @@ ATTR_RESULT: Final = "result"
 ATTR_LIMIT: Final = "limit"
 
 #: The four values record_run_outcome can write, and the only ones the filter
-#: accepts. They live in session.py as RESULT_*; repeated here as a validation
-#: vocabulary rather than imported, because services.py importing session.py
-#: would be a new dependency for a tuple of four strings.
-_RUN_RESULTS: Final = ("completed", "skipped", "interrupted", "cancelled")
+#: accepts. Imported rather than repeated: services.py already imports runtime,
+#: which imports session, so this adds no edge and no cycle -- and a second
+#: written-out copy of one vocabulary is the defect this repo's migrations exist
+#: to remove. services.yaml holds a third copy it cannot import away, so a test
+#: pins it, exactly as ALL_EVENTS is already pinned.
+_RUN_RESULTS: Final = (
+    RESULT_COMPLETED,
+    RESULT_SKIPPED,
+    RESULT_INTERRUPTED,
+    RESULT_CANCELLED,
+)
 
 _RUN_HISTORY_LIMIT: Final = 500
 _RUN_HISTORY_MAX_LIMIT: Final = 5000
@@ -2259,6 +2287,20 @@ In `tests/components/test_services_yaml.py`, extend the parametrize list again:
 
 ```python
         ("get_run_history", services._GET_RUN_HISTORY_SCHEMA),
+```
+
+And pin the third copy of the result vocabulary — `services.yaml` cannot import, so only a test can keep it from drifting the way the notification event list once did. Append to the same file:
+
+```python
+def test_the_run_result_options_match_what_the_schema_accepts() -> None:
+    """Three copies exist: session.py's RESULT_* (the source), _RUN_RESULTS (imported
+    from it), and this select list, which YAML cannot import. A value in only one of
+    them either cannot be picked or cannot be validated."""
+    raw = yaml.safe_load(_SERVICES_YAML.read_text(encoding="utf-8"))
+    options = raw["get_run_history"]["fields"]["result"]["selector"]["select"]["options"]
+    values = {option if isinstance(option, str) else option["value"] for option in options}
+
+    assert values == set(services._RUN_RESULTS)
 ```
 
 - [ ] **Step 7: Run the tests**
