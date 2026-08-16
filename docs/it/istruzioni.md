@@ -643,17 +643,20 @@ dei due scrive nulla.
 
 **Storico dei consumi** (`get_water_history`) restituisce i litri giornalieri
 di ogni zona in un intervallo — un punto per giorno, compresi quelli senza
-consumo: un giorno omesso sarebbe indistinguibile da una zona inesistente. Un
-giorno in cui il flussometro non era leggibile porta i **secondi non
-osservati** invece di un litro inventato, così un buco di misura non
-somiglia a un giorno tranquillo; le zone senza flussometro compaiono
-comunque, con i loro **litri stimati** marcati come tali. L'**acqua non
-attribuita** — misurata ma reclamata da nessuna zona — è restituita accanto
-alle zone, mai al loro interno: sommare le zone resta l'operazione giusta.
-Campi: **Dal** e **Al** delimitano l'intervallo (default: gli ultimi 30
-giorni fino a oggi); **Zone** filtra una o più zone, comprese quelle rimosse
-che conservano ancora acqua nello storico; **Includi l'acqua non attribuita**
-decide se quel blocco compare nella risposta.
+consumo. La densità serve a tenere distinti tre fatti che un'assenza
+confonderebbe: un giorno pienamente osservato senza acqua, un giorno in cui il
+**flussometro** non era leggibile — che porta i **secondi non osservati**
+invece di un litro inventato, così un buco di misura non somiglia a un giorno
+tranquillo — e una data fuori dall'intervallo conservato, che resta
+sconosciuta. Anche una zona configurata senza consumi nel periodo compare
+comunque, con una serie tutta a zero, anziché essere omessa. Le zone senza
+flussometro compaiono comunque, con i loro **litri stimati** marcati come
+tali. L'**acqua non attribuita** — misurata ma reclamata da nessuna zona — è
+restituita accanto alle zone, mai al loro interno: sommare le zone resta
+l'operazione giusta. Campi: **Dal** e **Al** delimitano l'intervallo (default:
+gli ultimi 30 giorni fino a oggi); **Zone** filtra una o più zone, comprese
+quelle rimosse che conservano ancora acqua nello storico; **Includi l'acqua
+non attribuita** decide se quel blocco compare nella risposta.
 
 **Storico delle esecuzioni** (`get_run_history`) restituisce ogni esito
 registrato — le irrigazioni completate e, non meno importante, quelle

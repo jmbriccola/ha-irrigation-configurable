@@ -360,7 +360,7 @@ is not among the four frozen files.
 
 ```json
 {"start": "2026-07-18", "end": "2026-08-16",
- "retention_days": 730, "oldest_available": "2024-08-18",
+ "retention_days": 730, "oldest_available": "2024-08-17",
  "truncated_by_retention": false, "unit": "L",
  "zones": [{"zone_id": "1b2f3c4d5e6f", "zone_name": "Vasi",
             "total_l": 1234.5,

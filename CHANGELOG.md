@@ -8,14 +8,16 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Read-only history services
 
-- **Two new services, both `supports response: ONLY`.** `get_water_history`
+- **Two new services, both `supports_response: ONLY`.** `get_water_history`
   returns the per-zone daily water series the component has held since
-  3.3.0 but that a caller could previously only reach through the
-  diagnostics download; `get_run_history` returns every recorded outcome —
-  completed runs and, just as importantly, the ones that were skipped,
-  interrupted or cancelled, each with its `reason_key`. A cycle that never
-  starts leaves no trace anywhere else, and until now neither did a card
-  asking one.
+  3.3.0: no service exposed it and the frontend could not reach it at all.
+  `get_run_history` returns every recorded outcome — completed runs and,
+  just as importantly, the ones that were skipped, interrupted or
+  cancelled, each with its `reason_key`. Nothing held that either before
+  this branch: `outcome_log` is pruned to three days of bare result
+  strings, with no reason and no duration. A cycle that never starts
+  leaves no trace anywhere else, and until now neither did a card asking
+  one.
 - **The run log lives in a `Store` of its own.** `RuntimeState` rewrites its
   whole dict on every `schedule_save()` — a litre-bearing meter sample, a
   session phase transition, a zone toggle, midnight housekeeping — and the
