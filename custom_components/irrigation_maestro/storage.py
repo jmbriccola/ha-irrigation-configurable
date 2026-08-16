@@ -22,8 +22,8 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.storage import Store
 
 from . import migration as migrate
-from .const import DOMAIN, STORAGE_VERSION
-from .engine import history, metering
+from .const import DOMAIN, STORAGE_VERSION, STORAGE_VERSION_RUNS
+from .engine import history, metering, runlog
 from .engine.model import EngineParams
 from .migration import migrate_last_completed
 
@@ -438,3 +438,74 @@ class RuntimeState:
     def as_dict(self) -> dict[str, Any]:
         """Snapshot for diagnostics."""
         return dict(self._data)
+
+
+class RunLogStore:
+    """Every outcome the component recorded, in a file of its own.
+
+    Deliberately not a section of ``RuntimeState``. That store rewrites its
+    whole dict on every ``schedule_save()`` -- a litre-bearing meter sample, a
+    session phase transition, a zone toggle, a rain reading, midnight -- and
+    this series reaches ~720 KB on a small installation and ~2 MB at the entry
+    cap. Appending it there would multiply write amplification on what is
+    usually an SD card, for something that changes a handful of times a day.
+
+    The file is not deleted when the config entry is removed, because the state
+    store is not either: the integration has no ``async_remove_entry`` at all,
+    and deleting one of the two would be the worse of the three available
+    behaviours.
+    """
+
+    def __init__(self, hass: HomeAssistant, entry_id: str) -> None:
+        self.store_key = f"{DOMAIN}.runs.{entry_id}"
+        self._store: Store[dict[str, Any]] = Store(hass, STORAGE_VERSION_RUNS, self.store_key)
+        self._data: dict[str, Any] = {"runs": [], "cap_dropped": 0}
+
+    async def async_load(self) -> None:
+        stored = await self._store.async_load()
+        if stored is not None:
+            self._data = {"runs": [], "cap_dropped": 0, **stored}
+
+    async def async_save(self) -> None:
+        await self._store.async_save(self._data)
+
+    def schedule_save(self) -> None:
+        """Debounced, like the state store: an outcome is not worth a sync write."""
+        self._store.async_delay_save(lambda: self._data, _SAVE_DELAY_S)
+
+    @property
+    def entries(self) -> list[runlog.RunEntry]:
+        """The live list, read-only by contract -- deliberately not a copy.
+
+        RuntimeState.daily_water() next door copies three levels deep so a
+        caller cannot corrupt the live store, and this diverges on purpose. Its
+        innermost records ARE the accumulators, which a caller would naturally
+        add to; a log entry is a finished record that nobody edits. Copying here
+        would put an 8000-entry copy on append(), which runs on every recorded
+        outcome, to defend against a mutation neither consumer performs -- both
+        build fresh dicts from these and never touch them. Do not mutate an
+        entry in place.
+        """
+        return cast(list[runlog.RunEntry], self._data["runs"])
+
+    @property
+    def cap_dropped(self) -> int:
+        """How many entries the cap has ever removed.
+
+        Monotonic and persisted, because it is the only thing that tells a
+        truncated log apart from a young one: both have an oldest entry newer
+        than a caller's requested start, and only this says which. It resetting
+        on every reboot would make the truncation flag quietly go false.
+        """
+        return int(self._data["cap_dropped"])
+
+    def oldest_at(self) -> str | None:
+        return runlog.oldest_at(self.entries)
+
+    def append(self, entry: runlog.RunEntry) -> None:
+        runs, dropped = runlog.append_run(self.entries, entry)
+        self._data["runs"] = runs
+        self._data["cap_dropped"] = self.cap_dropped + dropped
+
+    def prune(self, cutoff: datetime) -> None:
+        self._data["runs"] = runlog.prune_runs(self.entries, cutoff)

@@ -257,6 +257,11 @@ DEFAULT_WATER_SUPPLY_CONFIRM_S: Final = 180
 
 STORAGE_VERSION: Final = 1
 
+#: The run log is a second Store with a schema of its own, so it versions on
+#: its own. Sharing STORAGE_VERSION would force a bump of one file for a change
+#: to the other, and a migration for a schema that did not move.
+STORAGE_VERSION_RUNS: Final = 1
+
 EVENT_PREFIX: Final = f"{DOMAIN}_"
 
 ATTR_MAESTRO_ROLE: Final = "maestro_role"
