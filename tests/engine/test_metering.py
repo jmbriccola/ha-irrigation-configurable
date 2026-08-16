@@ -6,6 +6,8 @@ from custom_components.irrigation_maestro.engine.metering import (
     RETENTION_DAYS,
     UNATTRIBUTED_KEY,
     accumulate,
+    daily_series,
+    keys_in_range,
     prune_daily,
     roll_into_day,
     sum_period,
@@ -120,3 +122,68 @@ def test_sum_period_can_be_scoped_to_one_key() -> None:
     assert sum_period(daily, date(2026, 8, 1), date(2026, 8, 31), key="z1") == 10.0
     assert sum_period(daily, date(2026, 8, 1), date(2026, 8, 31), key="z2") == 20.0
     assert sum_period(daily, date(2026, 8, 1), date(2026, 8, 31), key="nobody") == 0.0
+
+
+def test_the_series_is_dense_so_a_quiet_day_and_a_blind_day_are_different_shapes() -> None:
+    """The whole reason gap_s exists: a day with a six-hour hole in the meter
+    must not look like a day on which nothing was watered."""
+    daily = roll_into_day({}, "2026-08-16", "z1", 40.0, estimated=False, gap_s=0.0)
+    daily = roll_into_day(daily, "2026-08-18", "z1", 0.0, estimated=False, gap_s=21600.0)
+
+    series = daily_series(daily, "z1", date(2026, 8, 16), date(2026, 8, 18))
+
+    assert series == [
+        {"date": "2026-08-16", "l": 40.0, "est": False, "gap_s": 0.0},
+        {"date": "2026-08-17", "l": 0.0, "est": False, "gap_s": 0.0},
+        {"date": "2026-08-18", "l": 0.0, "est": False, "gap_s": 21600.0},
+    ]
+
+
+def test_a_single_day_range_yields_exactly_one_point() -> None:
+    series = daily_series({}, "z1", date(2026, 8, 16), date(2026, 8, 16))
+
+    assert series == [{"date": "2026-08-16", "l": 0.0, "est": False, "gap_s": 0.0}]
+
+
+def test_the_series_carries_the_estimated_latch_through() -> None:
+    daily = roll_into_day({}, "2026-08-16", "z1", 40.0, estimated=True, gap_s=0.0)
+
+    assert daily_series(daily, "z1", date(2026, 8, 16), date(2026, 8, 16))[0]["est"] is True
+
+
+def test_the_unattributed_series_carries_closed_l_and_no_est() -> None:
+    """closed_l is the only figure leak detection reads, and est is meaningless
+    for water no zone claimed."""
+    daily = roll_into_day(
+        {},
+        "2026-08-16",
+        UNATTRIBUTED_KEY,
+        5.0,
+        estimated=False,
+        gap_s=0.0,
+        closed_l=2.0,
+    )
+
+    series = daily_series(daily, UNATTRIBUTED_KEY, date(2026, 8, 16), date(2026, 8, 16))
+
+    assert series == [{"date": "2026-08-16", "l": 5.0, "gap_s": 0.0, "closed_l": 2.0}]
+
+
+def test_the_series_rounds_litres_to_millilitres_and_seconds_to_a_tenth() -> None:
+    daily = roll_into_day({}, "2026-08-16", "z1", 1.0 / 3.0, estimated=False, gap_s=1.0 / 3.0)
+
+    point = daily_series(daily, "z1", date(2026, 8, 16), date(2026, 8, 16))[0]
+
+    assert point["l"] == 0.333
+    assert point["gap_s"] == 0.3
+
+
+def test_keys_in_range_reports_every_key_that_booked_anything() -> None:
+    daily = roll_into_day({}, "2026-08-16", "z1", 1.0, estimated=False, gap_s=0.0)
+    daily = roll_into_day(daily, "2026-08-20", "z2", 1.0, estimated=False, gap_s=0.0)
+    daily = roll_into_day(daily, "2026-08-16", UNATTRIBUTED_KEY, 1.0, estimated=False, gap_s=0.0)
+
+    assert keys_in_range(daily, date(2026, 8, 16), date(2026, 8, 17)) == {
+        "z1",
+        UNATTRIBUTED_KEY,
+    }

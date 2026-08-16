@@ -108,3 +108,57 @@ def sum_period(daily: DailyLitres, start: date, end: date, *, key: str | None = 
                 continue
             total += float(entry.get("l", 0.0))
     return total
+
+
+def daily_series(daily: DailyLitres, key: str, start: date, end: date) -> list[dict[str, Any]]:
+    """One record per day across an inclusive range -- the zeros included.
+
+    Dense, not sparse, and that is the point. The stored history has no record
+    for a day on which a key booked neither litres nor gap seconds, so an
+    absence there means "nothing happened". A reader must be able to tell that
+    apart from a day whose meter could not be read, which *does* have a record,
+    carrying zero litres and a positive ``gap_s`` -- a gap is booked as zero
+    litres on purpose, since interpolating would invent water and counting a
+    zero would assert that none passed. Emitting the zeros makes the two shapes
+    comparable at a glance instead of leaving every consumer to reconstruct the
+    calendar, which one of them would get wrong.
+
+    ``closed_l`` rides along only for UNATTRIBUTED_KEY: it is the only key that
+    accumulates it, and the only figure leak detection reads. ``est`` is
+    omitted there for the mirror reason -- water no zone claimed was never
+    estimated from a nominal rate.
+
+    Rounding happens here rather than in storage: litres to millilitres, which
+    is exact for any real meter, and gap seconds to a tenth. A dense series can
+    run to thousands of points, and float tails on every one of them are
+    payload nobody reads.
+    """
+    unattributed = key == UNATTRIBUTED_KEY
+    series: list[dict[str, Any]] = []
+    day = start
+    while day <= end:
+        entry = daily.get(day.isoformat(), {}).get(key, {})
+        record: dict[str, Any] = {
+            "date": day.isoformat(),
+            "l": round(float(entry.get("l", 0.0)), 3),
+        }
+        record["gap_s"] = round(float(entry.get("gap_s", 0.0)), 1)
+        if unattributed:
+            record["closed_l"] = round(float(entry.get("closed_l", 0.0)), 3)
+        else:
+            record["est"] = bool(entry.get("est", False))
+        series.append(record)
+        day += timedelta(days=1)
+    return series
+
+
+def keys_in_range(daily: DailyLitres, start: date, end: date) -> set[str]:
+    """Every key that booked litres or gap seconds in an inclusive range.
+
+    Includes UNATTRIBUTED_KEY, which callers filter out when they want zones.
+    Used to find zones that hold water in the history but are no longer
+    configured -- their litres stay on the books when the zone is removed, for
+    the same reason ``drop_zone`` leaves them there.
+    """
+    first, last = start.isoformat(), end.isoformat()
+    return {key for day, keys in daily.items() if first <= day <= last for key in keys}
