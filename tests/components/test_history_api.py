@@ -15,7 +15,7 @@ from .mocks import MockValvePark
 from .test_session import START, mock_weather, setup_hub, zone_data
 
 
-async def _hub(hass: HomeAssistant) -> Any:
+async def _hub(hass: HomeAssistant, *, time_zone: str | None = "UTC") -> Any:
     park = MockValvePark(hass)
     park.add("valve.vasi")
     park.add("valve.prato")
@@ -26,6 +26,7 @@ async def _hub(hass: HomeAssistant) -> Any:
             zone_data("Vasi", "valve.vasi", at="23:59", order=10),
             zone_data("Prato", "valve.prato", at="23:59", order=20),
         ],
+        time_zone=time_zone,
     )
 
 
@@ -437,9 +438,8 @@ async def test_a_run_recorded_before_the_local_offset_is_filed_on_its_local_day(
     """00:30 in CEST carries the previous UTC date. Filtering on the raw string
     would file it a day early -- an off-by-one that reads as correct until a
     chart's first or last day is wrong."""
-    await hass.config.async_set_time_zone("Europe/Rome")
     freezer.move_to("2026-08-15 22:30:00+00:00")  # 2026-08-16 00:30 local
-    await _hub(hass)
+    await _hub(hass, time_zone="Europe/Rome")
     _seed(hass, _run(datetime(2026, 8, 15, 22, 30, tzinfo=UTC)))
 
     same_day = await _runs(hass, start_date="2026-08-16", end_date="2026-08-16")
