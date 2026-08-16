@@ -133,7 +133,11 @@ itself), and two that explain a silent leak entity:
   been in a position to conclude anything for this zone: a leak sensor that
   has never reported, a meter that is not measuring, or a valve somewhere that
   never reports closed — which blocks every metered scope, since a meter's
-  seconds only count with the whole system shut.
+  seconds only count with the whole system shut. **Not necessarily a fault**:
+  a valve held open outside this integration reads exactly the same, so an
+  hour of hand-watering from an irrigation line produces this key and is
+  entirely benign. Word it as "this zone could not check", never as "this zone
+  is broken".
 - `leak_evidence_unresolved` — same hour, but something **is** reporting a
   leak and nothing can finish judging it: a sensor asserting over a valve that
   never reports closed, or measured seconds frozen by a meter that stopped
@@ -329,8 +333,14 @@ problem* and neither case can claim that:
    never been observable — are declared after an hour of idle time as
    `leak_never_observable` / `leak_evidence_unresolved` in `degraded` (above),
    so that a permanently silent entity is never left looking like a broken
-   one. The hub scope has no `zone_state` of its own, so a hub-scope stall is
-   visible only through the zones it also blocks.
+   one. **The hub scope is not covered by this at all**: `degraded` lives on
+   `zone_state` and the hub has none. Where the same cause also stalls the
+   zones — a valve that never reports closed blocks every metered scope — the
+   zones declare it and the hub's silence is at least explained nearby. Where
+   it does not, it is explained nowhere: two zones that each have their own
+   leak sensor, behind one shared line meter, both settle on their sensors and
+   report nothing, while `hub_leak` can stay `unavailable` indefinitely with no
+   surface saying why. A card should not present that as healthy.
 
 Four consequences worth stating, because they are easy to get backwards:
 

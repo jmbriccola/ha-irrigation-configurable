@@ -579,6 +579,49 @@ async def test_a_source_that_reports_late_starts_the_window_late(
     assert _leak_entity(hass, entry, zone_id).state == "off"
 
 
+async def test_a_sensor_that_restores_off_and_goes_quiet_earns_no_window(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    """Hold what withholds; never hold what permits.
+
+    A Zigbee sensor restores ``off`` when Home Assistant loads and its
+    coordinator is then down for five minutes. The reading is remembered --
+    it has to be, or an assertion that goes silent would be retracted -- but
+    remembering the ``off`` and counting observation from it would let this
+    scope publish "there is no problem" over a window in which its only source
+    said nothing at all, having genuinely observed about one second.
+
+    So the ``off`` branch is read LIVE and the clock stops when the sensor
+    does. The ``on`` branch keeps the remembered reading, where holding can
+    only withhold an answer rather than manufacture one.
+    """
+    freezer.move_to(START)
+    park = MockValvePark(hass)
+    park.add("valve.a")
+    hass.states.async_set("binary_sensor.a_leak", *_moisture("off"))
+    mock_weather(hass)
+    entry = await setup_hub(
+        hass,
+        [zone_data("Alpha", "valve.a", at="23:00", leak_sensor="binary_sensor.a_leak")],
+    )
+    zone_id = entry.runtime_data.zone_ids[0]
+
+    # One second of a sensor that then goes off the air entirely.
+    await advance(hass, freezer, 1, step=1.0)
+    hass.states.async_set("binary_sensor.a_leak", *_moisture("unavailable"))
+    await advance(hass, freezer, _WELL_PAST_CONFIRM_S, step=10.0)
+
+    assert _leak_entity(hass, entry, zone_id).state == "unavailable"
+
+    # It comes back, and the window fills from there.
+    hass.states.async_set("binary_sensor.a_leak", *_moisture("off"))
+    await advance(hass, freezer, 200, step=10.0)
+    assert _leak_entity(hass, entry, zone_id).state == "unavailable"
+
+    await advance(hass, freezer, 150, step=10.0)
+    assert _leak_entity(hass, entry, zone_id).state == "off"
+
+
 async def test_a_configured_source_that_never_reports_never_says_off(
     hass: HomeAssistant, freezer: FrozenDateTimeFactory
 ) -> None:
@@ -785,25 +828,27 @@ async def test_an_assertion_that_goes_silent_still_holds_the_window_open(
     assert _leak_entity(hass, entry, zone_id).state == "off"
 
 
-async def test_a_meter_confirming_from_the_start_never_publishes_off_first(
+async def test_a_meter_whose_evidence_lags_the_window_never_publishes_off(
     hass: HomeAssistant, freezer: FrozenDateTimeFactory
 ) -> None:
-    """The coincident case, which is where the flow gate earns its keep.
+    """Where the flow gate earns its keep: the window fills first.
 
-    A meter flowing above the threshold with every valve shut from the moment
-    we load: observable time and the detector's own measured seconds fill
-    together, so both reach ``leak_confirm_s`` in the same instant. Whichever
-    timer fires first decides what is published, and if the window closes
-    without asking about held evidence the entity says ``off`` in the tick
-    before the ``on`` it is about to say -- a clearing edge out of a tie.
+    Observable time accrues whenever the meter is measuring with every valve
+    shut -- whatever the reading says. Source 2's own seconds accrue only while
+    that reading is ABOVE the threshold. So a line that trickles below the bar
+    and then starts leaking fills this entity's window well before the detector
+    has the evidence to raise, and closing the window on time alone publishes
+    ``off`` in the minutes before the ``on`` that was already coming.
 
-    Every state published is captured, not just the last, because the defect
-    is a single frame that the end state does not remember.
+    Every state published is captured, not just the last, because the defect is
+    a frame the end state does not remember.
     """
     freezer.move_to(START)
     park = MockValvePark(hass)
     park.add("valve.a")
-    hass.states.async_set("sensor.flow", "2.0", {"unit_of_measurement": "L/min"})
+    # Below the 0.5 L/min default threshold: measured, so the window counts it,
+    # but no evidence of a leak accrues from it.
+    hass.states.async_set("sensor.flow", "0.2", {"unit_of_measurement": "L/min"})
     mock_weather(hass)
     entry = await setup_hub(
         hass, [zone_data("Alpha", "valve.a", at="23:00", flow_sensor="sensor.flow")]
@@ -820,6 +865,15 @@ async def test_a_meter_confirming_from_the_start_never_publishes_off_first(
             published.append(new_state.state)
 
     hass.bus.async_listen(EVENT_STATE_CHANGED, _record)
+
+    # Two hundred seconds of observation that establishes nothing about a leak,
+    # then a real one. The window is full long before the evidence is.
+    await advance(hass, freezer, 200, step=10.0)
+    hass.states.async_set("sensor.flow", "2.0", {"unit_of_measurement": "L/min"})
+    await advance(hass, freezer, 200, step=10.0)
+
+    assert _leak_entity(hass, entry, zone_id).state == "unavailable"
+    assert "off" not in published
 
     await advance(hass, freezer, _WELL_PAST_CONFIRM_S, step=10.0)
 
@@ -1030,6 +1084,11 @@ async def test_a_scope_that_can_never_observe_says_so_in_degraded(
     zone_id = entry.runtime_data.zone_ids[0]
 
     await advance(hass, freezer, 600, step=60.0)
+    # Asked again before the negative assertion, or it would read whatever the
+    # zone last published and pass under any threshold at all -- including one
+    # short enough to declare a stall after ten minutes.
+    entry.runtime_data.dispatch_update()
+    await hass.async_block_till_done()
 
     # Ten minutes in it is silent but not yet remarkable: an ordinary slow boot
     # looks exactly like this.
