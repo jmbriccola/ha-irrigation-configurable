@@ -22,7 +22,7 @@ from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from functools import partial
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Final
 
 from homeassistant.core import CALLBACK_TYPE, Event, EventStateChangedData, callback
 from homeassistant.helpers.event import (
@@ -60,6 +60,26 @@ REASON_LEAK = "leak"
 #: there is none. It both refuses a start and explains a zero-flow interrupt,
 #: which are the same fact reached from either side of the valve opening.
 REASON_NO_WATER_SUPPLY = "no_water_supply"
+REASON_MANUAL_STOP_BLOCK = "manual_stop_block"
+
+#: Every reason a zone can be refused a NEW cycle, in the order ``_execute``
+#: applies them, with the outcome each is recorded under.
+#:
+#: The order is not decoration: ``start_block`` returns the first, which is the
+#: reason the outcome carries, so this dict IS the gate sequence and anything
+#: that wants to know "would a cycle start" must read it rather than repeat it.
+#: That is the whole point of ``SessionRunner.start_blocks`` -- see its
+#: docstring for the defect class it exists to close.
+#:
+#: Two different results, deliberately: the manual-stop window CANCELS (the
+#: user stopped this, and the queue is theirs to have stopped), while a leak or
+#: a missing supply SKIPS (a condition of the world refused it). Keeping the
+#: pairing here rather than at the call site is what stops the two drifting.
+START_BLOCK_RESULTS: Final[dict[str, str]] = {
+    REASON_MANUAL_STOP_BLOCK: RESULT_CANCELLED,
+    REASON_LEAK: RESULT_SKIPPED,
+    REASON_NO_WATER_SUPPLY: RESULT_SKIPPED,
+}
 
 _GATHER_WINDOW_S = 2.0
 
@@ -968,7 +988,9 @@ class SessionRunner:
 
     def _cancel_queue(self) -> None:
         reason = (
-            "manual_stop_block" if self._abort_manual else (self._abort_reason or RESULT_CANCELLED)
+            REASON_MANUAL_STOP_BLOCK
+            if self._abort_manual
+            else (self._abort_reason or RESULT_CANCELLED)
         )
         for segment in list(self._queue):
             self._record(segment, RESULT_CANCELLED, reason)
@@ -978,6 +1000,95 @@ class SessionRunner:
         for reason, names in self._pending_cancel_notices.items():
             await self._runtime.notify_cancelled(reason, names)
         self._pending_cancel_notices.clear()
+
+    # -- the start gates, as one reader ----------------------------------------------
+
+    def start_blocks(self, *zone_ids: str, manual: bool = False) -> list[str]:
+        """Every reason a new cycle is refused for these zones, in gate order.
+
+        The one definition of "blocked from starting right now", and the reason
+        it exists at all is a defect that had already been fixed once and grown
+        back. Two features can refuse a start, and each described the refusal
+        from inside its own module: the supply notice announced that "cycles
+        still start" whenever its own gate was switched off, and the leak
+        clearing message announced that "new cycles are allowed again" whenever
+        no other LEAK alarm stood. Both are false the moment the other feature
+        is the one blocking, and one ordinary sequence reaches both -- a leak
+        alarm under close_and_block, the user shutting the mains by hand, the
+        supply sensor tripping, and the flow going to zero, which withdraws the
+        alarm at the exact instant the supply gate engages.
+
+        The leak message even had the fix's shape: its docstring exists because
+        of this defect class, and it consults ``leak_blocked_zone_ids()``
+        before promising resumption. It stopped at the feature boundary,
+        because the audit that produced it was scoped to one feature and could
+        only see the same-feature half. Two one-line corrections would have
+        been right today and would have rotted the same way, because nothing
+        owned the union and the next feature able to refuse a start would
+        reintroduce it.
+
+        So the union is owned here, where the gates are actually applied.
+        ``_execute`` consumes this rather than repeating it, exactly as
+        ``leak_watch`` calls ``leak_sources_configured`` rather than
+        re-deriving it: the answer and the refusal are one piece of code, so
+        they cannot disagree about what is about to happen.
+
+        NAMED reasons, not a yes/no -- see the report for the argument. The
+        short version: naming is strictly better in both directions. It lets a
+        message say WHY a zone is still blocked, which is the difference
+        between a claim a user can check and one they can only believe; it
+        costs a new gate one phrase, and ``START_BLOCK_RESULTS`` is checked
+        against the phrase table by a test, so forgetting fails loudly rather
+        than printing a raw key.
+
+        ALL of them, and not merely the first: a message that named one reason
+        of two would send the user to fix it and leave them blocked, which is
+        the same "true but sends you to the wrong thing" failure the leak
+        notices were corrected for. ``start_block`` takes the first, because a
+        refusal happens once and is recorded under one key.
+
+        Zero zone ids is a real call, not a degenerate one: the manual-stop
+        window is zone-independent, so "is anything blocking" still has an
+        answer when the zones an alarm implicated have since been deleted.
+
+        ``manual`` mirrors ``_execute``: a run asked for by hand is exempt from
+        the post-manual-stop window and from nothing else. Callers describing
+        the world at large leave it False, which is the scheduled case and the
+        one every message is about.
+        """
+        reasons: list[str] = []
+        if not manual and self._runtime.manual_block_active():
+            # Safety level 5: post-manual-stop block window.
+            reasons.append(REASON_MANUAL_STOP_BLOCK)
+        if any(self._runtime.leak_block_active(zone_id) for zone_id in zone_ids):
+            # A confirmed leak, under the leak action that opted into blocking.
+            # Judged here rather than at enqueue time so every path is covered
+            # by one gate: scheduled runs, manual runs and the later segments
+            # of a soak split all reach this before a valve opens. A segment
+            # already watering is NOT stopped -- blocking governs starts, and
+            # aborting a running cycle is what `close` promises not to do.
+            # Manual runs are deliberately not exempt: "no new cycles" includes
+            # the one asked for by hand, and the escapes are fixing the leak,
+            # removing the source that reported it, or changing the action.
+            reasons.append(REASON_LEAK)
+        if any(self._runtime.water_supply_block_active(zone_id) for zone_id in zone_ids):
+            # No water behind the valve, confirmed for long enough to be
+            # believed. Same reasons as the gate above, and a manual run is not
+            # exempt from this one either -- asking by hand does not conjure
+            # water into the pipe. Blocking costs the garden nothing, because
+            # with no water the cycle waters nothing either way; what it saves
+            # is a pointless actuation and an outcome that says why.
+            reasons.append(REASON_NO_WATER_SUPPLY)
+        return reasons
+
+    def start_block(self, zone_id: str, *, manual: bool = False) -> str | None:
+        """The reason this zone's next segment would be refused, or None.
+
+        First gate wins, which is what makes this and ``_execute`` the same
+        decision: a refusal happens once and its outcome carries one key.
+        """
+        reasons = self.start_blocks(zone_id, manual=manual)
+        return reasons[0] if reasons else None
 
     # -- segment execution ----------------------------------------------------------
 
@@ -989,33 +1100,13 @@ class SessionRunner:
             return
         valve = zone.valve
 
-        # Safety level 5: post-manual-stop block window.
-        if not segment.manual and runtime.manual_block_active():
-            self._record(segment, RESULT_CANCELLED, "manual_stop_block")
-            return
-
-        # A confirmed leak, under the leak action that opted into blocking.
-        # Here rather than at enqueue time so every path is covered by one
-        # gate, exactly like the window above: scheduled runs, manual runs and
-        # the later segments of a soak split all reach this before a valve
-        # opens. A segment already watering is NOT stopped -- blocking governs
-        # starts, and aborting a running cycle is what `close` promises not to
-        # do. Manual runs are deliberately not exempt: "no new cycles" includes
-        # the one asked for by hand, and the escapes are fixing the leak,
-        # removing the source that reported it, or changing the action.
-        if runtime.leak_block_active(segment.zone_id):
-            self._record(segment, RESULT_SKIPPED, REASON_LEAK)
-            return
-
-        # No water behind the valve, confirmed for long enough to be believed.
-        # In the same gate block and for the same reasons: every path reaches
-        # it before a valve opens, a running segment is not stopped, and a
-        # manual run is not exempt -- asking by hand does not conjure water
-        # into the pipe. Blocking costs the garden nothing, because with no
-        # water the cycle waters nothing either way; what it saves is a
-        # pointless actuation and an outcome that says why.
-        if runtime.water_supply_block_active(segment.zone_id):
-            self._record(segment, RESULT_SKIPPED, REASON_NO_WATER_SUPPLY)
+        # Every gate that can refuse a NEW cycle, asked once, from the reader
+        # that IS their definition. Written out here as three ifs until the
+        # messages that describe blocking started disagreeing with the blocking
+        # itself -- see start_blocks.
+        blocked = self.start_block(segment.zone_id, manual=segment.manual)
+        if blocked is not None:
+            self._record(segment, START_BLOCK_RESULTS[blocked], blocked)
             return
 
         # Calendar forbidden windows: never start inside one; truncate to

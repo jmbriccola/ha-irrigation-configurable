@@ -12,7 +12,7 @@ import logging
 from dataclasses import replace
 from datetime import datetime, timedelta
 from functools import partial
-from typing import Any
+from typing import Any, Final
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import ATTR_UNIT_OF_MEASUREMENT
@@ -67,6 +67,9 @@ from .notify import (
 )
 from .sentinel import Sentinel
 from .session import (
+    REASON_LEAK,
+    REASON_MANUAL_STOP_BLOCK,
+    REASON_NO_WATER_SUPPLY,
     RESULT_CANCELLED,
     RESULT_COMPLETED,
     RESULT_INTERRUPTED,
@@ -139,6 +142,19 @@ _LEAK_MIN_OBSERVATION_S = 30.0
 #: unloaded is unknowable from the configuration that remains -- and a
 #: non-scope id is indistinguishable from a scope's by shape alone. Anything
 #: new that starts with the prefix must be named here or it will be swept.
+#: How each start-gate reads in a message, keyed by the reason
+#: ``SessionRunner.start_blocks`` returns. Present tense and no undertaking
+#: about how long it lasts, like every other note this module builds.
+#:
+#: One phrase per reason, and a test asserts this covers ``START_BLOCK_RESULTS``
+#: exactly -- which is what makes the named-reason design safe to extend. A new
+#: gate that reaches a user as a raw key would be the kind of defect nobody
+#: reports and everybody sees.
+_START_BLOCK_PHRASES: Final[dict[str, str]] = {
+    REASON_MANUAL_STOP_BLOCK: "watering was stopped by hand a short while ago",
+    REASON_LEAK: "a leak alarm is standing",
+    REASON_NO_WATER_SUPPLY: "the water supply is reported missing",
+}
 _LEAK_ISSUE_PREFIX = "leak_"
 _LEAK_ACTION_ISSUE_ID = "leak_action_invalid"
 _LEAK_NON_SCOPE_ISSUE_IDS = frozenset({_LEAK_ACTION_ISSUE_ID})
@@ -2653,11 +2669,41 @@ class IrrigationRuntime:
         subject = "The irrigation system" if scope == HUB_SCOPE else self._zone_name(scope)
         if self.hub.leak_action != LEAK_ACTION_CLOSE_AND_BLOCK:
             blocking = ""
-        elif set(self.leak_zone_ids(scope)) & self.leak_blocked_zone_ids():
-            blocking = " New cycles are still blocked by another leak alarm."
+        elif reasons := self._start_block_reasons(*self.leak_zone_ids(scope)):
+            blocking = f" New cycles are still blocked: {reasons}."
         else:
             blocking = " New cycles are allowed again."
         return f"{subject}: the leak condition has cleared.{blocking}"
+
+    def _start_block_reasons(self, *zone_ids: str) -> str:
+        """Why these zones still cannot start a cycle, or "" if they can.
+
+        Every message that says anything about cycles starting goes through
+        here, and through ``SessionRunner.start_blocks`` beneath it, because the
+        alternative was each feature asserting about the other's block from
+        inside its own module. That is not a hypothetical: the supply notice
+        claimed "cycles still start" whenever its own gate was off, and the leak
+        clearing message promised resumption whenever no other LEAK alarm stood,
+        and one ordinary sequence made both false at once.
+
+        The phrases are checked against ``START_BLOCK_RESULTS`` by a test, so a
+        new gate cannot reach a user as a bare key. Every reason is listed
+        rather than the first: sending someone to fix one of two blocks and
+        leaving them blocked is the failure this whole class of message has
+        already been corrected for once.
+
+        Read in the caller's own turn, which is the ordering that matters here:
+        these messages are built by the hook that the state change triggered, so
+        the answer has to describe the world AFTER that change. Both gates do --
+        the detector resets its alarm before calling ``on_leak_cleared``, and
+        the supply predicates read the sensor's live state -- and neither
+        consults an "announced" flag, which is the memory that would still be
+        describing the world before.
+        """
+        return "; ".join(
+            _START_BLOCK_PHRASES.get(reason, reason)
+            for reason in self.session.start_blocks(*zone_ids)
+        )
 
     def _leak_action_note(self) -> str:
         """What the configured action WILL do, in the mood the fact deserves.
@@ -3144,11 +3190,20 @@ class IrrigationRuntime:
         # ends when the water returns, but it also ends if this sensor simply
         # goes quiet -- withholding water needs positive evidence that there is
         # none -- and a snapshot must not undertake to keep refusing.
-        gate = (
-            " No new cycle starts for this zone."
-            if self.hub.require_water_supply
-            else " Cycles still start: the water-supply gate is switched off."
-        )
+        # "Cycles still start" was an assertion about the whole start decision
+        # made from inside one gate, and it is false whenever another gate is
+        # holding -- a close_and_block leak alarm above all, which is the state
+        # a careful user produces by shutting the mains by hand. The gate being
+        # off is still worth saying; what it entails is asked of the reader.
+        if self.hub.require_water_supply:
+            gate = " No new cycle starts for this zone."
+        elif reasons := self._start_block_reasons(zone_id):
+            gate = (
+                " The water-supply gate is switched off, so this alone refuses "
+                f"nothing -- but new cycles are blocked anyway: {reasons}."
+            )
+        else:
+            gate = " Cycles still start: the water-supply gate is switched off."
         self._notify_water_supply(
             f"{name}: no water supply -- the zone's sensor reports the water is gone.{gate}"
         )
@@ -3171,11 +3226,21 @@ class IrrigationRuntime:
                 f"{name}: the water-supply sensor has been removed, so the "
                 "missing supply is no longer reported."
             )
-        resumed = (
-            " Cycles are no longer refused for lack of water."
-            if self.hub.require_water_supply
-            else ""
-        )
+        # The third consumer, found by sweeping rather than by being reported.
+        # "no longer refused FOR LACK OF WATER" was already scoped to its own
+        # feature and so was never false -- but a reader takes it for
+        # resumption, and it is read at exactly the moment another gate is most
+        # likely to be holding: the water coming back is what a user does after
+        # dealing with the leak that made them shut the mains.
+        if not self.hub.require_water_supply:
+            resumed = ""
+        elif reasons := self._start_block_reasons(zone_id):
+            resumed = (
+                " Cycles are no longer refused for lack of water, but they are "
+                f"still blocked: {reasons}."
+            )
+        else:
+            resumed = " Cycles are no longer refused for lack of water."
         self._notify_water_supply(f"{ended}{resumed}")
 
     def _notify_water_supply(self, message: str) -> None:

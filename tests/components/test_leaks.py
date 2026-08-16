@@ -25,9 +25,11 @@ from custom_components.irrigation_maestro.leak import (
     SOURCE_VALVE_SENSOR,
     LeakDetector,
 )
+from custom_components.irrigation_maestro.runtime import _START_BLOCK_PHRASES
 from custom_components.irrigation_maestro.session import (
     _SUPPLY_EVIDENCE_GRACE_S,
     PHASE_WATERING,
+    START_BLOCK_RESULTS,
 )
 from freezegun.api import FrozenDateTimeFactory
 from homeassistant.config_entries import ConfigSubentry
@@ -1671,6 +1673,12 @@ async def test_the_clearing_notice_does_not_promise_cycles_that_are_still_blocke
     recovering clears the first; the hub alarm still blocks that zone and its
     neighbour, so "new cycles are allowed again" would be false at the instant
     it was sent.
+
+    This is the SAME-FEATURE half of the rule, and it is the half that was
+    found first because the audit that found it was scoped to leaks. The clause
+    now comes from ``SessionRunner.start_blocks``, which owns every gate, so
+    the sentence reads the same whichever feature is holding -- see the
+    cross-feature pair below for the half that audit could not see.
     """
     freezer.move_to(START)
     park = MockValvePark(hass)
@@ -1706,7 +1714,7 @@ async def test_the_clearing_notice_does_not_promise_cycles_that_are_still_blocke
     assert alpha in runtime.leak_blocked_zone_ids()  # the hub alarm still stands
     cleared = next(body for body in _bodies(sent) if "cleared" in body)
     assert "allowed again" not in cleared
-    assert "still blocked by another leak alarm" in cleared
+    assert "New cycles are still blocked: a leak alarm is standing." in cleared
 
 
 async def test_the_action_note_never_asserts_a_close_that_is_not_performed(
@@ -3818,3 +3826,265 @@ async def test_a_valve_notice_survives_a_reload_and_is_swept_when_the_valve_goes
     await hass.async_block_till_done()
 
     assert _valve_notices(hass) == []
+
+
+# The cross-feature half ----------------------------------------------------
+#
+# Two features can refuse a start, and each used to describe the refusal from
+# inside its own module. Both messages below were written by an audit scoped to
+# one feature, so both found the same-feature half and neither could see the
+# other. One ordinary sequence reaches both, and it is the sequence a careful
+# user produces: a leak alarm raises under close_and_block, they go and shut
+# the mains by hand, and the supply sensor trips -- which also stops the flow,
+# so a `no_flow_closed` source withdraws on the next measured zero and the
+# alarm clears at the exact moment the supply gate engages.
+
+
+async def test_the_supply_notice_never_claims_cycles_start_while_a_leak_blocks(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    """The claim was about the supply gate; the sentence was about starting.
+
+    True about the supply gate, false about starting -- which is what the
+    sentence actually says. A user who has switched that gate off has said
+    "do not withhold water from me for this"; they have not said anything
+    about a leak alarm, and under close_and_block the leak alarm is refusing
+    every cycle while this notice announces the opposite.
+    """
+    freezer.move_to(START)
+    park = MockValvePark(hass)
+    park.add("valve.a")
+    hass.states.async_set("binary_sensor.a_leak", "on", {"device_class": "moisture"})
+    _supply(hass, "off")
+    mock_weather(hass)
+    entry = await setup_hub(
+        hass,
+        [
+            zone_data(
+                "Alpha",
+                "valve.a",
+                at="23:00",
+                leak_sensor="binary_sensor.a_leak",
+                water_supply_sensor="binary_sensor.a_supply",
+            )
+        ],
+        {
+            "leak_action": "close_and_block",
+            "require_water_supply": False,
+            "water_supply_confirm_s": 60,
+            "notifications": {"anomaly": {"enabled": True, "services": ["phone"]}},
+        },
+    )
+    sent = _notify_target(hass)
+    runtime = entry.runtime_data
+    zone_id = runtime.zone_ids[0]
+
+    await advance(hass, freezer, _PAST_CONFIRM_S, step=10.0)
+    assert runtime.leak_state(zone_id).active is True
+    assert runtime.leak_block_active(zone_id) is True
+    sent.clear()
+
+    # They shut the mains by hand; the supply sensor notices.
+    _supply(hass, "on")
+    await advance(hass, freezer, 120, step=10.0)
+
+    announced = next(body for body in _bodies(sent) if "no water supply" in body)
+    assert "Cycles still start" not in announced
+    assert "new cycles are blocked anyway: a leak alarm is standing." in announced
+
+    # And the same message tells the truth the other way round once the leak is
+    # gone, so this is a reader and not a second hard-coded sentence.
+    hass.states.async_set("binary_sensor.a_leak", "off", {"device_class": "moisture"})
+    await advance(hass, freezer, 30, step=10.0)
+    _supply(hass, "off")
+    await advance(hass, freezer, 30, step=10.0)
+    sent.clear()
+    _supply(hass, "on")
+    await advance(hass, freezer, 120, step=10.0)
+
+    again = next(body for body in _bodies(sent) if "no water supply" in body)
+    assert "Cycles still start: the water-supply gate is switched off." in again
+
+
+async def test_the_clearing_notice_never_promises_cycles_a_supply_outage_refuses(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    """The other half, and the sequence that produces it in one motion.
+
+    Shutting the mains stops the flow, so the `no_flow_closed` source withdraws
+    on the next measured zero -- and the same act is what makes the supply
+    sensor report the water gone. So the leak alarm clears at the very moment
+    the supply gate engages, and "New cycles are allowed again" is false in the
+    turn it is sent.
+
+    `_leak_cleared_message` already had the fix's SHAPE: it consulted
+    `leak_blocked_zone_ids()` before promising resumption, and stopped at the
+    feature boundary. That is the tell this test exists to pin.
+    """
+    freezer.move_to(START)
+    park = MockValvePark(hass)
+    park.add("valve.a")
+    hass.states.async_set("sensor.a_flow", "3.0", {"unit_of_measurement": "L/min"})
+    _supply(hass, "off")
+    mock_weather(hass)
+    entry = await setup_hub(
+        hass,
+        [
+            zone_data(
+                "Alpha",
+                "valve.a",
+                at="23:00",
+                flow_sensor="sensor.a_flow",
+                water_supply_sensor="binary_sensor.a_supply",
+            )
+        ],
+        {
+            **_LEAK_NOTIFICATIONS,
+            "leak_action": "close_and_block",
+            "require_water_supply": True,
+            "water_supply_confirm_s": 60,
+        },
+    )
+    sent = _notify_target(hass)
+    runtime = entry.runtime_data
+    zone_id = runtime.zone_ids[0]
+
+    await advance(hass, freezer, _WELL_PAST_CONFIRM_S, step=10.0)
+    assert runtime.leak_state(zone_id).first_source == SOURCE_NO_FLOW_CLOSED
+    assert runtime.leak_block_active(zone_id) is True
+
+    # The mains go off by hand: the supply sensor trips, and the water stops.
+    _supply(hass, "on")
+    await advance(hass, freezer, 120, step=10.0)
+    assert runtime.water_supply_block_active(zone_id) is True
+    sent.clear()
+
+    hass.states.async_set("sensor.a_flow", "0.0", {"unit_of_measurement": "L/min"})
+    await advance(hass, freezer, 120, step=10.0)
+
+    assert runtime.leak_state(zone_id).active is False
+    cleared = next(body for body in _bodies(sent) if "cleared" in body)
+    assert "allowed again" not in cleared
+    assert (
+        cleared == "Alpha: the leak condition has cleared. New cycles are still blocked: "
+        "the water supply is reported missing."
+    )
+    # The refusal and the sentence come from one reader, so they agree by
+    # construction rather than by two people remembering the same rule.
+    assert runtime.session.start_block(zone_id) == "no_water_supply"
+
+
+async def test_the_start_reader_is_what_the_session_actually_refuses_on(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    """The reader and the refusal are one decision, gate order included.
+
+    Two gates hold at once here -- the post-manual-stop window and a leak alarm
+    -- and the outcome the session records must be the FIRST of them, which is
+    what `start_block` returns. A reader that agreed about "blocked" but not
+    about "why" would put one reason in the notification and another in the
+    history for the same refusal.
+    """
+    freezer.move_to(START)
+    park = MockValvePark(hass)
+    park.add("valve.a")
+    hass.states.async_set("binary_sensor.a_leak", "on", {"device_class": "moisture"})
+    mock_weather(hass)
+    entry = await setup_hub(
+        hass,
+        [zone_data("Alpha", "valve.a", at="05:30", leak_sensor="binary_sensor.a_leak")],
+        {"leak_action": "close_and_block"},
+    )
+    runtime = entry.runtime_data
+    zone_id = runtime.zone_ids[0]
+
+    await advance(hass, freezer, _PAST_CONFIRM_S, step=10.0)
+    assert runtime.leak_state(zone_id).active is True
+    runtime.state.set_manual_stop(dt_util.utcnow())
+
+    assert runtime.manual_block_active() is True
+    assert runtime.session.start_blocks(zone_id) == ["manual_stop_block", "leak"]
+    assert runtime.session.start_block(zone_id) == "manual_stop_block"
+    # A run asked for by hand is exempt from the manual-stop window and from
+    # nothing else, so the same zone answers differently and still agrees with
+    # what _execute would do with it.
+    assert runtime.session.start_blocks(zone_id, manual=True) == ["leak"]
+
+    await advance(hass, freezer, 31 * 60, step=30.0)
+
+    outcome = runtime.state.last_outcome(zone_id)
+    assert outcome is not None
+    assert outcome["reason_key"] == "manual_stop_block"
+    assert outcome["result"] == "cancelled"
+
+
+def test_every_start_block_reason_has_a_phrase() -> None:
+    """A new gate must not reach a user as a raw key.
+
+    This is the price of naming the reason rather than answering yes/no, and
+    the reason that price is worth paying: it is one line in a table, checked
+    here, rather than a message that silently stops explaining itself. The
+    table is compared against the gate sequence itself, so adding a gate and
+    forgetting the phrase fails loudly instead of printing `no_water_supply`
+    at somebody.
+    """
+    assert set(_START_BLOCK_PHRASES) == set(START_BLOCK_RESULTS)
+    assert all(phrase and phrase[0].islower() for phrase in _START_BLOCK_PHRASES.values()), (
+        "the phrases are joined into a sentence after a colon, so each is a clause"
+    )
+
+
+async def test_a_message_names_every_reason_a_zone_is_still_blocked(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    """Two gates holding at once, from two different features, in one sentence.
+
+    Naming the first reason only would be true and would still send the user to
+    fix one thing and leave them blocked -- the same "true, but points at the
+    wrong thing" failure the leak notices were corrected for when a withdrawn
+    source left the description citing evidence that no longer existed.
+
+    Gate order, so the sentence reads the same way every time rather than by
+    dict iteration, and so it matches the order the session would actually
+    refuse in.
+    """
+    freezer.move_to(START)
+    park = MockValvePark(hass)
+    park.add("valve.a")
+    park.add("valve.b")
+    hass.states.async_set("sensor.line", "2.0", {"unit_of_measurement": "L/min"})
+    hass.states.async_set("binary_sensor.a_leak", "on", {"device_class": "moisture"})
+    mock_weather(hass)
+    entry = await setup_hub(
+        hass,
+        [
+            zone_data("Alpha", "valve.a", at="23:00", leak_sensor="binary_sensor.a_leak"),
+            zone_data("Beta", "valve.b", at="23:00", order=200),
+        ],
+        {
+            **_LEAK_NOTIFICATIONS,
+            "line_flow_sensor": "sensor.line",
+            "leak_action": "close_and_block",
+        },
+    )
+    sent = _notify_target(hass)
+    runtime = entry.runtime_data
+    alpha = runtime.zone_ids[0]
+
+    await advance(hass, freezer, _PAST_CONFIRM_S, step=10.0)
+    assert runtime.leak_state(alpha).active is True
+    assert runtime.leak_state(HUB_SCOPE).active is True
+
+    # They stop watering by hand as well, so two gates hold when Alpha's own
+    # sensor recovers: the post-manual-stop window and the hub's leak alarm.
+    runtime.state.set_manual_stop(dt_util.utcnow())
+    sent.clear()
+    hass.states.async_set("binary_sensor.a_leak", "off", {"device_class": "moisture"})
+    await advance(hass, freezer, 30, step=10.0)
+
+    assert runtime.session.start_blocks(alpha) == ["manual_stop_block", "leak"]
+    cleared = next(body for body in _bodies(sent) if "cleared" in body)
+    assert cleared == (
+        "Alpha: the leak condition has cleared. New cycles are still blocked: "
+        "watering was stopped by hand a short while ago; a leak alarm is standing."
+    )
