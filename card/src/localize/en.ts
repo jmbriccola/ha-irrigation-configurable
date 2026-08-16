@@ -422,7 +422,7 @@ export const en = {
     "Litres per minute measured with every valve closed before it counts as a leak. Default 0.5.",
   "settings.leak_confirm_s": "Leak confirmation",
   "settings.leak_confirm_s_hint":
-    "Seconds the evidence must last before the alarm is raised. Each leak entity also stays unavailable until its scope has been watched this long, so raising it postpones a first answer. Default 300.",
+    "Seconds the evidence must last before the alarm is raised. Each leak entity also stays unavailable until its scope has been watched this long (never less than 30 s, so that \"no problem\" is never asserted out of nothing), so raising it postpones a first answer. Default 300.",
   "settings.leak_repeat_min": "Leak reminder",
   "settings.leak_repeat_min_hint":
     "Minutes between reminders while the alarm stands. 0 turns the reminders off without touching the alarm. Default 360.",

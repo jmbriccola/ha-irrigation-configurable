@@ -424,7 +424,7 @@ export const it: Record<keyof typeof en, string> = {
     "Litri al minuto misurati con tutte le valvole chiuse perché contino come perdita. Default 0,5.",
   "settings.leak_confirm_s": "Conferma della perdita",
   "settings.leak_confirm_s_hint":
-    "Secondi per cui le prove devono durare prima che scatti l'allarme. Ogni entità di perdita resta non disponibile finché il suo ambito non è stato osservato altrettanto a lungo, quindi alzarlo rimanda anche la prima risposta. Default 300.",
+    "Secondi per cui le prove devono durare prima che scatti l'allarme. Ogni entità di perdita resta non disponibile finché il suo ambito non è stato osservato altrettanto a lungo (mai meno di 30 s, perché «nessun problema» non venga mai affermato dal nulla), quindi alzarlo rimanda anche la prima risposta. Default 300.",
   "settings.leak_repeat_min": "Promemoria della perdita",
   "settings.leak_repeat_min_hint":
     "Minuti fra un promemoria e l'altro finché l'allarme dura. 0 li disattiva senza toccare l'allarme. Default 360.",

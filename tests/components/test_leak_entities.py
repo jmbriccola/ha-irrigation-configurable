@@ -1564,3 +1564,218 @@ def test_the_card_branches_on_the_stall_keys_by_name() -> None:
             f"{key} is matched by name in discovery.ts's leakStatus; renaming it "
             "here without renaming it there silently stops that branch firing"
         )
+
+
+# The edges an ordinary week emits ------------------------------------------
+#
+# Ruling L31: `unavailable` was treated as a free state and every availability
+# decision was optimised locally -- "is this assertion supported?" -- with
+# nobody asking what SEQUENCE of edges this entity emits. It is not free in
+# either direction. Every excursion INTO `unavailable` manufactures a later
+# `unavailable -> off` on the way out, which is why the shipped automation has
+# to carry `from: "on"`; and once it does, every excursion THROUGH
+# `unavailable` deletes a real clearing edge. So these tests assert SEQUENCES,
+# never end states.
+
+
+def _published(hass: HomeAssistant, entity_id: str) -> list[str]:
+    """Every state this entity publishes from now on, in order."""
+    states: list[str] = []
+
+    @callback
+    def _record(event: Event[EventStateChangedData]) -> None:
+        if event.data["entity_id"] != entity_id:
+            return
+        new_state = event.data["new_state"]
+        states.append("<removed>" if new_state is None else new_state.state)
+
+    hass.bus.async_listen(EVENT_STATE_CHANGED, _record)
+    return states
+
+
+async def test_de_configuring_the_alarming_source_never_publishes_off(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    """The Critical of the whole-branch review, and the reason it was one.
+
+    A zone with both a meter and a leak sensor, an alarm standing on the meter,
+    and the user clearing the meter -- plausibly BECAUSE they distrust it. The
+    withdrawal that follows dispatches synchronously, and the observation
+    window that would have said "we have not established anything about this
+    scope any more" was dropped one step too late, so the entity published
+    ``off`` -- "there is no problem" -- before settling at ``unavailable``.
+
+    That ``off`` is the exact edge "leak cleared -> reopen the mains" fires on.
+    Ruling L8 priced de-configuring as the safe direction, and it was, while
+    the alarm only ever reached a human; Task 11a made it machine-actionable
+    and nobody revisited the ruling.
+
+    The whole sequence is asserted, not the end state: the defect is one frame
+    the settled value does not remember.
+    """
+    freezer.move_to(START)
+    park = MockValvePark(hass)
+    park.add("valve.a")
+    hass.states.async_set("binary_sensor.a_leak", *_moisture("off"))
+    # Above the 0.5 L/min default threshold, with every valve shut: source 2
+    # raises on its own, and the leak sensor keeps the zone sourced afterwards.
+    hass.states.async_set("sensor.a_flow", "3.0", {"unit_of_measurement": "L/min"})
+    mock_weather(hass)
+    entry = await setup_hub(
+        hass,
+        [
+            zone_data(
+                "Alpha",
+                "valve.a",
+                at="23:00",
+                flow_sensor="sensor.a_flow",
+                leak_sensor="binary_sensor.a_leak",
+            )
+        ],
+    )
+    runtime = entry.runtime_data
+    zone_id = runtime.zone_ids[0]
+
+    await advance(hass, freezer, _WELL_PAST_CONFIRM_S, step=10.0)
+    assert _leak_entity(hass, entry, zone_id).state == "on"
+
+    published = _published(hass, _leak_entity(hass, entry, zone_id).entity_id)
+    await _reconfigure_zone(hass, entry, zone_id, flow_sensor="")
+
+    assert published == ["unavailable"]
+    # And the alarm's own surface still carries the transition, which is where
+    # Ruling L32 puts the clearing side of every shipped automation.
+    assert runtime.leak_state(zone_id).active is False
+
+
+async def test_the_genuine_clear_publishes_on_to_off_with_nothing_in_between(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    """A restart into a live leak, then the leak really stopping.
+
+    The scope never latched while the alarm stood -- it could not, the sensor
+    was asserting the whole time -- so the clear had to close the window and
+    withdraw the alarm in one turn. It did them in the wrong order: the
+    detector subscribed inside ``start()`` and the runtime's own recorder three
+    lines later, and listeners fire in registration order, so the withdrawal
+    was judged while ``_leak_evidence_pending`` still held the remembered
+    ``on``. The latch could not close, and the entity published
+    ``unavailable`` before ``off``.
+
+    Which deletes the clearing edge entirely: the automation this branch ships
+    triggers ``from: "on"``, so a clear that goes through ``unavailable`` never
+    fires it. The mains stay shut after the leak has stopped.
+    """
+    freezer.move_to(START)
+    park = MockValvePark(hass)
+    park.add("valve.a")
+    hass.states.async_set("binary_sensor.a_leak", *_moisture("on"))
+    mock_weather(hass)
+    entry = await setup_hub(
+        hass, [zone_data("Alpha", "valve.a", at="23:00", leak_sensor="binary_sensor.a_leak")]
+    )
+    zone_id = entry.runtime_data.zone_ids[0]
+
+    # The sensor as a restart leaves it: still asserting, with a timestamp no
+    # older than the restore, so the scope has to re-earn everything.
+    hass.states.async_remove("binary_sensor.a_leak")
+    hass.states.async_set("binary_sensor.a_leak", *_moisture("on"))
+    await hass.config_entries.async_reload(entry.entry_id)
+    await hass.async_block_till_done()
+    await advance(hass, freezer, _WELL_PAST_CONFIRM_S, step=10.0)
+    entity_id = _leak_entity(hass, entry, zone_id).entity_id
+    assert hass.states.get(entity_id).state == "on"
+
+    published = _published(hass, entity_id)
+    hass.states.async_set("binary_sensor.a_leak", *_moisture("off"))
+    await hass.async_block_till_done()
+
+    assert published == ["off"]
+
+
+async def test_a_sensor_reading_off_over_its_own_open_valve_earns_no_window(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    """Invariant 4 was applied at two of its three sites.
+
+    The meter half counts only while every valve is closed, and the sensor's
+    ``on`` half only while this zone's valve is closed -- but its ``off`` half
+    counted unconditionally. On this branch's reference hardware that sensor is
+    the valve's own alarm, "water is passing while I am shut", which only
+    speaks while the valve IS shut: its ``off`` over an open valve is the
+    firmware saying nothing, not the firmware saying no leak. On probe hardware
+    the same minutes are a probe under a running sprinkler.
+
+    So a zone that watered through its whole window would answer "there is no
+    problem" having concluded nothing at all. No mutation could have caught it:
+    no test existed for the state, and a mutation only proves a test CAN fail.
+    """
+    freezer.move_to(START)
+    park = MockValvePark(hass)
+    park.add("valve.a")
+    hass.states.async_set("binary_sensor.a_leak", *_moisture("off"))
+    mock_weather(hass)
+    entry = await setup_hub(
+        hass, [zone_data("Alpha", "valve.a", at="23:00", leak_sensor="binary_sensor.a_leak")]
+    )
+    runtime = entry.runtime_data
+    zone_id = runtime.zone_ids[0]
+
+    park.force_state("valve.a", "open")
+    await hass.async_block_till_done()
+    await advance(hass, freezer, _WELL_PAST_CONFIRM_S, step=10.0)
+
+    assert _leak_entity(hass, entry, zone_id).state == "unavailable"
+    assert runtime.leak_diagnostics()[zone_id]["observation"]["can_observe"] is False
+
+    # And the moment the valve is shut again the same reading does conclude
+    # something, so this is a gate on the state and not on the reading.
+    park.force_state("valve.a", "closed")
+    await hass.async_block_till_done()
+    await advance(hass, freezer, _WELL_PAST_CONFIRM_S, step=10.0)
+
+    assert _leak_entity(hass, entry, zone_id).state == "off"
+
+
+async def test_a_zero_confirmation_window_still_withholds_until_something_is_seen(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    """``leak_confirm_s = 0`` answers one question, and was answering two.
+
+    Zero means "do not wait before believing an alarm". It silently also meant
+    "do not wait before asserting the absence of one", because
+    ``qualified_s < 0`` is False for every qualified_s -- so the window closed
+    on the first bookkeeping run of setup. A zone whose leak sensor had never
+    reported and whose meter was dead then published ``off``, with zero
+    readings behind it, to an automation that reads ``off`` as "there is no
+    problem" and reopens the mains on it.
+
+    Both halves are asserted, because a fix that made zero mean "wait" for the
+    alarm too would trade one wrong promise for another.
+    """
+    freezer.move_to(START)
+    park = MockValvePark(hass)
+    park.add("valve.a")
+    # Configured, and never heard from.
+    mock_weather(hass)
+    entry = await setup_hub(
+        hass,
+        [zone_data("Alpha", "valve.a", at="23:00", leak_sensor="binary_sensor.a_leak")],
+        options={"leak_confirm_s": 0},
+    )
+    runtime = entry.runtime_data
+    zone_id = runtime.zone_ids[0]
+
+    assert _leak_entity(hass, entry, zone_id).state == "unavailable"
+    published = _published(hass, _leak_entity(hass, entry, zone_id).entity_id)
+    await advance(hass, freezer, 600, step=10.0)
+    assert _leak_entity(hass, entry, zone_id).state == "unavailable"
+    assert published == []
+
+    # The alarm side keeps the promise zero was chosen for: believed at once,
+    # with no window in front of it.
+    hass.states.async_set("binary_sensor.a_leak", *_moisture("on"))
+    await hass.async_block_till_done()
+
+    assert runtime.leak_state(zone_id).active is True
+    assert _leak_entity(hass, entry, zone_id).state == "on"

@@ -10,6 +10,7 @@ meter, not a ground probe -- so the tests that matter most are the ones proving
 they converge into a single alarm.
 """
 
+from dataclasses import replace
 from datetime import timedelta
 from typing import Any
 
@@ -19,6 +20,7 @@ from custom_components.irrigation_maestro.engine.metering import HUB_SCOPE
 from custom_components.irrigation_maestro.leak import (
     SOURCE_NO_FLOW_CLOSED,
     SOURCE_VALVE_SENSOR,
+    LeakDetector,
 )
 from custom_components.irrigation_maestro.session import (
     _SUPPLY_EVIDENCE_GRACE_S,
@@ -32,7 +34,14 @@ from homeassistant.util import dt as dt_util
 from homeassistant.util.async_ import get_scheduled_timer_handles
 
 from .mocks import BEHAVIOR_STUCK, MockValvePark
-from .test_session import START, advance, mock_weather, setup_hub, zone_data
+from .test_session import (
+    START,
+    advance,
+    mock_weather,
+    open_valves,
+    setup_hub,
+    zone_data,
+)
 
 #: The confirmation window is 300 s and a quiet meter is sampled every 30 s, so
 #: 310 s is the first advance that can contain ten measured samples.
@@ -1697,15 +1706,28 @@ async def test_the_clearing_notice_does_not_promise_cycles_that_are_still_blocke
     assert "still blocked by another leak alarm" in cleared
 
 
-async def test_the_action_note_does_not_claim_a_re_close_that_was_skipped(
+async def test_the_action_note_never_asserts_a_close_that_is_not_performed(
     hass: HomeAssistant, freezer: FrozenDateTimeFactory
 ) -> None:
-    """The message and the action must agree about what is being done.
+    """One message, two scenarios, and it has to be true in both.
 
-    A running session is not an edge case for the skip: it is the scenario the
-    skip exists for. Telling the user the master was re-closed at the exact
-    moment the component chose not to touch it leaves nothing they can see
-    that says otherwise.
+    The note used to be written in the indicative and chosen from a live read
+    of ``session.active``, which made it false twice over. A running session is
+    not an edge case for the skip -- it is the scenario the skip exists for --
+    and the reading was taken in one turn while ``async_close_for_leak`` took
+    its own when the background task ran, so "nothing intervenes" was the only
+    thing holding the two together.
+
+    Worse, the other branch asserted a close that is essentially never
+    performed: ``async_close_for_leak`` skips a controller already closed, and
+    a ``no_flow_closed`` alarm can only raise once every managed valve has been
+    shut for the whole confirmation window -- so at the moment that sentence
+    was sent, nothing was commanded at all. The Repairs notice on the same fact
+    has always been modal ("can re-close"); the two surfaces disagreed.
+
+    So the same modal note is asserted here in the two states that used to
+    produce different indicative claims, and it is asserted not to state either
+    as a thing already done.
     """
     freezer.move_to(START)
     park = MockValvePark(hass)
@@ -1732,9 +1754,26 @@ async def test_the_action_note_does_not_claim_a_re_close_that_was_skipped(
     await advance(hass, freezer, 120, step=10.0)
 
     assert runtime.leak_state(runtime.zone_ids[0]).active is True
-    body = _bodies(sent)[0]
-    assert "the re-close is skipped because a cycle is running" in body
-    assert "commanded closed again" not in body
+    while_running = _bodies(sent)[0]
+    assert "commanded closed again if either is still open" in while_running
+    assert "not at all while a cycle is running" in while_running
+
+    # The same alarm again with nothing running, and nothing open to command:
+    # Beta's cycle has ended, so every managed valve is shut and the re-close
+    # will touch none of them. The note must not have changed its story.
+    sent.clear()
+    hass.states.async_set("binary_sensor.a_leak", "off", {"device_class": "moisture"})
+    await advance(hass, freezer, 120, step=10.0)
+    await advance(hass, freezer, 30 * 60, step=30.0)
+    assert open_valves(hass) == set()
+    sent.clear()
+    hass.states.async_set("binary_sensor.a_leak", "on", {"device_class": "moisture"})
+    await advance(hass, freezer, 120, step=10.0)
+
+    assert runtime.leak_state(runtime.zone_ids[0]).active is True
+    while_idle = _bodies(sent)[0]
+    note = "Configured action:"
+    assert while_idle[while_idle.index(note) :] == while_running[while_running.index(note) :]
 
 
 async def test_an_unrecognised_leak_action_is_reported_rather_than_silently_defaulted(
@@ -3083,3 +3122,462 @@ async def test_unloading_the_entry_leaves_no_verdict_armed(
 
     assert _pending_supply_decisions(hass) == 0
     assert runtime.state.manual_stop_at is None
+
+
+# Lifecycle: what happens to an alarm the configuration takes away ----------
+
+
+async def test_a_zone_deleted_mid_alarm_fires_the_clearing_transition(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    """The hole in the surface Ruling L32 moves every automation onto.
+
+    Removing the zone stopped its detector -- and ``stop()`` is cancel-only by
+    its own documentation -- so nothing routed through ``on_leak_cleared``: no
+    ``cleared`` event, no clearing notification. The entity was removed
+    outright, and Home Assistant fires no state trigger on a removal, so a user
+    whose automation had closed the mains was left with them closed and nothing
+    anywhere to tell them otherwise. The integration's own block released,
+    because ``leak_blocked_zone_ids`` iterates live detectors: the component
+    recovered and the user did not.
+
+    The message has to name the zone, which is the part that is easy to get
+    wrong: by the time the removal is noticed, ``_build_zones`` has already
+    replaced ``self.zones``, and an opaque subentry id is not a sentence to
+    send anyone.
+    """
+    freezer.move_to(START)
+    park = MockValvePark(hass)
+    park.add("valve.a")
+    park.add("valve.b")
+    hass.states.async_set("binary_sensor.a_leak", "on", {"device_class": "moisture"})
+    mock_weather(hass)
+    entry = await setup_hub(
+        hass,
+        [
+            zone_data("Alpha", "valve.a", at="23:00", leak_sensor="binary_sensor.a_leak"),
+            zone_data("Beta", "valve.b", at="23:00"),
+        ],
+        {**_LEAK_NOTIFICATIONS, "leak_action": "close_and_block"},
+    )
+    sent = _notify_target(hass)
+    runtime = entry.runtime_data
+    zone_id = runtime.zone_ids[0]
+
+    await advance(hass, freezer, _PAST_CONFIRM_S, step=10.0)
+    assert runtime.leak_state(zone_id).active is True
+    assert runtime.leak_blocked_zone_ids() == {zone_id}
+    events = _leak_events(hass)
+    sent.clear()
+
+    hass.config_entries.async_remove_subentry(entry, zone_id)
+    await hass.async_block_till_done()
+
+    assert [event["state"] for event in events] == ["cleared"]
+    # The payload still says what KIND of leak ended, which is the whole reason
+    # on_leak_cleared is handed the state as it was.
+    assert events[0]["first_source"] == SOURCE_VALVE_SENSOR
+    assert events[0]["zone_id"] == zone_id
+    assert _bodies(sent) == ["Alpha: the leak condition has cleared. New cycles are allowed again."]
+    assert ir.async_get(hass).async_get_issue(DOMAIN, f"leak_{zone_id}") is None
+    assert runtime.leak_blocked_zone_ids() == set()
+
+
+async def test_repointing_a_leak_sensor_withdraws_the_old_sensors_alarm(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    """Ruling L8 named repointing as worse than stranding; source 1 never got it.
+
+    After a repoint ``_evaluate_valve_sensor`` re-read the NEW sensor: ``off``
+    withdrew, ``on`` re-timed its window, and ``unknown``, ``unavailable`` and
+    an entity that does not exist yet all took a bare return -- leaving an
+    alarm raised by the OLD sensor standing, behind a Repairs notice citing a
+    sensor that had raised nothing, and under ``close_and_block`` refusing
+    every cycle until the new entity happened to speak.
+
+    Nothing the new sensor can do withdraws it, because the alarm was never
+    the new sensor's. Pointing the setting elsewhere is the user's own
+    statement about the old one, exactly as clearing it is -- and the remedy
+    was already implemented for source 2 (``_forget_flow``).
+    """
+    freezer.move_to(START)
+    park = MockValvePark(hass)
+    park.add("valve.a")
+    hass.states.async_set("binary_sensor.a_leak", "on", {"device_class": "moisture"})
+    mock_weather(hass)
+    entry = await setup_hub(
+        hass,
+        [zone_data("Alpha", "valve.a", at="23:00", leak_sensor="binary_sensor.a_leak")],
+        {**_LEAK_NOTIFICATIONS, "leak_action": "close_and_block"},
+    )
+    runtime = entry.runtime_data
+    zone_id = runtime.zone_ids[0]
+
+    await advance(hass, freezer, _PAST_CONFIRM_S, step=10.0)
+    assert runtime.leak_state(zone_id).active is True
+    events = _leak_events(hass)
+
+    # The new sensor does not exist yet: the paired device has not reported, or
+    # the entity id was typed ahead of the integration that will provide it.
+    await _reconfigure_zone(hass, entry, zone_id, leak_sensor="binary_sensor.new_leak")
+
+    assert runtime.leak_state(zone_id).active is False
+    assert [event["state"] for event in events] == ["cleared"]
+    assert ir.async_get(hass).async_get_issue(DOMAIN, f"leak_{zone_id}") is None
+    assert runtime.leak_blocked_zone_ids() == set()
+
+    # And the new sensor is genuinely watched: this withdrew an alarm, it did
+    # not deafen the source.
+    hass.states.async_set("binary_sensor.new_leak", "on", {"device_class": "moisture"})
+    await advance(hass, freezer, _WELL_PAST_CONFIRM_S, step=10.0)
+
+    assert runtime.leak_state(zone_id).active is True
+    assert runtime.leak_state(zone_id).first_source == SOURCE_VALVE_SENSOR
+
+
+async def test_changing_the_repeat_interval_reaches_an_alarm_already_standing(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    """``_arm_repeat`` was reachable only from the raise and from its own expiry.
+
+    So an edit to ``leak_repeat_min`` while an alarm stood reached everything
+    except the alarm that was standing -- and ``0 -> N`` meant that alarm never
+    reminded again for the whole of its life, which is precisely the alarm the
+    user was reaching for the setting because of.
+
+    The re-arm is guarded on the interval actually changing, so an unrelated
+    configuration edit cannot push a reminder that was nearly due back out to
+    the full interval. Both halves are asserted.
+    """
+    freezer.move_to(START)
+    park = MockValvePark(hass)
+    park.add("valve.a")
+    hass.states.async_set("binary_sensor.a_leak", "on", {"device_class": "moisture"})
+    mock_weather(hass)
+    entry = await setup_hub(
+        hass,
+        [zone_data("Alpha", "valve.a", at="23:00", leak_sensor="binary_sensor.a_leak")],
+        {**_LEAK_NOTIFICATIONS, "leak_repeat_min": 0},
+    )
+    sent = _notify_target(hass)
+    runtime = entry.runtime_data
+    zone_id = runtime.zone_ids[0]
+
+    await advance(hass, freezer, _PAST_CONFIRM_S, step=10.0)
+    assert runtime.leak_state(zone_id).active is True
+    sent.clear()
+    await advance(hass, freezer, 20 * 60, step=30.0)
+    assert _bodies(sent) == []  # off means off
+
+    hass.config_entries.async_update_entry(entry, options={**entry.options, "leak_repeat_min": 5})
+    await hass.async_block_till_done()
+    await advance(hass, freezer, 6 * 60, step=30.0)
+
+    assert len(_bodies(sent)) == 1
+    assert "still reporting a leak" in _bodies(sent)[0]
+
+    # An edit that leaves the interval alone must not re-time the reminder. The
+    # second one is due ten minutes after the first edit; three minutes short of
+    # that an unrelated setting changes, and it still falls due on the original
+    # schedule rather than five minutes after the edit.
+    await advance(hass, freezer, 3 * 60, step=30.0)
+    assert len(_bodies(sent)) == 1
+    sent.clear()
+    hass.config_entries.async_update_entry(
+        entry, options={**entry.options, "leak_threshold_lpm": 0.7}
+    )
+    await hass.async_block_till_done()
+    await advance(hass, freezer, 90, step=30.0)
+
+    assert len(_bodies(sent)) == 1
+
+
+async def test_retiring_a_meter_never_reaches_source_2(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory, monkeypatch: Any
+) -> None:
+    """A one-line ordering in the accountant that leak detection now leans on.
+
+    ``MeterLedger.retire`` publishes a farewell sample so a live FlowMonitor is
+    told the meter has gone rather than left waiting. ``WaterAccountant.rebuild``
+    drops its OWN subscription before provoking it, for its own reason (the
+    litres would be booked against a total that is about to be dropped) -- and
+    that ordering is what keeps the sample away from ``note_flow`` as well.
+
+    Without it, a configuration edit made during post-cycle drainage would hand
+    source 2 one last interval of above-threshold seconds, raise an alarm, and
+    clear it milliseconds later when the rebuild withdrew the meter: two push
+    notifications and an ERROR repair notice, for an edit. Pinned here because
+    the guard is a single line whose stated reason says nothing about leaks,
+    and a refactor that moved it would look harmless.
+    """
+    freezer.move_to(START)
+    park = MockValvePark(hass)
+    park.add("valve.a")
+    hass.states.async_set("sensor.a_flow", "3.0", {"unit_of_measurement": "L/min"})
+    mock_weather(hass)
+    entry = await setup_hub(
+        hass,
+        [zone_data("Alpha", "valve.a", at="23:00", flow_sensor="sensor.a_flow")],
+        # Between two samples of the quiet meter's 30 s cadence, so the pending
+        # seconds the farewell sample would carry are exactly what tips it.
+        {**_LEAK_NOTIFICATIONS, "leak_confirm_s": 275},
+    )
+    sent = _notify_target(hass)
+    runtime = entry.runtime_data
+    zone_id = runtime.zone_ids[0]
+    events = _leak_events(hass)
+
+    fed: list[float] = []
+    original = LeakDetector.note_flow
+
+    def _spy(self: LeakDetector, **kwargs: Any) -> None:
+        fed.append(float(kwargs["measured_s"]))
+        original(self, **kwargs)
+
+    monkeypatch.setattr(LeakDetector, "note_flow", _spy)
+
+    await advance(hass, freezer, 280, step=10.0)
+    detector = runtime.leak_detector(zone_id)
+    assert detector is not None
+    assert detector.state.active is False
+    assert detector.flow_evidence_pending is True  # right on the edge
+    fed_before = len(fed)
+
+    await _reconfigure_zone(hass, entry, zone_id, flow_sensor="")
+
+    assert fed[fed_before:] == []
+    assert events == []
+    assert _bodies(sent) == []
+    assert ir.async_get(hass).async_get_issue(DOMAIN, f"leak_{zone_id}") is None
+
+
+async def test_a_leak_issue_orphaned_while_the_entry_was_unloaded_is_swept(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    """The alarm lives in memory; the issue registry does not.
+
+    ``_reconcile_leak_issues`` used to iterate live detectors, which cannot
+    reach the one case nothing else can either: a zone removed while the entry
+    was unloaded leaves an issue whose scope is unknowable from the
+    configuration that remains, with no detector to reconcile it and no path
+    left that could delete it.
+
+    Swept by prefix instead -- and the prefix cannot tell a scope's alarm from
+    ``leak_action_invalid``, which is not one and has a lifecycle of its own.
+    That it survives the sweep is asserted here, because a sweep that ate it
+    would take down a live warning about a mistyped setting.
+    """
+    freezer.move_to(START)
+    park = MockValvePark(hass)
+    park.add("valve.a")
+    park.add("valve.b")
+    hass.states.async_set("binary_sensor.a_leak", "on", {"device_class": "moisture"})
+    mock_weather(hass)
+    entry = await setup_hub(
+        hass,
+        [
+            zone_data("Alpha", "valve.a", at="23:00", leak_sensor="binary_sensor.a_leak"),
+            zone_data("Beta", "valve.b", at="23:00"),
+        ],
+        {"leak_action": "close_and_pray"},  # also raises leak_action_invalid
+    )
+    runtime = entry.runtime_data
+    zone_id = runtime.zone_ids[0]
+    registry = ir.async_get(hass)
+
+    await advance(hass, freezer, _PAST_CONFIRM_S, step=10.0)
+    assert registry.async_get_issue(DOMAIN, f"leak_{zone_id}") is not None
+    action_issue = registry.async_get_issue(DOMAIN, "leak_action_invalid")
+    assert action_issue is not None
+    raised_at = action_issue.created
+
+    await hass.config_entries.async_unload(entry.entry_id)
+    await hass.async_block_till_done()
+    hass.config_entries.async_remove_subentry(entry, zone_id)
+    await hass.async_block_till_done()
+    assert registry.async_get_issue(DOMAIN, f"leak_{zone_id}") is not None  # nobody could
+    await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    assert registry.async_get_issue(DOMAIN, f"leak_{zone_id}") is None
+    survivor = registry.async_get_issue(DOMAIN, "leak_action_invalid")
+    assert survivor is not None
+    # UNTOUCHED, not merely present again. `_report_invalid_leak_action` runs
+    # after the sweep and would re-create anything the sweep ate -- which is
+    # what makes the exclusion look free -- but Home Assistant's upsert
+    # preserves an issue's creation time and its DISMISSAL, and a delete
+    # followed by a create loses both. Without the exclusion, a user who
+    # dismissed this notice would get it back on every configuration change.
+    assert survivor.created == raised_at
+
+
+async def test_a_supply_notice_is_reconciled_across_a_reload(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    """Two halves of one defect: ``_supply_announced`` is memory of one runtime.
+
+    A reload builds a new runtime while every issue it created stays exactly
+    where it was. So a standing outage was announced a SECOND time -- a repeat
+    push notification for a condition nothing re-detected, from a sensor that
+    never changed -- and one that had ended while the entry was unloaded left
+    its notice active for good, because the withdrawal is gated on having
+    announced it and nothing remembered that we had.
+
+    Both are asserted in one run, because the fix is one thing: the notices
+    themselves are what the edge detector is restored from.
+    """
+    freezer.move_to(START)
+    park = MockValvePark(hass)
+    park.add("valve.a")
+    _supply(hass, "on")
+    mock_weather(hass)
+    entry = await setup_hub(
+        hass,
+        [zone_data("Alpha", "valve.a", at="23:00", water_supply_sensor="binary_sensor.a_supply")],
+        {"notifications": {"anomaly": {"enabled": True, "services": ["phone"]}}},
+    )
+    sent = _notify_target(hass)
+    runtime = entry.runtime_data
+    zone_id = runtime.zone_ids[0]
+    issue_id = f"water_supply_missing_{zone_id}"
+    registry = ir.async_get(hass)
+
+    await advance(hass, freezer, 700, step=10.0)
+    assert len(_bodies(sent)) == 1
+    assert registry.async_get_issue(DOMAIN, issue_id) is not None
+
+    sent.clear()
+    await hass.config_entries.async_reload(entry.entry_id)
+    await hass.async_block_till_done()
+    await advance(hass, freezer, 700, step=10.0)
+
+    assert _bodies(sent) == []  # nothing was re-detected, so nothing is re-said
+    assert registry.async_get_issue(DOMAIN, issue_id) is not None
+
+    # And now the water comes back while nothing is listening.
+    await hass.config_entries.async_unload(entry.entry_id)
+    await hass.async_block_till_done()
+    _supply(hass, "off")
+    sent.clear()
+    await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    assert registry.async_get_issue(DOMAIN, issue_id) is None
+    assert _bodies(sent) == [
+        "Alpha: the water supply is back. Cycles are no longer refused for lack of water."
+    ]
+
+
+async def test_the_self_close_exemption_does_not_consult_require_water_supply(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    """A deliberate NON-consumer of that setting, pinned so it stays deliberate.
+
+    ``require_water_supply`` governs whether the component REFUSES TO WATER on
+    a supply sensor's word. The exemption governs something else entirely: how
+    an observation is read -- whether a valve that shut itself was the
+    firmware's own no-water closure or a hand on the switch. Making a diagnosis
+    switchable by a policy setting is the two-sources-of-truth defect this
+    design keeps refusing, and it would point the wrong way besides: on the
+    reference hardware the valve self-closes during an outage whatever we
+    believe, so honouring the setting here would abort the whole session and
+    arm the manual-stop block for exactly the user who asked us to stop letting
+    that sensor stop them. The gate off would then be STRICTER than the gate
+    on.
+
+    What it costs is stated rather than hidden: a hand-closed valve on a zone
+    whose own supply sensor happens to read "no water" at that instant ends one
+    segment instead of the cycle. That cost is identical with the gate on --
+    the exemption has always been unconditional -- so the setting is not the
+    lever that would fix it.
+    """
+    freezer.move_to(START)
+    park = MockValvePark(hass)
+    park.add("valve.a")
+    park.add("valve.b")
+    _supply(hass, "off")
+    mock_weather(hass)
+    entry = await setup_hub(
+        hass,
+        [
+            zone_data(
+                "Alpha",
+                "valve.a",
+                minutes=10,
+                order=1,
+                water_supply_sensor="binary_sensor.a_supply",
+            ),
+            zone_data("Beta", "valve.b", minutes=3, order=2),
+        ],
+        {"water_supply_confirm_s": 3600, "require_water_supply": False},
+    )
+    runtime = entry.runtime_data
+    alpha, beta = runtime.zone_ids
+
+    await advance(hass, freezer, 31 * 60)
+    assert hass.states.get("valve.a").state == "open"  # the gate is off, so it started
+
+    _supply(hass, "on")
+    park.force_state("valve.a", "closed")
+    await advance(hass, freezer, 30, step=5.0)
+
+    outcome = runtime.state.last_outcome(alpha)
+    assert outcome is not None
+    assert outcome["reason_key"] == "no_water_supply"
+    assert runtime.state.manual_stop_at is None
+
+    await advance(hass, freezer, 6 * 60)
+    beta_outcome = runtime.state.last_outcome(beta)
+    assert beta_outcome is not None
+    assert beta_outcome["result"] == "completed"
+
+
+async def test_a_supply_notice_restored_inactive_by_a_restart_is_not_re_announced(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    """A reload and a restart are different, and the registry says which.
+
+    Home Assistant restores a non-persistent issue as INACTIVE: invisible in
+    Repairs, carrying neither severity nor translation key, present only so a
+    dismissal survives. Restoring the announcement flag from one of those would
+    be remembering across a restart something this feature deliberately does
+    not remember -- and it would push "the water supply is back" for a notice
+    the user could not see, about an outage that ended while the system was
+    down.
+
+    So the seed reads ACTIVE issues only, and the outage is confirmed again
+    from the sensor's own ``last_changed``, which the restart has reset. The
+    inactive entry is simulated exactly as ``IssueRegistry._async_load`` writes
+    it, because nothing else in a test process produces one.
+    """
+    freezer.move_to(START)
+    park = MockValvePark(hass)
+    park.add("valve.a")
+    _supply(hass, "on")
+    mock_weather(hass)
+    entry = await setup_hub(
+        hass,
+        [zone_data("Alpha", "valve.a", at="23:00", water_supply_sensor="binary_sensor.a_supply")],
+        {"notifications": {"anomaly": {"enabled": True, "services": ["phone"]}}},
+    )
+    sent = _notify_target(hass)
+    runtime = entry.runtime_data
+    zone_id = runtime.zone_ids[0]
+    issue_id = f"water_supply_missing_{zone_id}"
+    registry = ir.async_get(hass)
+
+    await advance(hass, freezer, 700, step=10.0)
+    assert len(_bodies(sent)) == 1
+
+    await hass.config_entries.async_unload(entry.entry_id)
+    await hass.async_block_till_done()
+    stored = registry.async_get_issue(DOMAIN, issue_id)
+    assert stored is not None
+    registry.issues[(DOMAIN, issue_id)] = replace(stored, active=False)
+    _supply(hass, "off")
+    sent.clear()
+
+    await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    assert _bodies(sent) == []
