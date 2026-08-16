@@ -39,18 +39,18 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
   its days is the subset measured with every managed valve shut — the only
   figure leak detection reads.
 - **A removed zone keeps its water and its runs.** Both services still
-  return them, with `zone_name: null` and sorted last: deleting a zone's
-  history along with its configuration would rewrite months a user already
-  lived through, over a fact — the water used, the cycles run — that
-  removing the zone does not undo.
+  return them, with `zone_name: null` and sorted last. The water used and
+  the cycles run happened whether or not the zone is still configured;
+  deleting that history along with the configuration would rewrite months
+  a user already lived through.
 - **The run log starts empty at this upgrade, on purpose.** The sentinel's
   `outcome_log` — the only outcome record that existed before this branch —
   keeps three days of bare result strings, with no `reason_key` and no
-  duration, kept purely to answer "did this cycle leave a trace". Inventing
-  plausible `reason_key`s for those three days to seed the new log would be
-  exactly the plausible-but-false number this architecture exists to
-  remove, so `get_run_history` answers truthfully with nothing before the
-  upgrade instant instead of a guess dressed as history.
+  duration, existing purely to answer "did this cycle leave a trace".
+  Inventing plausible `reason_key`s for those three days to seed the new
+  log would be exactly the plausible-but-false number this architecture
+  exists to remove, so `get_run_history` answers truthfully with nothing
+  before the upgrade instant instead of a guess dressed as history.
 
 ## [3.4.0] - 2026-08-16
 
