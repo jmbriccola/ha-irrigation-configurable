@@ -856,6 +856,32 @@
           "description": "Acqua misurata dal flussometro che nessuna zona ha reclamato. Viene restituita accanto alle zone e non fa mai parte del loro totale: non è consumo."
         }
       }
+    },
+    "get_run_history": {
+      "name": "Storico delle esecuzioni",
+      "description": "Restituisce ogni esito registrato in un intervallo di date — le irrigazioni completate e, non meno importante, quelle saltate, interrotte o annullate, ciascuna con il suo motivo. Un ciclo che non parte non lascia traccia da nessun'altra parte.",
+      "fields": {
+        "start_date": {
+          "name": "Dal",
+          "description": "Primo giorno dell'intervallo, incluso. Se omesso, 29 giorni prima della data finale. Una data più vecchia dei 730 giorni conservati viene riportata al limite, e la risposta lo dichiara."
+        },
+        "end_date": {
+          "name": "Al",
+          "description": "Ultimo giorno dell'intervallo, incluso. Se omesso è oggi, e una data futura viene riportata a oggi."
+        },
+        "zone_id": {
+          "name": "Zone",
+          "description": "Una o più zone. Lasciato vuoto restituisce ogni zona, comprese quelle rimosse che conservano esecuzioni nello storico."
+        },
+        "result": {
+          "name": "Esiti",
+          "description": "Tiene solo questi esiti. Lasciato vuoto restituisce ogni esito."
+        },
+        "limit": {
+          "name": "Numero massimo di voci",
+          "description": "Al massimo questo numero di voci, tenendo le più recenti. La risposta dichiara se ha dovuto tagliare."
+        }
+      }
     }
   },
   "issues": {

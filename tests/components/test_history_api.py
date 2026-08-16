@@ -1,11 +1,11 @@
 """The two history services: what they return, and what they refuse to imply."""
 
-from datetime import timedelta
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import pytest
 from custom_components.irrigation_maestro.const import DOMAIN
-from custom_components.irrigation_maestro.engine import metering
+from custom_components.irrigation_maestro.engine import metering, runlog
 from freezegun.api import FrozenDateTimeFactory
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ServiceValidationError
@@ -260,3 +260,205 @@ async def test_an_installation_with_no_zones_answers_rather_than_raising(
 
     assert response["zones"] == []
     assert response["unattributed"]["total_l"] == 0.0
+
+
+# ---------------------------------------------------------------------------
+# get_run_history
+# ---------------------------------------------------------------------------
+
+
+async def _runs(hass: HomeAssistant, **data: Any) -> dict[str, Any]:
+    return await hass.services.async_call(
+        DOMAIN, "get_run_history", data, blocking=True, return_response=True
+    )
+
+
+def _seed(hass: HomeAssistant, *entries: runlog.RunEntry) -> None:
+    log = hass.config_entries.async_entries(DOMAIN)[0].runtime_data.run_log
+    for entry in entries:
+        log.append(entry)
+
+
+def _run(
+    at: datetime, *, zone_id: str = "z1", result: str = "completed", name: str = "Vasi"
+) -> runlog.RunEntry:
+    return runlog.build_entry(
+        at=at,
+        zone_id=zone_id,
+        zone_name=name,
+        program_id="p1",
+        program_name="Mattino",
+        result=result,
+        reason_key=None if result == "completed" else "budget_sufficient",
+        duration_min=12 if result == "completed" else None,
+        volume_l=40.0 if result == "completed" else None,
+        partial=False,
+        scheduled=True,
+    )
+
+
+async def test_runs_come_back_oldest_first_so_the_two_series_share_an_axis(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    freezer.move_to(START)
+    await _hub(hass)
+    now = dt_util.utcnow()
+    _seed(hass, _run(now - timedelta(hours=2)), _run(now - timedelta(hours=1)))
+
+    response = await _runs(hass)
+
+    assert [entry["at"] for entry in response["runs"]] == sorted(
+        entry["at"] for entry in response["runs"]
+    )
+    assert response["count"] == 2
+
+
+async def test_a_skip_reports_its_reason_and_null_figures(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    freezer.move_to(START)
+    await _hub(hass)
+    _seed(hass, _run(dt_util.utcnow(), result="skipped"))
+
+    entry = (await _runs(hass))["runs"][0]
+
+    assert entry["result"] == "skipped"
+    assert entry["reason_key"] == "budget_sufficient"
+    assert entry["duration_min"] is None
+    assert entry["volume_l"] is None
+    assert entry["partial"] is False
+
+
+async def test_the_zone_and_result_filters_combine(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    freezer.move_to(START)
+    await _hub(hass)
+    now = dt_util.utcnow()
+    _seed(
+        hass,
+        _run(now - timedelta(hours=3), zone_id="z1", result="completed"),
+        _run(now - timedelta(hours=2), zone_id="z1", result="skipped"),
+        _run(now - timedelta(hours=1), zone_id="z2", result="skipped"),
+    )
+
+    response = await _runs(hass, zone_id="z1", result="skipped")
+
+    assert response["count"] == 1
+    assert response["runs"][0]["zone_id"] == "z1"
+    assert response["runs"][0]["result"] == "skipped"
+
+
+async def test_the_limit_keeps_the_most_recent_and_declares_itself(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    freezer.move_to(START)
+    await _hub(hass)
+    now = dt_util.utcnow()
+    _seed(hass, *[_run(now - timedelta(hours=hours)) for hours in (5, 4, 3, 2, 1)])
+
+    response = await _runs(hass, limit=2)
+
+    assert response["truncated_by_limit"] is True
+    assert response["count"] == 2
+    assert response["runs"][-1]["at"] == (now - timedelta(hours=1)).isoformat()
+
+
+async def test_a_young_log_is_not_reported_as_truncated_by_the_cap(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    """A fresh install has an oldest entry newer than the requested start and
+    has truncated nothing. Only cap_dropped tells the two apart."""
+    freezer.move_to(START)
+    await _hub(hass)
+    _seed(hass, _run(dt_util.utcnow()))
+
+    response = await _runs(hass)
+
+    assert response["truncated_by_cap"] is False
+    assert response["oldest_kept"] is not None
+
+
+async def test_a_capped_log_whose_window_starts_earlier_is_reported_as_truncated(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    freezer.move_to(START)
+    await _hub(hass)
+    log = hass.config_entries.async_entries(DOMAIN)[0].runtime_data.run_log
+    now = dt_util.utcnow()
+    # Seeded directly rather than appended MAX_RUNS times: append_run's cap is
+    # proved in tests/engine/test_runlog.py. What matters here is that a log
+    # the cap HAS bitten reports differently from one it has not, for a window
+    # that starts before the oldest surviving entry.
+    log._data["runs"] = [
+        _run(now - timedelta(seconds=runlog.MAX_RUNS - index)) for index in range(runlog.MAX_RUNS)
+    ]
+    log.append(_run(now))
+
+    response = await _runs(hass, start_date=(dt_util.now().date() - timedelta(days=5)).isoformat())
+
+    assert log.cap_dropped == 1
+    assert response["truncated_by_cap"] is True
+
+
+async def test_an_empty_log_answers_with_a_null_oldest_rather_than_raising(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    freezer.move_to(START)
+    await _hub(hass)
+
+    response = await _runs(hass)
+
+    assert response["runs"] == []
+    assert response["count"] == 0
+    assert response["oldest_kept"] is None
+    assert response["truncated_by_cap"] is False
+
+
+async def test_a_run_range_older_than_retention_is_clamped_and_declares_it(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    """Same name as the get_water_history test above would collide -- Python
+    would silently rebind the module-level name to this one and the earlier
+    test would never run again (ruff F811 catches exactly this)."""
+    freezer.move_to(START)
+    await _hub(hass)
+    today = dt_util.now().date()
+
+    response = await _runs(hass, start_date=(today - timedelta(days=900)).isoformat())
+
+    assert response["truncated_by_retention"] is True
+    assert response["start"] == (today - timedelta(days=runlog.RETENTION_DAYS - 1)).isoformat()
+
+
+async def test_a_run_recorded_before_the_local_offset_is_filed_on_its_local_day(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    """00:30 in CEST carries the previous UTC date. Filtering on the raw string
+    would file it a day early -- an off-by-one that reads as correct until a
+    chart's first or last day is wrong."""
+    await hass.config.async_set_time_zone("Europe/Rome")
+    freezer.move_to("2026-08-15 22:30:00+00:00")  # 2026-08-16 00:30 local
+    await _hub(hass)
+    _seed(hass, _run(datetime(2026, 8, 15, 22, 30, tzinfo=UTC)))
+
+    same_day = await _runs(hass, start_date="2026-08-16", end_date="2026-08-16")
+    day_before = await _runs(hass, start_date="2026-08-15", end_date="2026-08-15")
+
+    assert same_day["count"] == 1
+    assert day_before["count"] == 0
+
+
+async def test_a_backwards_range_is_refused_here_too(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    freezer.move_to(START)
+    await _hub(hass)
+    today = dt_util.now().date()
+
+    with pytest.raises(ServiceValidationError):
+        await _runs(
+            hass,
+            start_date=today.isoformat(),
+            end_date=(today - timedelta(days=5)).isoformat(),
+        )

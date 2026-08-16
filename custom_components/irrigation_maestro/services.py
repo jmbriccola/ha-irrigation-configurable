@@ -11,7 +11,7 @@ import json
 import re
 from collections.abc import Callable
 from copy import deepcopy
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from types import MappingProxyType
 from typing import Any, Final, cast
 from uuid import uuid4
@@ -32,7 +32,7 @@ from homeassistant.util import dt as dt_util
 from . import const
 from .capabilities import discover_sibling_sensors, resolve_zone_capabilities
 from .const import DOMAIN, SUBENTRY_TYPE_ZONE
-from .engine import metering
+from .engine import metering, runlog
 from .engine.calendar import ProgramCalendar
 from .engine.curves import CurveError, CurveKind, interpolate, validate_points
 from .flow import SUPPORTED_FLOW_UNITS
@@ -48,6 +48,12 @@ from .notify import (
     normalize_service,
 )
 from .runtime import IrrigationRuntime
+from .session import (
+    RESULT_CANCELLED,
+    RESULT_COMPLETED,
+    RESULT_INTERRUPTED,
+    RESULT_SKIPPED,
+)
 
 SERVICE_RUN_ZONE: Final = "run_zone"
 SERVICE_RUN_ALL: Final = "run_all"
@@ -83,6 +89,7 @@ SERVICE_TEST_NOTIFICATION: Final = "test_notification"
 SERVICE_NOTIFICATION_STATUS: Final = "notification_status"
 SERVICE_DISCOVER_ZONE_SENSORS: Final = "discover_zone_sensors"
 SERVICE_GET_WATER_HISTORY: Final = "get_water_history"
+SERVICE_GET_RUN_HISTORY: Final = "get_run_history"
 
 ATTR_ZONE_ID: Final = "zone_id"
 ATTR_CYCLE_ID: Final = "cycle_id"
@@ -170,11 +177,29 @@ ATTR_VOLUME_SAFETY_TIMEOUT_MIN: Final = "volume_safety_timeout_min"
 ATTR_START_DATE: Final = "start_date"
 ATTR_END_DATE: Final = "end_date"
 ATTR_INCLUDE_UNATTRIBUTED: Final = "include_unattributed"
+ATTR_RESULT: Final = "result"
+ATTR_LIMIT: Final = "limit"
 
 #: Both history services default to this many inclusive days ending today. One
 #: number on purpose: two services disagreeing about what "the last 30 days"
 #: means would put two charts on one screen that do not line up.
 _HISTORY_WINDOW_DAYS: Final = 30
+
+#: The four values record_run_outcome can write, and the only ones the filter
+#: accepts. Imported rather than repeated: services.py already imports runtime,
+#: which imports session, so this adds no edge and no cycle -- and a second
+#: written-out copy of one vocabulary is the defect this repo's migrations exist
+#: to remove. services.yaml holds a third copy it cannot import away, so a test
+#: pins it, exactly as ALL_EVENTS is already pinned.
+_RUN_RESULTS: Final = (
+    RESULT_COMPLETED,
+    RESULT_SKIPPED,
+    RESULT_INTERRUPTED,
+    RESULT_CANCELLED,
+)
+
+_RUN_HISTORY_LIMIT: Final = 500
+_RUN_HISTORY_MAX_LIMIT: Final = 5000
 
 # Validated against the converter itself: an override it cannot handle would
 # be stored and then silently ignored at read time, which is the class of
@@ -349,6 +374,18 @@ _GET_WATER_HISTORY_SCHEMA = vol.Schema(
         vol.Optional(ATTR_END_DATE): cv.date,
         vol.Optional(ATTR_ZONE_ID): vol.All(cv.ensure_list, [cv.string]),
         vol.Optional(ATTR_INCLUDE_UNATTRIBUTED): cv.boolean,
+    }
+)
+
+_GET_RUN_HISTORY_SCHEMA = vol.Schema(
+    {
+        vol.Optional(ATTR_START_DATE): cv.date,
+        vol.Optional(ATTR_END_DATE): cv.date,
+        vol.Optional(ATTR_ZONE_ID): vol.All(cv.ensure_list, [cv.string]),
+        vol.Optional(ATTR_RESULT): vol.All(cv.ensure_list, [vol.In(_RUN_RESULTS)]),
+        vol.Optional(ATTR_LIMIT): vol.All(
+            vol.Coerce(int), vol.Range(min=1, max=_RUN_HISTORY_MAX_LIMIT)
+        ),
     }
 )
 
@@ -1656,6 +1693,75 @@ async def _async_get_water_history(call: ServiceCall) -> ServiceResponse:
     return cast(ServiceResponse, response)
 
 
+async def _async_get_run_history(call: ServiceCall) -> ServiceResponse:
+    """Every outcome recorded in a range, skips and their reasons included."""
+    runtime = _runtime(call.hass)
+    start, end = _history_range(call)
+    floor = _retention_floor(runlog.RETENTION_DAYS)
+    truncated_retention = start < floor
+    start = max(start, floor)
+
+    # The stored instants are UTC; the caller's range is local calendar days.
+    # Inclusive [start, end] is exactly [local midnight of start, local
+    # midnight of the day after end) -- start_of_local_day rather than a
+    # 24-hour subtraction, so a DST boundary inside the window costs nothing.
+    start_at = dt_util.as_utc(dt_util.start_of_local_day(start))
+    end_at = dt_util.as_utc(dt_util.start_of_local_day(end + timedelta(days=1)))
+
+    zone_ids = call.data.get(ATTR_ZONE_ID)
+    results = call.data.get(ATTR_RESULT)
+    selected, truncated_limit = runlog.select_runs(
+        runtime.run_log.entries,
+        start_at=start_at,
+        end_at=end_at,
+        zone_ids=frozenset(zone_ids) if zone_ids else None,
+        results=frozenset(results) if results else None,
+        limit=call.data.get(ATTR_LIMIT, _RUN_HISTORY_LIMIT),
+    )
+
+    oldest = runtime.run_log.oldest_at()
+    # cap_dropped is what tells a truncated log apart from a young one: both
+    # have an oldest entry newer than the requested start. The residual is a
+    # false warning, never a false all-clear.
+    truncated_cap = (
+        runtime.run_log.cap_dropped > 0
+        and oldest is not None
+        and start < dt_util.as_local(datetime.fromisoformat(oldest)).date()
+    )
+
+    runs = [
+        {
+            "at": entry["at"],
+            "zone_id": entry["zone_id"],
+            "zone_name": entry["zone_name"],
+            "program_id": entry["program_id"],
+            "program_name": entry.get("program_name"),
+            "result": entry["result"],
+            "reason_key": entry.get("reason_key"),
+            "duration_min": entry.get("duration_min"),
+            "volume_l": entry.get("volume_l"),
+            "partial": bool(entry.get("partial", False)),
+            "scheduled": bool(entry["scheduled"]),
+        }
+        for entry in selected
+    ]
+
+    return cast(
+        ServiceResponse,
+        {
+            "start": start.isoformat(),
+            "end": end.isoformat(),
+            "retention_days": runlog.RETENTION_DAYS,
+            "oldest_kept": oldest,
+            "truncated_by_retention": truncated_retention,
+            "truncated_by_cap": truncated_cap,
+            "truncated_by_limit": truncated_limit,
+            "count": len(runs),
+            "runs": runs,
+        },
+    )
+
+
 def _zone_history_sort_key(runtime: IrrigationRuntime, zone_id: str) -> tuple[int, int, str]:
     """Configured zones by order then name, then everything else by id.
 
@@ -1739,6 +1845,13 @@ def async_setup_services(hass: HomeAssistant) -> None:
         SERVICE_GET_WATER_HISTORY,
         _async_get_water_history,
         _GET_WATER_HISTORY_SCHEMA,
+        supports_response=SupportsResponse.ONLY,
+    )
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_GET_RUN_HISTORY,
+        _async_get_run_history,
+        _GET_RUN_HISTORY_SCHEMA,
         supports_response=SupportsResponse.ONLY,
     )
     hass.services.async_register(

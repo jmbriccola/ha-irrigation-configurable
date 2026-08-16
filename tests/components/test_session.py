@@ -91,7 +91,13 @@ async def setup_hub(
     zones: list[dict[str, Any]],
     options: dict[str, Any] | None = None,
 ) -> MockConfigEntry:
-    await hass.config.async_set_time_zone("UTC")
+    if hass.config.time_zone == "US/Pacific":
+        # "US/Pacific" is the pytest-homeassistant fixture's untouched default,
+        # never a zone a caller picked on purpose. A caller that has already
+        # set a different one (a DST-boundary test exercising a local-day
+        # conversion, say) is left alone -- silently overriding it here would
+        # discard a choice the test made on purpose.
+        await hass.config.async_set_time_zone("UTC")
     entry = MockConfigEntry(
         domain=DOMAIN,
         version=3,
