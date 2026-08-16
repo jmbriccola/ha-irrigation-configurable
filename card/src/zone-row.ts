@@ -7,6 +7,7 @@ import {
   waterSummary,
   zoneAdjustmentPct,
   zoneHasFlowMeter,
+  type CapabilityBadgeKey,
   type LeakStatus,
   type ZoneBundle,
 } from "./discovery";
@@ -53,9 +54,10 @@ const PAUSE_HOURS = [1, 4, 8, 24] as const;
  * second copy of the same word — it is the same fact said by a different
  * attribute, and the render below draws it once whichever attribute said it.
  */
-const CAPABILITY_BADGES: Record<string, { label: TranslationKey; icon: string }> = {
+const CAPABILITY_BADGES: Record<CapabilityBadgeKey, { label: TranslationKey; icon: string }> = {
   water_estimated: { label: "zone.water_estimated", icon: "mdi:approximately-equal" },
   leak_unavailable: { label: "zone.leak_unavailable", icon: "mdi:water-alert-outline" },
+  leak_system_scope: { label: "zone.leak_system_scope", icon: "mdi:home-flood" },
   leak_candidate: { label: "zone.leak_candidate", icon: "mdi:water-plus-outline" },
   supply_unavailable: { label: "zone.supply_unavailable", icon: "mdi:water-pump-off" },
   supply_candidate: { label: "zone.supply_candidate", icon: "mdi:water-pump" },
@@ -464,8 +466,10 @@ export class ImcZoneRow extends LitElement {
     // chose (its sensor still carries device_class: water on purpose).
     const capabilities = capabilityBadges(zone);
     for (const badge of capabilities) {
+      // Total by construction: `CAPABILITY_BADGES` is a Record over the badge
+      // key union, so there is no "unknown key" branch to fall through. A new
+      // badge without a label fails to compile rather than never appearing.
       const spec = CAPABILITY_BADGES[badge.key];
-      if (!spec) continue;
       const label = localize(this.language, spec.label);
       badges.push(html`
         <span class="badge ${badge.tone}" title=${label}>

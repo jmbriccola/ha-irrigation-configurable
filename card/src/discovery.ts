@@ -167,8 +167,24 @@ export function zoneHasFlowMeter(zone: ZoneBundle): boolean {
  *  never be drawn as a warning (docs/design/card-contract.md). */
 export type BadgeTone = "muted" | "hint";
 
+/**
+ * Every badge this helper can emit. A closed union rather than `string` so
+ * that the renderer's label/icon map is a total `Record` over it: adding a
+ * badge here without giving it a label is then a compile error naming the
+ * missing key, instead of a chip that silently never appears.
+ */
+export const CAPABILITY_BADGE_KEYS = [
+  "water_estimated",
+  "leak_unavailable",
+  "leak_system_scope",
+  "leak_candidate",
+  "supply_unavailable",
+  "supply_candidate",
+] as const;
+export type CapabilityBadgeKey = (typeof CAPABILITY_BADGE_KEYS)[number];
+
 export interface CapabilityBadge {
-  key: string;
+  key: CapabilityBadgeKey;
   tone: BadgeTone;
 }
 
@@ -211,11 +227,20 @@ function zoneCapabilities(zone: ZoneBundle): Record<string, unknown> {
  * - **A configured capability** says nothing at all: it is the normal state,
  *   and the card contract asks for it to read as active, not as a notice.
  *
- * `leak_unavailable` deliberately means "no leak SENSOR", which is exactly
- * what `capabilities.leak_detection` measures — it knows nothing about the
- * flow meter, and a zone with a meter of its own is covered by leak source 2
- * whatever this key says. The label must therefore never be worded as "leak
- * detection is off for this zone", which would be false on a metered zone.
+ * **The leak badges are driven by `leak_watch`, not by `leak_detection`.**
+ * The latter is about the valve's own leak SENSOR and knows nothing about
+ * flow, so an installation of metered zones and no sensors reads
+ * `"unavailable"` on every zone while source 2 watches all of them. Badging
+ * that as "no leak sensor" is *true*, and it leaves the user believing
+ * nothing is watching — which is worse than a false statement, because there
+ * is nothing to catch by reading it. `leak_watch` answers the question the
+ * badge is actually asking, from the same predicate the entity's own
+ * availability uses, so the two cannot disagree.
+ *
+ * The candidate invitation is NOT suppressed on a watched zone: a second,
+ * independent source is a real improvement, and an invitation costs nothing
+ * to ignore. On an unwatched zone it arrives beside the declaration — one
+ * names the state, the other the remedy.
  */
 export function capabilityBadges(zone: ZoneBundle): CapabilityBadge[] {
   const caps = zoneCapabilities(zone);
@@ -223,17 +248,23 @@ export function capabilityBadges(zone: ZoneBundle): CapabilityBadge[] {
   if (asString(caps["water_accounting"]) === "estimated") {
     badges.push({ key: "water_estimated", tone: "muted" });
   }
-  const detectors = [
-    ["leak_detection", "leak"],
-    ["water_supply", "supply"],
-  ] as const;
-  for (const [attribute, prefix] of detectors) {
-    const value = asString(caps[attribute]);
-    if (value === "unavailable") {
-      badges.push({ key: `${prefix}_unavailable`, tone: "muted" });
-    } else if (value === "candidate_available") {
-      badges.push({ key: `${prefix}_candidate`, tone: "hint" });
-    }
+
+  // Where this zone's leaks are watched. Absent (an older sensor, or a zone
+  // whose state entity is unavailable) says nothing at all rather than
+  // guessing in either direction.
+  const watch = asString(caps["leak_watch"]);
+  if (watch === "none") badges.push({ key: "leak_unavailable", tone: "muted" });
+  else if (watch === "system") badges.push({ key: "leak_system_scope", tone: "muted" });
+  if (asString(caps["leak_detection"]) === "candidate_available") {
+    badges.push({ key: "leak_candidate", tone: "hint" });
+  }
+
+  // The water supply has no second source, so its own capability IS its
+  // coverage and the older shape still holds here.
+  const supply = asString(caps["water_supply"]);
+  if (supply === "unavailable") badges.push({ key: "supply_unavailable", tone: "muted" });
+  else if (supply === "candidate_available") {
+    badges.push({ key: "supply_candidate", tone: "hint" });
   }
   return badges;
 }
@@ -294,11 +325,18 @@ function leakAlarm(entity: HassEntity | undefined): LeakStatus | null {
  * helper that concluded "no leak" from a missing entity would publish
  * exactly the silence the availability rule exists to withhold.
  *
- * `unknown` rather than `uncovered` for a zone with no configured sensor:
- * `capabilities.leak_detection` describes the SENSOR, and a zone with its
- * own meter is still covered by leak source 2 while that says
- * `unavailable`. The muted capability badge declares the missing sensor;
- * this helper adds no claim it cannot support.
+ * `establishing` is gated on `leak_watch === "zone"`, not on
+ * `leak_detection === "configured"`. The two differ on exactly the zones
+ * this feature is for: a metered zone with no leak sensor has a source on
+ * its own scope and IS serving a confirmation window, while
+ * `leak_detection` reads `"unavailable"` for it. Gating on the sensor would
+ * report "nothing known" about a zone that is mid-window — and `leak_watch`
+ * is `leak_sources_configured` itself, the same predicate the entity's
+ * availability is gated on, so the badge and the entity move together.
+ *
+ * `unknown` covers `leak_watch: "system"` too: that zone's OWN alarm is
+ * unavailable for ever by design, so it has nothing to establish. Where its
+ * water is watched is the capability badge's job, not this one's.
  */
 export function leakStatus(zone: ZoneBundle): LeakStatus {
   const alarm = leakAlarm(zone.leak);
@@ -308,7 +346,7 @@ export function leakStatus(zone: ZoneBundle): LeakStatus {
   if (LEAK_STALL_KEYS.some((key) => degraded.includes(key))) {
     return { coverage: "unresolved", sources: [] };
   }
-  if (asString(zoneCapabilities(zone)["leak_detection"]) === "configured") {
+  if (asString(zoneCapabilities(zone)["leak_watch"]) === "zone") {
     return { coverage: "establishing", sources: [] };
   }
   return { coverage: "unknown", sources: [] };

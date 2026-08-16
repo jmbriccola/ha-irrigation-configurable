@@ -305,6 +305,55 @@ describe("the leak settings in the advanced drawer", () => {
   });
 });
 
+/**
+ * Every value bound to a `step=` attribute anywhere in a lit template tree,
+ * in render order.
+ *
+ * Reading the template rather than a DOM: these tests run without jsdom, and
+ * a `TemplateResult`'s `strings`/`values` pair is exactly what lit will
+ * commit. The chunk preceding a binding ends with `step=` for precisely the
+ * one attribute we are after, so this cannot be fooled by another numeric
+ * binding on the same element.
+ */
+function stepsIn(node: unknown): unknown[] {
+  const found: unknown[] = [];
+  if (Array.isArray(node)) {
+    for (const item of node) found.push(...stepsIn(item));
+    return found;
+  }
+  if (!node || typeof node !== "object") return found;
+  const template = node as { strings?: readonly string[]; values?: unknown[] };
+  if (!template.strings || !template.values) return found;
+  template.values.forEach((value, index) => {
+    if (template.strings?.[index]?.trimEnd().endsWith("step=")) found.push(value);
+    found.push(...stepsIn(value));
+  });
+  return found;
+}
+
+describe("the number fields' step", () => {
+  const drawer = (): unknown =>
+    (new ImcSettingsView() as unknown as { _renderLeakFields(lang: string): unknown })
+      ._renderLeakFields("en");
+
+  it("lets the litres-per-minute threshold hold its own default", () => {
+    // `<input type="number">` defaults to step="1". The leak threshold's
+    // default is 0.5, so under that step the field is `:stepMismatch` — the
+    // browser marks it invalid and the spinner steps straight over the value
+    // the backend actually ships with. Every other field in this drawer is
+    // whole seconds or minutes, which is why this went unnoticed until a
+    // decimal arrived.
+    expect(stepsIn(drawer())).toContain(0.1);
+  });
+
+  it("leaves the whole-number fields stepping in whole numbers", () => {
+    // The counterpart: a blanket 0.1 would offer a spinner running in tenths
+    // of a second through the confirmation windows beside it.
+    const steps = stepsIn(drawer());
+    expect(steps.filter((step) => step === 1).length).toBeGreaterThanOrEqual(3);
+  });
+});
+
 describe("a control that is not a real button", () => {
   /** A keydown carrying the one method the handler is allowed to call on it. */
   function keydown(key: string): { event: KeyboardEvent; prevented: () => boolean } {

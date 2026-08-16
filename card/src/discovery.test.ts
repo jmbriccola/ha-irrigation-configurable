@@ -318,6 +318,7 @@ describe("capabilityBadges", () => {
             water_accounting: "measured",
             leak_detection: "configured",
             water_supply: "configured",
+            leak_watch: "zone",
           }),
         ),
       ),
@@ -331,6 +332,7 @@ describe("capabilityBadges", () => {
           water_accounting: "estimated",
           leak_detection: "unavailable",
           water_supply: "unavailable",
+          leak_watch: "none",
         }),
       ),
     );
@@ -342,17 +344,83 @@ describe("capabilityBadges", () => {
     expect(badges.every((badge) => badge.tone === "muted")).toBe(true);
   });
 
+  /**
+   * The user's own installation: three metered zones, not one leak sensor.
+   * Source 2 watches all three, and `leak_detection` says "unavailable" for
+   * all three because it is about the valve's SENSOR. A badge reading "No
+   * leak sensor" there is true and leaves the user believing nothing is
+   * watching — worse than a false statement, because there is nothing to
+   * catch by reading it.
+   */
+  it("says nothing about a missing sensor on a zone its own meter watches", () => {
+    expect(
+      capabilityBadges(
+        zoneWith(
+          capabilities({
+            water_accounting: "measured",
+            leak_detection: "unavailable",
+            water_supply: "configured",
+            leak_watch: "zone",
+          }),
+        ),
+      ),
+    ).toEqual([]);
+  });
+
+  it("says where a shared-line-meter zone is watched instead of calling it uncovered", () => {
+    // Its own scope has no source and its own alarm can never fire, but the
+    // water IS measured and a leak in it raises `hub_leak`. "Not watched"
+    // would be false; saying nothing would leave the sensor-less zone
+    // looking identical to an unwatched one.
+    expect(
+      capabilityBadges(
+        zoneWith(
+          capabilities({
+            water_accounting: "measured",
+            leak_detection: "unavailable",
+            water_supply: "configured",
+            leak_watch: "system",
+          }),
+        ),
+      ),
+    ).toEqual([{ key: "leak_system_scope", tone: "muted" }]);
+  });
+
+  it("still invites the sensor on a zone the meter already watches", () => {
+    // A second, independent source is a real improvement even where source 2
+    // is running, and an invitation costs the user nothing to ignore.
+    expect(
+      capabilityBadges(
+        zoneWith(
+          capabilities({
+            water_accounting: "measured",
+            leak_detection: "candidate_available",
+            water_supply: "configured",
+            leak_watch: "zone",
+          }),
+        ),
+      ),
+    ).toEqual([{ key: "leak_candidate", tone: "hint" }]);
+  });
+
   it("invites configuration when the hardware could do it", () => {
+    // Nothing watches this zone yet, so the invitation arrives beside the
+    // declaration that it is unwatched: one names the state, the other the
+    // remedy.
     const badges = capabilityBadges(
       zoneWith(
         capabilities({
           water_accounting: "measured",
           leak_detection: "candidate_available",
           water_supply: "configured",
+          leak_watch: "none",
         }),
       ),
     );
-    expect(badges).toEqual([{ key: "leak_candidate", tone: "hint" }]);
+    expect(badges).toEqual([
+      { key: "leak_unavailable", tone: "muted" },
+      { key: "leak_candidate", tone: "hint" },
+    ]);
   });
 
   /**
@@ -367,6 +435,7 @@ describe("capabilityBadges", () => {
           water_accounting: "measured",
           leak_detection: "candidate_available",
           water_supply: "candidate_available",
+          leak_watch: "zone",
         }),
       ),
     );
@@ -406,6 +475,7 @@ describe("capabilityBadges", () => {
               water_accounting: "unavailable",
               leak_detection: "configured",
               water_supply: "configured",
+              leak_watch: "zone",
             },
             ["no_flow_meter"],
           ),
@@ -430,6 +500,7 @@ describe("leakStatus", () => {
           water_accounting: "measured",
           leak_detection: "configured",
           water_supply: "configured",
+          leak_watch: "zone",
         }),
         {
           state: "on",
@@ -460,6 +531,7 @@ describe("leakStatus", () => {
           water_accounting: "measured",
           leak_detection: "unavailable",
           water_supply: "unavailable",
+          leak_watch: "zone",
         }),
         { state: "on", attributes: { sources: ["no_flow_closed"], since: null } },
       ),
@@ -476,6 +548,7 @@ describe("leakStatus", () => {
           water_accounting: "measured",
           leak_detection: "configured",
           water_supply: "configured",
+          leak_watch: "zone",
         }),
         { state: "off", attributes: { sources: [], since: null } },
       ),
@@ -494,6 +567,7 @@ describe("leakStatus", () => {
           water_accounting: "measured",
           leak_detection: "configured",
           water_supply: "configured",
+          leak_watch: "zone",
         }),
       ),
     );
@@ -509,6 +583,7 @@ describe("leakStatus", () => {
               water_accounting: "measured",
               leak_detection: "configured",
               water_supply: "configured",
+              leak_watch: "zone",
             },
             [stall],
           ),
@@ -518,22 +593,59 @@ describe("leakStatus", () => {
     }
   });
 
-  it("says nothing it cannot know for a zone with no configured sensor", () => {
-    // No entity and no configured sensor: the zone may still be served by a
-    // meter whose window has not run, so neither "still looking" nor "no
-    // leak" is knowable. The muted capability badge declares the missing
-    // sensor; this helper adds no second claim.
+  it("says nothing it cannot know for a zone nothing watches", () => {
+    // No entity and no source anywhere: there is no window running, so
+    // neither "still looking" nor "no leak" is true. The muted capability
+    // badge declares that nothing watches it; this helper adds no second
+    // claim on top.
     const status = leakStatus(
       zoneWith(
         capabilities({
           water_accounting: "measured",
           leak_detection: "unavailable",
           water_supply: "unavailable",
+          leak_watch: "none",
         }),
       ),
     );
     expect(status.coverage).toBe("unknown");
     expect(status.sources).toEqual([]);
+  });
+
+  it("is still establishing for a metered zone that has no leak sensor", () => {
+    // The gap this whole field closed. `leak_detection` says "unavailable"
+    // -- there is no sensor -- while source 2 is mid-window on the zone's own
+    // meter. Gating on the sensor would report "nothing known" about a zone
+    // that is actively being watched.
+    const status = leakStatus(
+      zoneWith(
+        capabilities({
+          water_accounting: "measured",
+          leak_detection: "unavailable",
+          water_supply: "unavailable",
+          leak_watch: "zone",
+        }),
+      ),
+    );
+    expect(status.coverage).toBe("establishing");
+  });
+
+  it("establishes nothing of its own for a zone the system scope watches", () => {
+    // Its own alarm is unavailable for ever by design -- the hub's is the one
+    // that can fire. Saying "still looking" would promise a zone-named
+    // verdict that is never coming; where its water IS watched is the
+    // capability badge's job.
+    const status = leakStatus(
+      zoneWith(
+        capabilities({
+          water_accounting: "measured",
+          leak_detection: "unavailable",
+          water_supply: "unavailable",
+          leak_watch: "system",
+        }),
+      ),
+    );
+    expect(status.coverage).toBe("unknown");
   });
 });
 

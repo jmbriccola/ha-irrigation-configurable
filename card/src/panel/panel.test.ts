@@ -390,20 +390,22 @@ describe("opening the settings view", () => {
 });
 
 describe("what discover_zone_sensors answers", () => {
-  it("keeps the configured sensors and the device's candidates", () => {
+  it("keeps the device's candidates and nothing else", () => {
+    // The service also answers with the zone's configured sensors and its two
+    // capability verdicts. The form seeds the first from `export_config` and
+    // the card reads the second off `zone_state`, so keeping either here
+    // would be a second copy of a value nothing reads — and one that could
+    // differ from the copy actually on screen.
     expect(
       parseSensorDiscovery({
         leak_sensor: "binary_sensor.chosen_leak",
         water_supply_sensor: null,
         leak_candidate: "binary_sensor.valve_water_leak",
         supply_candidate: "binary_sensor.valve_water_supply",
-        // The service answers with the capability verdicts too; the editor
-        // reads them off `zone_state` instead, so they are simply not kept.
         leak_detection: "configured",
         water_supply: "candidate_available",
       }),
     ).toEqual({
-      leak_sensor: "binary_sensor.chosen_leak",
       leak_candidate: "binary_sensor.valve_water_leak",
       supply_candidate: "binary_sensor.valve_water_supply",
     });
@@ -458,6 +460,11 @@ describe("opening the zone editor", () => {
 
     expect(inner._editingZone).toEqual({ name: "Lawn", valve_entity: "valve.lawn" });
     expect(inner._editingZoneSensors).toBeUndefined();
+    // And silently: a toast reporting "Service not found" over an editor that
+    // opened correctly reports a fault the user did not cause, for a
+    // convenience they never asked for. It teaches them to ignore the toast
+    // that will one day matter.
+    expect(inner._error).toBeUndefined();
   });
 
   it("does not carry one zone's candidates into the next zone's form", async () => {

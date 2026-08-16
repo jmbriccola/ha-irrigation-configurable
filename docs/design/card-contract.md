@@ -364,13 +364,28 @@ Four consequences worth stating, because they are easy to get backwards:
 - A card rendering a leak badge must treat `unavailable` as *"nothing
   established"*, never as `off` and never as a fault. The entity itself does
   not say which of the two reasons applies, and a card that needs to tell them
-  apart must read `zone_state.capabilities.leak_detection`: `"unavailable"`
-  there is the declared absence of a source (reason 1), while `"configured"`
-  alongside an unavailable leak entity is reason 2 — a window that resolves by
-  itself within `leak_confirm_s` of the source reporting, and does not resolve
-  at all while it never does (check `degraded` for
-  `leak_sensor_missing` / `flow_unit_unknown` first; if neither is there, the
-  source exists and has not yet spoken).
+  apart must read **`zone_state.capabilities.leak_watch`** (see "Zone
+  capabilities" below): `"none"` there is the declared absence of a source
+  (reason 1), while `"zone"` alongside an unavailable leak entity is reason
+  2 — a window that resolves by itself within `leak_confirm_s` of the source
+  reporting, and does not resolve at all while it never does (check `degraded`
+  for `leak_sensor_missing` / `flow_unit_unknown` first; if neither is there,
+  the source exists and has not yet spoken).
+
+  **Not `leak_detection`, which cannot answer this.** That key is about the
+  valve's own leak *sensor* and knows nothing about flow, so a zone watched
+  entirely by its own meter — leak source 2, with no sensor anywhere — reads
+  `"unavailable"` there while being fully covered. A card branching on it
+  tells such a user "no leak sensor", which is true and leaves them believing
+  nothing is watching. `leak_watch` is `leak_sources_configured`, the same
+  predicate this entity's own availability is gated on, so the two cannot
+  disagree.
+
+  The third value, `"system"`, is a zone whose leaks are watched at the hub
+  scope rather than its own — see `leak_watch` below. Its `zone_leak` entity
+  stays `unavailable` indefinitely and that is correct: nothing can name that
+  zone. A card must not render it as uncovered, and must not render it as an
+  all-clear either; it says *where*.
 - **Discovery caveat:** Home Assistant publishes no extra state attributes at
   all while an entity is unavailable, `maestro_role` included — so the
   attribute walk at the top of this document does not see an unavailable leak
@@ -402,16 +417,22 @@ Attributes, on both:
 Resolved **per zone, not per hub**: in a mixed installation one zone's valve
 sits on a device that exposes a moisture/problem sibling sensor and another
 does not, and each zone reports its own hardware — never the hub's or
-another zone's. `zone_state.capabilities` is an object with three keys, each
+another zone's. `zone_state.capabilities` is an object with four keys, each
 one of three string values:
 
 ```json
 "capabilities": {
   "water_accounting": "measured" | "estimated" | "unavailable",
   "leak_detection":   "configured" | "candidate_available" | "unavailable",
-  "water_supply":     "configured" | "candidate_available" | "unavailable"
+  "water_supply":     "configured" | "candidate_available" | "unavailable",
+  "leak_watch":       "zone" | "system" | "none"
 }
 ```
+
+**`leak_detection` and `leak_watch` answer different questions, and a card
+almost always wants the second.** The first is about the valve's own leak
+*sensor*; the second is about whether anything at all watches this zone's
+water, including the flow meter that `leak_detection` knows nothing about.
 
 - **`leak_detection` / `water_supply`** — from `capabilities.py`'s
   `resolve_zone_capabilities`, one per zone:
@@ -424,16 +445,39 @@ one of three string values:
     (`moisture` for leak, `problem` for water supply) that could be wired
     up. Render this as an **invitation** — "your hardware could do this,
     you have not told it to" — never as a warning or an alarm.
-  - `unavailable`: neither configured nor candidate. A **declared absence**,
-    on purpose: an alarm that would silently never fire is worse than a
-    capability that plainly says it is not covered, because the user would
-    otherwise believe they are protected.
+  - `unavailable`: neither configured nor candidate. A **declared absence of
+    that sensor**, on purpose: a sensor-shaped alarm that would silently
+    never fire is worse than a capability that plainly says the sensor is not
+    there. For `water_supply` that is also the whole story, since the supply
+    gate has no second source. For `leak_detection` it is **not**: read
+    `leak_watch` before telling a user anything about leak coverage, because
+    a fully metered zone with no sensor reads `unavailable` here and is
+    watched.
   - Detected candidates are matched by `device_class` alone, never by
     entity id or name — a plausible-looking id earns a sensor nothing (see
     `capabilities.py`'s own tests). The card must not re-derive candidates
     by name either; read `candidate_available` and, if it needs the actual
     entity id to offer wiring it up, call the `discover_zone_sensors`
     service (below).
+- **`leak_watch`** — *which scope watches this zone's water for leaks*, from
+  `runtime.leak_watch`. The one key a card should build a leak-coverage badge
+  on:
+  - `zone`: this zone's own scope has a source — its leak sensor, or a meter
+    that serves it alone — so an alarm can name **this zone**, and its
+    `zone_leak` entity is the one to watch. This value is
+    `leak_sources_configured` itself, the same predicate that entity's
+    availability is gated on, so the attribute and the entity cannot disagree
+    about whether a zone is watched.
+  - `system`: no source on its own scope, but a meter that also serves it
+    reports for the hub scope — the shared-line-meter topology, where which
+    of the zones behind the meter leaked is unanswerable. Its water **is**
+    measured and a leak in it **will** raise an alarm, on `hub_leak`. Its own
+    `zone_leak` therefore stays `unavailable` for ever, correctly. Render
+    this as *where* it is watched: "not watched" is false, and "watched"
+    without saying where promises a zone-named alarm that can never arrive.
+    No badge for this state may read as an all-clear.
+  - `none`: nothing watches this zone's water at all. This is the value that
+    means what a user reads as "no leak detection here".
 - **`water_accounting`** — judged from the zone's flow meter and nominal
   rate, not from `capabilities.py` (which knows nothing about flow), and
   deliberately in the same order `zone_water_total`'s own `source` uses —
@@ -695,7 +739,9 @@ missing outcome.
 
 Zone/session states and degraded keys above are localizable too, as are the
 `capabilities` values (`measured`, `estimated`, `configured`,
-`candidate_available`, `unavailable`) and the leak source keys
+`candidate_available`, `unavailable`, and `leak_watch`'s `zone` / `system` /
+`none` — the last three being statements about *where*, so word them that
+way and never as a verdict) and the leak source keys
 `valve_sensor` / `no_flow_closed`, which reach the card as raw values in
 `zone_leak` / `hub_leak`'s `sources` and `describing_source` attributes and
 in the `leak` event's `first_source`. Word them as *observations*, never as

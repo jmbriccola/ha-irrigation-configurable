@@ -238,6 +238,29 @@ describe("the note under each sensor picker", () => {
     expect(sensorNote("en", "supply", "", {})).toMatch(/no water-supply sensor/i);
   });
 
+  it("says which one wins when the user picked a different sensor", () => {
+    // The note would otherwise name the device's sensor while the picker
+    // above it holds another, with nothing saying which the zone acts on.
+    const note = sensorNote("en", "leak", "binary_sensor.bed_probe", found);
+    expect(note).toBe(
+      "Using the sensor you picked; this valve's device also offers binary_sensor.valve_water_leak",
+    );
+    expect(sensorNote("it", "leak", "binary_sensor.bed_probe", found)).toMatch(
+      /Uso il sensore che hai scelto/,
+    );
+  });
+
+  it("treats an empty picker as no competing choice", () => {
+    // Nothing is chosen — including right after the user cleared it — so the
+    // candidate is an offer, not a runner-up.
+    expect(sensorNote("en", "leak", "", found)).toBe(
+      "Found on this valve's device: binary_sensor.valve_water_leak",
+    );
+    expect(sensorNote("en", "leak", "binary_sensor.valve_water_leak", found)).toBe(
+      "Found on this valve's device: binary_sensor.valve_water_leak",
+    );
+  });
+
   it("says nothing about a sensor chosen elsewhere", () => {
     // A ground probe in the bed is a deliberate, legitimate choice — the
     // capability model says so in as many words. Warning about it would

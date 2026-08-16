@@ -1085,18 +1085,31 @@ export class ImcSettingsView extends LitElement {
   }
 
 
-  /** A labelled number input that reports its unit and its default. */
+  /**
+   * A labelled number input that reports its unit and its default.
+   *
+   * `step` is explicit because the HTML default is `1`, and an
+   * `<input type="number">` with `step="1"` holding `0.5` is
+   * `:stepMismatch`: the browser marks the field invalid and its spinner
+   * moves in whole units past a value the backend's own default sits
+   * between. Every field routed through here was an integer until leak
+   * detection brought a litres-per-minute threshold, and the zone editor
+   * already spells `step="0.1"` out for its nominal-flow field — same idiom,
+   * now available to this one.
+   */
   private _num(
     label: string,
     hint: string,
     value: number | undefined,
     onInput: (value: number | undefined) => void,
+    step: number = 1,
   ): TemplateResult {
     return html`
       <div class="section-label">${label}</div>
       <input
         class="field"
         type="number"
+        step=${step}
         .value=${value ?? ""}
         @input=${(e: Event) => onInput(asNumber((e.target as HTMLInputElement).value))}
       />
@@ -1645,6 +1658,9 @@ export class ImcSettingsView extends LitElement {
         localize(lang, "settings.leak_threshold_lpm_hint"),
         this._valves.leakThresholdLpm,
         (v) => (this._valves = { ...this._valves, leakThresholdLpm: v }),
+        // Litres per minute, default 0.5, and `services.yaml` declares the
+        // same 0.1 step for this field. The only decimal in the drawer.
+        0.1,
       )}
       ${this._num(
         localize(lang, "settings.leak_confirm_s"),
