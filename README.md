@@ -278,17 +278,53 @@ them.
   report normally while `hub_leak` sits `unavailable` for ever with no
   surface saying why. A zone whose `leak_watch` is `system` points you at
   precisely that scope.
-- **After a restart every leak entity is `unavailable` for a confirmation
-  window before it will say `off`, by design.** The alarm lives in memory
-  and is deliberately not persisted, so at boot nothing is known. Publishing
-  `off` there would fire the second half of the obvious automation pair —
-  *"leak → close the mains"* and *"leak cleared → reopen the mains"* — on a
-  restart during a live leak, and put the water back on. A transition into
-  `unavailable` fires no `to: "off"` trigger; a restored alarm was rejected
-  because it can be stale, fixed while Home Assistant was down.
+- **The state sequence after every restart is: `unavailable`, for one
+  confirmation window of observation, then `off`** (or `on`, if a leak is
+  confirmed in the meantime). The alarm lives in memory and is deliberately
+  not persisted, so at boot nothing is known, and publishing `off` there
+  would assert the opposite. A restored alarm was rejected because it can be
+  stale — fixed while Home Assistant was down — so the evidence is re-earned
+  instead. Every healthy install therefore makes an `unavailable → off`
+  transition once per restart; write your automations knowing that.
 - **`since` is when the alarm was confirmed, not when the water started.** A
   source withdrawing and returning yields a fresh one, and a restart moves it
   forward. No surface may present it as the age of the leak.
+
+The automation pair almost everyone wants is *"leak → close the mains"* and
+*"leak cleared → reopen it"*. Write it like this:
+
+```yaml
+automation:
+  - alias: Leak - close the mains
+    triggers:
+      - trigger: state
+        entity_id: binary_sensor.alpha_leak
+        to: "on"
+    actions:
+      - action: valve.close_valve
+        target:
+          entity_id: valve.mains
+
+  - alias: Leak cleared - reopen the mains
+    triggers:
+      - trigger: state
+        entity_id: binary_sensor.alpha_leak
+        # `from: "on"` is load-bearing: it restricts this to a real clearing
+        # edge. Without it the trigger also matches the `unavailable -> off`
+        # transition that every restart produces once the window completes,
+        # and the mains would reopen on a reboot you did after closing them
+        # by hand.
+        from: "on"
+        to: "off"
+    actions:
+      - action: valve.open_valve
+        target:
+          entity_id: valve.mains
+```
+
+If you have both a line meter and per-zone meters, one leak turns on two of
+these entities (see the matrix above) — either trigger on a single scope, or
+keep the action idempotent, which closing a valve already is.
 
 ## Entities & services
 

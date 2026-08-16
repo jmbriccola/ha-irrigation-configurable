@@ -79,6 +79,18 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
   while a *different* zone waters and closing the master there would abort a
   cycle nothing implicated. An unrecognised value falls back to `close` and
   says so in Repairs instead of doing it silently.
+- **Diagnostics now carry the leak picture.** Everything above lives in
+  memory by design — the alarm is not persisted, and neither is the
+  observation window — so the diagnostics download, which dumps the *stored*
+  state, said nothing whatever about a subsystem whose failure mode is
+  silence. Per scope it now reports the alarm with its sources, `since` and
+  describing source; whether a source is configured and whether the state is
+  established; and the observation window itself: seconds earned against the
+  confirmation window, whether the scope can observe right now, whether it
+  holds evidence it cannot resolve, whether it has latched, and the stall
+  reason once there is one. Every value is read from the predicate the rest
+  of the component already uses, so a support dump cannot disagree with the
+  entity beside it.
 - **A leak in progress is described by evidence the scope still has.** The
   Repairs notice is keyed on `describing_source` — the first source to notice
   while it is still contributing, a surviving source otherwise — so removing

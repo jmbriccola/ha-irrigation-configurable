@@ -49,6 +49,10 @@ async def async_get_config_entry_diagnostics(
             if subentry.subentry_type == SUBENTRY_TYPE_ZONE
         },
         "runtime_state": runtime_state,
+        # The leak mechanism lives in memory by design, so runtime_state above
+        # carries none of it. Read from the runtime's own predicates rather
+        # than re-derived here -- see RuntimeManager.leak_diagnostics.
+        "leaks": runtime.leak_diagnostics(),
         # Which events are live and where they go, so "mute" is inspectable
         # without opening .storage.
         "notifications": evaluate_notifications(
