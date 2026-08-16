@@ -40,11 +40,15 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
   zones stays the right operation for a total or a budget. `closed_l` on
   its days is the subset measured with every managed valve shut — the only
   figure leak detection reads.
-- **A removed zone keeps its water and its runs.** Both services still
-  return them, with `zone_name: null` and sorted last. The water used and
-  the cycles run happened whether or not the zone is still configured;
-  deleting that history along with the configuration would rewrite months
-  a user already lived through.
+- **A removed zone keeps its water and its runs.** The water used and the
+  cycles run happened whether or not the zone is still configured; deleting
+  that history along with the configuration would rewrite months a user
+  already lived through. The two services report its identity differently,
+  though: `get_water_history` returns `zone_name: null` for it and sorts it
+  last, while `get_run_history` never writes a null name — `build_entry`
+  requires one, so every run carries the name its zone had at the moment it
+  ran. That is the more honest of the two: a later zone reusing the id, or
+  none at all, should not get to rewrite what already happened.
 - **The run log starts empty at this upgrade, on purpose.** The sentinel's
   `outcome_log` — the only outcome record that existed before this branch —
   keeps four days of bare result strings, with no `reason_key` and no
