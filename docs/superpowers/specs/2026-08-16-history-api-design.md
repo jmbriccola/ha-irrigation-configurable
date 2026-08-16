@@ -29,7 +29,8 @@ data behind them today, and they fail in opposite ways.
 pruned to 730 days (`engine/metering.py`, `RETENTION_DAYS`), with `l`, `est`,
 `gap_s` and `closed_l` per day and per key. It exists precisely so a card can
 draw a history without querying the recorder and without depending on the
-user's `purge_keep_days`. `IrrigationStore.daily_water()` already returns a
+user's `purge_keep_days`. `RuntimeState.daily_water()` (`storage.py:411`,
+reached as `runtime.state.daily_water()`) already returns a
 read-only three-level copy of it, and its docstring already says
 "diagnostics, card". **No service exposes it.** The frontend cannot reach it at
 all. This is a wrapper, not new plumbing.
@@ -74,7 +75,13 @@ outcome is recorded or the midnight prune runs.
   a change to the other.
 - `async_save_state` (`runtime.py:3458`) saves both, so an orderly shutdown
   flushes the run log too.
-- Removing the config entry must remove both files.
+- **The file is not deleted when the config entry is removed**, because the
+  existing state store is not either: the integration has no
+  `async_remove_entry` at all. Deleting one of the two and not the other would
+  be the worse of the three available behaviours. Removing both is a separate,
+  defensible change and is noted as a follow-up rather than smuggled in here —
+  it also deserves its own thought, since an orphaned state file is what makes
+  a remove-and-re-add keep its history.
 
 ### 1.1 Pure arithmetic in `engine/runlog.py`
 
@@ -442,7 +449,7 @@ something nobody reads at a glance.
 | `engine/runlog.py` | **new**. `append_run`, `prune_runs`, `cap_runs`, `select_runs` — pure, clock injected |
 | `engine/metering.py` | `daily_series` — dense per-day projection over a range |
 | `storage.py` | **new** `RunLogStore` class: own `Store`, `async_load`, `async_save`, `schedule_save`, `append`, `prune`, `entries`, `cap_dropped`, `oldest_kept` |
-| `const.py` | `STORAGE_VERSION_RUNS`, `RUN_RETENTION_DAYS`, `MAX_RUNS` |
+| `const.py` | `STORAGE_VERSION_RUNS` only. `RETENTION_DAYS` and `MAX_RUNS` live in `engine/runlog.py`, where `engine/metering.py` already keeps its own `RETENTION_DAYS` — the retention of a series belongs beside the arithmetic that enforces it |
 | `runtime.py` | construct + load `RunLogStore`; one append in `record_run_outcome`; prune in `_midnight`; save in `async_save_state`; remove the file with the entry |
 | `services.py` | `SERVICE_GET_WATER_HISTORY`, `SERVICE_GET_RUN_HISTORY`, their schemas, their handlers, **and their registration** — two distinct places |
 | `services.yaml` | both services declared with fields and selectors |
