@@ -206,9 +206,8 @@ e le impostazioni quotidiane dell'hub, tutto in un unico posto.
    valvola master e — in fondo allo stesso cassetto, salvate con lo stesso
    pulsante — le **impostazioni di perdita e mancanza d'acqua**: cosa fare
    con una perdita confermata, la soglia di perdita in L/min, la finestra di
-   conferma, l'intervallo dei promemoria, se un ciclo possa partire senza
-   acqua e quanto a lungo debba durare la mancanza prima del rifiuto; vedi
-   §8).
+   conferma, l'intervallo dei promemoria, **Non partire senza acqua** e quanto
+   a lungo debba durare la mancanza prima del rifiuto; vedi §8).
 
 I parametri esperti — pesi e soglie del motore meteo (§3 sopra) — non sono
 nel pannello: restano nel menu **Configura** dell'hub (il config flow), che
@@ -354,8 +353,18 @@ sono.
 
 **Cosa succede alla conferma**: una notifica ad alta priorità (l'evento
 `leak` è già preselezionato nella procedura guidata, §6), una segnalazione in
-Riparazioni che resta finché resta la condizione, un promemoria ogni 6 ore
-per default, e una delle nuove **entità di perdita** che passa a `on`.
+Riparazioni, un promemoria ogni 6 ore per default, e una delle nuove **entità
+di perdita** che passa a `on`.
+
+La segnalazione in Riparazioni resta finché resta la condizione, con
+un'eccezione che vale la pena conoscere perché sullo schermo non la dice
+nessuno: **un riavvio di Home Assistant la fa sparire.** L'allarme vive in
+memoria e deliberatamente non viene salvato (vedi i punti sull'entità qui
+sotto), quindi la segnalazione se ne va con lui e torna solo quando la prova
+è stata raccolta di nuovo, per un'intera finestra di conferma. Lo stesso vale
+per la segnalazione di mancanza d'acqua. Una segnalazione sparita la mattina
+dopo un riavvio non è rientrata: è stata dimenticata, e si sta
+riconquistando.
 
 **Le entità di perdita** sono `binary_sensor` con `device_class: problem` —
 una per zona più una per l'impianto — ed è su queste che va scritta
@@ -442,9 +451,12 @@ riparte da zero, perché da quanto tempo manchi l'acqua non è conoscibile.
 L'esito si legge `no_water_supply` invece di un generico `no_flow`, e lo
 stesso vale per un ciclo già partito che non trova flusso.
 
-Riattivare **«parti anche senza acqua»** disattiva il rifiuto e nient'altro:
-la notifica e la segnalazione in Riparazioni arrivano lo stesso. Scegliere di
-irrigare comunque non è scegliere di non esserne informati.
+Disattivare **«Non partire senza acqua»** toglie il rifiuto e nient'altro: la
+notifica e la segnalazione in Riparazioni arrivano lo stesso. Scegliere di
+irrigare comunque non è scegliere di non esserne informati. (Quella è la
+casella nel pannello; il servizio `set_valve_safety` chiama la stessa
+impostazione **Richiedi la presenza d'acqua**, e la chiave salvata è
+`require_water_supply`. Tutt'e tre sono attive quando il rifiuto è attivo.)
 
 Due limiti onesti, da conoscere prima di contarci:
 
@@ -472,10 +484,12 @@ tace. Provalo apposta, una volta, in un giorno in cui non c'è niente che non
 va.
 
 **Un falso allarme non costa nulla.** L'azione predefinita richiude la master
-e la valvola implicata, e a impianto fermo sono già chiuse entrambe:
-richiudere una valvola chiusa non fa assolutamente niente e dalla 3.4.0 non
-lascia nemmeno una traccia nel registro dei comandi. Non si irriga nulla, non
-si ferma nulla, nessuna valvola si muove. L'unica azione con un costo da
+e la valvola implicata *solo se una delle due risulta ancora aperta*, e a
+impianto fermo sono già chiuse entrambe: quindi non parte nessun comando, né
+verso le valvole né nel registro dei comandi. Non si irriga nulla, non si
+ferma nulla, nessuna valvola si muove. (Mentre un ciclo è in corso la
+richiusura viene saltata del tutto, perché una perdita su una zona non deve
+far abortire l'irrigazione di un'altra.) L'unica azione con un costo da
 valutare è *blocca i nuovi cicli*, e solo perché rifiuta le partenze finché
 non togli l'allarme.
 
@@ -540,8 +554,9 @@ Questa non è una perdita, e le entità di perdita giustamente non si muovono.
    chiama `run_zone` su quella zona, o premi play sulla sua riga nella card, e
    il ciclo viene saltato con esito `no_water_supply`. Gli avvii manuali non
    sono esentati, deliberatamente: chiedere a mano non fa comparire l'acqua
-   nel tubo. (Con *parti anche senza acqua* attivo, la segnalazione arriva
-   comunque e sparisce solo il rifiuto.)
+   nel tubo. (Con *Non partire senza acqua* **disattivato**, la segnalazione
+   arriva comunque e sparisce solo il rifiuto: per questa prova lascialo
+   attivo.)
 
 **Come si rientra, e cosa si vede.** Rimetti a `off` il sensore di perdita e
 l'origine si ritira subito; riporta il flusso a zero, o chiudi il rubinetto, e
@@ -551,18 +566,27 @@ mai un allarme in piedi. Quando si ritira l'ultima origine arrivano una
 notifica di rientro, la sparizione della segnalazione in Riparazioni,
 l'entità che torna a `off` e il badge che si spegne. Con *blocca i nuovi
 cicli* il messaggio dice anche se i cicli sono davvero di nuovo permessi: non
-lo sono, se un altro ambito ha ancora un allarme suo.
+lo sono, se un altro ambito ha ancora un allarme suo. Anche cancellare la
+zona mentre il suo allarme è in piedi lo fa rientrare, con la stessa notifica
+di rientro, che nomina la zona come era configurata l'ultima volta: un
+allarme il cui soggetto non esiste più non verrebbe altrimenti mai ritirato, e
+qualsiasi automazione in attesa del cessato allarme aspetterebbe per sempre.
 
 **E per vedere cosa pensa davvero il componente**, scarica la diagnostica
 (pagina dell'integrazione → menu a tre puntini → **Scarica diagnostica**) e
 leggi la sezione `leaks`. È l'unica finestra su tutto questo, perché niente
 di ciò viene scritto su disco: per ogni ambito dice se un'origine è
 configurata, se uno stato è stato stabilito, quanti secondi osservabili sono
-stati accumulati rispetto alla finestra di conferma, se l'ambito può
-osservare adesso, se sta trattenendo una prova che non riesce a risolvere, se
-si è assestato — e quali flussometri riportano per lui, che è l'unico modo di
-confermare dall'esterno che un flussometro di linea condiviso finisce davvero
-sull'ambito dell'impianto.
+stati accumulati (`observation.observed_s`) rispetto alla soglia che devono
+raggiungere (`observation.window_s` — la finestra di conferma, ma mai meno di
+30 s: per questo compare accanto a `confirm_s` e non al suo posto), se
+l'ambito può osservare adesso, se sta trattenendo una prova che non riesce a
+risolvere, se si è assestato e — in `observation.blocking_valves` — quali
+valvole esattamente lo stanno bloccando, elencando solo quelle che non
+risultano *né* aperte *né* chiuse, perché una valvola aperta sta irrigando e
+non è un guasto. E infine quali flussometri riportano per lui, che è l'unico
+modo di confermare dall'esterno che un flussometro di linea condiviso finisce
+davvero sull'ambito dell'impianto.
 
 **I valori grezzi che ci troverai.** La card li traduce tutti nella tua
 lingua; gli Strumenti per sviluppatori e la diagnostica no, deliberatamente:
@@ -595,8 +619,18 @@ due proprietari per la stessa frase. Cosa dice ciascuno:
   configurata, perché quella era una tua scelta e nulla la sovrascrive in
   silenzio.
 - **`flow_unit_unknown`** (in `degraded`) — il flussometro c'è ma la sua
-  unità di misura non si risolve, quindi tutto lo tratta come assente invece
-  di dare per scontati i L/min.
+  unità di misura non si risolve, quindi i litri, la modalità a volume e le
+  anomalie di flusso lo trattano come assente invece di dare per scontati i
+  L/min. **La rilevazione delle perdite fa eccezione, ed è quella che conta in
+  questo capitolo:** `capabilities.leak_watch` risponde da ciò che è
+  *configurato*, senza nessuna prova di usabilità, quindi una zona così legge
+  ancora `zone` — mentre l'origine 2 da un flussometro illeggibile non può
+  concludere niente. La sua entità di perdita resta perciò `unavailable` per
+  sempre; nel frattempo la card dice *Controllo perdite non ancora concluso*,
+  e dopo un'ora di tempo a riposo `leak_never_observable` si affianca a
+  questa chiave in `degraded` e la card mostra quelle. Sistema l'unità (§1, o
+  **Meteo e sensori** nel pannello) oppure togli il flussometro: aspettare non
+  produce nessuna risposta.
 
 I motivi di esito che puoi vedere su una zona — `no_water_supply`, `leak`,
 `no_flow` — sono spiegati al §9 qui sotto.
@@ -632,6 +666,19 @@ I motivi di esito che puoi vedere su una zona — `no_water_supply`, `leak`,
   chiusa, che blocca ogni ambito con flussometro. Di per sé non è un guasto:
   un'ora di irrigazione a mano si legge allo stesso modo. Finché dura,
   qualsiasi automazione su quell'entità non sta scattando (§8).
+- **«Una valvola non segnala la sua posizione»** → quella valvola non risulta
+  né aperta né chiusa: batteria scarica, radio che ha perso il collegamento,
+  integrazione cloud in attesa, oppure un'entità cancellata da Home Assistant
+  ma rimasta in configurazione. Vale la pena intervenire anche se in
+  apparenza non c'è nulla che non va: finché dura, **la rilevazione delle
+  perdite tramite flusso è ferma per tutte le zone**, non solo per quella
+  valvola, perché quell'origine misura l'acqua mentre *ogni* valvola gestita
+  risulta chiusa. Una zona il cui ambito si era già assestato continua a
+  pubblicare il suo ultimo `off`, che è una risposta acquisita e non una
+  verifica in tempo reale. Ripristina la valvola o toglila dalla
+  configurazione: la segnalazione sparisce appena torna a segnalare la sua
+  posizione, e da lì ogni zona osserva una nuova finestra di conferma. Una
+  segnalazione per ogni valvola in quello stato, dopo un'ora.
 - **Tutto saltato come `leak`** → l'azione in caso di perdita è impostata su
   *blocca i nuovi cicli* e c'è un allarme in piedi. Rimuovi la causa: il
   blocco cade con l'allarme. La segnalazione in Riparazioni nomina la zona e

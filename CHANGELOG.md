@@ -64,33 +64,52 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
   an irrigation system should never miss, so it is pre-selected by the wizard
   and defaults to high priority — one message on the transition, then a
   reminder every `leak_repeat_min` (default **360 min**; zero turns the
-  reminders off without touching the alarm), and a standing Repairs issue for
-  as long as the condition lasts.
+  reminders off without touching the alarm), and a Repairs issue that stands
+  for as long as the condition does — **except across a restart**, which takes
+  it down with the in-memory alarm behind it; it returns only once the
+  evidence has been earned again over a fresh confirmation window. The same
+  holds for the water-supply notice.
 - **`leak_action` decides what happens next**: `notify` (message and Repairs
-  notice only), `close` (the default — additionally one re-close attempt of
-  the master and the implicated valves) or `close_and_block` (also refuses to
-  start new cycles for the zones concerned while the alarm stands). The
-  default is deliberately not the blocking one: re-closing a valve that is
-  already closed is a no-op, which is the honest position — a leak found
-  while idle cannot be stopped by this component, only reported, with the
-  closure re-asserted in case a command was lost. It recovers a valve left
-  open by a lost command and dries nothing on a false positive. The re-close
-  is skipped while a cycle is running, because a zone's own sensor can alarm
-  while a *different* zone waters and closing the master there would abort a
-  cycle nothing implicated. An unrecognised value falls back to `close` and
-  says so in Repairs instead of doing it silently.
+  notice only), `close` (the default — additionally one re-close of the master
+  and the implicated valves, but only of a valve still reporting open, so on
+  an idle system no command is sent at all) or `close_and_block` (also
+  refuses to start new cycles for the zones concerned while the alarm
+  stands). The default is deliberately not the blocking one: re-closing a
+  valve that is already closed is a no-op, which is the honest position — a
+  leak found while idle cannot be stopped by this component, only reported,
+  with the closure re-asserted in case a command was lost. It recovers a valve
+  left open by a lost command and dries nothing on a false positive. The
+  re-close is skipped while a cycle is running, because a zone's own sensor
+  can alarm while a *different* zone waters and closing the master there would
+  abort a cycle nothing implicated. An unrecognised value falls back to
+  `close` and says so in Repairs instead of doing it silently.
 - **Diagnostics now carry the leak picture.** Everything above lives in
   memory by design — the alarm is not persisted, and neither is the
   observation window — so the diagnostics download, which dumps the *stored*
   state, said nothing whatever about a subsystem whose failure mode is
   silence. Per scope it now reports the alarm with its sources, `since` and
   describing source; whether a source is configured and whether the state is
-  established; and the observation window itself: seconds earned against the
-  confirmation window, whether the scope can observe right now, whether it
-  holds evidence it cannot resolve, whether it has latched, and the stall
-  reason once there is one. Every value is read from the predicate the rest
-  of the component already uses, so a support dump cannot disagree with the
-  entity beside it.
+  established; and the observation window itself: seconds earned
+  (`observed_s`) against the figure they must reach (`window_s` — the
+  confirmation window, floored at 30 s, reported beside `confirm_s` rather
+  than replacing it), whether the scope can observe right now, whether it
+  holds evidence it cannot resolve, whether it has latched, the stall reason
+  once there is one, and `blocking_valves`: which valves are holding this
+  scope's window shut, naming only valves that report *neither* open nor
+  closed. Every value is read from the predicate the rest of the component
+  already uses, so a support dump cannot disagree with the entity beside it.
+- **A valve that cannot say where it is is now named.** Leak source 2 needs
+  *every* managed valve to report closed, and "reports closed" is strict — so
+  one flat battery, one radio dropout, one cloud integration in backoff, or
+  one valve deleted from Home Assistant but left in the configuration
+  silently switches flow-based leak detection off for **every** zone, not
+  only its own. After an hour that now raises one Repairs notice **per such
+  valve**, naming it — where a meter exists at all, since with none there was
+  no flow detection to stop. A valve that is merely open is watering and
+  raises nothing. The notice also states what a reader would otherwise get
+  wrong: a scope that had already settled goes on publishing the `off` it last
+  established throughout the freeze, which is a latched answer rather than a
+  live check. It comes down the moment the valve reports its position again.
 - **A leak in progress is described by evidence the scope still has.** The
   Repairs notice is keyed on `describing_source` — the first source to notice
   while it is still contributing, a surviving source otherwise — so removing

@@ -219,8 +219,8 @@ and the UI (zone attributes + card badges) declares it:
 | Measured consumption | Flow meter whose unit can be determined | Consumption estimated as nominal flow × minutes (needs nominal flow; otherwise not tracked) |
 | Continuous water accounting | A flow meter (zone or line) whose unit can be determined, **or** a per-zone nominal flow rate | Litres are estimated once per cycle as nominal flow × minutes and marked `estimated`; water outside cycles is not seen at all, so unattributed-water detection is unavailable for that zone. With **neither** a meter nor a nominal rate nothing is recorded at all, and `zone_water_total` says so with `source: "none"` rather than claiming a measurement |
 | Unattributed-water detection | Same | Unavailable for that zone: with no meter there is nothing to observe while the valves are closed |
-| Leak source 1 — the valve's own sensor | A `binary_sensor` with `device_class: moisture`, found on the valve's own device or picked by hand in the zone form | That source is absent; `capabilities.leak_detection` reads `unavailable` rather than leaving an alarm that looks armed. Source 2 can still cover the zone on its own — which is why a card must read `leak_watch`, not `leak_detection`, before telling anyone whether a zone is watched |
-| Leak source 2 — flow while every valve is closed | A flow meter (the zone's own, or the hub's line meter) whose unit resolves | That source is absent. A zone with neither source has no leak detection at all: `capabilities.leak_watch` says `none` and its `zone_leak` entity is `unavailable` for ever |
+| Leak source 1 — the valve's own sensor | A `binary_sensor` with `device_class: moisture`, found on the valve's own device or picked by hand in the zone form | That source is absent rather than left looking armed, and `capabilities.leak_detection` says which kind of absence: `candidate_available` where the valve's own device exposes a `moisture` sibling nobody has wired up — the card badges that as an invitation, in a hint tone — and `unavailable` only where there is no candidate either. Neither value is a verdict on the zone: source 2 can still cover it on its own, which is why a card must read `leak_watch`, not `leak_detection`, before telling anyone whether a zone is watched |
+| Leak source 2 — flow while every valve is closed | A flow meter (the zone's own, or the hub's line meter) whose unit resolves | That source is absent, and a zone with neither source has no leak detection at all. Read `leak_watch` precisely, though: it answers from **configuration**, with no usability test, so `none` means *no meter is configured for this zone's scope and no leak sensor is named* — never *the sources named here do not work*. A zone whose meter is configured but whose unit never resolves still reads `leak_watch: "zone"` while source 2 can conclude nothing from it: its `zone_leak` entity is `unavailable` for ever, the card shows *Leak check not concluded yet* meanwhile, and after an hour of idle time the zone's `degraded` list adds `leak_never_observable` beside `flow_unit_unknown` and the card defers to those. Fix the unit or clear the meter; nothing here resolves by waiting |
 | A leak alarm that names the **zone** | A source on the zone's own scope: its leak sensor, or a meter serving that zone alone | A meter shared by two or more zones (or by none) measures water no single zone can be blamed for, so its alarm is raised on the **system** scope instead — `hub_leak`, with `capabilities.leak_watch: "system"` on each zone behind it. Those zones' own `zone_leak` entities stay `unavailable` permanently, and correctly: nothing can name the zone. Do not render that as uncovered, and do not render it as an all-clear |
 | **One** alarm per leak | Per-zone meters **or** a line meter — not both | A line meter configured *alongside* per-zone meters measures the same water the zone meters already measured, so one physical leak raises `zone_leak` **and** `hub_leak`. Both statements are true and neither scope can know the other saw it; suppressing either would mean choosing which evidence to ignore, and which choice is right depends on the plumbing, not on the code. Since 3.4.0 that is also **two entities an automation can double-count** — trigger on one scope, or make the action idempotent |
 | Water-supply diagnosis, and refusing to start into a dry line | A `binary_sensor` with `device_class: problem` on the zone (`on` = **no** water) | A cycle starts into the dry line and, *if* the zone has a usable meter, is interrupted as generic `no_flow` rather than `no_water_supply`; with no meter it is not interrupted at all (row above). `require_water_supply` (default on) governs **only** the refusal — switching it off still notifies and still raises the Repairs notice, because "do not withhold water" is a different statement from "do not tell me" |
@@ -269,15 +269,30 @@ them.
   `leak_never_observable` describes. It is true, and it reads like a defect.
   Treat both keys as *"this zone could not check, and here is where to
   look"* — never as *"this zone is broken"*, and never as a leak.
+- **One valve that cannot say where it is switches flow detection off
+  everywhere.** Source 2 measures water while *every* managed valve, master
+  included, reports closed, and "reports closed" is strict: a flat battery, a
+  radio dropout, a cloud integration in backoff, or a valve deleted from Home
+  Assistant but left in the configuration all read as *neither open nor
+  closed*, and any one of them freezes the observation window for every
+  meter-backed scope at once — not only for its own zone. A valve that is
+  merely open is watering, and is not this. After the same hour, one Repairs
+  notice **per such valve** names it — raised only where a meter exists at
+  all, since with none there was no flow detection to stop. That notice is
+  the only surface that explains a whole installation going quiet, and the
+  cause is one nobody associates with leak detection. Scope by scope, the
+  diagnostics download's `observation.blocking_valves` lists the same
+  valves. A scope that had
+  already settled goes on publishing the `off` it last established for the
+  whole freeze — that answer is latched, not a live check.
 - **The hub scope has no such signal at all.** `degraded` lives on
   `zone_state`, and the hub has none. Where the same cause also stalls the
-  zones — a valve that never reports closed blocks every metered scope — the
-  zones declare it and the hub's silence is at least explained nearby. Where
-  it does not, it is explained nowhere: two zones that each have their own
-  leak sensor, behind one shared line meter, both settle on their sensors and
-  report normally while `hub_leak` sits `unavailable` for ever with no
-  surface saying why. A zone whose `leak_watch` is `system` points you at
-  precisely that scope.
+  zones — the unreported valve above — the zones declare it and the valve's
+  own notice names it outright. Where it does not, the hub's silence is
+  explained nowhere: two zones that each have their own leak sensor, behind
+  one shared line meter, both settle on their sensors and report normally
+  while `hub_leak` sits `unavailable` for ever with no surface saying why. A
+  zone whose `leak_watch` is `system` points you at precisely that scope.
 - **The state sequence after every restart is: `unavailable`, for one
   confirmation window of observation, then `off`** (or `on`, if a leak is
   confirmed in the meantime). The alarm lives in memory and is deliberately
@@ -392,7 +407,7 @@ and instead writes whatever it detects on the valve's own device),
 `discover_zone_sensors`
 (reports what is configured for a zone *and* what its valve's own device
 offers, as a suggestion only — nothing is adopted until you save it) and
-`set_valve_safety`, which holds the five leak and water-supply settings
+`set_valve_safety`, which holds the six leak and water-supply settings
 alongside the valve confirmation windows: `leak_action`,
 `leak_threshold_lpm`, `leak_confirm_s`, `leak_repeat_min`,
 `require_water_supply` and `water_supply_confirm_s`. All are documented in
