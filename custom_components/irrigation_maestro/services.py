@@ -1614,8 +1614,14 @@ async def _async_get_water_history(call: ServiceCall) -> ServiceResponse:
     requested = call.data.get(ATTR_ZONE_ID)
     if requested is not None:
         # Not validated against runtime.zones: a removed zone's litres stay on
-        # the books, so asking for one by id is a legitimate question.
-        zone_ids = list(dict.fromkeys(requested))
+        # the books, so asking for one by id is a legitimate question. The
+        # reserved key is not a zone, on either path. sum_period skips it
+        # unconditionally while daily_series does not, so a row built for it
+        # would carry a total_l of 0.0 over days holding real litres -- and
+        # summing the zones has to stay the right operation (spec §5.4).
+        zone_ids = [
+            zone_id for zone_id in dict.fromkeys(requested) if zone_id != metering.UNATTRIBUTED_KEY
+        ]
     else:
         held = metering.keys_in_range(daily, start, end) - {metering.UNATTRIBUTED_KEY}
         zone_ids = sorted(set(runtime.zones) | held)
