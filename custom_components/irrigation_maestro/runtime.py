@@ -10,7 +10,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from dataclasses import replace
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from functools import partial
 from typing import Any, Final
 
@@ -42,6 +42,7 @@ from .const import (
     LEAK_WATCH_ZONE,
     SUBENTRY_TYPE_ZONE,
 )
+from .engine import runlog
 from .engine.curves import CurveKind, curve_value
 from .engine.evaluate import evaluate_session
 from .engine.metering import HUB_SCOPE
@@ -76,7 +77,7 @@ from .session import (
     RESULT_SKIPPED,
     SessionRunner,
 )
-from .storage import RuntimeState
+from .storage import RunLogStore, RuntimeState
 from .valves import ValveController
 from .watchdog import Watchdog
 from .weather_client import WeatherClient
@@ -201,6 +202,9 @@ class IrrigationRuntime:
         self.entry = entry
         self.hub = HubConfig.from_options(dict(entry.options))
         self.state = RuntimeState(hass, entry.entry_id)
+        #: The run log lives in its own Store: see RunLogStore's docstring for
+        #: why it is not a section of the one above.
+        self.run_log = RunLogStore(hass, entry.entry_id)
         self.zones: dict[str, ZoneRuntime] = {}
         #: The name of every zone in the configuration, plus the names of those
         #: removed by the MOST RECENT rebuild and no earlier one. A notice about
@@ -285,6 +289,7 @@ class IrrigationRuntime:
 
     async def async_setup(self) -> None:
         await self.state.async_load()
+        await self.run_log.async_load()
         self._build_zones()
         # v2: the watering marker is keyed per program. Idempotent — already
         # migrated keys pass through untouched.
@@ -1032,6 +1037,22 @@ class IrrigationRuntime:
         if result == RESULT_COMPLETED and scheduled:
             self.state.set_last_completed(zone_id, cycle_id, today)
         self.state.schedule_save()
+        self.run_log.append(
+            runlog.build_entry(
+                at=now,
+                zone_id=zone_id,
+                zone_name=zone_name,
+                program_id=cycle_id,
+                program_name=self._program_name(zone_id, cycle_id),
+                result=result,
+                reason_key=reason,
+                duration_min=minutes,
+                volume_l=liters,
+                partial=partial,
+                scheduled=scheduled,
+            )
+        )
+        self.run_log.schedule_save()
 
         event_map = {
             RESULT_COMPLETED: "cycle_finished",
@@ -1063,6 +1084,25 @@ class IrrigationRuntime:
                 name="irrigation_maestro_notify_completed",
             )
         self.dispatch_update()
+
+    def _program_name(self, zone_id: str, cycle_id: str) -> str | None:
+        """The program's display name at the moment it ran, or None if it is gone.
+
+        Denormalised into the entry rather than looked up on read. A removed
+        zone keeps its runs -- the daily water history keeps its litres for the
+        same reason -- and without the stored name what survives is an
+        unreadable subentry id. It is also the more honest name: what the
+        program was called then, not what a later program with that id is
+        called now. A zone_removed cancellation records the outcome after the
+        zone is already gone, which is exactly the None case.
+        """
+        zone = self.zones.get(zone_id)
+        if zone is None:
+            return None
+        for cycle in zone.config.cycles:
+            if cycle.cycle_id == cycle_id:
+                return cycle.name
+        return None
 
     # Aggregated notifications -------------------------------------------------------
 
@@ -3444,8 +3484,21 @@ class IrrigationRuntime:
         today = dt_util.now().date()
         self.state.prune(today)
         self.state.prune_water(today)
+        self.run_log.prune(self._run_retention_cutoff(today))
+        self.run_log.schedule_save()
         self.state.schedule_save()
         self.dispatch_update()
+
+    def _run_retention_cutoff(self, today: date) -> datetime:
+        """The UTC instant the run-log retention window opens at.
+
+        The window is a local-calendar one and entries stamp UTC, so the
+        conversion happens here: engine/runlog.py keeps no timezone, exactly as
+        engine/metering.py keeps no clock. start_of_local_day rather than a
+        subtraction of hours, so a DST boundary inside the window costs nothing.
+        """
+        first_kept = today - timedelta(days=runlog.RETENTION_DAYS - 1)
+        return dt_util.as_utc(dt_util.start_of_local_day(first_kept))
 
     # Misc -----------------------------------------------------------------------------
 
@@ -3457,3 +3510,4 @@ class IrrigationRuntime:
 
     async def async_save_state(self) -> None:
         await self.state.async_save()
+        await self.run_log.async_save()
