@@ -106,6 +106,19 @@ def test_select_is_half_open_so_the_last_local_day_is_included_whole() -> None:
     assert [run["at"] for run in selected] == ["2026-08-16T06:00:00+00:00"]
 
 
+def test_the_exclusive_end_instant_is_excluded_and_the_inclusive_start_is_not() -> None:
+    """Both edges, exactly. The window is half-open, and nothing else in this
+    file places an entry ON either boundary -- so `<` reads as correct while
+    being unpinned, which is how an off-by-one survives a green suite."""
+    runs = [_entry(0, day=16), _entry(0, day=17)]  # exactly start_at, exactly end_at
+
+    selected, _ = runlog.select_runs(
+        runs, start_at=_at(0, day=16), end_at=_at(0, day=17), limit=100
+    )
+
+    assert [run["at"] for run in selected] == ["2026-08-16T00:00:00+00:00"]
+
+
 def test_select_filters_by_zone_and_by_result_together() -> None:
     runs = [
         _entry(6, zone_id="z1", result="completed"),

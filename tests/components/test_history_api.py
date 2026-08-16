@@ -188,6 +188,23 @@ async def test_a_range_inside_retention_declares_no_truncation(
     assert response["truncated_by_retention"] is False
 
 
+async def test_a_range_starting_exactly_at_the_retention_floor_is_not_truncated(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    """Asking for precisely everything the component holds has truncated
+    nothing, and must not say it has. One day earlier must."""
+    freezer.move_to(START)
+    await _hub(hass)
+    floor = dt_util.now().date() - timedelta(days=metering.RETENTION_DAYS - 1)
+
+    at_floor = await _water(hass, start_date=floor.isoformat())
+    below_floor = await _water(hass, start_date=(floor - timedelta(days=1)).isoformat())
+
+    assert at_floor["truncated_by_retention"] is False
+    assert at_floor["start"] == floor.isoformat()
+    assert below_floor["truncated_by_retention"] is True
+
+
 async def test_include_unattributed_false_omits_the_key_entirely(
     hass: HomeAssistant, freezer: FrozenDateTimeFactory
 ) -> None:
@@ -430,6 +447,24 @@ async def test_a_run_range_older_than_retention_is_clamped_and_declares_it(
 
     assert response["truncated_by_retention"] is True
     assert response["start"] == (today - timedelta(days=runlog.RETENTION_DAYS - 1)).isoformat()
+
+
+async def test_a_run_range_starting_exactly_at_the_retention_floor_is_not_truncated(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    """Same reasoning as the get_water_history version above, and its own test
+    because the two services own separate comparisons against separate
+    RETENTION_DAYS constants that happen to share a value."""
+    freezer.move_to(START)
+    await _hub(hass)
+    floor = dt_util.now().date() - timedelta(days=runlog.RETENTION_DAYS - 1)
+
+    at_floor = await _runs(hass, start_date=floor.isoformat())
+    below_floor = await _runs(hass, start_date=(floor - timedelta(days=1)).isoformat())
+
+    assert at_floor["truncated_by_retention"] is False
+    assert at_floor["start"] == floor.isoformat()
+    assert below_floor["truncated_by_retention"] is True
 
 
 async def test_a_run_recorded_before_the_local_offset_is_filed_on_its_local_day(
