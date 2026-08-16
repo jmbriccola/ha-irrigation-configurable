@@ -4,6 +4,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import pytest
+from custom_components.irrigation_maestro import services
 from custom_components.irrigation_maestro.const import DOMAIN
 from custom_components.irrigation_maestro.engine import metering, runlog
 from freezegun.api import FrozenDateTimeFactory
@@ -145,6 +146,53 @@ async def test_est_and_gap_s_reach_the_response(
     assert point["gap_s"] == 90.0
 
 
+async def test_total_l_is_summed_from_the_same_days_it_labels(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    """total_l must equal the sum of the returned days, not an independently
+    rounded figure: a card draws the bars and prints the total beside them,
+    and the two must never disagree about what they add up to."""
+    freezer.move_to(START)
+    entry = await _hub(hass)
+    runtime = hass.config_entries.async_entries(DOMAIN)[0].runtime_data
+    zone_id = _zone_ids(entry)[0]
+    today = dt_util.now().date()
+    # Five sub-millilitre days: each rounds to 0.0 individually, while their
+    # raw sum (0.002) would round to a nonzero figure -- exactly the split
+    # that a "sum-then-round" computation of total_l would expose.
+    for offset in range(5):
+        runtime.state.add_water(
+            zone_id, 0.0004, day=today - timedelta(days=offset), estimated=False
+        )
+
+    response = await _water(hass, zone_id=zone_id)
+
+    zone = response["zones"][0]
+    assert zone["total_l"] == round(sum(day["l"] for day in zone["days"]), 3)
+
+
+async def test_oldest_recorded_is_not_the_retention_floor(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    """oldest_available is the retention floor (today - 729); oldest_recorded
+    is the oldest day the history actually holds data for. Collapsing the two
+    would let a card draw confident zeros for the stretch before this
+    installation existed."""
+    freezer.move_to(START)
+    entry = await _hub(hass)
+    runtime = hass.config_entries.async_entries(DOMAIN)[0].runtime_data
+    zone_id = _zone_ids(entry)[0]
+    today = dt_util.now().date()
+    runtime.state.add_water(zone_id, 5.0, day=today, estimated=False)
+
+    response = await _water(hass)
+
+    floor = today - timedelta(days=metering.RETENTION_DAYS - 1)
+    assert response["oldest_available"] == floor.isoformat()
+    assert response["oldest_recorded"] == today.isoformat()
+    assert response["oldest_recorded"] != response["oldest_available"]
+
+
 async def test_a_blind_day_and_a_quiet_day_are_different_records(
     hass: HomeAssistant, freezer: FrozenDateTimeFactory
 ) -> None:
@@ -259,12 +307,13 @@ async def test_a_backwards_range_is_refused_rather_than_silently_swapped(
     await _hub(hass)
     today = dt_util.now().date()
 
-    with pytest.raises(ServiceValidationError):
+    with pytest.raises(ServiceValidationError) as err:
         await _water(
             hass,
             start_date=today.isoformat(),
             end_date=(today - timedelta(days=5)).isoformat(),
         )
+    assert err.value.translation_key == "invalid_history_range"
 
 
 async def test_an_installation_with_no_zones_answers_rather_than_raising(
@@ -278,6 +327,7 @@ async def test_an_installation_with_no_zones_answers_rather_than_raising(
 
     assert response["zones"] == []
     assert response["unattributed"]["total_l"] == 0.0
+    assert response["oldest_recorded"] is None
 
 
 # ---------------------------------------------------------------------------
@@ -484,6 +534,23 @@ async def test_a_run_recorded_before_the_local_offset_is_filed_on_its_local_day(
     assert day_before["count"] == 0
 
 
+async def test_the_run_prune_cutoff_and_the_water_retention_floor_agree(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    """Both derive RETENTION_DAYS - 1 days before today, independently. If
+    either drifted, the prune would drop a day the service still advertises
+    in oldest_available, and truncated_by_retention would go false all-clear
+    -- the one direction this design forbids."""
+    freezer.move_to(START)
+    entry = await _hub(hass)
+    runtime = entry.runtime_data
+    today = dt_util.now().date()
+
+    cutoff = dt_util.as_local(runtime._run_retention_cutoff(today)).date()
+    floor = services._retention_floor(runlog.RETENTION_DAYS)
+    assert cutoff == floor
+
+
 async def test_a_backwards_range_is_refused_here_too(
     hass: HomeAssistant, freezer: FrozenDateTimeFactory
 ) -> None:
@@ -491,9 +558,10 @@ async def test_a_backwards_range_is_refused_here_too(
     await _hub(hass)
     today = dt_util.now().date()
 
-    with pytest.raises(ServiceValidationError):
+    with pytest.raises(ServiceValidationError) as err:
         await _runs(
             hass,
             start_date=today.isoformat(),
             end_date=(today - timedelta(days=5)).isoformat(),
         )
+    assert err.value.translation_key == "invalid_history_range"

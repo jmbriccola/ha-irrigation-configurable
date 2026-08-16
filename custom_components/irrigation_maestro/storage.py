@@ -503,6 +503,12 @@ class RunLogStore:
         return runlog.oldest_at(self.entries)
 
     def append(self, entry: runlog.RunEntry) -> None:
+        """Add one entry, dropping from the head if the cap is now exceeded.
+
+        The only caller is ``IrrigationRuntime.record_run_outcome`` -- two
+        writers would be two histories that can disagree, and that is the
+        one thing the single-writer rule exists to prevent.
+        """
         runs, dropped = runlog.append_run(self.entries, entry)
         self._data["runs"] = runs
         self._data["cap_dropped"] = self.cap_dropped + dropped
