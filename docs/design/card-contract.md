@@ -576,6 +576,8 @@ healthy (`"configured"`, nothing in `degraded`).
 | `copy_curve` | `source_zone_id`, `source_program_id`, `zone_id`, `program_id` — copies only the curve's shape onto an already-existing destination program |
 | `remove_program` | `zone_id`, `program_id` |
 | `rename_program` | `zone_id`, `program_id`, `name` |
+| `get_water_history` | `start_date`, `end_date` (dates, optional), `zone_id` (string or list, optional), `include_unattributed` (bool, default true); supports response ONLY |
+| `get_run_history` | `start_date`, `end_date` (dates, optional), `zone_id` (string or list, optional), `result` (one or more of `completed`/`skipped`/`interrupted`/`cancelled`, optional), `limit` (1–5000, default 500); supports response ONLY |
 
 `zone_id` is always the subentry id (the `zone_id` attribute above).
 `program_id` is the same value as the `cycle_id` in the `cycles` attribute —
@@ -698,6 +700,112 @@ automations, YAML-driven setups, or bulk changes:
   Phase A shipped the service layer only; Phase B is the panel UI that calls
   these six services — see "The sidebar panel" below for the ＋/✎ zone
   editor and the ⚙️ settings view that consume them.
+
+### History services
+
+Both `supports_response: ONLY` — neither writes anything, both exist purely
+so a card can draw a chart from data the component already holds. They share
+one range resolver (`_history_range`) and one retention floor
+(`_retention_floor`), so "the last 30 days" and "how far back this
+installation still remembers" mean the same thing on both.
+
+`get_water_history` — the per-zone daily water series, dense, with
+unattributed water beside it:
+
+```json
+{
+  "start": "2026-07-18",
+  "end": "2026-08-16",
+  "retention_days": 730,
+  "oldest_available": "2024-08-17",
+  "truncated_by_retention": false,
+  "unit": "L",
+  "zones": [
+    {
+      "zone_id": "1b2f3c4d5e6f",
+      "zone_name": "Vasi",
+      "total_l": 12.345,
+      "days": [
+        {"date": "2026-07-18", "l": 0.0, "gap_s": 0.0, "est": false}
+      ]
+    }
+  ],
+  "unattributed": {
+    "total_l": 5.0,
+    "closed_l": 5.0,
+    "days": [
+      {"date": "2026-07-18", "l": 0.0, "gap_s": 0.0, "closed_l": 0.0}
+    ]
+  }
+}
+```
+
+`zones[].days[]` runs one record per day across `[start, end]` inclusive, in
+calendar order; `unattributed.days[]` is the same shape with `closed_l`
+instead of `est` (see statement 2 below). `unattributed` is present only when
+`include_unattributed` is true (the default) — omitted, not an empty object,
+when the caller asked it off. `zones` is sorted by the same order used
+elsewhere in this contract: configured zones by `order` then name, zones no
+longer configured last, by id.
+
+`get_run_history` — every outcome recorded in the range, skips and their
+reasons included:
+
+```json
+{
+  "start": "2026-07-18",
+  "end": "2026-08-16",
+  "retention_days": 730,
+  "oldest_kept": "2024-08-18T06:00:00+00:00",
+  "truncated_by_retention": false,
+  "truncated_by_cap": false,
+  "truncated_by_limit": false,
+  "count": 1,
+  "runs": [
+    {
+      "at": "2026-08-16T05:00:00+00:00",
+      "zone_id": "1b2f3c4d5e6f",
+      "zone_name": "Vasi",
+      "program_id": "p1",
+      "program_name": "Mattino",
+      "result": "completed",
+      "reason_key": null,
+      "duration_min": 12,
+      "volume_l": 40.0,
+      "partial": false,
+      "scheduled": true
+    }
+  ]
+}
+```
+
+`runs[]` is chronological, oldest first — the order a chart's x-axis wants,
+and the same order the log itself is kept in. `oldest_kept` is the `at` of
+the log's oldest surviving entry, an ISO instant, or `null` for a log that
+has recorded nothing yet. A skip, an interruption or a cancellation carries
+`reason_key`; `duration_min` and `volume_l` are `null` on any run that never
+measured them, a completed run included when no meter was usable.
+
+Five statements a card author must not have to infer:
+
+1. Both windows default to the last 30 inclusive local days, both clamp a
+   future `end_date` to today, both refuse a backwards range with
+   `invalid_history_range`, and both anchor the retention floor to **today**
+   rather than to `end_date`.
+2. The water series is **dense**: one point per day, zeros included. `l: 0,
+   gap_s: 0` is a fully observed dry day; `l: 0, gap_s > 0` is a day the
+   meter could not be read and **must not be drawn as a dry day**; a date
+   outside `[oldest_available, end]` is unknown.
+3. `unattributed` is a sibling of `zones` and is **never** part of their
+   sum. `closed_l` on its days is the subset measured with every managed
+   valve shut — the only figure leak detection reads.
+4. A zone that is no longer configured is returned with `zone_name: null`
+   and sorts last. Its water and its runs stay on the books; nothing is
+   deleted when a zone is removed.
+5. `truncated_by_retention` means the caller asked for more than the
+   component ever keeps; `truncated_by_cap` means this installation
+   produces more runs than the log holds at once. They are different
+   sentences and a card should not merge them.
 
 ## Events
 

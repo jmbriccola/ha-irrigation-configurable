@@ -89,6 +89,11 @@ lasciato esito.
   per scelta: i nuovi sensori partono da zero e il vecchio contatore mensile
   vale una volta sola come saldo di apertura del periodo. Dettagli in
   [istruzioni.md](istruzioni.md) §7.
+- **Storico dei consumi** e **storico delle esecuzioni** — due servizi di
+  sola lettura (`get_water_history`, `get_run_history`), richiamabili da
+  Strumenti per sviluppatori → Azioni, per i litri giornalieri per zona e
+  ogni esito registrato coi suoi motivi. Dettagli in
+  [istruzioni.md](istruzioni.md) §9.
 
 ## Perdite e mancanza d'acqua
 
