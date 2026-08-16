@@ -559,6 +559,77 @@ details harvested from it (kept as engine behaviour):
   irrigation line — produces `leak_never_observable` legitimately, so the
   wording is "could not check", never "is broken". The hub scope has no such
   signal at all, because `degraded` lives on `zone_state`.
+- **The run log lives in a Store of its own, and the shutdown path has to be
+  told (3.5.0).** `RuntimeState.schedule_save()` rewrites its whole dict on
+  every litre-bearing meter sample, phase transition, zone toggle and rain
+  reading; the run log reaches ~2 MB at its cap. Appending it there would
+  multiply write amplification on an SD card for a series that changes a
+  handful of times a day, so it gets `irrigation_maestro.runs.<entry_id>` and
+  its own `STORAGE_VERSION_RUNS` — two schemas that must version
+  independently. The trap is one level down: `async_save_state` flushes both,
+  but `async_shutdown` called `state.async_save()` directly, and a
+  config-entry reload (a HACS update, a disable/enable) goes through
+  `async_shutdown`. An outcome recorded inside the 10 s debounce was lost from
+  the run log while surviving in `outcome_log` — two persisted records of one
+  event disagreeing across a restart, which is the failure the single-writer
+  rule exists to prevent, arriving through the persistence path instead of the
+  write path. **Whenever a second store is added, check every path that saves
+  the first.**
+- **One writer, and the log's names are denormalised at write time (3.5.0).**
+  `record_run_outcome` was already the funnel for every recorded outcome —
+  completions, plan-time skips, session overruns, interruptions,
+  cancellations — so the run log gets exactly one append, there. Two writers
+  would be two histories that can disagree. `zone_name` and `program_name` are
+  copied into the entry rather than looked up on read, for the reason
+  `drop_zone` leaves a removed zone's litres alone: the runs happened, and
+  without the stored name what survives is an unreadable subentry id. The
+  stored name is also the more honest one — what the zone was called when it
+  ran. **The two services therefore differ and must not be described
+  together**: `get_water_history` returns `zone_name: null` for a removed
+  zone, `get_run_history` never does, because `build_entry` requires a name.
+  Both the changelog and the card contract stated this wrongly at first.
+- **The daily water series is dense, and `oldest_recorded` is what makes it
+  honest (3.5.0).** One point per day including the zeros, so a card can tell
+  `l: 0, gap_s: 0` (observed, dry) from `l: 0, gap_s > 0` (the meter could not
+  be read) — the second being exactly the false reading `gap_s` exists to
+  prevent. A sparse response would push that reconstruction into every
+  consumer and one would get it wrong. But `oldest_available` is the
+  *retention floor* by design, never the oldest day holding data, so a
+  young installation asking for 730 days got hundreds of days of confident
+  zeros for a period the component did not exist — the same false reading
+  relocated to the pre-installation boundary. `oldest_recorded` (`min(daily)`)
+  answers it; `get_run_history` already had `oldest_kept`.
+- **`total_l` is summed from the series it labels (3.5.0).** It used to come
+  from `sum_period` while the days came from `daily_series`, which round
+  differently: a card printed a total beside bars that did not add up to it,
+  diverging 0.32 L over 730 days × 40 zones. Worse, `sum_period` is
+  O(days × keys) *per zone*, so calling it once per zone was quadratic in zone
+  count — 33.5 ms of a 91 ms handler at 40 zones, on the event loop. The total
+  now equals the sum of the bars by construction. Do not reintroduce a second,
+  independent computation of a figure the response already contains.
+- **The two truncation flags mean different things and are never merged
+  (3.5.0).** `truncated_by_retention` is a pure date comparison.
+  `truncated_by_cap` needs the persisted, monotonic `cap_dropped`, because a
+  fresh install and a log the cap ate eighteen months of have the *same shape*
+  — both have an oldest entry newer than the caller's start. Persisting that
+  counter is what stops the flag going quietly false on every reboot. Its
+  residual is a false *warning*, never a false all-clear.
+- **`outcome_log` keeps four calendar days, not three (3.5.0, correction).**
+  `day >= today - timedelta(days=3)` retains today, −1, −2 and −3. Four
+  surfaces said "three days". The sentences were corrected and the prune left
+  alone: `outcome_log` is the sentinel's input, and narrowing its window is a
+  behaviour change nobody asked for.
+- **There is no mutation-testing harness in this repo, and a branch should
+  still run a small declared matrix (3.5.0).** The 3.4.0 practice was done by
+  hand; nothing was ever committed. Six mutations over this branch's own
+  decision points found two boundaries that were correct by inspection and
+  pinned by nothing. Two entries in the matrix are declared
+  expected-to-survive: the control (`MAX_RUNS` 8000 → 8001, unreachable by any
+  test) and one **equivalent mutant** — `append_run`'s `<=` → `<`, which at
+  `len(appended) == max_runs` falls through to `dropped = 0` and returns
+  `appended[0:], 0`, byte-identical behaviour, verified exhaustively over
+  cap 1..6 × length 0..6. Declaring an equivalent mutant is what stops the
+  next person writing a test for an unreachable state.
 
 ## Progress log
 
