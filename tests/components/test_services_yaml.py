@@ -37,6 +37,7 @@ def _schema_fields(schema: vol.Schema) -> set[str]:
         ("set_session_limits", services._SET_SESSION_LIMITS_SCHEMA),
         ("set_valve_safety", services._SET_VALVE_SAFETY_SCHEMA),
         ("set_concurrency", services._SET_CONCURRENCY_SCHEMA),
+        ("get_water_history", services._GET_WATER_HISTORY_SCHEMA),
     ],
 )
 def test_the_hub_settings_services_declare_exactly_what_they_accept(

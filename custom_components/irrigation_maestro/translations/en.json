@@ -834,6 +834,28 @@
           "description": "The zone to inspect."
         }
       }
+    },
+    "get_water_history": {
+      "name": "Water history",
+      "description": "Returns the daily litres each zone used over a date range, one point per day including the days with none, plus the water no zone claimed. Days on which the meter could not be read are marked with the seconds that went unobserved, so a gap in measurement does not look like a quiet day.",
+      "fields": {
+        "start_date": {
+          "name": "From",
+          "description": "First day of the range, included. Defaults to 29 days before the end date. Earlier than the 730 days kept is clamped, and the response says so."
+        },
+        "end_date": {
+          "name": "To",
+          "description": "Last day of the range, included. Defaults to today, and a future date is clamped to today."
+        },
+        "zone_id": {
+          "name": "Zones",
+          "description": "One or more zones. Left empty, every zone is returned, including zones that were removed but still hold water in the history."
+        },
+        "include_unattributed": {
+          "name": "Include unattributed water",
+          "description": "Water a meter measured that no zone claimed. It is returned beside the zones and is never part of their total: it is not consumption."
+        }
+      }
     }
   },
   "issues": {
@@ -1022,6 +1044,9 @@
     },
     "invalid_notify_service": {
       "message": "\"{service}\" is not a valid notify service name. Use the service name, for example mobile_app_phone."
+    },
+    "invalid_history_range": {
+      "message": "The start date ({start}) is after the end date ({end})."
     }
   },
   "selector": {
