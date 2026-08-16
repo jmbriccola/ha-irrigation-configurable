@@ -513,6 +513,13 @@ al default servono una decina di campioni — e un flussometro che smette di
 segnalare mette in pausa quel conteggio invece di azzerarlo. Una zona senza
 flussometro non può provare questa origine: non c'è niente con cui osservare.
 
+Già che sei lì a guardare il flussometro, **annota quanto segna con tutte le
+valvole chiuse e nessuna perdita in corso.** È il numero che la soglia di
+perdita da 0,5 L/min sta tirando a indovinare, e questo è l'unico momento in
+cui misurarlo costa poco: una linea che sta a uno zero vero permette di
+abbassare la soglia, una che gocciola mentre si svuota chiede il default o
+qualcosa di più. Per l'hardware vero questo dato non ce l'ha ancora nessuno.
+
 **Origine 3 — la mancanza d'acqua.** Metti a `on` il sensore di mancanza
 d'acqua della zona, ricordando che `on` significa che l'acqua **non c'è**.
 Questa non è una perdita, e le entità di perdita giustamente non si muovono.
@@ -557,6 +564,43 @@ si è assestato — e quali flussometri riportano per lui, che è l'unico modo d
 confermare dall'esterno che un flussometro di linea condiviso finisce davvero
 sull'ambito dell'impianto.
 
+**I valori grezzi che ci troverai.** La card li traduce tutti nella tua
+lingua; gli Strumenti per sviluppatori e la diagnostica no, deliberatamente:
+quelle parole appartengono alla card, e tenerle in due posti vorrebbe dire
+due proprietari per la stessa frase. Cosa dice ciascuno:
+
+- **`valve_sensor`** (in `sources`, `describing_source`, `first_source`) — il
+  sensore della valvola stessa segnala una perdita. Sull'hardware di
+  riferimento è un allarme derivato dal *flussometro interno* della valvola,
+  cioè «sta passando acqua mentre io sono chiusa»; su una vera sonda a terra
+  significa che la sonda è bagnata. Non significa che si è vista acqua per
+  terra.
+- **`no_flow_closed`** (stessi posti) — è stata misurata acqua mentre ogni
+  valvola gestita, master compresa, risultava chiusa.
+- **`zone` / `system` / `none`** (in `capabilities.leak_watch`) — *dove*
+  l'acqua di questa zona è sorvegliata per le perdite: sul suo ambito, su
+  quello dell'impianto (un flussometro condiviso con altre zone, quindi
+  nessuna zona è nominabile), o da nessuna parte. Indica un luogo, mai un
+  verdetto: `system` non vuol dire «non sorvegliata», e una perdita lì fa
+  scattare `hub_leak`.
+- **`leak_never_observable`** (in `degraded`) — per un'ora di tempo a riposo
+  niente qui è stato in condizione di concludere alcunché: un sensore che non
+  ha mai parlato, un flussometro che non misura, o una valvola che non
+  risulta mai chiusa. **Di per sé non è un guasto**: un'ora di irrigazione a
+  mano da una linea dell'impianto si legge esattamente allo stesso modo.
+- **`leak_evidence_unresolved`** (in `degraded`) — stessa ora, ma qualcosa
+  *sta* segnalando una perdita e niente riesce a finire di giudicarla.
+- **`leak_sensor_missing` / `water_supply_sensor_missing`** (in `degraded`) —
+  il sensore che avevi scelto non esiste più. La zona continua a dirsi
+  configurata, perché quella era una tua scelta e nulla la sovrascrive in
+  silenzio.
+- **`flow_unit_unknown`** (in `degraded`) — il flussometro c'è ma la sua
+  unità di misura non si risolve, quindi tutto lo tratta come assente invece
+  di dare per scontati i L/min.
+
+I motivi di esito che puoi vedere su una zona — `no_water_supply`, `leak`,
+`no_flow` — sono spiegati al §9 qui sotto.
+
 ## 9. Risoluzione dei problemi
 
 - **Un ciclo non è partito e nessuno ti ha avvisato** → la sentinella
@@ -595,6 +639,13 @@ sull'ambito dell'impianto.
 - **Una perdita, due allarmi** → hai un flussometro di linea *e* flussometri
   per zona, quindi la stessa acqua è misurata due volte ed entrambi gli
   ambiti la segnalano. È previsto: vedi la matrice di degradazione nel README.
+- **`no_flow`** → il ciclo è partito ma il flussometro non ha misurato
+  praticamente nulla per tutta la finestra di tolleranza, quindi è stato
+  interrotto. Controlla il rubinetto, il filtro e la linea. Se quella zona ha
+  un sensore di mancanza d'acqua e l'acqua manca davvero, l'esito indica
+  invece `no_water_supply`: vince la diagnosi più precisa. Una zona **senza**
+  flussometro non ha nessun controllo del genere e va avanti a secco per
+  tutta la sua durata (§8).
 - **`no_water_supply`** → il sensore di mancanza d'acqua della zona segnala
   che l'acqua non c'è e la mancanza è durata la finestra di conferma.
   Controlla il rubinetto, la pressione di rete e ogni intercettazione a
