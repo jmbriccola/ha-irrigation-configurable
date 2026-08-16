@@ -279,8 +279,11 @@ export function capabilityBadges(zone: ZoneBundle): CapabilityBadge[] {
  *   seconds since.
  * - `unresolved` — no entity, and the zone says why in `degraded`. Render
  *   the zone's own explanation; do not add a vaguer one on top.
- * - `establishing` — no entity, a leak sensor IS configured, and no stall is
- *   declared: the scope is serving its confirmation window.
+ * - `establishing` — no entity, the zone has a source on its OWN scope
+ *   (`leak_watch: "zone"`, which a meter satisfies just as a leak sensor
+ *   does), and no stall is declared: the scope is serving its confirmation
+ *   window. Gating this on the sensor instead is the mistake the long comment
+ *   on `leakStatus` below exists to prevent.
  * - `unknown` — no entity and nothing that could tell us either way.
  */
 export type LeakCoverage = "alarm" | "quiet" | "unresolved" | "establishing" | "unknown";

@@ -190,8 +190,8 @@ hub settings, all in one place.
    master valve pre-open/post-close delays, and — at the foot of the same
    drawer, saved with the same button — the **leak and water-supply
    settings**: what to do on a confirmed leak, the leak threshold in L/min,
-   the leak confirmation window, the reminder interval, whether a cycle may
-   start without water and how long an outage must last first; see §7).
+   the leak confirmation window, the reminder interval, **Refuse to start
+   without water** and how long an outage must last first; see §7).
 
 Expert parameters — the weather engine's weights and thresholds (§3 above)
 — aren't in the panel; they stay in the hub's **Configure** menu (the
@@ -233,9 +233,17 @@ it show "leaks watched at system level, not for this zone", which says where
 they are watched, not whether they are.
 
 **What you get when one is confirmed**: a high-priority notification (the
-`leak` event is pre-selected in the wizard, §6), a Repairs notice that stays
-for as long as the condition does, a reminder every 6 hours by default, and
-one of the new **leak entities** turning `on`.
+`leak` event is pre-selected in the wizard, §6), a Repairs notice, a reminder
+every 6 hours by default, and one of the new **leak entities** turning `on`.
+
+The Repairs notice stays for as long as the condition does — with one
+exception worth knowing, because nothing on screen will tell you: **a restart
+of Home Assistant takes it down.** The alarm lives in memory and is
+deliberately not persisted (see the entity bullets below), so the notice goes
+with it and comes back only once the evidence has been gathered again over a
+fresh confirmation window. The same is true of the water-supply notice. A
+notice that is gone the morning after a reboot has not been resolved; it has
+been forgotten, and is being re-established.
 
 **The leak entities** are `binary_sensor`s with `device_class: problem` — one
 per zone plus one for the system — and they are what an automation should
@@ -319,9 +327,12 @@ not knowable. The outcome reads `no_water_supply` rather than a generic
 `no_flow`, and so does a cycle that had already started and found nothing
 flowing.
 
-Switching **"start without water"** back on turns off the refusal and nothing
-else: the notification and the Repairs notice still arrive. Choosing to water
-anyway is not the same as choosing not to be told.
+Switching **"Refuse to start without water"** off turns off the refusal and
+nothing else: the notification and the Repairs notice still arrive. Choosing
+to water anyway is not the same as choosing not to be told. (That checkbox is
+the panel's name for it; the `set_valve_safety` service calls the same setting
+**Require the water supply**, and the stored key is `require_water_supply`.
+All three are on when the refusal is on.)
 
 Two honest limits worth knowing before you rely on any of this:
 
@@ -346,11 +357,13 @@ that is quiet looks exactly like a misconfigured one that is quiet. Test it
 deliberately, once, on a day nothing is wrong.
 
 **A false trip is free.** The default action re-closes the master and the
-implicated valve, and on an idle system both are already shut — closing a
-closed valve does nothing at all, and since 3.4.0 it does not even register
-in the command ledger. Nothing is watered, nothing is stopped, no valve
-moves. Only `close_and_block` has a cost worth thinking about, and only
-because it refuses new cycles until you clear the alarm.
+implicated valve *only where one of them is still reporting open* — and on an
+idle system both are already shut, so no command is sent at all: nothing
+reaches the valves and nothing reaches the command ledger. Nothing is
+watered, nothing is stopped, no valve moves. (While a cycle is running the
+re-close is skipped outright, so that a leak on one zone cannot abort
+another zone's watering.) Only `close_and_block` has a cost worth thinking
+about, and only because it refuses new cycles until you clear the alarm.
 
 **Shorten the wait first.** ⚙️ Impostazioni → *Advanced: valves and
 concurrency* → **leak confirmation window**, set to 60 seconds, Save. The
@@ -409,8 +422,9 @@ and the leak entities correctly do not move.
    The interesting outcome is the **refused start** — call `run_zone` on that
    zone, or press play on its card row, and the run is skipped with the
    outcome `no_water_supply`. Manual runs are deliberately not exempt: asking
-   by hand does not conjure water into the pipe. (With *start without water*
-   switched off, the notice still arrives and only the refusal is gone.)
+   by hand does not conjure water into the pipe. (With *Refuse to start
+   without water* switched **off**, the notice still arrives and only the
+   refusal is gone — so leave it on for this test.)
 
 **Clearing, and what it looks like.** Set the leak sensor back to `off` and
 the source withdraws immediately; drop the flow back to zero, or close the
@@ -420,17 +434,27 @@ standing. When the last source withdraws you get a "cleared" notification,
 the Repairs issue disappears, the entity returns to `off` and the badge
 clears. Under `close_and_block` the message also tells you whether cycles
 are actually allowed again — they are not, if another scope still holds an
-alarm of its own.
+alarm of its own. Deleting the zone while its alarm stands clears it the same
+way, and you get the same "cleared" notification, naming the zone as it was
+last configured: an alarm whose subject no longer exists would otherwise
+never be withdrawn, and any automation waiting on the all-clear would wait
+for ever.
 
 **And to see what the component actually thinks**, download diagnostics
 (integration page → three-dot menu → **Download diagnostics**) and read the
 `leaks` section. It is the only window into any of this, because none of it
 is written to disk: per scope it reports whether a source is configured,
 whether a state has been established, how many observable seconds have been
-earned against the confirmation window, whether the scope can observe right
-now, whether it is holding evidence it cannot resolve, whether it has
-latched — and which meters report for it, which is the only way to confirm
-from outside that a shared line meter really is routed to the system scope.
+earned (`observation.observed_s`) against the window they must reach
+(`observation.window_s` — the confirmation window, but never less than 30 s,
+which is why it is reported beside `confirm_s` rather than instead of it),
+whether the scope can observe right now, whether it is holding evidence it
+cannot resolve, whether it has latched, and — in
+`observation.blocking_valves` — exactly which valves are stopping it, naming
+only valves that report *neither* open nor closed, since an open valve is
+watering rather than faulty. Plus which meters report for the scope, which is
+the only way to confirm from outside that a shared line meter really is routed
+to the system scope.
 
 **The raw values you will meet there.** The card translates all of these into
 your language; Developer Tools and the diagnostics download deliberately do
@@ -460,8 +484,16 @@ mean two owners for one sentence. What each one says:
   the sensor you chose no longer exists. The zone still says it is configured,
   because that was your choice and nothing overwrites it silently.
 - **`flow_unit_unknown`** (in `degraded`) — the meter is there but its unit
-  will not resolve, so everything treats it as absent rather than guessing
-  L/min.
+  will not resolve, so litres, volume mode and the flow anomalies all treat it
+  as absent rather than guessing L/min. **Leak detection is the exception, and
+  it is the one that matters in this chapter:** `capabilities.leak_watch` is
+  answered from what is *configured*, with no usability test, so such a zone
+  still reads `zone` — while source 2 can conclude nothing from a meter it
+  cannot read. Its leak entity therefore stays `unavailable` for ever; the
+  card shows *Leak check not concluded yet* meanwhile, and after an hour of
+  idle time `leak_never_observable` joins this key in `degraded` and the card
+  shows those instead. Fix the unit (§1, or the panel's **Weather &
+  sensors**) or clear the meter — waiting produces no answer.
 
 Outcome reasons you may see on a zone — `no_water_supply`, `leak`, `no_flow`
 — are explained in §8 below.
@@ -493,6 +525,17 @@ Outcome reasons you may see on a zone — `no_water_supply`, `leak`, `no_flow`
   reports closed, which blocks every metered scope. It is not a fault by
   itself: an hour of hand-watering from an irrigation line looks identical.
   Any automation on that entity is not firing while this lasts (§7).
+- **"A valve is not reporting its position"** → that valve reads neither open
+  nor closed — a flat battery, a radio that dropped out, a cloud integration
+  in backoff, or an entity deleted from Home Assistant but left in the
+  configuration. It is worth reacting to even though nothing looks wrong:
+  while it lasts, **leak detection by flow is off for every zone**, not just
+  that valve's own, because that source works by measuring water while *every*
+  managed valve reports closed. A zone whose scope had already settled keeps
+  publishing its last `off`, which is a latched answer and not a live check.
+  Restore the valve or remove it from the configuration; the notice goes as
+  soon as it reports again, and each zone then serves a fresh confirmation
+  window. One notice per such valve, raised after an hour.
 - **Everything skipped as `leak`** → the leak action is set to *close and
   block* and an alarm is standing. Clear the cause; the block lifts with the
   alarm. The Repairs notice names the zone and the evidence.

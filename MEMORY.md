@@ -300,6 +300,20 @@ details harvested from it (kept as engine behaviour):
   d'acqua" in the Repairs notice — three names for one field, across the two
   surfaces that edit it. Swept in the release commit. A new user-visible noun
   needs its Italian fixed once, in both files, at the moment it is coined.
+  **Third recurrence, same release, and the rule now covers CONTROLS as well
+  as nouns (3.4.0).** The whole-branch review found both guides referring to
+  a checkbox called "start without water" / "parti anche senza acqua" —
+  a control that exists on no surface and is the logical INVERSE of the one
+  that does (the panel's "Refuse to start without water" / "Non partire senza
+  acqua", the service's "Require the water supply" / "Richiedi la presenza
+  d'acqua"). English §7 then stated its polarity backwards inside the very
+  paragraph predicting what a test would show, because an inverted name
+  invites an inverted sentence. **Quote a control by the words on it, never by
+  a paraphrase, and least of all by its negation** — the paraphrase costs the
+  reader a hunt for a switch to turn on when they must turn one off, and it
+  hides polarity errors from every reviewer who reads for sense rather than
+  for the UI. Where the same setting has three legitimate names (panel label,
+  service field, stored key) the guide names all three once, together.
 - **Water becomes litres in one place (3.3.0).** One `MeterLedger` per meter
   integrates continuously, whether or not anything is watering; `FlowMonitor`
   holds a baseline and reads the ledger's deltas — it does not integrate.
@@ -409,6 +423,21 @@ details harvested from it (kept as engine behaviour):
   promise it unconditionally, because silence retracts it; the Repairs
   description is worded for that. Do not "fix" the asymmetry by making them
   match.
+- **No Repairs notice of ours survives a restart, and every one of them used
+  to say otherwise (3.4.0).** Home Assistant reloads a non-persistent issue
+  with `active=False` and no translation key
+  (`IssueRegistry._async_load`), so it is not shown; nothing at setup
+  re-creates one, and re-raising costs a full confirmation window because the
+  condition behind it has to be established again. Both leak notices, the
+  system-flow notice and the water-supply notice each promised permanence —
+  "this notice stays until…", with "the notification is read and forgotten,
+  this is not" as the whole rhetorical point — while every surface documented
+  the memory-only restart behaviour meticulously *for the entity* and no
+  surface said it of the notice. The rule that generalises: **whenever a
+  restart is documented as erasing some state, check every text that promises
+  durability built on that state**, not just the text about the state itself.
+  Persisting the issues is not the fix — a restored notice can be as stale as
+  a restored alarm — so the texts say so instead.
 - **`require_water_supply: false` still notifies and still raises the repair
   (3.4.0).** The setting is named for the gate and governs the gate; "do not
   withhold water" is a different statement from "do not tell me". A user who
@@ -472,13 +501,22 @@ details harvested from it (kept as engine behaviour):
 - **`leak_watch` answers coverage; `leak_detection` answers the sensor
   (3.4.0).** They diverge on ordinary hardware and the divergence is the
   reason the second exists: three metered zones with no leak sensors have
-  full source-2 coverage while `leak_detection` reads `unavailable` on all
-  three, so a card built on it says "no leak sensor" — true, and it produces
-  the belief that nothing is watching. `leak_watch` returns
-  `leak_sources_configured` itself, the same predicate the entity's
-  availability is gated on, so the attribute and the entity cannot disagree.
-  Its `system` value states a *place*, not a verdict. Do not merge the two
-  keys and do not re-derive either in the frontend.
+  full source-2 coverage while `leak_detection` reads `unavailable` — or
+  `candidate_available`, where the valve's own device exposes an unwired
+  `moisture` sibling, which is the common case on the reference hardware — on
+  all three, so a card built on it says "no leak sensor" or offers to wire one
+  up. Both are true, and both produce the belief that nothing is watching.
+  `leak_watch` returns `leak_sources_configured` itself, the same predicate
+  the entity's availability is gated on, so the attribute and the entity
+  cannot disagree. Its `system` value states a *place*, not a verdict.
+  **`leak_watch` is CONFIGURATION, with no usability test**, so `zone` is not
+  a promise that the source works: a meter whose unit never resolves reads
+  `zone` while source 2 can conclude nothing from it, leaving the entity
+  `unavailable` for ever — behind a card that says "Leak check not concluded
+  yet" until the hour is up, then hands over to `flow_unit_unknown` +
+  `leak_never_observable` in `degraded` (verified by probe, 3.4.0). Do not
+  make the matrix say such a zone reads `none`. Do not merge the two keys and
+  do not re-derive either in the frontend.
 - **"Configured and missing" is a `degraded` key, not a fourth capability
   value (3.4.0).** `capabilities` records the user's intent, so a sensor that
   has vanished still reads `configured` — downgrading it would make the panel

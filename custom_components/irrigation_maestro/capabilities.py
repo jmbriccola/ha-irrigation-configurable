@@ -9,9 +9,11 @@ entities for the device_class it needs -- "moisture" for a leak report,
 Detection proposes; storage decides. Nothing here is applied implicitly: what
 acts at runtime is only what is written in the zone's configuration, because a
 silently adopted sensor is a coupling between two devices that nobody
-authorised. The intended wiring is add_zone writing what this finds and the
-panel pre-filling from it -- that does not exist yet; today only the
-discover_zone_sensors service and this module's own tests call it.
+authorised. Both halves of that wiring exist now: ``add_zone`` calls
+``discover_sibling_sensors`` and writes what it finds into the new zone, which
+is a decision the user is making at that moment; for a zone that already
+exists nothing is adopted, and the panel reads ``discover_zone_sensors`` to
+PRE-FILL the form, so the write still happens only when they save.
 
 A capability that is neither configured nor available is declared absent, which
 is the point: an alarm that will never fire must say so rather than sit there
