@@ -384,6 +384,13 @@ default — and a meter that stops reporting pauses that count rather than
 resetting it. A zone with no meter at all cannot test this source; there is
 nothing to observe with.
 
+While you are looking at the meter, **write down what it reads with every
+valve shut and nothing leaking.** That number is what the 0.5 L/min leak
+threshold is guessing at, and this is the only moment it is cheap to
+measure: a line that sits at a true zero can have the threshold lowered, and
+one that trickles while it drains needs the default or more. Nobody has this
+figure for real hardware yet.
+
 **Source 3 — the water supply.** Set the zone's water-supply sensor to `on`,
 remembering that `on` means the water is **gone**. This one is not a leak
 and the leak entities correctly do not move.
@@ -425,6 +432,40 @@ now, whether it is holding evidence it cannot resolve, whether it has
 latched — and which meters report for it, which is the only way to confirm
 from outside that a shared line meter really is routed to the system scope.
 
+**The raw values you will meet there.** The card translates all of these into
+your language; Developer Tools and the diagnostics download deliberately do
+not, because the words belong to the card and having them in two places would
+mean two owners for one sentence. What each one says:
+
+- **`valve_sensor`** (in `sources`, `describing_source`, `first_source`) —
+  the valve's own sensor reports a leak. On the reference hardware that is an
+  alarm derived from the valve's *internal flow meter*, meaning "water is
+  passing while I am shut"; on a genuine ground probe it means the probe is
+  wet. It does not mean water has been seen on the ground.
+- **`no_flow_closed`** (same places) — water was measured while every managed
+  valve, master included, reported closed.
+- **`zone` / `system` / `none`** (in `capabilities.leak_watch`) — *where*
+  this zone's water is watched for leaks: on its own scope, on the system
+  scope (a meter shared with other zones, so no zone can be named), or
+  nowhere. It states a place, never a verdict: `system` is not "unwatched",
+  and a leak there does raise `hub_leak`.
+- **`leak_never_observable`** (in `degraded`) — for an hour of idle time,
+  nothing here has been in a position to conclude anything: a sensor that has
+  never reported, a meter that is not measuring, or a valve that never
+  reports closed. **Not a fault by itself** — an hour of hand-watering from
+  an irrigation line reads exactly the same.
+- **`leak_evidence_unresolved`** (in `degraded`) — same hour, but something
+  *is* reporting a leak and nothing can finish judging it.
+- **`leak_sensor_missing` / `water_supply_sensor_missing`** (in `degraded`) —
+  the sensor you chose no longer exists. The zone still says it is configured,
+  because that was your choice and nothing overwrites it silently.
+- **`flow_unit_unknown`** (in `degraded`) — the meter is there but its unit
+  will not resolve, so everything treats it as absent rather than guessing
+  L/min.
+
+Outcome reasons you may see on a zone — `no_water_supply`, `leak`, `no_flow`
+— are explained in §8 below.
+
 ## 8. Troubleshooting
 
 - **A cycle didn't run and nobody told you** → the daily sentinel (default
@@ -458,6 +499,12 @@ from outside that a shared line meter really is routed to the system scope.
 - **One leak, two alarms** → you have a line meter *and* per-zone meters, so
   the same water is measured twice and both scopes report it. Expected; see
   the README's degradation matrix.
+- **`no_flow`** → the cycle started but the meter measured essentially nothing
+  over the grace window, so it was interrupted. Check the tap, the filter and
+  the line. If that zone has a water-supply sensor and the water is genuinely
+  gone, the outcome names `no_water_supply` instead — the more specific
+  diagnosis wins. A zone with **no** meter has no such guard at all and runs
+  its full length dry (§7).
 - **`no_water_supply`** → the zone's water-supply sensor reports no water and
   the outage has lasted the confirmation window. Check the tap, the mains
   pressure and any upstream shut-off. Remember the polarity: `on` on that
