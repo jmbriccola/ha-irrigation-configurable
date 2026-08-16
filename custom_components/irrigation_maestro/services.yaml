@@ -803,3 +803,23 @@ set_program_advanced:
       example: 45
       selector:
         number: { min: 1, max: 1440, step: 1, unit_of_measurement: min, mode: box }
+
+get_water_history:
+  fields:
+    start_date:
+      example: "2026-07-18"
+      selector:
+        date:
+    end_date:
+      example: "2026-08-16"
+      selector:
+        date:
+    zone_id:
+      example: 1b2f3c4d5e6f
+      selector:
+        text:
+          multiple: true
+    include_unattributed:
+      default: true
+      selector:
+        boolean:

@@ -834,6 +834,28 @@
           "description": "La zona da analizzare."
         }
       }
+    },
+    "get_water_history": {
+      "name": "Storico dei consumi",
+      "description": "Restituisce i litri giornalieri di ogni zona in un intervallo di date, un punto per giorno compresi quelli senza consumo, più l'acqua non attribuita. I giorni in cui il flussometro non era leggibile portano i secondi non osservati, così un buco di misura non somiglia a un giorno tranquillo.",
+      "fields": {
+        "start_date": {
+          "name": "Dal",
+          "description": "Primo giorno dell'intervallo, incluso. Se omesso, 29 giorni prima della data finale. Una data più vecchia dei 730 giorni conservati viene riportata al limite, e la risposta lo dichiara."
+        },
+        "end_date": {
+          "name": "Al",
+          "description": "Ultimo giorno dell'intervallo, incluso. Se omesso è oggi, e una data futura viene riportata a oggi."
+        },
+        "zone_id": {
+          "name": "Zone",
+          "description": "Una o più zone. Lasciato vuoto restituisce ogni zona, comprese quelle rimosse che conservano acqua nello storico."
+        },
+        "include_unattributed": {
+          "name": "Includi l'acqua non attribuita",
+          "description": "Acqua misurata dal flussometro che nessuna zona ha reclamato. Viene restituita accanto alle zone e non fa mai parte del loro totale: non è consumo."
+        }
+      }
     }
   },
   "issues": {
@@ -1022,6 +1044,9 @@
     },
     "invalid_notify_service": {
       "message": "\"{service}\" non è un nome valido di servizio notify. Usa il nome del servizio, ad esempio mobile_app_phone."
+    },
+    "invalid_history_range": {
+      "message": "La data iniziale ({start}) è successiva alla data finale ({end})."
     }
   },
   "selector": {

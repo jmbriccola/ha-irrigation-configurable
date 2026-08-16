@@ -11,6 +11,7 @@ import json
 import re
 from collections.abc import Callable
 from copy import deepcopy
+from datetime import date, timedelta
 from types import MappingProxyType
 from typing import Any, Final, cast
 from uuid import uuid4
@@ -31,6 +32,7 @@ from homeassistant.util import dt as dt_util
 from . import const
 from .capabilities import discover_sibling_sensors, resolve_zone_capabilities
 from .const import DOMAIN, SUBENTRY_TYPE_ZONE
+from .engine import metering
 from .engine.calendar import ProgramCalendar
 from .engine.curves import CurveError, CurveKind, interpolate, validate_points
 from .flow import SUPPORTED_FLOW_UNITS
@@ -80,6 +82,7 @@ SERVICE_SET_PROGRAM_ADVANCED: Final = "set_program_advanced"
 SERVICE_TEST_NOTIFICATION: Final = "test_notification"
 SERVICE_NOTIFICATION_STATUS: Final = "notification_status"
 SERVICE_DISCOVER_ZONE_SENSORS: Final = "discover_zone_sensors"
+SERVICE_GET_WATER_HISTORY: Final = "get_water_history"
 
 ATTR_ZONE_ID: Final = "zone_id"
 ATTR_CYCLE_ID: Final = "cycle_id"
@@ -163,6 +166,15 @@ ATTR_MESSAGE: Final = "message"
 ATTR_SOAK_MAX_RUN_MIN: Final = "soak_max_run_min"
 ATTR_SOAK_PAUSE_MIN: Final = "soak_pause_min"
 ATTR_VOLUME_SAFETY_TIMEOUT_MIN: Final = "volume_safety_timeout_min"
+
+ATTR_START_DATE: Final = "start_date"
+ATTR_END_DATE: Final = "end_date"
+ATTR_INCLUDE_UNATTRIBUTED: Final = "include_unattributed"
+
+#: Both history services default to this many inclusive days ending today. One
+#: number on purpose: two services disagreeing about what "the last 30 days"
+#: means would put two charts on one screen that do not line up.
+_HISTORY_WINDOW_DAYS: Final = 30
 
 # Validated against the converter itself: an override it cannot handle would
 # be stored and then silently ignored at read time, which is the class of
@@ -330,6 +342,15 @@ _UPDATE_ZONE_SCHEMA = vol.Schema(
 )
 _REMOVE_ZONE_SCHEMA = vol.Schema({vol.Required(ATTR_ZONE_ID): cv.string})
 _DISCOVER_ZONE_SENSORS_SCHEMA = vol.Schema({vol.Required(ATTR_ZONE_ID): cv.string})
+
+_GET_WATER_HISTORY_SCHEMA = vol.Schema(
+    {
+        vol.Optional(ATTR_START_DATE): cv.date,
+        vol.Optional(ATTR_END_DATE): cv.date,
+        vol.Optional(ATTR_ZONE_ID): vol.All(cv.ensure_list, [cv.string]),
+        vol.Optional(ATTR_INCLUDE_UNATTRIBUTED): cv.boolean,
+    }
+)
 
 _SET_WEATHER_SOURCES_SCHEMA = vol.Schema(
     {
@@ -575,6 +596,39 @@ def _optional_zone(call: ServiceCall, runtime: IrrigationRuntime) -> str | None:
 
 def _invalid_payload() -> ServiceValidationError:
     return ServiceValidationError(translation_domain=DOMAIN, translation_key="invalid_payload")
+
+
+def _history_range(call: ServiceCall) -> tuple[date, date]:
+    """The inclusive local-day window both history services resolve.
+
+    One implementation on purpose -- see _HISTORY_WINDOW_DAYS. A future
+    end_date is clamped to today: neither history can hold tomorrow, and
+    answering a future range with zeroes would assert observation of a day that
+    has not happened. A backwards range is refused rather than swapped: a
+    caller with its arguments the wrong way round has a bug, and quietly fixing
+    it hides the bug.
+    """
+    today = dt_util.now().date()
+    end: date = min(call.data.get(ATTR_END_DATE, today), today)
+    start: date = call.data.get(ATTR_START_DATE, end - timedelta(days=_HISTORY_WINDOW_DAYS - 1))
+    if start > end:
+        raise ServiceValidationError(
+            translation_domain=DOMAIN,
+            translation_key="invalid_history_range",
+            translation_placeholders={"start": start.isoformat(), "end": end.isoformat()},
+        )
+    return start, end
+
+
+def _retention_floor(keep_days: int) -> date:
+    """The oldest local day a series can still hold.
+
+    Anchored to today, never to the caller's end_date: the prune runs against
+    today, so what the component holds is a window anchored there. A request
+    for a range that ended six months ago is still limited by what survived
+    until now.
+    """
+    return dt_util.now().date() - timedelta(days=keep_days - 1)
 
 
 # Handlers ------------------------------------------------------------------------
@@ -1548,6 +1602,68 @@ async def _async_import_config(call: ServiceCall) -> None:
         async_report_migration_notes(hass, migration_notes)
 
 
+async def _async_get_water_history(call: ServiceCall) -> ServiceResponse:
+    """The per-zone daily water series, dense, with unattributed water beside it."""
+    runtime = _runtime(call.hass)
+    start, end = _history_range(call)
+    floor = _retention_floor(metering.RETENTION_DAYS)
+    truncated = start < floor
+    start = max(start, floor)
+
+    daily = runtime.state.daily_water()
+    requested = call.data.get(ATTR_ZONE_ID)
+    if requested is not None:
+        # Not validated against runtime.zones: a removed zone's litres stay on
+        # the books, so asking for one by id is a legitimate question.
+        zone_ids = list(dict.fromkeys(requested))
+    else:
+        held = metering.keys_in_range(daily, start, end) - {metering.UNATTRIBUTED_KEY}
+        zone_ids = sorted(set(runtime.zones) | held)
+
+    zones = [
+        {
+            "zone_id": zone_id,
+            "zone_name": (runtime.zones[zone_id].config.name if zone_id in runtime.zones else None),
+            "total_l": round(metering.sum_period(daily, start, end, key=zone_id), 3),
+            "days": metering.daily_series(daily, zone_id, start, end),
+        }
+        for zone_id in zone_ids
+    ]
+    zones.sort(key=lambda row: _zone_history_sort_key(runtime, str(row["zone_id"])))
+
+    response: dict[str, Any] = {
+        "start": start.isoformat(),
+        "end": end.isoformat(),
+        "retention_days": metering.RETENTION_DAYS,
+        "oldest_available": floor.isoformat(),
+        "truncated_by_retention": truncated,
+        "unit": "L",
+        "zones": zones,
+    }
+    if call.data.get(ATTR_INCLUDE_UNATTRIBUTED, True):
+        days = metering.daily_series(daily, metering.UNATTRIBUTED_KEY, start, end)
+        response["unattributed"] = {
+            "total_l": round(sum(float(day["l"]) for day in days), 3),
+            "closed_l": round(sum(float(day["closed_l"]) for day in days), 3),
+            "days": days,
+        }
+    return cast(ServiceResponse, response)
+
+
+def _zone_history_sort_key(runtime: IrrigationRuntime, zone_id: str) -> tuple[int, int, str]:
+    """Configured zones by order then name, then everything else by id.
+
+    The same sort the session queue uses, so a card listing zones in one place
+    and charting them in another gets one order. A zone that is no longer
+    configured has no order and sorts last rather than at an arbitrary
+    position.
+    """
+    zone = runtime.zones.get(zone_id)
+    if zone is None:
+        return (1, 0, zone_id)
+    return (0, zone.config.order, zone.config.name)
+
+
 # Registration ---------------------------------------------------------------------
 
 
@@ -1610,6 +1726,13 @@ def async_setup_services(hass: HomeAssistant) -> None:
         SERVICE_DISCOVER_ZONE_SENSORS,
         _async_discover_zone_sensors,
         _DISCOVER_ZONE_SENSORS_SCHEMA,
+        supports_response=SupportsResponse.ONLY,
+    )
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_GET_WATER_HISTORY,
+        _async_get_water_history,
+        _GET_WATER_HISTORY_SCHEMA,
         supports_response=SupportsResponse.ONLY,
     )
     hass.services.async_register(
