@@ -14,7 +14,7 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
   `get_run_history` returns every recorded outcome — completed runs and,
   just as importantly, the ones that were skipped, interrupted or
   cancelled, each with its `reason_key`. Nothing held that either before
-  this branch: `outcome_log` is pruned to three days of bare result
+  this branch: `outcome_log` is pruned to four days of bare result
   strings, with no reason and no duration. A cycle that never starts
   leaves no trace anywhere else, and until now neither did a card asking
   one.
@@ -47,9 +47,9 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
   a user already lived through.
 - **The run log starts empty at this upgrade, on purpose.** The sentinel's
   `outcome_log` — the only outcome record that existed before this branch —
-  keeps three days of bare result strings, with no `reason_key` and no
+  keeps four days of bare result strings, with no `reason_key` and no
   duration, existing purely to answer "did this cycle leave a trace".
-  Inventing plausible `reason_key`s for those three days to seed the new
+  Inventing plausible `reason_key`s for those four days to seed the new
   log would be exactly the plausible-but-false number this architecture
   exists to remove, so `get_run_history` answers truthfully with nothing
   before the upgrade instant instead of a guess dressed as history.

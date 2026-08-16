@@ -39,7 +39,7 @@ all. This is a wrapper, not new plumbing.
 non-events are the ones that get away" is the requirement; nothing in the store
 can answer it. `outcome_log` (`storage.py:226`) keeps
 `day -> "zone:program" -> result` — a bare result string, with no `reason_key`,
-no duration, no litres — and is **pruned to three days** (`storage.py:143`),
+no duration, no litres — and is **pruned to four days** (`storage.py:143`),
 because it is sentinel evidence, not a history. `last_outcome` keeps only the
 most recent outcome per zone. So the component today can say *that* something
 was skipped this morning, for about 72 hours, and can never say *why*.
@@ -381,7 +381,7 @@ is not among the four frozen files.
 - `zones` is ordered by the zone's configured `order`, then by name — the same
   sort the session queue uses, so a card listing zones in one place and
   charting them in another gets one order. Zones no longer configured (§5.5)
-  have no `order` and sort last, by name.
+  have no `order` and sort last, by id.
 - There is no cap flag here. The water history has one limit, retention, and
   the daily model is bounded by construction: one record per day per key, no
   matter how many runs produced it.
@@ -450,7 +450,7 @@ something nobody reads at a glance.
 | `engine/metering.py` | `daily_series` — dense per-day projection over a range |
 | `storage.py` | **new** `RunLogStore` class: own `Store`, `async_load`, `async_save`, `schedule_save`, `append`, `prune`, `entries`, `cap_dropped`, `oldest_kept` |
 | `const.py` | `STORAGE_VERSION_RUNS` only. `RETENTION_DAYS` and `MAX_RUNS` live in `engine/runlog.py`, where `engine/metering.py` already keeps its own `RETENTION_DAYS` — the retention of a series belongs beside the arithmetic that enforces it |
-| `runtime.py` | construct + load `RunLogStore`; one append in `record_run_outcome`; prune in `_midnight`; save in `async_save_state`; remove the file with the entry |
+| `runtime.py` | construct + load `RunLogStore`; one append in `record_run_outcome`; prune in `_midnight`; save in `async_save_state`; the file is **not** removed with the entry (§1) |
 | `services.py` | `SERVICE_GET_WATER_HISTORY`, `SERVICE_GET_RUN_HISTORY`, their schemas, their handlers, **and their registration** — two distinct places |
 | `services.yaml` | both services declared with fields and selectors |
 | `translations/en.json`, `it.json` | `services.get_water_history`, `services.get_run_history` — names, descriptions, every field — plus `exceptions.invalid_history_range` |
@@ -493,7 +493,7 @@ passes without a rebuild.
 
 **No seeding, no backfill.** The run log starts empty at 3.5.0 and fills from
 the first outcome after upgrade. There is nothing to backfill from:
-`outcome_log` holds three days of bare result strings, and inventing
+`outcome_log` holds four days of bare result strings, and inventing
 `reason_key`s for them would be exactly the plausible-but-false number this
 architecture exists to remove. The water series needs no backfill — it has been
 accumulating since 3.3.0.
