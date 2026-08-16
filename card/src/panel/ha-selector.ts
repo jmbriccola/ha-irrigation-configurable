@@ -3,7 +3,17 @@ import { property } from "lit/decorators.js";
 import type { HomeAssistant } from "../types";
 import { defineElement } from "../types";
 
-export type EntitySelectorConfig = { entity: { domain?: string | string[] } };
+/**
+ * `device_class` sits beside `domain` at the top level of the entity filter.
+ * That is Home Assistant's legacy filter shape — feature-frozen rather than
+ * deprecated, still carried by `_LegacyEntityFilterSelectorConfig` in HA's
+ * own `helpers/selector.py`, and the form this integration's `services.yaml`
+ * already uses for every entity field it declares. Same shape here, so the
+ * panel and the services agree about what a leak sensor looks like.
+ */
+export type EntitySelectorConfig = {
+  entity: { domain?: string | string[]; device_class?: string | string[] };
+};
 
 /** True iff HA's native <ha-selector> is registered in this document. */
 export function useNativeSelector(): boolean {

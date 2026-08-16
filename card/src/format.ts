@@ -1,6 +1,7 @@
+import type { LeakStatus } from "./discovery";
 import type { CycleTrigger } from "./types";
 import { asNumber, asString, clamp } from "./types";
-import { localize } from "./localize/localize";
+import { localize, localizeDynamic } from "./localize/localize";
 
 /* ------------------------------------------------------------------ */
 /* Intl helpers (formatters cached per language)                       */
@@ -89,6 +90,44 @@ export function formatNumber(
   const n = asNumber(value);
   if (n === undefined) return undefined;
   return n.toFixed(digits).replace(/\.0+$/, (m) => (digits > 0 ? "" : m));
+}
+
+/* ------------------------------------------------------------------ */
+/* Leak alarm                                                          */
+/* ------------------------------------------------------------------ */
+
+/**
+ * A standing leak alarm in one line: what it is, which evidence it stands
+ * on, and when it was confirmed. `headline` is the caller's own name for the
+ * scope — a zone row says "Leak", the card header says "System leak".
+ *
+ * Two things this must never do, and both are the reason it exists once
+ * rather than once per surface:
+ *
+ * - **`since` is when the alarm was CONFIRMED**, not when the water started
+ *   escaping. Nothing measures the latter — a source withdrawing and
+ *   returning yields a fresh `since` — so the label says "confirmed" and the
+ *   sentence is built around that word.
+ * - **`sources` and `describing_source` are unlocalised contract keys**, the
+ *   way `reason_key` is. They are translated here, never printed raw.
+ *
+ * `describing_source` comes first because it is what the Repairs notice is
+ * keyed on: the two are read in the same breath, and an attribute naming the
+ * meter while the notice names the valve sensor leaves the user guessing
+ * which one to go and look at.
+ */
+export function describeLeakAlarm(
+  lang: string,
+  headline: string,
+  leak: LeakStatus,
+  nowMs: number,
+): string {
+  const parts = [headline];
+  const source = leak.describingSource ?? leak.sources[0];
+  if (source) parts.push(localizeDynamic(lang, "leak_source", source));
+  const when = formatRelative(leak.confirmedAt, lang, nowMs);
+  if (when) parts.push(localize(lang, "zone.leak_confirmed_at", { when }));
+  return parts.join(" · ");
 }
 
 /* ------------------------------------------------------------------ */

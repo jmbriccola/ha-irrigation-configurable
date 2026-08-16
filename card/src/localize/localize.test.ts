@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { en } from "./en";
 import { it as itDict } from "./it";
-import { REASON_KEYS } from "../types";
+import { DEGRADED_KEYS, LEAK_SOURCE_KEYS, REASON_KEYS } from "../types";
 
 /**
  * `en.ts` is the reference dictionary; the TypeScript type on `it.ts`
@@ -46,5 +46,52 @@ describe("every reason key the card can render has a label", () => {
   it.each(RENDERED)("localizes reason.%s in both locales", (key) => {
     expect(en[`reason.${key}` as keyof typeof en]).toBeTruthy();
     expect(itDict[`reason.${key}` as keyof typeof en]).toBeTruthy();
+  });
+});
+
+/**
+ * `degraded` reaches the row as raw keys and is rendered through
+ * `localizeDynamic`, which falls back to the raw key rather than hiding it —
+ * so a missing label ships as `leak_never_observable` on a user's screen,
+ * visibly and silently at once. Same failure mode as the reason keys above,
+ * same guard.
+ */
+describe("every degraded key the row can render has a label", () => {
+  it.each(DEGRADED_KEYS)("localizes degraded.%s in both locales", (key) => {
+    expect(en[`degraded.${key}` as keyof typeof en]).toBeTruthy();
+    expect(itDict[`degraded.${key}` as keyof typeof en]).toBeTruthy();
+  });
+});
+
+/**
+ * `sources` and `describing_source` arrive as unlocalised contract keys, the
+ * way `reason_key` does. A raw `no_flow_closed` on screen is the same defect
+ * `reason.leak` was before it had a label.
+ */
+describe("every leak source key has a label", () => {
+  it.each(LEAK_SOURCE_KEYS)("localizes leak_source.%s in both locales", (key) => {
+    expect(en[`leak_source.${key}` as keyof typeof en]).toBeTruthy();
+    expect(itDict[`leak_source.${key}` as keyof typeof en]).toBeTruthy();
+  });
+
+  it("words them as observations rather than as conclusions", () => {
+    // `valve_sensor` covers BOTH readings of a `moisture` device class: the
+    // SWV firmware's "water passed while I was closed" and a genuine ground
+    // probe. "Water detected on the ground" is false on the reference
+    // hardware, so the label names the reporter, not the puddle.
+    expect(en["leak_source.valve_sensor"]).toMatch(/sensor/i);
+    expect(itDict["leak_source.valve_sensor"]).toMatch(/sensore/i);
+  });
+});
+
+/**
+ * The alarm's `since` is when the leak was CONFIRMED — the evidence
+ * completing, not the water starting. A label reading "leaking since 05:30"
+ * would put a time on screen that nothing measured.
+ */
+describe("the leak alarm's timestamp says what it is", () => {
+  it("is worded as a confirmation in both locales", () => {
+    expect(en["zone.leak_confirmed_at"]).toMatch(/confirmed/i);
+    expect(itDict["zone.leak_confirmed_at"]).toMatch(/confermat/i);
   });
 });

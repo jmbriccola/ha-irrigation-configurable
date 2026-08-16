@@ -2,9 +2,12 @@ import { css, html, LitElement, nothing } from "lit";
 import type { TemplateResult } from "lit";
 import { property, state } from "lit/decorators.js";
 import {
+  capabilityBadges,
+  leakStatus,
   waterSummary,
   zoneAdjustmentPct,
   zoneHasFlowMeter,
+  type LeakStatus,
   type ZoneBundle,
 } from "./discovery";
 import type { CycleInfo, WaterSummary, ZoneAction, ZoneState } from "./types";
@@ -17,6 +20,7 @@ import {
 } from "./types";
 import {
   computeRunProgress,
+  describeLeakAlarm,
   describeTrigger,
   formatDate,
   formatDateTime,
@@ -24,6 +28,7 @@ import {
   formatRelative,
 } from "./format";
 import { localize, localizeDynamic } from "./localize/localize";
+import type { TranslationKey } from "./localize/localize";
 import "./curve-sparkline";
 import "./curve-editor";
 import type { CurveSavePayload } from "./curve-editor";
@@ -39,6 +44,22 @@ const STATE_ICONS: Record<ZoneState, string> = {
 };
 
 const PAUSE_HOURS = [1, 4, 8, 24] as const;
+
+/**
+ * What each capability badge says and what it looks like
+ * (`capabilityBadges` in discovery.ts decides which of them appear).
+ *
+ * `water_estimated` reuses the row's existing label rather than owning a
+ * second copy of the same word — it is the same fact said by a different
+ * attribute, and the render below draws it once whichever attribute said it.
+ */
+const CAPABILITY_BADGES: Record<string, { label: TranslationKey; icon: string }> = {
+  water_estimated: { label: "zone.water_estimated", icon: "mdi:approximately-equal" },
+  leak_unavailable: { label: "zone.leak_unavailable", icon: "mdi:water-alert-outline" },
+  leak_candidate: { label: "zone.leak_candidate", icon: "mdi:water-plus-outline" },
+  supply_unavailable: { label: "zone.supply_unavailable", icon: "mdi:water-pump-off" },
+  supply_candidate: { label: "zone.supply_candidate", icon: "mdi:water-pump" },
+};
 
 function isZoneState(value: string): value is ZoneState {
   return value in STATE_ICONS;
@@ -131,6 +152,26 @@ export class ImcZoneRow extends LitElement {
       border: 1px solid var(--warning-color, #ffa600);
       color: var(--warning-color, #ffa600);
     }
+    /* A declared absence is not a fault: it states what this zone cannot do,
+       in the same weight as the rest of the row's secondary text. */
+    .badge.muted {
+      border-color: var(--divider-color, rgba(127, 127, 127, 0.35));
+      color: var(--secondary-text-color, #727272);
+    }
+    /* An invitation -- "your hardware could do this" -- reads as a link
+       would, never as a warning. */
+    .badge.hint {
+      border-color: var(--primary-color, #03a9f4);
+      color: var(--primary-color, #03a9f4);
+    }
+    /* A confirmed leak is the one thing in this row that is filled rather
+       than outlined. */
+    .badge.alarm {
+      border-color: transparent;
+      background: var(--error-color, #db4437);
+      color: var(--text-primary-color, #fff);
+      font-weight: 600;
+    }
     .state-chip {
       flex: none;
       font-size: 11px;
@@ -169,6 +210,10 @@ export class ImcZoneRow extends LitElement {
     }
     .meta .abs {
       opacity: 0.8;
+    }
+    .meta .leak-line {
+      color: var(--error-color, #db4437);
+      font-weight: 500;
     }
     .progress-line {
       display: flex;
@@ -355,12 +400,37 @@ export class ImcZoneRow extends LitElement {
   /* Render fragments                                              */
   /* ------------------------------------------------------------ */
 
-  private _renderBadges(water: WaterSummary | null): unknown {
+  private _renderBadges(water: WaterSummary | null, leak: LeakStatus): unknown {
     const zone = this.zone;
     if (!zone) return nothing;
     const attrs = zone.state?.attributes ?? {};
 
     const badges: TemplateResult[] = [];
+
+    // First, and in the alarm colour: a confirmed leak outranks everything
+    // else this row has to say. `establishing` is its opposite in weight —
+    // the scope is still serving its confirmation window, which is a fact
+    // about the CARD's knowledge, not about the water.
+    if (leak.coverage === "alarm") {
+      const label = localize(this.language, "zone.leak_alarm");
+      badges.push(html`
+        <span class="badge alarm" title=${this._leakTitle(leak)}>
+          <ha-icon icon="mdi:water-alert" style="--mdc-icon-size:12px"></ha-icon>
+          ${label}
+        </span>
+      `);
+    } else if (leak.coverage === "establishing") {
+      // Never "no leak": nothing has been established yet. `unresolved` is
+      // deliberately absent here — the zone's own `degraded` key below says
+      // the same thing and says which of the two causes it is.
+      const label = localize(this.language, "zone.leak_checking");
+      badges.push(html`
+        <span class="badge muted" title=${label}>
+          <ha-icon icon="mdi:progress-question" style="--mdc-icon-size:12px"></ha-icon>
+          ${this.compact ? nothing : label}
+        </span>
+      `);
+    }
 
     const suspendedUntil =
       asString(attrs["suspended_until"]) ??
@@ -387,24 +457,54 @@ export class ImcZoneRow extends LitElement {
       `);
     }
 
+    // What this zone plainly cannot do, and what it could do if asked. Muted
+    // for a declared absence, accented for an invitation -- deliberately not
+    // from the `mdi:alert`/degraded family above: neither is a fault, and an
+    // estimated zone in particular is an intentional, healthy state the user
+    // chose (its sensor still carries device_class: water on purpose).
+    const capabilities = capabilityBadges(zone);
+    for (const badge of capabilities) {
+      const spec = CAPABILITY_BADGES[badge.key];
+      if (!spec) continue;
+      const label = localize(this.language, spec.label);
+      badges.push(html`
+        <span class="badge ${badge.tone}" title=${label}>
+          <ha-icon icon=${spec.icon} style="--mdc-icon-size:12px"></ha-icon>
+          ${this.compact ? nothing : label}
+        </span>
+      `);
+    }
+
     // Redundant marking for a zone whose water is (partly) a nominal-flow
     // estimate rather than a meter reading -- see waterSummary()'s doc and
     // docs/design/card-contract.md's "Water accounting sensors" section.
-    // Deliberately not from the `mdi:alert`/degraded family: an estimated
-    // zone is an intentional, healthy state the user chose (the sensor
-    // still carries device_class: water on purpose), not a problem -- and
-    // leak detection (next PR) needs a real alert glyph in this same row
-    // that this badge must not be confused with.
-    if (water?.estimated) {
+    // Skipped when the capability badge above already said it: the two
+    // attributes describe different moments (what the litres on the books
+    // are made of, versus what is being recorded right now) and legitimately
+    // differ, but when they agree this is one fact, and one fact gets one
+    // chip.
+    if (water?.estimated && !capabilities.some((badge) => badge.key === "water_estimated")) {
       const label = localize(this.language, "zone.water_estimated");
       badges.push(html`
-        <span class="badge" title=${label}>
+        <span class="badge muted" title=${label}>
           <ha-icon icon="mdi:approximately-equal" style="--mdc-icon-size:12px"></ha-icon>
           ${this.compact ? nothing : label}
         </span>
       `);
     }
     return badges;
+  }
+
+  /** This zone's standing alarm, described once for the badge's tooltip and
+   *  the meta line below it (see `describeLeakAlarm` for the two things that
+   *  sentence is not allowed to say). */
+  private _leakTitle(leak: LeakStatus): string {
+    return describeLeakAlarm(
+      this.language,
+      localize(this.language, "zone.leak_alarm"),
+      leak,
+      this.now,
+    );
   }
 
   private _renderProgress(): unknown {
@@ -435,11 +535,18 @@ export class ImcZoneRow extends LitElement {
     `;
   }
 
-  private _renderMeta(water: WaterSummary | null): unknown {
+  private _renderMeta(water: WaterSummary | null, leak: LeakStatus): unknown {
     const zone = this.zone;
     if (!zone) return nothing;
     const lang = this.language;
     const lines: TemplateResult[] = [];
+
+    // The alarm gets a line of its own, above everything else: the badge is
+    // a glyph and a word, and this is where a person actually reads what
+    // happened. Hidden behind a hover it would not be read at all.
+    if (leak.coverage === "alarm") {
+      lines.push(html`<span class="leak-line">${this._leakTitle(leak)}</span>`);
+    }
 
     // Next scheduled run: relative + absolute (+ cycle name).
     const nextRun = zone.nextRun;
@@ -692,6 +799,7 @@ export class ImcZoneRow extends LitElement {
     // fragment calling the pure helper again -- cheap either way, but this
     // avoids the two call sites drifting out of sync later.
     const water = waterSummary(zone);
+    const leak = leakStatus(zone);
 
     return html`
       <div class="zone ${stateClass}">
@@ -707,7 +815,7 @@ export class ImcZoneRow extends LitElement {
           <div class="main">
             <div class="name-line">
               <span class="name">${zone.name}</span>
-              ${this._renderBadges(water)}
+              ${this._renderBadges(water, leak)}
             </div>
           </div>
           <span class="state-chip ${stateClass}">${stateLabel}</span>
@@ -717,7 +825,7 @@ export class ImcZoneRow extends LitElement {
           ></ha-icon>
         </div>
         ${this._renderProgress()}
-        ${showBody ? this._renderMeta(water) : nothing}
+        ${showBody ? this._renderMeta(water, leak) : nothing}
         ${showBody ? this._renderControls() : nothing}
         ${this._expanded ? this._renderCycles() : nothing}
       </div>

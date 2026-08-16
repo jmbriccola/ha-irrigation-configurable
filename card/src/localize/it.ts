@@ -72,6 +72,10 @@ export const it: Record<keyof typeof en, string> = {
   "header.global_pause": "In pausa globale",
   "header.stale_weather": "Dati meteo non aggiornati",
   "header.consumption_left": "Acqua residua",
+  // L'ambito hub: acqua su un flussometro che non appartiene a una sola zona.
+  // Non c'è nessuna zona da nominare, ed è proprio per questo che l'hub ha un
+  // allarme suo.
+  "header.leak": "Perdita nell'impianto",
 
   // Stati sessione
   "session.idle": "Inattiva",
@@ -139,6 +143,21 @@ export const it: Record<keyof typeof en, string> = {
   "degraded.line_meter_shared": "Flussometro di linea condiviso",
   "degraded.no_hourly_forecast": "Nessuna previsione oraria",
   "degraded.volume_mode_unavailable": "Modalità a volume non disponibile",
+  "degraded.leak_sensor_missing": "Il sensore di perdita scelto non esiste più",
+  "degraded.water_supply_sensor_missing":
+    "Il sensore di mancanza d'acqua scelto non esiste più",
+  // Diagnosi, mai allarmi: «non ha potuto controllare», non «è guasta» e non
+  // «perde». Una valvola tenuta aperta fuori dall'integrazione si legge così,
+  // e un pomeriggio di innaffiature a mano è del tutto innocuo.
+  "degraded.leak_never_observable": "Questa zona non ha potuto controllare le perdite",
+  "degraded.leak_evidence_unresolved":
+    "Questa zona non riesce a concludere su una possibile perdita",
+
+  // Origini della perdita, come le pubblicano `zone_leak`/`hub_leak`.
+  // Osservazioni, non conclusioni: su questo hardware un sensore «moisture»
+  // dice «è passata acqua mentre ero chiusa», non «c'è acqua per terra».
+  "leak_source.valve_sensor": "il sensore della valvola segnala una perdita",
+  "leak_source.no_flow_closed": "acqua misurata con tutte le valvole chiuse",
 
   // Righe zona
   "zone.next_run": "Prossima irrigazione",
@@ -153,6 +172,20 @@ export const it: Record<keyof typeof en, string> = {
   "zone.water_estimated": "stimato",
   "zone.water_today": "oggi",
   "zone.water_month": "questo mese",
+  "zone.leak_alarm": "Perdita",
+  // `since` è il momento della CONFERMA — quando le prove si sono chiuse, non
+  // quando l'acqua ha iniziato a uscire. Mai «perde da…».
+  "zone.leak_confirmed_at": "Confermata {when}",
+  "zone.leak_checking": "Controllo perdite non ancora concluso",
+  // Il nome dice ciò che la capability misura davvero: il SENSORE di perdita.
+  // Una zona con flussometro proprio resta coperta dal flussometro anche
+  // quando qui c'è «non disponibile», quindi non si può scrivere «rilevamento
+  // perdite disattivo».
+  "zone.leak_unavailable": "Nessun sensore di perdita",
+  "zone.leak_candidate": "Il dispositivo di questa valvola offre un sensore di perdita",
+  "zone.supply_unavailable": "Nessun sensore di mancanza d'acqua",
+  "zone.supply_candidate":
+    "Il dispositivo di questa valvola offre un sensore di mancanza d'acqua",
 
   // Trigger dei cicli
   "trigger.sunrise": "Alba",
@@ -256,6 +289,16 @@ export const it: Record<keyof typeof en, string> = {
   "zone.field_interval": "Intervallo di irrigazione (giorni)",
   "zone.field_season": "Deroga ai mesi della stagione",
   "zone.field_group": "Gruppo di compatibilità",
+  "zone.field_leak_sensor": "Sensore di perdita",
+  "zone.field_water_supply_sensor": "Sensore di mancanza d'acqua",
+  "zone.sensor_detected": "Trovato sul dispositivo di questa valvola: {entity}",
+  "zone.leak_sensor_none":
+    "Il dispositivo di questa valvola non offre un sensore di perdita. Puoi comunque sceglierne uno altrove: una sonda nell'aiuola è una scelta legittima e voluta.",
+  "zone.water_supply_none":
+    "Il dispositivo di questa valvola non offre un sensore di mancanza d'acqua. Puoi comunque sceglierne uno altrove.",
+  // La polarità è invertita rispetto al nome del campo, e capirla al
+  // contrario bloccherebbe ogni ciclo invece di nessuno.
+  "zone.water_supply_polarity": "È un sensore di tipo «problema»: on significa che l'acqua NON c'è.",
 
   // Vista impostazioni (pannello)
   "settings.title": "Impostazioni",
@@ -362,6 +405,27 @@ export const it: Record<keyof typeof en, string> = {
   "settings.master_pre_open_s_hint": "Secondi di anticipo con cui la valvola master apre. Default 0.",
   "settings.master_post_close_s": "Post-chiusura master",
   "settings.master_post_close_s_hint": "Secondi in cui la valvola master resta aperta dopo la zona. Default 0.",
+  "settings.leak_action": "Con una perdita confermata",
+  "settings.leak_action_hint":
+    "Cosa fare quando una perdita è confermata. Richiudere una valvola già chiusa non fa nulla: recupera una valvola rimasta aperta per un comando perso, e in caso di falso allarme non lascia nulla a secco. Default: notifica e richiude.",
+  "settings.leak_action_notify": "Solo notifica",
+  "settings.leak_action_close": "Notifica e richiude le valvole",
+  "settings.leak_action_close_and_block": "Notifica, richiude e blocca i nuovi cicli",
+  "settings.leak_threshold_lpm": "Soglia di perdita",
+  "settings.leak_threshold_lpm_hint":
+    "Litri al minuto misurati con tutte le valvole chiuse perché contino come perdita. Default 0,5.",
+  "settings.leak_confirm_s": "Conferma della perdita",
+  "settings.leak_confirm_s_hint":
+    "Secondi per cui le prove devono durare prima che scatti l'allarme. Ogni entità di perdita resta non disponibile finché il suo ambito non è stato osservato altrettanto a lungo, quindi alzarlo rimanda anche la prima risposta. Default 300.",
+  "settings.leak_repeat_min": "Promemoria della perdita",
+  "settings.leak_repeat_min_hint":
+    "Minuti fra un promemoria e l'altro finché l'allarme dura. 0 li disattiva senza toccare l'allarme. Default 360.",
+  "settings.require_water_supply": "Non partire senza acqua",
+  "settings.require_water_supply_hint":
+    "Rifiuta l'avvio di un ciclo finché il sensore della zona segnala che l'acqua manca. La notifica e la segnalazione di riparazione arrivano comunque: questa impostazione governa il rifiuto, non l'avviso.",
+  "settings.water_supply_confirm_s": "Conferma della mancanza d'acqua",
+  "settings.water_supply_confirm_s_hint":
+    "Secondi per cui la mancanza deve durare prima che un avvio venga rifiutato e parta l'avviso. Non ritarda mai la diagnosi di un'irrigazione già interrotta. Default 180.",
   "program_editor.soak_max_run": "Durata massima per corsa",
   "program_editor.soak_max_run_hint": "Minuti. Divide l'irrigazione in corse più brevi perché il terreno assorba fra una e l'altra. Vuoto = una corsa continua.",
   "program_editor.soak_pause": "Pausa di ammollo",

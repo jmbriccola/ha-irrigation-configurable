@@ -45,12 +45,14 @@ import type { EntitySelectorConfig } from "./ha-selector";
  * A field the user left empty is omitted entirely, because every settings
  * service treats absent as unchanged. Zero is NOT empty — it is a meaningful
  * pause or confirmation delay, and dropping it as falsy would make the field
- * impossible to set back to zero.
+ * impossible to set back to zero. Neither is `false`, and that one points
+ * the dangerous way: dropping it would leave a gate switched on while the
+ * form showed it off.
  */
 function put(
   patch: Record<string, unknown>,
   key: string,
-  value: number | string | undefined,
+  value: number | string | boolean | undefined,
 ): void {
   if (value === undefined) return;
   if (typeof value === "string" && value.trim() === "") return;
@@ -83,6 +85,15 @@ export interface ValveSafetyInput {
   switchConfirmS?: number;
   startupValveTimeoutS?: number;
   watchdogMaxMin?: number;
+  // Leak detection and the water-supply gate: the same service, because they
+  // are the same kind of setting — what the component does when a valve, or
+  // the water behind it, does not behave.
+  leakAction?: LeakAction;
+  leakThresholdLpm?: number;
+  leakConfirmS?: number;
+  leakRepeatMin?: number;
+  requireWaterSupply?: boolean;
+  waterSupplyConfirmS?: number;
 }
 
 export function buildValveSafetyPatch(input: ValveSafetyInput): Record<string, unknown> {
@@ -92,6 +103,12 @@ export function buildValveSafetyPatch(input: ValveSafetyInput): Record<string, u
   put(patch, "switch_confirm_s", input.switchConfirmS);
   put(patch, "startup_valve_timeout_s", input.startupValveTimeoutS);
   put(patch, "watchdog_max_min", input.watchdogMaxMin);
+  put(patch, "leak_action", input.leakAction);
+  put(patch, "leak_threshold_lpm", input.leakThresholdLpm);
+  put(patch, "leak_confirm_s", input.leakConfirmS);
+  put(patch, "leak_repeat_min", input.leakRepeatMin);
+  put(patch, "require_water_supply", input.requireWaterSupply);
+  put(patch, "water_supply_confirm_s", input.waterSupplyConfirmS);
   return patch;
 }
 
@@ -244,10 +261,39 @@ export interface RestrictionsSaveDetail {
 type BudgetAction = "notify" | "reduce" | "suspend";
 type Parity = "none" | "odd" | "even";
 
+/**
+ * What the component does once a leak is confirmed. Ordered by how much they
+ * do, which is also how the drawer offers them.
+ *
+ * The default is `close`, and it is deliberately not `close_and_block`:
+ * re-closing a valve that is already shut is a no-op, and that is the honest
+ * position — a leak found while idle cannot be stopped by this component,
+ * only reported, with the closure re-asserted in case a command was lost.
+ * Blocking is opt-in because a false positive that blocks dries the zone.
+ */
+export const LEAK_ACTIONS = ["notify", "close", "close_and_block"] as const;
+export type LeakAction = (typeof LEAK_ACTIONS)[number];
+
+/** models.py's own defaults, mirrored so an untouched save is a no-op. */
+const DEFAULT_LEAK_ACTION: LeakAction = "close";
+const DEFAULT_REQUIRE_WATER_SUPPLY = true;
+
 const DEFAULT_WINDOW = { start: "22:00", end: "06:00" };
 
 function normalizeAction(raw?: string): BudgetAction {
   return raw === "reduce" || raw === "suspend" ? raw : "notify";
+}
+
+/**
+ * The backend falls back to the default on an unrecognised value without
+ * saying so, and nothing validates what `import_config` or Developer Tools
+ * write here. Offering such a value back would leave the select showing
+ * nothing selected and saving whichever option happened to be first.
+ */
+function normalizeLeakAction(raw?: string): LeakAction {
+  return (LEAK_ACTIONS as readonly string[]).includes(raw ?? "")
+    ? (raw as LeakAction)
+    : DEFAULT_LEAK_ACTION;
 }
 
 function normalizeParity(raw?: string): Parity {
@@ -639,6 +685,17 @@ export class ImcSettingsView extends LitElement {
       switchConfirmS: opts.switch_confirm_s,
       startupValveTimeoutS: opts.startup_valve_timeout_s,
       watchdogMaxMin: opts.watchdog_max_min,
+      // Unlike every field above, these two are always sent — a select and a
+      // checkbox have no "unset" to render — so they are seeded to the
+      // backend's own defaults when the hub has never been told. Anything
+      // else here and the first save in this drawer would quietly move the
+      // installation onto a different leak policy.
+      leakAction: normalizeLeakAction(opts.leak_action),
+      leakThresholdLpm: opts.leak_threshold_lpm,
+      leakConfirmS: opts.leak_confirm_s,
+      leakRepeatMin: opts.leak_repeat_min,
+      requireWaterSupply: opts.require_water_supply ?? DEFAULT_REQUIRE_WATER_SUPPLY,
+      waterSupplyConfirmS: opts.water_supply_confirm_s,
     };
     this._concurrency = {
       maxConcurrent: opts.max_concurrent,
@@ -1538,12 +1595,89 @@ export class ImcSettingsView extends LitElement {
                 this._concurrency.masterPostCloseS,
                 (v) => (this._concurrency = { ...this._concurrency, masterPostCloseS: v }),
               )}
+              ${this._renderLeakFields(lang)}
               <button class="primary" @click=${this._saveValveSafety}>
                 ${localize(lang, "editor.save")}
               </button>
             `
           : nothing}
       </div>
+    `;
+  }
+
+  /**
+   * Leak detection and the water-supply gate, inside the same drawer as the
+   * valve confirmations they belong with. Everything here is written by
+   * `set_valve_safety`, so one Save covers the lot.
+   *
+   * The action is a `<select>` whose selection lives on its options rather
+   * than in a `.value` binding, for the reason spelled out in the zone
+   * editor's `_renderFlowUnit`: lit-html commits an element's own bindings
+   * before its children exist, so `.value` would be assigned against an
+   * empty option list and fall back to the first entry — which here means
+   * the control would silently disagree with what is stored.
+   */
+  private _renderLeakFields(lang: string): TemplateResult {
+    const actionLabel = localize(lang, "settings.leak_action");
+    const chosen = this._valves.leakAction ?? DEFAULT_LEAK_ACTION;
+    const supplyLabel = localize(lang, "settings.require_water_supply");
+    return html`
+      <div class="section-label">${actionLabel}</div>
+      <select
+        class="field"
+        aria-label=${actionLabel}
+        @change=${(e: Event) =>
+          (this._valves = {
+            ...this._valves,
+            leakAction: normalizeLeakAction((e.target as HTMLSelectElement).value),
+          })}
+      >
+        ${LEAK_ACTIONS.map(
+          (action) => html`<option value=${action} ?selected=${chosen === action}>
+            ${localize(lang, `settings.leak_action_${action}` as TranslationKey)}
+          </option>`,
+        )}
+      </select>
+      <div class="hint">${localize(lang, "settings.leak_action_hint")}</div>
+
+      ${this._num(
+        localize(lang, "settings.leak_threshold_lpm"),
+        localize(lang, "settings.leak_threshold_lpm_hint"),
+        this._valves.leakThresholdLpm,
+        (v) => (this._valves = { ...this._valves, leakThresholdLpm: v }),
+      )}
+      ${this._num(
+        localize(lang, "settings.leak_confirm_s"),
+        localize(lang, "settings.leak_confirm_s_hint"),
+        this._valves.leakConfirmS,
+        (v) => (this._valves = { ...this._valves, leakConfirmS: v }),
+      )}
+      ${this._num(
+        localize(lang, "settings.leak_repeat_min"),
+        localize(lang, "settings.leak_repeat_min_hint"),
+        this._valves.leakRepeatMin,
+        (v) => (this._valves = { ...this._valves, leakRepeatMin: v }),
+      )}
+
+      <label class="section-label">
+        <input
+          type="checkbox"
+          .checked=${this._valves.requireWaterSupply ?? DEFAULT_REQUIRE_WATER_SUPPLY}
+          @change=${(e: Event) =>
+            (this._valves = {
+              ...this._valves,
+              requireWaterSupply: (e.target as HTMLInputElement).checked,
+            })}
+        />
+        ${supplyLabel}
+      </label>
+      <div class="hint">${localize(lang, "settings.require_water_supply_hint")}</div>
+      ${this._num(
+        localize(lang, "settings.water_supply_confirm_s"),
+        localize(lang, "settings.water_supply_confirm_s_hint"),
+        this._valves.waterSupplyConfirmS,
+        (v) => (this._valves = { ...this._valves, waterSupplyConfirmS: v }),
+      )}
     `;
   }
 

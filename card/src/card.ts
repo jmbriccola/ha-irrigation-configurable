@@ -2,7 +2,7 @@ import { css, html, LitElement, nothing } from "lit";
 import type { PropertyValues, TemplateResult } from "lit";
 import { property, state } from "lit/decorators.js";
 import type { MaestroModel } from "./discovery";
-import { discover } from "./discovery";
+import { discover, hubLeakStatus } from "./discovery";
 import type {
   CardConfig,
   GlobalAction,
@@ -20,7 +20,7 @@ import {
   defineElement,
   isUnavailable,
 } from "./types";
-import { formatNumber } from "./format";
+import { describeLeakAlarm, formatNumber } from "./format";
 import {
   localize,
   localizeDynamic,
@@ -321,10 +321,33 @@ export class IrrigationMaestroCard extends LitElement {
       ? asNumber(hub.consumptionLeft?.state)
       : undefined;
 
+    // The hub scope's leak alarm: water measured on a meter no single zone
+    // owns, so no zone row can carry it. On an installation whose only meter
+    // is a shared line meter this is the ONLY place a confirmed leak can
+    // appear at all. Rendered when the alarm stands and never otherwise —
+    // the hub has no `zone_state` and therefore no `degraded`, so it has no
+    // way to say why it is quiet, and a chip claiming the system is fine is
+    // the one thing the contract forbids here.
+    const hubLeak = hubLeakStatus(hub);
+
     return html`
       <div class="header">
         ${meter}
         <div class="chips">
+          ${hubLeak.coverage === "alarm"
+            ? html`<span
+                class="chip alarm"
+                title=${describeLeakAlarm(
+                  lang,
+                  localize(lang, "header.leak"),
+                  hubLeak,
+                  this._now,
+                )}
+              >
+                <ha-icon icon="mdi:water-alert" style="--mdc-icon-size:14px"></ha-icon>
+                ${localize(lang, "header.leak")}
+              </span>`
+            : nothing}
           ${temp !== undefined
             ? html`<span
                 class="chip"
@@ -591,6 +614,11 @@ export class IrrigationMaestroCard extends LitElement {
     .chip.warning {
       background: var(--warning-color, #ffa600);
       color: var(--text-primary-color, #fff);
+    }
+    .chip.alarm {
+      background: var(--error-color, #db4437);
+      color: var(--text-primary-color, #fff);
+      font-weight: 600;
     }
     .queue {
       margin: 0 16px 10px;
