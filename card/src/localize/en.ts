@@ -180,7 +180,7 @@ export const en = {
   // The shared-line-meter zone: watched, but not by an alarm that can name
   // it. Says where, because "not watched" would be false and "watched" alone
   // would promise a zone-named alarm that can never arrive.
-  "zone.leak_system_scope": "Leaks watched for the system, not for this zone",
+  "zone.leak_system_scope": "Leaks watched at system level, not for this zone",
   "zone.leak_candidate": "This valve's device offers a leak sensor",
   "zone.supply_unavailable": "No water-supply sensor",
   "zone.supply_candidate": "This valve's device offers a water-supply sensor",

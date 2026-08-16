@@ -311,9 +311,9 @@ describe("the leak settings in the advanced drawer", () => {
  *
  * Reading the template rather than a DOM: these tests run without jsdom, and
  * a `TemplateResult`'s `strings`/`values` pair is exactly what lit will
- * commit. The chunk preceding a binding ends with `step=` for precisely the
- * one attribute we are after, so this cannot be fooled by another numeric
- * binding on the same element.
+ * commit. It matches any attribute whose name ENDS in `step` -- there is no
+ * such sibling today, and if one is ever added this walker has to learn the
+ * difference rather than be trusted to already know it.
  */
 function stepsIn(node: unknown): unknown[] {
   const found: unknown[] = [];

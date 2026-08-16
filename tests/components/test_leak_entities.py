@@ -21,7 +21,11 @@ needs -- is asserted where an available entity is at hand.
 from pathlib import Path
 from typing import Any
 
-from custom_components.irrigation_maestro.const import DOMAIN
+from custom_components.irrigation_maestro.const import (
+    DEGRADED_LEAK_EVIDENCE_UNRESOLVED,
+    DEGRADED_LEAK_NEVER_OBSERVABLE,
+    DOMAIN,
+)
 from custom_components.irrigation_maestro.leak import (
     SOURCE_NO_FLOW_CLOSED,
     SOURCE_VALVE_SENSOR,
@@ -1534,6 +1538,16 @@ def test_the_card_branches_on_the_stall_keys_by_name() -> None:
     "still checking" for ever. Nothing on either side fails, and nothing on
     screen looks wrong -- it just says something untrue.
 
+    **The keys come from the PRODUCER, imported, never retyped here.** The
+    first version of this test carried its own copy of the two names, which
+    made it green through exactly the rename it exists to catch: nothing
+    forces a renamer to edit a tuple in a test file, and the six other
+    assertions around it would have gone red and been fixed while this one
+    sat there promising a guarantee it no longer gave. Importing the
+    constants `leak_observation_stall` actually returns is what makes the
+    promise true -- rename the value and this asserts the NEW name against
+    the card, which is precisely the failure wanted.
+
     Deliberately NARROW. A parity test over the whole degraded list was
     considered and rejected: it would mean parsing TypeScript from Python, it
     would break on a formatting change with a message about a regex rather
@@ -1545,7 +1559,7 @@ def test_the_card_branches_on_the_stall_keys_by_name() -> None:
     discovery_ts = (Path(__file__).parents[2] / "card" / "src" / "discovery.ts").read_text(
         encoding="utf-8"
     )
-    for key in ("leak_never_observable", "leak_evidence_unresolved"):
+    for key in (DEGRADED_LEAK_NEVER_OBSERVABLE, DEGRADED_LEAK_EVIDENCE_UNRESOLVED):
         assert f'"{key}"' in discovery_ts, (
             f"{key} is matched by name in discovery.ts's leakStatus; renaming it "
             "here without renaming it there silently stops that branch firing"

@@ -264,11 +264,11 @@ const ei = (n, e) => {
   const t = n.length - 1, i = [];
   let s, o = e === 2 ? "<svg>" : e === 3 ? "<math>" : "", a = ee;
   for (let d = 0; d < t; d++) {
-    const u = n[d];
+    const c = n[d];
     let _, g, m = -1, S = 0;
-    for (; S < u.length && (a.lastIndex = S, g = a.exec(u), g !== null); ) S = a.lastIndex, a === ee ? g[1] === "!--" ? a = ot : g[1] !== void 0 ? a = rt : g[2] !== void 0 ? (xt.test(g[2]) && (s = RegExp("</" + g[2], "g")), a = W) : g[3] !== void 0 && (a = W) : a === W ? g[0] === ">" ? (a = s ?? ee, m = -1) : g[1] === void 0 ? m = -2 : (m = a.lastIndex - g[2].length, _ = g[1], a = g[3] === void 0 ? W : g[3] === '"' ? lt : at) : a === lt || a === at ? a = W : a === ot || a === rt ? a = ee : (a = W, s = void 0);
+    for (; S < c.length && (a.lastIndex = S, g = a.exec(c), g !== null); ) S = a.lastIndex, a === ee ? g[1] === "!--" ? a = ot : g[1] !== void 0 ? a = rt : g[2] !== void 0 ? (xt.test(g[2]) && (s = RegExp("</" + g[2], "g")), a = W) : g[3] !== void 0 && (a = W) : a === W ? g[0] === ">" ? (a = s ?? ee, m = -1) : g[1] === void 0 ? m = -2 : (m = a.lastIndex - g[2].length, _ = g[1], a = g[3] === void 0 ? W : g[3] === '"' ? lt : at) : a === lt || a === at ? a = W : a === ot || a === rt ? a = ee : (a = W, s = void 0);
     const w = a === W && n[d + 1].startsWith("/>") ? " " : "";
-    o += a === ee ? u + Xt : m >= 0 ? (i.push(_), u.slice(0, m) + wt + u.slice(m) + q + w) : u + q + (m === -2 ? d : w);
+    o += a === ee ? c + Xt : m >= 0 ? (i.push(_), c.slice(0, m) + wt + c.slice(m) + q + w) : c + q + (m === -2 ? d : w);
   }
   return [zt(n, o + (n[t] || "<?>") + (e === 2 ? "</svg>" : e === 3 ? "</math>" : "")), i];
 };
@@ -277,29 +277,29 @@ class re {
     let s;
     this.parts = [];
     let o = 0, a = 0;
-    const d = e.length - 1, u = this.parts, [_, g] = ei(e, t);
+    const d = e.length - 1, c = this.parts, [_, g] = ei(e, t);
     if (this.el = re.createElement(_, i), B.currentNode = this.el.content, t === 2 || t === 3) {
       const m = this.el.content.firstChild;
       m.replaceWith(...m.childNodes);
     }
-    for (; (s = B.nextNode()) !== null && u.length < d; ) {
+    for (; (s = B.nextNode()) !== null && c.length < d; ) {
       if (s.nodeType === 1) {
         if (s.hasAttributes()) for (const m of s.getAttributeNames()) if (m.endsWith(wt)) {
           const S = g[a++], w = s.getAttribute(m).split(q), U = /([.?@])?(.*)/.exec(S);
-          u.push({ type: 1, index: o, name: U[2], strings: w, ctor: U[1] === "." ? ii : U[1] === "?" ? si : U[1] === "@" ? ni : ye }), s.removeAttribute(m);
-        } else m.startsWith(q) && (u.push({ type: 6, index: o }), s.removeAttribute(m));
+          c.push({ type: 1, index: o, name: U[2], strings: w, ctor: U[1] === "." ? ii : U[1] === "?" ? si : U[1] === "@" ? ni : ye }), s.removeAttribute(m);
+        } else m.startsWith(q) && (c.push({ type: 6, index: o }), s.removeAttribute(m));
         if (xt.test(s.tagName)) {
           const m = s.textContent.split(q), S = m.length - 1;
           if (S > 0) {
             s.textContent = he ? he.emptyScript : "";
-            for (let w = 0; w < S; w++) s.append(m[w], ne()), B.nextNode(), u.push({ type: 2, index: ++o });
+            for (let w = 0; w < S; w++) s.append(m[w], ne()), B.nextNode(), c.push({ type: 2, index: ++o });
             s.append(m[S], ne());
           }
         }
-      } else if (s.nodeType === 8) if (s.data === $t) u.push({ type: 2, index: o });
+      } else if (s.nodeType === 8) if (s.data === $t) c.push({ type: 2, index: o });
       else {
         let m = -1;
-        for (; (m = s.data.indexOf(q, m + 1)) !== -1; ) u.push({ type: 7, index: o }), m += q.length - 1;
+        for (; (m = s.data.indexOf(q, m + 1)) !== -1; ) c.push({ type: 7, index: o }), m += q.length - 1;
       }
       o++;
     }
@@ -328,13 +328,13 @@ class ti {
   u(e) {
     const { el: { content: t }, parts: i } = this._$AD, s = (e?.creationScope ?? H).importNode(t, !0);
     B.currentNode = s;
-    let o = B.nextNode(), a = 0, d = 0, u = i[0];
-    for (; u !== void 0; ) {
-      if (a === u.index) {
+    let o = B.nextNode(), a = 0, d = 0, c = i[0];
+    for (; c !== void 0; ) {
+      if (a === c.index) {
         let _;
-        u.type === 2 ? _ = new le(o, o.nextSibling, this, e) : u.type === 1 ? _ = new u.ctor(o, u.name, u.strings, this, e) : u.type === 6 && (_ = new oi(o, this, e)), this._$AV.push(_), u = i[++d];
+        c.type === 2 ? _ = new le(o, o.nextSibling, this, e) : c.type === 1 ? _ = new c.ctor(o, c.name, c.strings, this, e) : c.type === 6 && (_ = new oi(o, this, e)), this._$AV.push(_), c = i[++d];
       }
-      a !== u?.index && (o = B.nextNode(), a++);
+      a !== c?.index && (o = B.nextNode(), a++);
     }
     return B.currentNode = H, s;
   }
@@ -418,8 +418,8 @@ class ye {
     if (o === void 0) e = X(this, e, t, 0), a = !oe(e) || e !== this._$AH && e !== Q, a && (this._$AH = e);
     else {
       const d = e;
-      let u, _;
-      for (e = o[0], u = 0; u < o.length - 1; u++) _ = X(this, d[i + u], t, u), _ === Q && (_ = this._$AH[u]), a ||= !oe(_) || _ !== this._$AH[u], _ === p ? e = p : e !== p && (e += (_ ?? "") + o[u + 1]), this._$AH[u] = _;
+      let c, _;
+      for (e = o[0], c = 0; c < o.length - 1; c++) _ = X(this, d[i + c], t, c), _ === Q && (_ = this._$AH[c]), a ||= !oe(_) || _ !== this._$AH[c], _ === p ? e = p : e !== p && (e += (_ ?? "") + o[c + 1]), this._$AH[c] = _;
     }
     a && !s && this.j(e);
   }
@@ -511,8 +511,8 @@ const di = { attribute: !0, type: String, converter: _e, reflect: !1, hasChanged
   if (o === void 0 && globalThis.litPropertyMetadata.set(s, o = /* @__PURE__ */ new Map()), i === "setter" && ((n = Object.create(n)).wrapped = !0), o.set(t.name, n), i === "accessor") {
     const { name: a } = t;
     return { set(d) {
-      const u = e.get.call(this);
-      e.set.call(this, d), this.requestUpdate(a, u, n, !0, d);
+      const c = e.get.call(this);
+      e.set.call(this, d), this.requestUpdate(a, c, n, !0, d);
     }, init(d) {
       return d !== void 0 && this.C(a, void 0, n, d), d;
     } };
@@ -520,8 +520,8 @@ const di = { attribute: !0, type: String, converter: _e, reflect: !1, hasChanged
   if (i === "setter") {
     const { name: a } = t;
     return function(d) {
-      const u = this[a];
-      e.call(this, d), this.requestUpdate(a, u, n, !0, d);
+      const c = this[a];
+      e.call(this, d), this.requestUpdate(a, c, n, !0, d);
     };
   }
   throw Error("Unsupported decorator location: " + i);
@@ -532,7 +532,7 @@ function h(n) {
     return s.constructor.createProperty(o, i), a ? Object.getOwnPropertyDescriptor(s, o) : void 0;
   })(n, e, t);
 }
-function c(n) {
+function u(n) {
   return h({ ...n, state: !0, attribute: !1 });
 }
 function v(n) {
@@ -719,7 +719,7 @@ const ae = {
   // The shared-line-meter zone: watched, but not by an alarm that can name
   // it. Says where, because "not watched" would be false and "watched" alone
   // would promise a zone-named alarm that can never arrive.
-  "zone.leak_system_scope": "Leaks watched for the system, not for this zone",
+  "zone.leak_system_scope": "Leaks watched at system level, not for this zone",
   "zone.leak_candidate": "This valve's device offers a leak sensor",
   "zone.supply_unavailable": "No water-supply sensor",
   "zone.supply_candidate": "This valve's device offers a water-supply sensor",
@@ -1118,7 +1118,7 @@ const ae = {
   // La zona dietro al flussometro condiviso: sorvegliata, ma non da un
   // allarme che possa nominarla. Dice dove, perché «non sorvegliata» sarebbe
   // falso e «sorvegliata» prometterebbe un allarme di zona che non arriverà.
-  "zone.leak_system_scope": "Perdite sorvegliate per l'impianto, non per questa zona",
+  "zone.leak_system_scope": "Perdite sorvegliate sull'impianto, non su questa zona",
   "zone.leak_candidate": "Il dispositivo di questa valvola offre un sensore di perdita",
   "zone.supply_unavailable": "Nessun sensore di mancanza d'acqua",
   "zone.supply_candidate": "Il dispositivo di questa valvola offre un sensore di mancanza d'acqua",
@@ -1424,21 +1424,21 @@ function yi(n) {
     i.push(o.entity_id);
     const d = N(o.attributes.zone_id);
     if (d) {
-      let u = t.get(d);
-      if (u || (u = {
+      let c = t.get(d);
+      if (c || (c = {
         zoneId: d,
         name: d,
         order: Number.MAX_SAFE_INTEGER,
         cycleSwitches: []
-      }, t.set(d, u)), a === "cycle_enabled")
-        u.cycleSwitches.push(o);
+      }, t.set(d, c)), a === "cycle_enabled")
+        c.cycleSwitches.push(o);
       else {
         const _ = gi[a];
-        _ && (u[_] = o);
+        _ && (c[_] = o);
       }
     } else {
-      const u = fi[a];
-      u && (e[u] = o);
+      const c = fi[a];
+      c && (e[c] = o);
     }
   }
   const s = [...t.values()];
@@ -1482,10 +1482,10 @@ function At(n) {
     a && typeof a == "object" && (o.calendar = a);
     const d = s.season_months;
     Array.isArray(d) && (o.season_months = d.map((_) => v(_)).filter((_) => _ !== void 0)), o.soak_max_run_min = v(s.soak_max_run_min), o.soak_pause_min = v(s.soak_pause_min), o.volume_safety_timeout_min = v(s.volume_safety_timeout_min), o.intensity_pct = v(s.intensity_pct);
-    const u = s.day_intensity_pct;
-    if (u && typeof u == "object") {
+    const c = s.day_intensity_pct;
+    if (c && typeof c == "object") {
       const _ = {};
-      for (const [g, m] of Object.entries(u)) {
+      for (const [g, m] of Object.entries(c)) {
         const S = v(m);
         S !== void 0 && (_[g] = S);
       }
@@ -1518,8 +1518,8 @@ function We(n, e) {
   for (let s = 0; s < n.length - 1; s++) {
     const o = n[s], a = n[s + 1];
     if (!o || !a) continue;
-    const [d, u] = o, [_, g] = a;
-    if (d <= e && e <= _) return u + (g - u) * (e - d) / (_ - d);
+    const [d, c] = o, [_, g] = a;
+    if (d <= e && e <= _) return c + (g - c) * (e - d) / (_ - d);
   }
   return i[1];
 }
@@ -1530,8 +1530,8 @@ function $e(n, e, t = 100, i, s) {
 function xi(n, e, t, i, s, o = 100) {
   const a = We(n, we);
   if (a <= 0) return 0;
-  const u = 100 * e / a * o / 100;
-  return de($e(n, t, u, i, s));
+  const c = 100 * e / a * o / 100;
+  return de($e(n, t, c, i, s));
 }
 function ki(n) {
   if (n.length === 0) return "curve_empty";
@@ -1880,10 +1880,10 @@ function Ri(n, e, t) {
   return e === 0 ? n : Math.max(0, de(n - e * t));
 }
 function Li(n, e, t, i, s, o) {
-  const a = [...n.map((_) => _[1]), e, t], d = Math.max(12, ...a) + 4, u = i - s - o;
+  const a = [...n.map((_) => _[1]), e, t], d = Math.max(12, ...a) + 4, c = i - s - o;
   return {
     top: d,
-    y: (_) => i - o - _ / d * u
+    y: (_) => i - o - _ / d * c
   };
 }
 var Ui = Object.defineProperty, F = (n, e, t, i) => {
@@ -1961,7 +1961,7 @@ const j = 320, Z = 170, D = 34, V = 12, te = 16, K = 24, ut = 5, pt = 40, _t = 2
     if (!s) return;
     const o = s[1], a = i.getScreenCTM();
     if (!a) return;
-    const d = this._pointerViewY(i, a, t), u = this._axis().top / (Z - te - K), _ = (m) => {
+    const d = this._pointerViewY(i, a, t), c = this._axis().top / (Z - te - K), _ = (m) => {
       const S = i.getScreenCTM();
       if (!S) return;
       const w = this._pointerViewY(i, S, m) - d;
@@ -1969,7 +1969,7 @@ const j = 320, Z = 170, D = 34, V = 12, te = 16, K = 24, ut = 5, pt = 40, _t = 2
         this._points,
         e,
         s[0],
-        Ri(o, w, u)
+        Ri(o, w, c)
       ), this._error = null;
     }, g = () => {
       window.removeEventListener("pointermove", _), window.removeEventListener("pointerup", g);
@@ -2165,14 +2165,14 @@ const j = 320, Z = 170, D = 34, V = 12, te = 16, K = 24, ut = 5, pt = 40, _t = 2
     const t = this._axisMin(), i = this._axisMax(), s = [];
     for (let w = t; w <= i; w += 1)
       s.push([this._sx(w), this._sy(We(this._points, w))]);
-    const o = s.map((w, U) => `${U === 0 ? "M" : "L"}${w[0].toFixed(1)},${w[1].toFixed(1)}`).join(" "), a = this.weightedTemp, d = a !== void 0 && !Number.isNaN(a) && a >= t && a <= i, u = this._sy(this._min), _ = this._sy(this._max), g = Math.min(u, _), m = Math.abs(_ - u), S = this._unit();
+    const o = s.map((w, U) => `${U === 0 ? "M" : "L"}${w[0].toFixed(1)},${w[1].toFixed(1)}`).join(" "), a = this.weightedTemp, d = a !== void 0 && !Number.isNaN(a) && a >= t && a <= i, c = this._sy(this._min), _ = this._sy(this._max), g = Math.min(c, _), m = Math.abs(_ - c), S = this._unit();
     return Se`
       <svg viewBox="0 0 ${j} ${Z}">
         <rect class="clamp-band" x=${D} y=${g.toFixed(1)}
           width=${(j - D - V).toFixed(1)} height=${m.toFixed(1)}></rect>
-        <line class="clamp-line" x1=${D} y1=${u.toFixed(1)} x2=${j - V} y2=${u.toFixed(1)}></line>
+        <line class="clamp-line" x1=${D} y1=${c.toFixed(1)} x2=${j - V} y2=${c.toFixed(1)}></line>
         <line class="clamp-line" x1=${D} y1=${_.toFixed(1)} x2=${j - V} y2=${_.toFixed(1)}></line>
-        <text class="clamp-text" x=${j - V} y=${(u - 3).toFixed(1)} text-anchor="end">${r(e, "curve.clamp_min")} ${this._min} ${S}</text>
+        <text class="clamp-text" x=${j - V} y=${(c - 3).toFixed(1)} text-anchor="end">${r(e, "curve.clamp_min")} ${this._min} ${S}</text>
         <text class="clamp-text" x=${j - V} y=${(_ - 3).toFixed(1)} text-anchor="end">${r(e, "curve.clamp_max")} ${this._max} ${S}</text>
         <line class="axis" x1=${D} y1=${te} x2=${D} y2=${Z - K}></line>
         <line class="axis" x1=${D} y1=${Z - K} x2=${j - V} y2=${Z - K}></line>
@@ -2401,19 +2401,19 @@ F([
   h({ type: Number })
 ], T.prototype, "zoneAdjustmentPct");
 F([
-  c()
+  u()
 ], T.prototype, "_points");
 F([
-  c()
+  u()
 ], T.prototype, "_min");
 F([
-  c()
+  u()
 ], T.prototype, "_max");
 F([
-  c()
+  u()
 ], T.prototype, "_kind");
 F([
-  c()
+  u()
 ], T.prototype, "_error");
 L("imc-curve-editor", T);
 var ji = Object.defineProperty, z = (n, e, t, i) => {
@@ -2816,7 +2816,7 @@ const Me = 15, ht = 1, mt = 1440, Vi = -360, Bi = 360, Hi = 5, Be = class Be ext
           zoneId: e,
           programId: t,
           calendar: this._calendar,
-          seasonMonths: this._seasonMonths.length ? [...this._seasonMonths].sort((d, u) => d - u) : void 0,
+          seasonMonths: this._seasonMonths.length ? [...this._seasonMonths].sort((d, c) => d - c) : void 0,
           start: i
         },
         bubbles: !0,
@@ -3094,37 +3094,37 @@ z([
   h({ attribute: !1 })
 ], b.prototype, "allZones");
 z([
-  c()
+  u()
 ], b.prototype, "_calendar");
 z([
-  c()
+  u()
 ], b.prototype, "_seasonMonths");
 z([
-  c()
+  u()
 ], b.prototype, "_startKind");
 z([
-  c()
+  u()
 ], b.prototype, "_startAt");
 z([
-  c()
+  u()
 ], b.prototype, "_startEvent");
 z([
-  c()
+  u()
 ], b.prototype, "_startOffsetMin");
 z([
-  c()
+  u()
 ], b.prototype, "_uniformMinutes");
 z([
-  c()
+  u()
 ], b.prototype, "_dayMinutes");
 z([
-  c()
+  u()
 ], b.prototype, "_sameForAll");
 z([
-  c()
+  u()
 ], b.prototype, "_advancedOpen");
 z([
-  c()
+  u()
 ], b.prototype, "_advanced");
 L("imc-program-editor", b);
 var Gi = Object.defineProperty, I = (n, e, t, i) => {
@@ -3511,25 +3511,25 @@ I([
   h({ type: Number })
 ], M.prototype, "zoneAdjustmentPct");
 I([
-  c()
+  u()
 ], M.prototype, "_step");
 I([
-  c()
+  u()
 ], M.prototype, "_calendar");
 I([
-  c()
+  u()
 ], M.prototype, "_startKind");
 I([
-  c()
+  u()
 ], M.prototype, "_startAt");
 I([
-  c()
+  u()
 ], M.prototype, "_startEvent");
 I([
-  c()
+  u()
 ], M.prototype, "_startOffsetMin");
 I([
-  c()
+  u()
 ], M.prototype, "_minutes");
 L("imc-program-wizard", M);
 var ns = Object.defineProperty, J = (n, e, t, i) => {
@@ -3816,10 +3816,10 @@ J([
   h({ attribute: !1 })
 ], R.prototype, "allZones");
 J([
-  c()
+  u()
 ], R.prototype, "_editingId");
 J([
-  c()
+  u()
 ], R.prototype, "_wizardOpen");
 L("imc-program-list", R);
 const xe = [
@@ -4284,43 +4284,43 @@ E([
   h({ attribute: !1 })
 ], x.prototype, "sensorDiscovery");
 E([
-  c()
+  u()
 ], x.prototype, "_name");
 E([
-  c()
+  u()
 ], x.prototype, "_valve");
 E([
-  c()
+  u()
 ], x.prototype, "_areaM2");
 E([
-  c()
+  u()
 ], x.prototype, "_flowSensor");
 E([
-  c()
+  u()
 ], x.prototype, "_flowSensorUnit");
 E([
-  c()
+  u()
 ], x.prototype, "_leakSensor");
 E([
-  c()
+  u()
 ], x.prototype, "_waterSupplySensor");
 E([
-  c()
+  u()
 ], x.prototype, "_nominalFlowLpm");
 E([
-  c()
+  u()
 ], x.prototype, "_flowTolerancePct");
 E([
-  c()
+  u()
 ], x.prototype, "_adjustmentPct");
 E([
-  c()
+  u()
 ], x.prototype, "_order");
 E([
-  c()
+  u()
 ], x.prototype, "_compatibilityGroup");
 E([
-  c()
+  u()
 ], x.prototype, "_advancedOpen");
 L("imc-zone-editor", x);
 const us = ["critical", "operational", "informational"], Dt = [
@@ -5664,49 +5664,49 @@ y([
   h({ attribute: !1 })
 ], f.prototype, "options");
 y([
-  c()
+  u()
 ], f.prototype, "_weatherEntity");
 y([
-  c()
+  u()
 ], f.prototype, "_rainSensor");
 y([
-  c()
+  u()
 ], f.prototype, "_outdoorTempSensor");
 y([
-  c()
+  u()
 ], f.prototype, "_lineFlowSensor");
 y([
-  c()
+  u()
 ], f.prototype, "_lineFlowSensorUnit");
 y([
-  c()
+  u()
 ], f.prototype, "_masterValve");
 y([
-  c()
+  u()
 ], f.prototype, "_litersPerMonth");
 y([
-  c()
+  u()
 ], f.prototype, "_action");
 y([
-  c()
+  u()
 ], f.prototype, "_reducePct");
 y([
-  c()
+  u()
 ], f.prototype, "_forbiddenWindows");
 y([
-  c()
+  u()
 ], f.prototype, "_sessionOpen");
 y([
-  c()
+  u()
 ], f.prototype, "_valvesOpen");
 y([
-  c()
+  u()
 ], f.prototype, "_session");
 y([
-  c()
+  u()
 ], f.prototype, "_valves");
 y([
-  c()
+  u()
 ], f.prototype, "_concurrency");
 y([
   h({ attribute: !1 })
@@ -5721,16 +5721,16 @@ y([
   h({ attribute: !1 })
 ], f.prototype, "testPending");
 y([
-  c()
+  u()
 ], f.prototype, "_wizardStep");
 y([
-  c()
+  u()
 ], f.prototype, "_selection");
 y([
-  c()
+  u()
 ], f.prototype, "_collapsedGroups");
 y([
-  c()
+  u()
 ], f.prototype, "_saveError");
 L("imc-settings-view", f);
 function Ms(n) {
@@ -5775,15 +5775,16 @@ const Xe = class Xe extends P {
   /* ------------------------------------------------------------ */
   /* Actions → services                                            */
   /* ------------------------------------------------------------ */
-  async _call(e, t, i, s = !1, o = !1) {
-    if (this.hass)
-      try {
-        return await this.hass.callService(e, t, i, void 0, !1, s);
-      } catch (a) {
-        const d = a instanceof Error ? a.message : String(a);
-        o || this._showError(d);
-        return;
-      }
+  async _call(e, t, i, s = {}) {
+    if (!this.hass) return;
+    const { response: o = !1, quiet: a = !1 } = s;
+    try {
+      return await this.hass.callService(e, t, i, void 0, !1, o);
+    } catch (d) {
+      const c = d instanceof Error ? d.message : String(d);
+      a || this._showError(c);
+      return;
+    }
   }
   /** Surface a message in the `_error` toast, auto-dismissed after 6s — shared
    *  by `_call`'s failure path and any other spot (e.g. `_onEditZone`) that
@@ -5810,7 +5811,7 @@ const Xe = class Xe extends P {
    * shape as the other response services above.
    */
   async _readConfig() {
-    const t = (await this._call("irrigation_maestro", "export_config", {}, !0))?.response?.payload;
+    const t = (await this._call("irrigation_maestro", "export_config", {}, { response: !0 }))?.response?.payload;
     if (typeof t == "string")
       try {
         return Ms(t);
@@ -5837,8 +5838,7 @@ const Xe = class Xe extends P {
       "irrigation_maestro",
       "discover_zone_sensors",
       { zone_id: e },
-      !0,
-      !0
+      { response: !0, quiet: !0 }
     );
     return Ts(t?.response);
   }
@@ -5869,7 +5869,7 @@ const Xe = class Xe extends P {
    */
   async _loadNotificationStatus() {
     this._notifyStatusFailed = !1;
-    const t = (await this._call("irrigation_maestro", "notification_status", {}, !0))?.response;
+    const t = (await this._call("irrigation_maestro", "notification_status", {}, { response: !0 }))?.response;
     if (Array.isArray(t?.events)) {
       this._notifyStatus = t;
       return;
@@ -5925,7 +5925,7 @@ const Xe = class Xe extends P {
           title: r(t, "notify.test_title"),
           message: r(t, "notify.test_message")
         },
-        !0
+        { response: !0 }
       ), o = Ps(s?.response?.results) ?? {}, a = { ...this._testResults, ...o };
       for (const d of i)
         a[d] = o[d] ?? {
@@ -5960,7 +5960,7 @@ const Xe = class Xe extends P {
     if (t.mode === "add") {
       const s = t.patch, o = { name: s.name, valve_entity: s.valve_entity };
       s.area_m2 !== void 0 && (o.area_m2 = s.area_m2), s.icon !== void 0 && (o.icon = s.icon);
-      const d = (await this._call("irrigation_maestro", "add_zone", o, !0))?.response?.zone_id;
+      const d = (await this._call("irrigation_maestro", "add_zone", o, { response: !0 }))?.response?.zone_id;
       i = typeof d == "string" && d !== "", i && (this._selectedZoneId = d);
     } else
       i = !!await this._call("irrigation_maestro", "update_zone", {
@@ -6063,8 +6063,7 @@ const Xe = class Xe extends P {
       "irrigation_maestro",
       "add_program",
       { zone_id: t.zoneId, ...t.name ? { name: t.name } : {} },
-      /* returnResponse */
-      !0
+      { response: !0 }
     ))?.response?.program_id;
     typeof s != "string" || !s || (await this._call("irrigation_maestro", "set_program_schedule", {
       zone_id: t.zoneId,
@@ -6424,39 +6423,39 @@ C([
   h({ type: Boolean })
 ], A.prototype, "narrow");
 C([
-  c()
+  u()
 ], A.prototype, "_selectedZoneId");
 C([
-  c()
+  u()
 ], A.prototype, "_error");
 C([
-  c()
+  u()
 ], A.prototype, "_notice");
 C([
-  c()
+  u()
 ], A.prototype, "_editingZone");
 C([
-  c()
+  u()
 ], A.prototype, "_editingZoneId");
 C([
-  c()
+  u()
 ], A.prototype, "_editingZoneSensors");
 C([
-  c()
+  u()
 ], A.prototype, "_view");
 C([
-  c()
+  u()
 ], A.prototype, "_options");
 C([
-  c()
+  u()
 ], A.prototype, "_notifyStatus");
 C([
-  c()
+  u()
 ], A.prototype, "_notifyStatusFailed");
 C([
-  c()
+  u()
 ], A.prototype, "_testResults");
 C([
-  c()
+  u()
 ], A.prototype, "_testPending");
 L("irrigation-maestro-panel", A);

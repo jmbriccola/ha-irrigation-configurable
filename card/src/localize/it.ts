@@ -184,7 +184,7 @@ export const it: Record<keyof typeof en, string> = {
   // La zona dietro al flussometro condiviso: sorvegliata, ma non da un
   // allarme che possa nominarla. Dice dove, perché «non sorvegliata» sarebbe
   // falso e «sorvegliata» prometterebbe un allarme di zona che non arriverà.
-  "zone.leak_system_scope": "Perdite sorvegliate per l'impianto, non per questa zona",
+  "zone.leak_system_scope": "Perdite sorvegliate sull'impianto, non su questa zona",
   "zone.leak_candidate": "Il dispositivo di questa valvola offre un sensore di perdita",
   "zone.supply_unavailable": "Nessun sensore di mancanza d'acqua",
   "zone.supply_candidate":
