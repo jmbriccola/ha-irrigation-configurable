@@ -247,12 +247,13 @@ watch. Read this before writing one:
   written against an entity that never leaves `unavailable` **silently never
   fires**, and silence looks exactly like working. Check that the entity has
   gone to `off` before you trust it.
-- **After a restart it is `unavailable` for a confirmation window before it
-  will say `off`, on purpose.** `off` on a `problem` sensor asserts *there is
-  no problem*, and moments after boot nothing of the kind has been
-  established. If it said `off` there, the natural companion automation —
-  "leak cleared → reopen the mains" — would fire on a restart during a live
-  leak.
+- **The sequence after every restart is: `unavailable`, for one confirmation
+  window of observation, then `off`** — or `on`, if a leak gets confirmed
+  first. `off` on a `problem` sensor asserts *there is no problem*, and
+  moments after boot nothing of the kind has been established, so the entity
+  says nothing instead. This means every healthy install makes an
+  `unavailable → off` transition once per restart, which is why the clearing
+  automation below is written the way it is.
 - If a zone's entity is stuck at `unavailable`, the zone's own **degraded
   badges** say why after an hour: *could not check for leaks* (nothing was in
   a position to conclude anything) or *cannot finish judging a possible leak*
@@ -266,6 +267,37 @@ watch. Read this before writing one:
   neither can know the other saw it. Make the automation idempotent, or
   trigger on one scope only.
 - `since` is when the alarm was **confirmed**, not when the water started.
+
+The pair almost everyone wants is "leak → close the mains" and "leak cleared
+→ reopen it". Write it like this:
+
+```yaml
+automation:
+  - alias: Leak - close the mains
+    triggers:
+      - trigger: state
+        entity_id: binary_sensor.alpha_leak
+        to: "on"
+    actions:
+      - action: valve.close_valve
+        target:
+          entity_id: valve.mains
+
+  - alias: Leak cleared - reopen the mains
+    triggers:
+      - trigger: state
+        entity_id: binary_sensor.alpha_leak
+        # `from: "on"` is load-bearing: it restricts this to a real clearing
+        # edge. Without it the trigger also matches the `unavailable -> off`
+        # transition every restart produces, and the mains would reopen on a
+        # reboot you did after closing them by hand.
+        from: "on"
+        to: "off"
+    actions:
+      - action: valve.open_valve
+        target:
+          entity_id: valve.mains
+```
 
 **What the component does about it** is yours to choose, in ⚙️ Impostazioni →
 *Advanced: valves and concurrency*: notify only, notify and re-close the

@@ -487,6 +487,30 @@ details harvested from it (kept as engine behaviour):
   `leak_sensor_missing` / `water_supply_sensor_missing` appear in
   `zone_state.degraded`, detected registry-first so an entity that has not
   posted a state since restart is not misflagged.
+- **Diagnostics READ the leak picture; they never compute it (3.4.0).**
+  `RuntimeManager.leak_diagnostics()` is the one place that assembles it, and
+  every value comes from the predicate the rest of the component already
+  consumes — `leak_state`, `leak_sources_configured`,
+  `leak_state_established`, `leak_observation_stall`, and the three the
+  observation window is built on. A support dump that re-derived any of them
+  would be a second place deciding what a leak is, and it would be worse
+  there than anywhere else, because a dump is believed exactly when the
+  entity is doubted. This deliberately widened the runtime's public surface
+  by one method rather than letting `diagnostics.py` reach into four
+  internals; if the picture needs another field, add it to that method.
+  It exists because the whole mechanism is in memory on purpose, so
+  `state.as_dict()` — everything diagnostics carried before — describes none
+  of it.
+- **Ship the safe example, never the hazard note (3.4.0).** The docs used to
+  explain that a transition *into* `unavailable` fires no `to: "off"`
+  trigger, and said nothing about the transition *out* of it — which every
+  healthy install makes once per restart, once the observation window
+  completes. A reader copying the obvious clearing automation would have
+  reopened the mains on a reboot. The fix was not a warning beside a wrong
+  example: it was to print the example with `from: "on"` on the clearing
+  trigger, with the reason in a comment inside the block, because the block
+  is what gets copied. Any future automation example in this repo carries the
+  same constraint.
 - **A silent leak entity is declared, after an hour, and only on the zones
   (3.4.0).** `leak_never_observable` and `leak_evidence_unresolved` exist
   because an entity stuck at `unavailable` for ever is indistinguishable from

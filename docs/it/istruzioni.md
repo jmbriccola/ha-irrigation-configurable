@@ -367,12 +367,13 @@ un'automazione. Da leggere prima di scriverne una:
   Un'automazione scritta su un'entità che non esce mai da `unavailable`
   **non scatta mai, in silenzio**, e il silenzio è identico al buon
   funzionamento. Verifica che l'entità sia passata a `off` prima di fidartene.
-- **Dopo un riavvio resta `unavailable` per una finestra di conferma prima di
-  dire `off`, ed è voluto.** `off` su un sensore `problem` afferma *non c'è
+- **La sequenza dopo ogni riavvio è: `unavailable`, per una finestra di
+  conferma di osservazione, poi `off`** — oppure `on`, se nel frattempo una
+  perdita viene confermata. `off` su un sensore `problem` afferma *non c'è
   nessun problema*, e pochi istanti dopo l'avvio non è stato stabilito niente
-  del genere. Se dicesse `off` lì, l'automazione gemella naturale — «perdita
-  rientrata → riapri l'acqua» — scatterebbe a un riavvio durante una perdita
-  in corso.
+  del genere, quindi l'entità preferisce tacere. Ne segue che ogni impianto
+  sano compie un passaggio `unavailable → off` a ogni riavvio: è il motivo
+  per cui l'automazione di rientro qui sotto è scritta così.
 - Se l'entità di una zona resta bloccata su `unavailable`, dopo un'ora sono i
   **badge di degrado** della zona a dire perché: *non ha potuto controllare
   le perdite* (niente è stato in condizione di concludere alcunché) oppure
@@ -389,6 +390,37 @@ un'automazione. Da leggere prima di scriverne una:
   Rendi l'automazione idempotente, oppure scatta su un solo ambito.
 - `since` è quando l'allarme è stato **confermato**, non quando l'acqua ha
   iniziato a uscire.
+
+La coppia di automazioni che vogliono quasi tutti è «perdita → chiudi
+l'acqua» e «perdita rientrata → riaprila». Si scrive così:
+
+```yaml
+automation:
+  - alias: Perdita - chiudi l'acqua
+    triggers:
+      - trigger: state
+        entity_id: binary_sensor.alpha_leak
+        to: "on"
+    actions:
+      - action: valve.close_valve
+        target:
+          entity_id: valve.rubinetto_generale
+
+  - alias: Perdita rientrata - riapri l'acqua
+    triggers:
+      - trigger: state
+        entity_id: binary_sensor.alpha_leak
+        # `from: "on"` è portante: limita il trigger a un vero rientro.
+        # Senza, scatterebbe anche sul passaggio `unavailable -> off` che
+        # ogni riavvio produce, riaprendo l'acqua dopo un riavvio fatto
+        # apposta avendola chiusa a mano.
+        from: "on"
+        to: "off"
+    actions:
+      - action: valve.open_valve
+        target:
+          entity_id: valve.rubinetto_generale
+```
 
 **Cosa fa il componente** lo scegli tu, in ⚙️ Impostazioni → *Avanzate:
 valvole e concorrenza*: solo notifica, notifica e richiude le valvole (il

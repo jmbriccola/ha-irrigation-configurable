@@ -1735,6 +1735,75 @@ class IrrigationRuntime:
             return DEGRADED_LEAK_EVIDENCE_UNRESOLVED
         return DEGRADED_LEAK_NEVER_OBSERVABLE
 
+    def leak_diagnostics(self) -> dict[str, dict[str, Any]]:
+        """What this runtime believes about each leak scope, for a support dump.
+
+        A READ, and deliberately nothing else. Every value is produced by the
+        predicate the rest of the component already consumes -- ``leak_state``,
+        ``leak_sources_configured``, ``leak_state_established``,
+        ``leak_observation_stall``, and the three the observation window itself
+        is built on -- so a diagnostics payload cannot disagree with the entity
+        the user is looking at while they read it. Nothing is decided here. A
+        second place that decided what a leak is would be the two-sources-of-
+        truth defect this design has spent its whole life refusing, and it
+        would be worse in diagnostics than anywhere else, because a support
+        dump is believed precisely when the entity is not.
+
+        It exists because the mechanism is in memory BY DESIGN. The alarm is
+        deliberately not persisted (a restored alarm can be stale), and neither
+        is the observation window, so ``state.as_dict()`` -- everything
+        diagnostics carried until now -- says nothing whatsoever about any of
+        it. The failure mode this feature has is silence: a scope that has
+        never been observable and a broken integration look identical from
+        outside, and until now the only thing that could tell them apart was a
+        degraded badge an hour late, in a card the user may not have.
+
+        Two values are worth reading carefully rather than at a glance:
+
+        * ``observed_s`` counts only seconds the scope could have concluded in,
+          so it is not wall clock and will sit still for a scope that is never
+          in a position to observe. It keeps accruing past ``confirm_s`` on a
+          latched scope -- the accumulator is not rewound once the window
+          closes -- so ``observed_s >= confirm_s`` is not by itself the latch.
+          ``latched`` is;
+        * ``evidence_pending`` is HELD, not counting down. A sensor whose last
+          reading was the alarm holds it with no timer running anywhere, which
+          is the state that made a countdown-shaped predicate wrong.
+        """
+        out: dict[str, dict[str, Any]] = {}
+        for scope in self.leak_scopes():
+            state = self.leak_state(scope)
+            zone = self.zones.get(scope)
+            sensor = zone.config.leak_sensor if zone is not None else None
+            out[scope] = {
+                "zone_ids": self.leak_zone_ids(scope),
+                "sources_configured": self.leak_sources_configured(scope),
+                "state_established": self.leak_state_established(scope),
+                "alarm": {
+                    "active": state.active,
+                    "since": state.since.isoformat() if state.since is not None else None,
+                    "sources": sorted(state.sources),
+                    "first_source": state.first_source,
+                    "describing_source": state.describing_source,
+                },
+                "observation": {
+                    "latched": scope in self._leak_observation_done,
+                    "observed_s": round(self._leak_qualified_s(scope), 1),
+                    "confirm_s": self.hub.leak_confirm_s,
+                    "can_observe": self._leak_can_observe(scope),
+                    "evidence_pending": self._leak_evidence_pending(scope),
+                    "stall": self.leak_observation_stall(scope),
+                },
+                "leak_sensor": sensor or None,
+                # The remembered reading, which is the one piece of this that
+                # is memory rather than live state: it is what "hold what
+                # withholds, never hold what permits" operates on, so a support
+                # dump that omitted it could not explain why a window is open.
+                "leak_sensor_reading": (self._leak_sensor_reading.get(sensor) if sensor else None),
+                "meters": sorted(self.accountant.scope_entity_ids(scope)),
+            }
+        return out
+
     def _track_leak_sources(self) -> None:
         """Watch everything that can change what this scope could conclude.
 

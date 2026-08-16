@@ -105,11 +105,11 @@ lasciato esito.
   cicli è possibile e opt-in.
 - Su quelle entità **`unavailable` è uno stato normale**, e può durare
   indefinitamente: significa che non è stato stabilito nulla. Un'automazione
-  scritta lì sopra in quel caso non scatta mai, senza dire niente. Anche dopo
-  ogni riavvio l'entità resta `unavailable` per una finestra di conferma
-  prima di dire `off`, per non far scattare un «perdita rientrata» che
-  nessuno ha verificato. Leggi [istruzioni.md](istruzioni.md) §8 prima di
-  automatizzare.
+  scritta lì sopra in quel caso non scatta mai, senza dire niente. La
+  sequenza dopo ogni riavvio è `unavailable` → (una finestra di conferma) →
+  `off`, quindi l'automazione di rientro va scritta con `from: "on"` oltre a
+  `to: "off"`, altrimenti scatta anche a ogni riavvio. L'esempio completo è
+  in [istruzioni.md](istruzioni.md) §8: leggilo prima di automatizzare.
 - La **mancanza d'acqua** è un'altra cosa: `on` sul suo sensore significa che
   l'acqua non c'è. Con quel sensore un ciclo viene rifiutato invece di
   partire a vuoto (dopo una finestra di conferma), e una valvola che si
