@@ -362,9 +362,9 @@ nessuno: **un riavvio di Home Assistant la fa sparire.** L'allarme vive in
 memoria e deliberatamente non viene salvato (vedi i punti sull'entità qui
 sotto), quindi la segnalazione se ne va con lui e torna solo quando la prova
 è stata raccolta di nuovo, per un'intera finestra di conferma. Lo stesso vale
-per la segnalazione di mancanza d'acqua. Una segnalazione sparita la mattina
-dopo un riavvio non è rientrata: è stata dimenticata, e si sta
-riconquistando.
+per la segnalazione di mancanza d'acqua. Quindi una segnalazione sparita la
+mattina dopo un riavvio da sola non dimostra niente: è stata dimenticata, non
+risolta, e se torni a vederla dipende dalle prove, non dalla segnalazione.
 
 **Le entità di perdita** sono `binary_sensor` con `device_class: problem` —
 una per zona più una per l'impianto — ed è su queste che va scritta
