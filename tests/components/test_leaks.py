@@ -15,7 +15,10 @@ from datetime import timedelta
 from typing import Any
 
 import pytest
-from custom_components.irrigation_maestro.const import DOMAIN
+from custom_components.irrigation_maestro.const import (
+    DEGRADED_LEAK_NEVER_OBSERVABLE,
+    DOMAIN,
+)
 from custom_components.irrigation_maestro.engine.metering import HUB_SCOPE
 from custom_components.irrigation_maestro.leak import (
     SOURCE_NO_FLOW_CLOSED,
@@ -33,7 +36,7 @@ from homeassistant.helpers import issue_registry as ir
 from homeassistant.util import dt as dt_util
 from homeassistant.util.async_ import get_scheduled_timer_handles
 
-from .mocks import BEHAVIOR_STUCK, MockValvePark
+from .mocks import BEHAVIOR_STUCK, BEHAVIOR_UNAVAILABLE, MockValvePark
 from .test_session import (
     START,
     advance,
@@ -3581,3 +3584,237 @@ async def test_a_supply_notice_restored_inactive_by_a_restart_is_not_re_announce
     await hass.async_block_till_done()
 
     assert _bodies(sent) == []
+
+
+# The freeze, made legible ---------------------------------------------------
+#
+# `all_valves_closed()` is strict across every managed valve plus the master,
+# so ONE valve that cannot say where it is turns source 2 off for every
+# meter-backed scope at once. The refusal is right -- a system nobody can see
+# at rest cannot be judged at rest -- and none of it is weakened here. What is
+# fixed is that it was silent: the only symptom was `leak_never_observable` an
+# hour later, on `zone_state`, a surface the HUB scope does not have.
+
+
+def _valve_notices(hass: HomeAssistant) -> list[str]:
+    """Every standing valve-unreported notice, by the valve it names."""
+    return sorted(
+        issue_id.removeprefix("valve_unreported_")
+        for (domain, issue_id), issue in ir.async_get(hass).issues.items()
+        if domain == DOMAIN and issue_id.startswith("valve_unreported_") and issue.active
+    )
+
+
+async def test_one_unreported_valve_names_itself_on_every_surface(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory, caplog: pytest.LogCaptureFixture
+) -> None:
+    """The shared-line-meter topology, which is the one with no other surface.
+
+    Two zones behind one line meter have no source on their own scopes --
+    `scope_for` sends that meter's water to HUB_SCOPE, because which of the two
+    leaked is unanswerable -- so the hub scope is the only one watching, and it
+    is exactly the scope that cannot publish a `degraded` key, because
+    `degraded` lives on `zone_state`. A flat battery on either valve therefore
+    used to switch the whole feature off with no surface anywhere able to say
+    so.
+
+    ONE notice, naming the valve, not one per blocked scope: three scopes are
+    blocked here and the cause is a single entity.
+    """
+    freezer.move_to(START)
+    park = MockValvePark(hass)
+    park.add("valve.a")
+    park.add("valve.b")
+    hass.states.async_set("sensor.line", "0.0", {"unit_of_measurement": "L/min"})
+    mock_weather(hass)
+    entry = await setup_hub(
+        hass,
+        [
+            zone_data("Alpha", "valve.a", at="23:00"),
+            zone_data("Beta", "valve.b", at="23:00"),
+        ],
+        {"line_flow_sensor": "sensor.line"},
+    )
+    runtime = entry.runtime_data
+    alpha, beta = runtime.zone_ids
+
+    await advance(hass, freezer, _WELL_PAST_CONFIRM_S, step=10.0)
+    assert runtime.leak_diagnostics()[HUB_SCOPE]["observation"]["can_observe"] is True
+    assert runtime.leak_diagnostics()[HUB_SCOPE]["observation"]["blocking_valves"] == []
+
+    park.set_behavior("valve.b", BEHAVIOR_UNAVAILABLE)
+    await advance(hass, freezer, 60, step=10.0)
+
+    # Named at once in diagnostics: the reader must not have to deduce which of
+    # the valves it is, which is the whole point of the field.
+    hub_observation = runtime.leak_diagnostics()[HUB_SCOPE]["observation"]
+    assert hub_observation["can_observe"] is False
+    assert hub_observation["blocking_valves"] == ["valve.b"]
+    assert runtime.leak_unreported_valves() == ["valve.b"]
+    # And Alpha, whose water this meter measures, is blocked by a valve that is
+    # not its own -- the fact that is impossible to guess from the outside.
+    assert runtime.leak_diagnostics()[alpha]["observation"]["blocking_valves"] == []
+    assert runtime.leak_sources_configured(alpha) is False
+    assert runtime.leak_watch(beta) == "system"
+
+    # The notice waits out the same threshold the stall keys use. Nothing fires
+    # when an hour merely runs out -- an entity that has gone quiet makes no
+    # further state change -- so this also proves the wake was armed.
+    assert _valve_notices(hass) == []
+    await advance(hass, freezer, 3700, step=60.0)
+
+    assert _valve_notices(hass) == ["valve.b"]
+    issue = ir.async_get(hass).async_get_issue(DOMAIN, "valve_unreported_valve.b")
+    assert issue is not None
+    assert issue.translation_placeholders == {"valve": "valve.b"}
+    assert issue.severity == ir.IssueSeverity.WARNING
+
+    # A configuration change runs `_reconcile_leak_issues`, which sweeps the
+    # `leak_` prefix. This notice deliberately does not share that prefix, and
+    # a sweep that ate it would take down a live warning.
+    await _reconfigure_zone(hass, entry, alpha, name="Alpha Renamed")
+    assert _valve_notices(hass) == ["valve.b"]
+    # And said ONCE. This is evaluated on every source and valve event there
+    # is, and a standing condition that re-announced itself on each of them
+    # would fill the log for the whole outage -- the same "one alarm, one
+    # notification" rule the leak side is built on, applied to a warning.
+    said = [
+        record
+        for record in caplog.records
+        if "has not reported open or closed" in record.getMessage()
+    ]
+    assert len(said) == 1
+
+    # And it comes down on the valve's own word, with no window: the moment it
+    # reports, flow detection is running again and the notice's claim is false.
+    park.set_behavior("valve.b", "normal")
+    park.force_state("valve.b", "closed")
+    await hass.async_block_till_done()
+
+    assert _valve_notices(hass) == []
+    assert runtime.leak_diagnostics()[HUB_SCOPE]["observation"]["blocking_valves"] == []
+
+
+async def test_a_valve_that_is_merely_open_is_watering_and_is_never_a_fault(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    """`is_closed` is False for an open valve too, and that is not the fault.
+
+    The predicate this reports on is strict in both directions, so the naive
+    reading -- "not closed" -- would name a watering valve and report every
+    single cycle as a broken installation. Only uncertainty is a fault: a valve
+    that says "open" has told us exactly where it is.
+    """
+    freezer.move_to(START)
+    park = MockValvePark(hass)
+    park.add("valve.a")
+    hass.states.async_set("sensor.a_flow", "0.0", {"unit_of_measurement": "L/min"})
+    mock_weather(hass)
+    entry = await setup_hub(
+        hass,
+        [zone_data("Alpha", "valve.a", at="23:00", flow_sensor="sensor.a_flow")],
+        {},
+    )
+    runtime = entry.runtime_data
+    zone_id = runtime.zone_ids[0]
+
+    park.force_state("valve.a", "open")
+    await advance(hass, freezer, 3700, step=60.0)
+
+    assert runtime.leak_unreported_valves() == []
+    assert _valve_notices(hass) == []
+    # It genuinely cannot observe -- water through an open valve is watering --
+    # and the field says so by naming nobody rather than by naming the valve.
+    assert runtime.leak_diagnostics()[zone_id]["observation"]["can_observe"] is False
+    assert runtime.leak_diagnostics()[zone_id]["observation"]["blocking_valves"] == []
+
+
+async def test_no_meter_anywhere_means_no_notice_about_a_source_that_never_ran(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    """The notice asserts that flow-based detection has STOPPED.
+
+    On an installation with no flow meter it was never running, so saying it
+    has stopped would be false in the one state the notice can be shown in.
+    The zone's own leak sensor is still blocked by its unreported valve, and
+    that is one zone's problem with a surface of its own -- `zone_state`'s
+    degraded key -- rather than a second thing for this notice to claim.
+    """
+    freezer.move_to(START)
+    park = MockValvePark(hass)
+    park.add("valve.a")
+    hass.states.async_set("binary_sensor.a_leak", "off", {"device_class": "moisture"})
+    mock_weather(hass)
+    entry = await setup_hub(
+        hass, [zone_data("Alpha", "valve.a", at="23:00", leak_sensor="binary_sensor.a_leak")]
+    )
+    runtime = entry.runtime_data
+    zone_id = runtime.zone_ids[0]
+
+    park.set_behavior("valve.a", BEHAVIOR_UNAVAILABLE)
+    await advance(hass, freezer, 3700, step=60.0)
+    # Past the threshold AND evaluated: a configuration change reaches the
+    # notice through the rebuild, so this asserts the gate rather than merely
+    # the absence of a timer -- with no meter no wake is armed either, and a
+    # test that only advanced the clock would pass on the wrong reason.
+    await _reconfigure_zone(hass, entry, zone_id, name="Alpha Renamed")
+
+    assert _valve_notices(hass) == []
+    # Named in diagnostics all the same: the field reports what blocks a scope,
+    # and this valve genuinely blocks source 1 for its own zone.
+    assert runtime.leak_diagnostics()[zone_id]["observation"]["blocking_valves"] == ["valve.a"]
+    assert runtime.leak_observation_stall(zone_id) == DEGRADED_LEAK_NEVER_OBSERVABLE
+
+
+async def test_a_valve_notice_survives_a_reload_and_is_swept_when_the_valve_goes(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    """The two lifecycle ends a repair on this branch has to have.
+
+    Across a reload the notice must not churn: nothing was re-detected, the
+    valve never spoke, and deleting and re-creating it would reset its creation
+    time and lose the user's dismissal. The raise is gated on the threshold and
+    the delete on the valve, so a valve still silent after a reload -- where
+    the threshold has NOT been re-earned, since the timestamp is when this
+    runtime first saw it -- keeps exactly the notice it had.
+
+    And a valve removed from the configuration while the entry was unloaded has
+    no controller left to evaluate, so the reconcile against the registry is
+    the only thing that can ever take its notice down.
+    """
+    freezer.move_to(START)
+    park = MockValvePark(hass)
+    park.add("valve.a")
+    park.add("valve.master")
+    hass.states.async_set("sensor.a_flow", "0.0", {"unit_of_measurement": "L/min"})
+    mock_weather(hass)
+    entry = await setup_hub(
+        hass,
+        [zone_data("Alpha", "valve.a", at="23:00", flow_sensor="sensor.a_flow")],
+        {"master_valve": "valve.master"},
+    )
+    registry = ir.async_get(hass)
+
+    park.set_behavior("valve.master", BEHAVIOR_UNAVAILABLE)
+    await advance(hass, freezer, 3700, step=60.0)
+    assert _valve_notices(hass) == ["valve.master"]
+    raised_at = registry.async_get_issue(DOMAIN, "valve_unreported_valve.master").created
+
+    await hass.config_entries.async_reload(entry.entry_id)
+    await hass.async_block_till_done()
+    await advance(hass, freezer, 600, step=60.0)
+
+    assert _valve_notices(hass) == ["valve.master"]
+    survivor = registry.async_get_issue(DOMAIN, "valve_unreported_valve.master")
+    assert survivor is not None
+    assert survivor.created == raised_at  # untouched, not deleted and re-raised
+
+    await hass.config_entries.async_unload(entry.entry_id)
+    await hass.async_block_till_done()
+    hass.config_entries.async_update_entry(
+        entry, options={key: value for key, value in entry.options.items() if key != "master_valve"}
+    )
+    await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    assert _valve_notices(hass) == []

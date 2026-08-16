@@ -236,6 +236,15 @@ class IrrigationRuntime:
         self._leak_stalled_since: dict[str, datetime] = {}
         self._leak_observation_unsub: CALLBACK_TYPE | None = None
         self._leak_source_unsub: CALLBACK_TYPE | None = None
+        #: When each managed valve last became unable to say where it is, for
+        #: as long as it still cannot. Per VALVE and not per scope, because the
+        #: cause is one entity while the cost is the whole installation:
+        #: ``all_valves_closed()`` is strict across every managed valve plus the
+        #: master, so one flat battery or one cloud integration in backoff
+        #: freezes source 2 for EVERY meter-backed scope at once. Nothing else
+        #: records it, and until it did, the only symptom was a degraded badge
+        #: an hour later on a surface the hub scope does not have.
+        self._valve_unreported_since: dict[str, datetime] = {}
         #: Zones whose outage has been ANNOUNCED -- confirmed, notified and
         #: carrying a repair notice. Memory only, and edge detection only:
         #: it decides whether a transition still has to be said out loud,
@@ -323,6 +332,7 @@ class IrrigationRuntime:
         self._leak_sensor_reading.clear()
         self._leak_source_ids.clear()
         self._leak_observation_done.clear()
+        self._valve_unreported_since.clear()
         self._cancel_leak_observation_wake()
         if self._leak_source_unsub is not None:
             self._leak_source_unsub()
@@ -1831,9 +1841,199 @@ class IrrigationRuntime:
                 self._leak_stalled_s.pop(scope, None)
                 self._leak_stalled_since.pop(scope, None)
                 settled.append(scope)
+        # Beside the window and not inside the loop: this is a fact about the
+        # installation, not about any one scope, and every caller that can
+        # change what a scope concludes can change it too.
+        self._note_valve_reporting(now)
+        self._evaluate_valve_notices()
         self._arm_leak_observation_wake()
         if settled:
             self.dispatch_update()
+
+    def _note_valve_reporting(self, now: datetime) -> None:
+        """Track which managed valves cannot say where they are, and since when.
+
+        "Cannot say" is neither ``is_closed`` nor ``is_open``, both of which are
+        strict -- so this is exactly ``unavailable``, ``unknown``, a valve
+        travelling, and an entity that is not there at all. Deliberately not
+        "is not closed": a valve that reports OPEN is watering, which is a
+        legitimate reason for ``all_valves_closed()`` to be False and no fault
+        of anybody's. Only uncertainty is a fault, and only uncertainty is
+        recorded here.
+
+        The timestamp is when this runtime first saw the valve uncertain, not
+        when the device fell over -- a restart resets it, the same safe
+        direction the rest of this feature takes: we do not know how long it
+        has been out and must not assert an hour we did not watch.
+
+        Pruned to the valves the configuration names now, so a valve removed
+        from the installation leaves nothing behind.
+        """
+        managed = self.managed_valve_entities()
+        for controller in self.all_valve_controllers():
+            if controller.is_closed or controller.is_open:
+                self._valve_unreported_since.pop(controller.entity_id, None)
+            else:
+                self._valve_unreported_since.setdefault(controller.entity_id, now)
+        for entity_id in set(self._valve_unreported_since) - set(managed):
+            del self._valve_unreported_since[entity_id]
+
+    def leak_unreported_valves(self) -> list[str]:
+        """Every managed valve that currently cannot say where it is.
+
+        Sorted, so a diagnostics dump and a repair notice list them the same
+        way every time rather than by dict order.
+        """
+        return sorted(self._valve_unreported_since)
+
+    def _leak_blocking_valves(self, scope: str) -> list[str]:
+        """Which valves are the reason this scope can conclude nothing.
+
+        Empty when the scope CAN observe, and empty when it cannot for a reason
+        that is not a valve -- a meter that is not measuring, a sensor that has
+        never spoken. The question this answers is the one a support dump is
+        opened to answer: not "is something wrong" but "which of eight valves
+        is it", which until now had to be deduced from ``can_observe: false``
+        and a hunch.
+
+        Both halves, because both are gated on a valve. Source 1 is blocked by
+        this zone's own valve going uncertain; source 2 by ANY managed valve
+        doing so, because ``all_valves_closed()`` is strict across the whole
+        installation -- which is why the hub scope, whose only half is the
+        meter, gets a complete answer here and has no other surface that could
+        give it one.
+
+        Only uncertainty is named. A valve that reports open is watering, and
+        listing it would report every running cycle as a fault.
+        """
+        if self._leak_can_observe(scope):
+            return []
+        blocking: set[str] = set()
+        zone = self.zones.get(scope)
+        sensor = zone.config.leak_sensor if zone is not None else None
+        if sensor and zone is not None and zone.valve.entity_id in self._valve_unreported_since:
+            blocking.add(zone.valve.entity_id)
+        if self.accountant.scope_is_measuring(scope):
+            blocking.update(self._valve_unreported_since)
+        return sorted(blocking)
+
+    def _evaluate_valve_notices(self) -> None:
+        """Say out loud which valve has switched flow-based leak detection off.
+
+        The refusal itself is right -- a system nobody can see at rest cannot be
+        judged at rest -- and this changes none of it. What it changes is that
+        the refusal stops being silent. A flat battery, a cloud integration in
+        backoff, or a master valve deleted from Home Assistant but left in the
+        options turns source 2 off for EVERY scope at once, and the only symptom
+        was ``leak_never_observable`` an hour later, on ``zone_state`` -- a
+        surface the hub scope does not have, which is the scope most likely to
+        be meter-only.
+
+        ONE NOTICE PER VALVE, never one per blocked scope. The cause is a single
+        entity and the cost is uniform, so N notices for one flat battery would
+        be the alarm fatigue this design refuses everywhere else. Two failing
+        valves genuinely are two things to go and fix, and each gets its own
+        lifecycle rather than one notice whose text mutates underneath a
+        dismissal.
+
+        Raised only where it costs something: no meter anywhere means source 2
+        was never running, and announcing that it has stopped would be false.
+        Source 1's own blocking is not announced here -- it is one zone's
+        problem, it already has ``leak_never_observable`` on a surface that zone
+        HAS, and one notice cannot truthfully say two different things.
+
+        The delete path is reached from three directions, which is what the
+        branch requires of a repair: the valve reporting again (its own state
+        change calls this), the valve leaving the configuration (the rebuild
+        calls this, and ``_note_valve_reporting`` has already pruned it), and a
+        notice left by an earlier runtime whose valve is fine now (this runs at
+        setup, and the registry is what it reconciles against -- there is no
+        memory of "announced" to go stale, which is the defect the supply side
+        had).
+
+        Nothing is re-announced across a reload: a valve still uncertain keeps
+        its notice untouched, because the raise is gated on the threshold while
+        the delete is gated on the valve, and after a reload the threshold has
+        not been re-earned. A notice restored INACTIVE by a restart and still
+        deserved is re-created, which upserts and preserves its creation time
+        and the user's dismissal.
+        """
+        registry = ir.async_get(self.hass)
+        now = dt_util.utcnow()
+        costs_something = bool(self.accountant.metered_scopes())
+        managed = set(self.managed_valve_entities())
+        for entity_id in managed:
+            issue_id = self._valve_unreported_issue_id(entity_id)
+            since = self._valve_unreported_since.get(entity_id)
+            if since is None:
+                ir.async_delete_issue(self.hass, DOMAIN, issue_id)
+                continue
+            if not costs_something:
+                continue
+            existing = registry.async_get_issue(DOMAIN, issue_id)
+            if existing is not None and existing.active:
+                continue
+            if (now - since).total_seconds() < _LEAK_STALL_NOTICE_S:
+                continue
+            _LOGGER.warning(
+                "%s has not reported open or closed for %d minutes; leak detection by "
+                "flow is not running while that lasts",
+                entity_id,
+                int(_LEAK_STALL_NOTICE_S // 60),
+            )
+            ir.async_create_issue(
+                self.hass,
+                DOMAIN,
+                issue_id,
+                is_fixable=False,
+                severity=ir.IssueSeverity.WARNING,
+                translation_key="valve_unreported",
+                translation_placeholders={"valve": entity_id},
+            )
+        prefix = self._valve_unreported_issue_id("")
+        for domain, issue_id in list(registry.issues):
+            # A valve that left the configuration while this entry was unloaded
+            # has no entry in the loop above and nothing else will ever look at
+            # it again.
+            if (
+                domain == DOMAIN
+                and issue_id.startswith(prefix)
+                and issue_id.removeprefix(prefix) not in managed
+            ):
+                ir.async_delete_issue(self.hass, DOMAIN, issue_id)
+
+    def _valve_notice_delays_s(self) -> list[float]:
+        """When each not-yet-announced uncertain valve reaches the threshold.
+
+        Nothing else fires when the hour merely runs out -- an entity that has
+        gone quiet makes no further state change, which is the whole shape of
+        this failure -- so the delays join the observation window's own timer
+        rather than arming a second one.
+
+        Gated on a meter existing for the same reason the notice is: an
+        installation with no flow meter must not carry an hourly timer for a
+        notice that can never be raised.
+        """
+        if not self.accountant.metered_scopes():
+            return []
+        now = dt_util.utcnow()
+        delays = []
+        for since in self._valve_unreported_since.values():
+            remaining_s = _LEAK_STALL_NOTICE_S - (now - since).total_seconds()
+            if remaining_s > 0.0:
+                delays.append(remaining_s)
+        return delays
+
+    @staticmethod
+    def _valve_unreported_issue_id(entity_id: str) -> str:
+        """Deliberately NOT under the ``leak_`` prefix.
+
+        ``_reconcile_leak_issues`` sweeps that prefix for scopes that no longer
+        exist, and a valve id is not a scope id. Sharing the prefix would put
+        this notice one rebuild away from being deleted by a sweep that has no
+        idea what it is.
+        """
+        return f"valve_unreported_{entity_id}"
 
     def _note_leak_stall(self, scope: str, now: datetime) -> None:
         """Integrate the idle time this scope has spent unable to conclude.
@@ -1950,6 +2150,12 @@ class IrrigationRuntime:
                     "window_s": self._leak_observation_window_s(),
                     "confirm_s": self.hub.leak_confirm_s,
                     "can_observe": self._leak_can_observe(scope),
+                    # WHICH valve, not merely that one is the reason. A strict
+                    # all_valves_closed() means any single uncertain valve
+                    # freezes every meter-backed scope, and deducing which of
+                    # eight it is from can_observe alone is the support
+                    # conversation this field exists to end.
+                    "blocking_valves": self._leak_blocking_valves(scope),
                     "evidence_pending": self._leak_evidence_pending(scope),
                     "stall": self.leak_observation_stall(scope),
                 },
@@ -2049,6 +2255,7 @@ class IrrigationRuntime:
             for scope in self._leak_detectors
             if (delay := self._leak_wake_delay_s(scope)) is not None
         ]
+        pending.extend(self._valve_notice_delays_s())
         if not pending:
             return
         self._leak_observation_unsub = async_call_later(
