@@ -118,7 +118,14 @@ class LeakDetector:
         self._above_threshold_s = 0.0
         self._unsubs: list[CALLBACK_TYPE] = []
         self._repeat_unsub: CALLBACK_TYPE | None = None
+        #: The interval the standing reminder was armed for, so a change to
+        #: ``leak_repeat_min`` can be noticed while an alarm is up. ``None``
+        #: means nothing is armed.
+        self._repeat_armed_s: float | None = None
         self._sensor_wake_unsub: CALLBACK_TYPE | None = None
+        #: The entity id whose reading raised source 1, kept so that a REPOINT
+        #: can be told from a reading. See ``_evaluate_valve_sensor``.
+        self._alarm_sensor: str | None = None
 
     @property
     def flow_evidence_pending(self) -> bool:
@@ -175,8 +182,20 @@ class LeakDetector:
         this worse than a plain removal: put a second zone behind a zone's
         meter and its scope becomes HUB_SCOPE, so a stale zone alarm and a
         fresh hub alarm would otherwise stand together for one physical leak.
+
+        The reminder is re-armed here, and ONLY when its interval has actually
+        changed. ``_arm_repeat`` is otherwise reached from the raise and from
+        its own expiry, so editing ``leak_repeat_min`` while an alarm stood
+        never reached the alarm that was standing: ``0 -> N`` meant that alarm
+        never reminded again for the whole of its life, which is precisely the
+        alarm the user was reaching for the setting because of. Guarded on the
+        change rather than re-armed unconditionally, because an unrelated edit
+        must not push a reminder that was nearly due back to the full interval,
+        and this method runs on every configuration change there is.
         """
         self._unsubscribe_sources()
+        if self.state.active and self._repeat_armed_s != self._repeat_interval_s():
+            self._arm_repeat()
         zone = self._zone
         sensor = zone.config.leak_sensor if zone else None
         if zone is not None and sensor:
@@ -247,22 +266,35 @@ class LeakDetector:
         starts counting at the close, not at the moment the probe went wet.
         After a restart both timestamps are the restore, so the window restarts
         -- the same safe direction as everything else here.
+
+        A REPOINT is judged before any reading is, and it has to be: an alarm
+        raised by the old sensor cannot be withdrawn by the new one's silence.
+        ``off`` withdrew and ``on`` re-timed, but ``unknown``, ``unavailable``
+        and an entity that does not exist yet all took a bare return, leaving
+        the old sensor's alarm standing behind a repair notice that named a
+        sensor which had raised nothing -- and, under ``close_and_block``,
+        blocking every cycle until the new entity happened to speak. Ruling L8
+        called repointing worse than stranding, and the remedy went in for
+        source 2 alone. Pointing the setting elsewhere is the user's own
+        statement about the old sensor, exactly as removing it is.
         """
         self._cancel_sensor_wake()
         zone = self._zone
         sensor = zone.config.leak_sensor if zone else None
+        if self._alarm_sensor is not None and self._alarm_sensor != sensor:
+            self._forget_valve_sensor()
         if zone is None or not sensor:
             # No sensor configured any more (or none ever, for a hub scope).
             # Withdrawn rather than merely unwatched: nothing else will ever
             # call this again for that source, so a bare return would strand an
             # alarm raised by a sensor the user has since removed. A no-op when
             # the source was not among the alarm's own.
-            self._withdraw(SOURCE_VALVE_SENSOR)
+            self._forget_valve_sensor()
             return
         state = self._runtime.hass.states.get(sensor)
         value = None if state is None else state.state
         if value == _STATE_NO_LEAK:
-            self._withdraw(SOURCE_VALVE_SENSOR)
+            self._forget_valve_sensor()
             return
         if state is None or value != _STATE_LEAK:
             return
@@ -275,6 +307,9 @@ class LeakDetector:
         confirm_s = self._runtime.hub.leak_confirm_s
         elapsed_s = (dt_util.utcnow() - max(state.last_changed, closed_since)).total_seconds()
         if elapsed_s >= confirm_s:
+            # Recorded before the raise, not after, so an alarm can never exist
+            # without the entity id that produced it being known.
+            self._alarm_sensor = sensor
             self._raise(SOURCE_VALVE_SENSOR)
             return
         # Nothing else will fire when the window merely runs out, so ask to be
@@ -282,6 +317,16 @@ class LeakDetector:
         self._sensor_wake_unsub = async_call_later(
             self._runtime.hass, confirm_s - elapsed_s, self._on_sensor_wake
         )
+
+    def _forget_valve_sensor(self) -> None:
+        """Withdraw source 1 and forget which sensor had raised it.
+
+        The pair is always written together: leaving the entity id behind after
+        a withdrawal would make the next repoint look like one that had already
+        been handled.
+        """
+        self._alarm_sensor = None
+        self._withdraw(SOURCE_VALVE_SENSOR)
 
     def _valve_closed_since(self, zone: ZoneRuntime) -> datetime | None:
         """When this zone's valve last became closed, or None if it is not.
@@ -463,10 +508,17 @@ class LeakDetector:
         avoid, at once.
         """
         self._cancel_repeat()
-        repeat_s = self._runtime.hub.leak_repeat_min * 60
+        repeat_s = self._repeat_interval_s()
+        # Recorded even when it is off, so that "off" is a state start() can
+        # tell from "never armed" and a later 0 -> N is noticed.
+        self._repeat_armed_s = repeat_s
         if repeat_s <= 0:
             return  # configured off: raise and clear still report
         self._repeat_unsub = async_call_later(self._runtime.hass, repeat_s, self._on_repeat)
+
+    def _repeat_interval_s(self) -> float:
+        """The configured reminder interval in seconds, from one expression."""
+        return float(self._runtime.hub.leak_repeat_min) * 60
 
     @callback
     def _on_repeat(self, _now: datetime) -> None:
@@ -477,6 +529,7 @@ class LeakDetector:
         self._arm_repeat()
 
     def _cancel_repeat(self) -> None:
+        self._repeat_armed_s = None
         if self._repeat_unsub is not None:
             self._repeat_unsub()
             self._repeat_unsub = None

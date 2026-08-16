@@ -120,6 +120,28 @@ _LEAK_SENSOR_REPORTING = frozenset({_LEAK_SENSOR_ALARM, _LEAK_SENSOR_CLEAR})
 #: shutdown. Cheap by construction (one timer, one state read per meter), and
 #: the alternative is concluding "no problem" from evidence nobody finished.
 _LEAK_CONFIRMING_RECHECK_S = 30.0
+#: The least observation any scope must collect before it may assert that there
+#: is no problem, whatever ``leak_confirm_s`` is set to. Zero was chosen to mean
+#: "do not wait before believing an alarm"; without this floor it silently also
+#: meant "do not wait before asserting the absence of one", which is a different
+#: promise and one nobody made -- ``0.0 < 0`` is False, so the window closed on
+#: the first bookkeeping run of setup and a zone whose leak sensor had never
+#: reported and whose meter was dead published ``off`` with nothing behind it.
+#: The two questions are separated here rather than by refusing the setting,
+#: because the setting is right and only its second reading was wrong.
+#: Thirty seconds is the meter's own sample cadence -- the granularity at which
+#: source 2's answer can change at all -- so it is the shortest interval in
+#: which either source could have said anything.
+_LEAK_MIN_OBSERVATION_S = 30.0
+#: The Repairs id prefix every scope's leak alarm carries, and the ids that
+#: share it WITHOUT naming a scope. ``_reconcile_leak_issues`` sweeps by prefix
+#: -- it has to, because the scope of a zone deleted while the entry was
+#: unloaded is unknowable from the configuration that remains -- and a
+#: non-scope id is indistinguishable from a scope's by shape alone. Anything
+#: new that starts with the prefix must be named here or it will be swept.
+_LEAK_ISSUE_PREFIX = "leak_"
+_LEAK_ACTION_ISSUE_ID = "leak_action_invalid"
+_LEAK_NON_SCOPE_ISSUE_IDS = frozenset({_LEAK_ACTION_ISSUE_ID})
 #: How long a scope may go without being able to conclude anything before the
 #: zone says so out loud. Counted in IDLE seconds only -- a zone that is
 #: watering cannot conclude and is not supposed to -- so no session length can
@@ -164,6 +186,14 @@ class IrrigationRuntime:
         self.hub = HubConfig.from_options(dict(entry.options))
         self.state = RuntimeState(hass, entry.entry_id)
         self.zones: dict[str, ZoneRuntime] = {}
+        #: The name of every zone in the configuration, plus the names of those
+        #: removed by the MOST RECENT rebuild and no earlier one. A notice about
+        #: a zone's removal is written after ``_build_zones`` has already
+        #: forgotten it -- an alarm cleared BY the deletion, a supply notice
+        #: taken down with it -- and "01J7…: the leak condition has cleared" is
+        #: not a sentence to send anyone. Bounded by construction: it is rebuilt
+        #: from the previous set each time, so it never accumulates.
+        self._zone_names: dict[str, str] = {}
         self.master_controller: ValveController | None = None
         self.notifier = Notifier(hass, lambda: self.hub.notifications)
         self.weather = WeatherClient(hass, lambda: self.hub)
@@ -261,6 +291,7 @@ class IrrigationRuntime:
         # setup is synchronous, and a ledger publishes nothing until its first
         # tick or state event.
         self._rebuild_leak_detectors()
+        self._restore_supply_announcements()
         self._track_water_supply_sensors()
         self.watchdog.start()
         self.sentinel.start()
@@ -318,6 +349,13 @@ class IrrigationRuntime:
             zones[config.zone_id] = ZoneRuntime(
                 config, ValveController(self.hass, config.valve_entity)
             )
+        # The names as they stood BEFORE this rebuild, kept for exactly one
+        # rebuild: everything that reports a zone's REMOVAL runs after this
+        # line, by which point self.zones can no longer name it.
+        self._zone_names = {
+            **{zone_id: zone.config.name for zone_id, zone in self.zones.items()},
+            **{zone_id: zone.config.name for zone_id, zone in zones.items()},
+        }
         self.zones = zones
         self.master_controller = (
             ValveController(self.hass, self.hub.master_valve) if self.hub.master_valve else None
@@ -1386,37 +1424,101 @@ class IrrigationRuntime:
         surviving scope keeps its detector and is only told to re-resolve its
         sources; only a scope that left the configuration is stopped and
         dropped.
+
+        The ORDER of the steps below is a safety property rather than tidiness,
+        and it was wrong in both directions. ``start()`` can WITHDRAW a source
+        -- a meter that has left the configuration, a leak sensor cleared or
+        repointed -- and a withdrawal dispatches synchronously, so whatever the
+        entities would publish at that instant is what an automation acts on.
+        Everything that decides what they may say therefore runs BEFORE the
+        first ``start()``:
+
+        * ``_resolve_leak_source_ids`` drops the observation window of a scope
+          whose source set changed. Run after the start loop, as it was, a
+          withdrawal found the OLD window still latched and the entity
+          published ``off`` -- "there is no problem" -- for a scope whose
+          alarming source the user had just removed, settling at
+          ``unavailable`` only a moment later. That ``off`` is the exact edge
+          the shipped "leak cleared -> reopen the mains" automation fires on,
+          in the middle of a live leak. It can lead safely because it reads
+          only ``self.zones`` and the accountant, and nothing a detector sets;
+        * ``_track_leak_sources`` and ``_seed_leak_sensor_readings`` put the
+          runtime's own bookkeeping IN FRONT of the detectors' subscriptions.
+          Home Assistant fires state listeners in registration order, so
+          registering the recorder first is what makes the runtime see a
+          sensor's new reading before a withdrawal is judged against it.
+          Registered second, a genuine clear published
+          ``on -> unavailable -> off``: ``_leak_evidence_pending`` was still
+          holding the remembered ``on`` when the alarm came down, so the latch
+          could not close in the same turn and the safe automation, which
+          triggers ``from: "on"``, never fired at all.
         """
         scopes = self.leak_scopes()
         metered = self.accountant.metered_scopes()
+        cleared: list[tuple[str, LeakState]] = []
         for scope in list(self._leak_detectors):
             if scope not in scopes:
-                self._leak_detectors.pop(scope).stop()
-                # With the detector, so a zone id reused later serves its own
-                # observation window rather than inheriting the elapsed one of
-                # the zone that had that id.
-                self._forget_leak_observation(scope)
-                self._leak_source_ids.pop(scope, None)
-                # A dropped detector never withdraws -- stop() only cancels its
-                # subscriptions -- so this is the only place its Repairs issue
-                # can ever be deleted. Without it, removing a zone that was
-                # alarming leaves an issue nothing can take down.
-                ir.async_delete_issue(self.hass, DOMAIN, self._leak_issue_id(scope))
+                state = self._drop_leak_detector(scope)
+                if state is not None:
+                    cleared.append((scope, state))
         for scope in scopes:
-            detector = self._leak_detectors.get(scope)
-            if detector is None:
-                detector = LeakDetector(self, scope)
-                self._leak_detectors[scope] = detector
-            detector.start(has_meter=scope in metered)
-        # After start(), so the sources this configuration declares are the
-        # ones watched. A scope that has just GAINED its first source starts
-        # collecting here rather than at whatever state change happens to come
-        # next, and one whose sources changed at all starts again from zero.
+            if scope not in self._leak_detectors:
+                self._leak_detectors[scope] = LeakDetector(self, scope)
+        # A scope that has just GAINED its first source starts collecting here
+        # rather than at whatever state change happens to come next, and one
+        # whose sources changed at all starts again from zero.
         self._resolve_leak_source_ids()
         self._track_leak_sources()
         self._seed_leak_sensor_readings()
+        for scope in scopes:
+            self._leak_detectors[scope].start(has_meter=scope in metered)
+        for scope, state in cleared:
+            # After the rebuild, never inside it. This hook dispatches, and a
+            # dispatch is where an automation reads every leak entity -- so all
+            # of them must already be answering from the configuration as it
+            # now stands, not from a half-applied one.
+            self.on_leak_cleared(scope, state)
         self._note_leak_observation()
         self._reconcile_leak_issues()
+
+    def _drop_leak_detector(self, scope: str) -> LeakState | None:
+        """This scope has left the configuration. Returns an alarm still owed.
+
+        ``stop()`` is cancel-only by its own documentation, so a zone deleted
+        mid-alarm used to leave every consumer of that alarm holding it for
+        ever: no ``cleared`` event, no clearing notification, and an entity
+        removed outright -- and Home Assistant fires no state trigger on a
+        removal, so the automation that closed the mains had nothing whatever
+        to act on. The integration's own block released, because
+        ``leak_blocked_zone_ids`` iterates live detectors: the component
+        recovered and the user was left with the water off and nothing to say
+        why.
+
+        So the clearing transition is owed, and the caller fires it once the
+        rebuild is complete. The event matters most of the three: Ruling L32
+        moves the clearing side of every shipped automation onto
+        ``EVENT_LEAK``, and a surface with a hole in precisely the case that
+        leaves the mains shut is not a surface.
+
+        The detector is popped before anything is told, so
+        ``leak_blocked_zone_ids`` and the resume clause of the clearing message
+        answer from the alarms that actually remain rather than counting this
+        one among them.
+        """
+        detector = self._leak_detectors.pop(scope)
+        detector.stop()
+        # With the detector, so a zone id reused later serves its own
+        # observation window rather than inheriting the elapsed one of the zone
+        # that had that id.
+        self._forget_leak_observation(scope)
+        self._leak_source_ids.pop(scope, None)
+        if detector.state.active:
+            return detector.state
+        # Nothing is owed, so no hook will run and nothing else will ever look
+        # at this scope again: without this, a stale issue would have no path
+        # left that could delete it.
+        ir.async_delete_issue(self.hass, DOMAIN, self._leak_issue_id(scope))
+        return None
 
     def _resolve_leak_source_ids(self) -> None:
         """Re-read each scope's source entities, dropping credit if they moved.
@@ -1464,7 +1566,7 @@ class IrrigationRuntime:
         self._leak_observation_done.discard(scope)
 
     def _reconcile_leak_issues(self) -> None:
-        """Delete the issue of every scope that is not actually alarming.
+        """Delete every leak issue no live alarm is standing behind.
 
         The alarm lives in memory and the issue registry does not, so a restart
         (or an alarm that ended while Home Assistant was down) would otherwise
@@ -1473,13 +1575,31 @@ class IrrigationRuntime:
         from live state and can raise on the spot, so a leak that is still
         present keeps the issue it just re-created.
 
+        Swept by PREFIX rather than by iterating the detectors, which is the
+        narrower case iterating them could not reach: a zone deleted while the
+        entry was unloaded -- or while Home Assistant was stopped -- has no
+        detector left to reconcile its issue, and its scope is unknowable from
+        the configuration that remains. Nothing else can take that issue down.
+
+        The prefix cannot tell a scope's alarm from ``leak_action_invalid``,
+        which is not one and has its own lifecycle, so the exceptions are named
+        (``_LEAK_NON_SCOPE_ISSUE_IDS``) rather than inferred.
+
         Deletion only: an issue is created by the raise, together with the
         notification that belongs to the same transition. Creating one here
         would be a second author for the same fact.
         """
-        for scope, detector in self._leak_detectors.items():
-            if not detector.state.active:
-                ir.async_delete_issue(self.hass, DOMAIN, self._leak_issue_id(scope))
+        standing = {
+            self._leak_issue_id(scope)
+            for scope, detector in self._leak_detectors.items()
+            if detector.state.active
+        }
+        for domain, issue_id in list(ir.async_get(self.hass).issues):
+            if domain != DOMAIN or not issue_id.startswith(_LEAK_ISSUE_PREFIX):
+                continue
+            if issue_id in _LEAK_NON_SCOPE_ISSUE_IDS or issue_id in standing:
+                continue
+            ir.async_delete_issue(self.hass, DOMAIN, issue_id)
 
     def leak_detector(self, scope: str) -> LeakDetector | None:
         """The detector for a scope, or None when the scope names nothing.
@@ -1562,9 +1682,28 @@ class IrrigationRuntime:
         answer back to ``unavailable``. This gates the CLOSING of the window,
         never the answer afterwards.
         """
-        if self._leak_qualified_s(scope) < self.hub.leak_confirm_s:
+        if self._leak_qualified_s(scope) < self._leak_observation_window_s():
             return False
         return not self._leak_evidence_pending(scope)
+
+    def _leak_observation_window_s(self) -> float:
+        """How much observation a scope must collect before it may say "off".
+
+        ``leak_confirm_s`` with a floor under it, and the floor is the whole
+        point: the setting answers "how long before an alarm is believed", and
+        it was being read as the answer to "how long before the ABSENCE of one
+        is asserted" as well. At every value but zero the two coincide, so the
+        second reading was invisible; at zero it made ``leak_state_established``
+        unconditionally true, because ``0.0 < 0`` is False. A scope whose leak
+        sensor had never reported and whose meter was dead then published
+        ``off`` -- "there is no problem" -- on the first bookkeeping run of
+        setup, with not one reading behind it. See ``_LEAK_MIN_OBSERVATION_S``.
+
+        The alarm's own side is untouched: ``LeakDetector`` compares against
+        ``leak_confirm_s`` directly, so zero still means an alarm is believed
+        the instant it is seen.
+        """
+        return max(float(self.hub.leak_confirm_s), _LEAK_MIN_OBSERVATION_S)
 
     def _leak_qualified_s(self, scope: str) -> float:
         """Seconds this scope has been observable, including the open period."""
@@ -1577,18 +1716,33 @@ class IrrigationRuntime:
     def _leak_can_observe(self, scope: str) -> bool:
         """Could one of this scope's sources conclude "no leak" right now?
 
-        Each half is that source's own gate, asked from the outside:
+        Each half is that source's own gate, asked from the outside, and BOTH
+        readings of the valve sensor are gated on this zone's own valve being
+        closed:
 
-        * the valve sensor reading ``off`` concludes it immediately and at any
-          time -- ``_evaluate_valve_sensor`` withdraws on ``off`` whatever the
-          valves are doing. Reading ``on`` counts only while this zone's valve
-          reports closed, which is exactly when that source is timing its own
-          window; while the valve is open the sensor is telling us nothing we
-          could act on;
         * a meter counts only while it is measuring AND every managed valve is
           closed, because ``note_flow`` discards any interval with a valve open
           -- water through an open valve is watering, so no amount of it moves
-          this scope toward a conclusion.
+          this scope toward a conclusion;
+        * the valve sensor is the same rule narrowed to one valve, because it
+          has one valve's own report to go on. Reading ``on`` counts only while
+          this zone's valve reports closed, which is exactly when that source
+          is timing its own window. Reading ``off`` counts under the same
+          condition and NOT unconditionally, which is what this used to do:
+          ``leak.py``'s standing rule is that anything reported about source 1
+          must be true for both readings of ``moisture``, and on the reference
+          hardware that sensor is the valve's own alarm -- "water is passing
+          while I am shut" -- which only speaks while the valve IS shut. Its
+          ``off`` over an open valve is the firmware saying nothing, not the
+          firmware saying no leak, so crediting those minutes would let a zone
+          that watered through its whole window answer "there is no problem"
+          having concluded nothing at all. On probe hardware the same minutes
+          are a probe under a running sprinkler.
+
+        ``_evaluate_valve_sensor`` still withdraws on ``off`` whatever the
+        valves are doing, and that asymmetry is deliberate: withdrawing an
+        alarm early errs toward saying less, while crediting observation early
+        errs toward asserting more.
 
         Both read the predicates that own those questions rather than copies:
         ``ValveController.is_closed`` and ``WaterAccountant.all_valves_closed``.
@@ -1612,11 +1766,11 @@ class IrrigationRuntime:
         """
         zone = self.zones.get(scope)
         sensor = zone.config.leak_sensor if zone is not None else None
-        if sensor and zone is not None:
+        if sensor and zone is not None and zone.valve.is_closed:
             state = self.hass.states.get(sensor)
             if state is not None and state.state == _LEAK_SENSOR_CLEAR:
                 return True
-            if self._leak_sensor_reading.get(sensor) == _LEAK_SENSOR_ALARM and zone.valve.is_closed:
+            if self._leak_sensor_reading.get(sensor) == _LEAK_SENSOR_ALARM:
                 return True
         return self.accountant.scope_is_measuring(scope) and self.accountant.all_valves_closed()
 
@@ -1762,10 +1916,14 @@ class IrrigationRuntime:
 
         * ``observed_s`` counts only seconds the scope could have concluded in,
           so it is not wall clock and will sit still for a scope that is never
-          in a position to observe. It keeps accruing past ``confirm_s`` on a
+          in a position to observe. It keeps accruing past the window on a
           latched scope -- the accumulator is not rewound once the window
-          closes -- so ``observed_s >= confirm_s`` is not by itself the latch.
-          ``latched`` is;
+          closes -- so ``observed_s >= window_s`` is not by itself the latch.
+          ``latched`` is. It is compared against ``window_s`` and not against
+          ``confirm_s``: the two differ exactly when ``leak_confirm_s`` is set
+          below the floor that keeps "no problem" from being asserted out of
+          nothing, and ``confirm_s`` is reported beside it because that is the
+          number the alarm itself is timed against;
         * ``evidence_pending`` is HELD, not counting down. A sensor whose last
           reading was the alarm holds it with no timer running anywhere, which
           is the state that made a countdown-shaped predicate wrong.
@@ -1789,6 +1947,7 @@ class IrrigationRuntime:
                 "observation": {
                     "latched": scope in self._leak_observation_done,
                     "observed_s": round(self._leak_qualified_s(scope), 1),
+                    "window_s": self._leak_observation_window_s(),
                     "confirm_s": self.hub.leak_confirm_s,
                     "can_observe": self._leak_can_observe(scope),
                     "evidence_pending": self._leak_evidence_pending(scope),
@@ -1917,7 +2076,7 @@ class IrrigationRuntime:
             return None
         if self.leak_state(scope).active:
             return None
-        remaining_s = self.hub.leak_confirm_s - self._leak_qualified_s(scope)
+        remaining_s = self._leak_observation_window_s() - self._leak_qualified_s(scope)
         if remaining_s > 0.0:
             return remaining_s if scope in self._leak_observing_since else None
         return _LEAK_CONFIRMING_RECHECK_S
@@ -2032,8 +2191,7 @@ class IrrigationRuntime:
         """
         if scope == HUB_SCOPE:
             return "the system (shared meter)"
-        zone = self.zones.get(scope)
-        return zone.config.name if zone else scope
+        return self._zone_name(scope)
 
     def on_leak_raised(self, scope: str, state: LeakState) -> None:
         """The alarm went false -> true, once, for however many sources agree.
@@ -2295,7 +2453,7 @@ class IrrigationRuntime:
         return f"{subject}: the leak condition has cleared.{blocking}"
 
     def _leak_action_note(self) -> str:
-        """What the configured action is doing, right now, and nothing more.
+        """What the configured action WILL do, in the mood the fact deserves.
 
         Two things it must not claim. Closing a valve that is already closed is
         a no-op, and the component cannot stop a leak it detects while idle --
@@ -2303,12 +2461,21 @@ class IrrigationRuntime:
         default after being shown that trade-off, and a message implying the
         water has been dealt with would undo it.
 
-        And it must not assert a close that ``async_close_for_leak``
-        deliberately skips. A running session is not an edge case here: it is
-        precisely the scenario the skip exists for, a zone's own sensor
-        alarming while a different zone waters. ``session.active`` is read in
-        the same turn that schedules the attempt, so the message and the action
-        agree about what is being done.
+        And it must not assert a close that is not performed, which is what the
+        indicative cost it. ``async_close_for_leak`` skips a controller already
+        closed, and a ``no_flow_closed`` alarm can only raise when every managed
+        valve has been shut for the whole confirmation window -- so on the
+        commonest alarm this feature has, "the master and the implicated valve
+        are commanded closed again" described something that was never done at
+        all. The Repairs notice on the same fact has always been modal ("can
+        re-close"), so the two surfaces disagreed about one action.
+
+        Modal also dissolves a race rather than documenting it. The indicative
+        needed ``session.active`` read here and read AGAIN when the background
+        close runs, with the claim resting on nothing intervening between the
+        two; a sentence that says what the action does when it finds a valve
+        open, and what it does while a cycle runs, is true whichever way that
+        reading falls.
         """
         action = self.hub.leak_action
         if action not in (LEAK_ACTION_CLOSE, LEAK_ACTION_CLOSE_AND_BLOCK):
@@ -2318,17 +2485,13 @@ class IrrigationRuntime:
             if action == LEAK_ACTION_CLOSE_AND_BLOCK
             else "Configured action: close"
         )
-        if self.session.active:
-            attempt = (
-                " -- the re-close is skipped because a cycle is running: re-asserting "
-                "the closure would abort a cycle on a zone nothing has implicated."
-            )
-        else:
-            attempt = (
-                " -- the master and the implicated valve are commanded closed again. "
-                "That recovers a valve left open by a command that never landed; it "
-                "cannot stop water passing a valve already shut."
-            )
+        attempt = (
+            " -- the master and the implicated valve are commanded closed again if "
+            "either is still open, and not at all while a cycle is running, since "
+            "re-asserting the closure would abort a cycle on a zone nothing has "
+            "implicated. That recovers a valve left open by a command that never "
+            "landed; it cannot stop water passing a valve already shut."
+        )
         # Present tense, and no undertaking about how long it will last. The
         # block follows the alarm AND the configured action, and the action is
         # a setting the user can change while the alarm still stands -- so a
@@ -2342,8 +2505,18 @@ class IrrigationRuntime:
         return f"{prefix}{attempt}{blocked}"
 
     def _zone_name(self, zone_id: str) -> str:
+        """This zone's name -- including just after it stopped being a zone.
+
+        Every notice about a zone's REMOVAL is written after ``_build_zones``
+        has replaced ``self.zones``: an alarm cleared BY the deletion, a supply
+        notice taken down with it. The fallback keeps those sentences readable
+        rather than sending the user an opaque subentry id. See
+        ``_zone_names``, which is bounded to one rebuild's worth of history.
+        """
         zone = self.zones.get(zone_id)
-        return zone.config.name if zone else zone_id
+        if zone is not None:
+            return zone.config.name
+        return self._zone_names.get(zone_id, zone_id)
 
     # What the alarm does ---------------------------------------------------------------
 
@@ -2451,7 +2624,7 @@ class IrrigationRuntime:
         """
         raw = self.entry.options.get(CONF_LEAK_ACTION)
         if raw is None or str(raw) in LEAK_ACTIONS:
-            ir.async_delete_issue(self.hass, DOMAIN, "leak_action_invalid")
+            ir.async_delete_issue(self.hass, DOMAIN, _LEAK_ACTION_ISSUE_ID)
             return
         _LOGGER.warning(
             "Unrecognised leak_action %r; using %s instead", str(raw), self.hub.leak_action
@@ -2459,7 +2632,7 @@ class IrrigationRuntime:
         ir.async_create_issue(
             self.hass,
             DOMAIN,
-            "leak_action_invalid",
+            _LEAK_ACTION_ISSUE_ID,
             is_fixable=False,
             severity=ir.IssueSeverity.WARNING,
             translation_key="leak_action_invalid",
@@ -2621,6 +2794,35 @@ class IrrigationRuntime:
             if sensor is not None and sensor not in entity_ids:
                 entity_ids.append(sensor)
         return entity_ids
+
+    def _restore_supply_announcements(self) -> None:
+        """Re-learn which outages were already announced, from their own notices.
+
+        ``_supply_announced`` is memory of one runtime, and the issue registry
+        is not: an entry reload builds a new runtime while every issue it
+        created stays exactly where it was. Both halves of that were wrong.
+        An outage still standing was announced a SECOND time -- a repeat push
+        notification for a condition nothing re-detected, from a sensor that
+        never changed -- and one that had ended while the entry was unloaded
+        left its notice active for good, because the withdrawal is gated on
+        having announced it and nothing remembered that we had. The leak side
+        has ``_reconcile_leak_issues`` for exactly this reason; this is the
+        same reconciliation from the other direction, restoring the edge
+        detector instead of deleting what it no longer covers.
+
+        ACTIVE issues only, which is what makes a reload and a restart differ
+        correctly. Home Assistant restores a non-persistent issue as inactive
+        -- invisible in Repairs, and carrying neither severity nor translation
+        key -- so after a real restart nothing is restored here and the outage
+        is confirmed again from the sensor's own ``last_changed``, which the
+        restart has reset. That is the same safe direction the rest of this
+        feature takes: after a restart we do not know how long the water has
+        been gone, and we say so by looking again rather than by remembering.
+        """
+        prefix = self._water_supply_issue_id("")
+        for (domain, issue_id), issue in ir.async_get(self.hass).issues.items():
+            if domain == DOMAIN and issue.active and issue_id.startswith(prefix):
+                self._supply_announced.add(issue_id.removeprefix(prefix))
 
     def _track_water_supply_sensors(self) -> None:
         """Watch every configured supply sensor; rebuilt on every config change.
