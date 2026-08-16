@@ -108,7 +108,12 @@ _LEAK_SENSOR_REPORTING = frozenset({_LEAK_SENSOR_ALARM, _LEAK_SENSOR_CLEAR})
 #: that is the granularity at which source 2's answer can change at all; a
 #: faster poll would read the same numbers. Runs only while evidence is
 #: accumulating, which on a healthy installation is post-cycle drainage and
-#: nothing else.
+#: nothing else -- with one exception worth knowing before you go looking for
+#: it: a meter that dies with above-threshold seconds on its books holds that
+#: evidence for ever, so this is the one timer here that does not terminate on
+#: its own. It ends when the meter reads again, when the alarm raises, or at
+#: shutdown. Cheap by construction (one timer, one state read per meter), and
+#: the alternative is concluding "no problem" from evidence nobody finished.
 _LEAK_CONFIRMING_RECHECK_S = 30.0
 #: How long a scope may go without being able to conclude anything before the
 #: zone says so out loud. Counted in IDLE seconds only -- a zone that is
@@ -172,9 +177,14 @@ class IrrigationRuntime:
         #: When the currently open observable interval began, per scope, or
         #: absent while that scope cannot observe anything.
         self._leak_observing_since: dict[str, datetime] = {}
-        #: The last ``on``/``off`` each configured leak sensor reported. Held,
-        #: because an assertion that goes silent is still an assertion and the
-        #: state machine keeps no history of its own.
+        #: The last ``on``/``off`` each CONFIGURED LEAK SENSOR reported, and
+        #: nothing else -- the same subscription also carries every managed
+        #: valve, and a switch-backed valve publishes ``on``/``off`` too, so
+        #: the write is filtered and the dict is pruned to the sensors that are
+        #: configured now. Held rather than re-read, because an assertion that
+        #: goes silent is still an assertion and the state machine keeps no
+        #: history of its own. Only ever consulted where holding WITHHOLDS: see
+        #: ``_leak_can_observe`` for the half that is read live instead.
         self._leak_sensor_reading: dict[str, str] = {}
         #: Which source entities each scope's window was earned against, so
         #: that changing the set drops the credit: the window belongs to the
@@ -1562,7 +1572,7 @@ class IrrigationRuntime:
     def _leak_can_observe(self, scope: str) -> bool:
         """Could one of this scope's sources conclude "no leak" right now?
 
-        The two halves are each source's own gate, asked from the outside:
+        Each half is that source's own gate, asked from the outside:
 
         * the valve sensor reading ``off`` concludes it immediately and at any
           time -- ``_evaluate_valve_sensor`` withdraws on ``off`` whatever the
@@ -1577,14 +1587,31 @@ class IrrigationRuntime:
 
         Both read the predicates that own those questions rather than copies:
         ``ValveController.is_closed`` and ``WaterAccountant.all_valves_closed``.
+
+        **Which readings are held and which are read live is the whole of the
+        care here, and the rule is: hold what withholds, never hold what
+        permits.** The ``off`` branch PERMITS -- it is what lets the window
+        fill and, at the end of it, publish "there is no problem". Answering it
+        from a remembered reading would accrue five minutes of observation
+        from a sensor that restored ``off`` at load and then said nothing at
+        all, which is exactly the assertion this entity exists to refuse. So it
+        is read live, and a sensor that has gone quiet stops the clock.
+
+        The ``on`` branch is the opposite: it only ever WITHHOLDS, because a
+        scope whose sensor asserts cannot close its window anyway (see
+        ``_leak_evidence_pending``). Holding it there costs nothing and keeps
+        the two halves of an assertion consistent.
+
+        The meter half has always been live -- ``scope_is_measuring`` reads the
+        meter -- and this makes the sensor half match it.
         """
         zone = self.zones.get(scope)
         sensor = zone.config.leak_sensor if zone is not None else None
-        if sensor is not None and zone is not None:
-            reading = self._leak_sensor_reading.get(sensor)
-            if reading == _LEAK_SENSOR_CLEAR:
+        if sensor and zone is not None:
+            state = self.hass.states.get(sensor)
+            if state is not None and state.state == _LEAK_SENSOR_CLEAR:
                 return True
-            if reading == _LEAK_SENSOR_ALARM and zone.valve.is_closed:
+            if self._leak_sensor_reading.get(sensor) == _LEAK_SENSOR_ALARM and zone.valve.is_closed:
                 return True
         return self.accountant.scope_is_measuring(scope) and self.accountant.all_valves_closed()
 
@@ -1605,7 +1632,7 @@ class IrrigationRuntime:
         """
         zone = self.zones.get(scope)
         sensor = zone.config.leak_sensor if zone is not None else None
-        if sensor is not None and self._leak_sensor_reading.get(sensor) == _LEAK_SENSOR_ALARM:
+        if sensor and self._leak_sensor_reading.get(sensor) == _LEAK_SENSOR_ALARM:
             return True
         detector = self._leak_detectors.get(scope)
         return detector is not None and detector.flow_evidence_pending
@@ -1732,13 +1759,24 @@ class IrrigationRuntime:
 
     @callback
     def _on_leak_source_state(self, event: Event[EventStateChangedData]) -> None:
+        entity_id = event.data["entity_id"]
         new_state = event.data["new_state"]
-        if new_state is not None and new_state.state in _LEAK_SENSOR_REPORTING:
+        if (
+            new_state is not None
+            and new_state.state in _LEAK_SENSOR_REPORTING
+            and entity_id in self._configured_leak_sensors()
+        ):
             # Remember the reading itself, not merely that one arrived: an
             # assertion that goes silent is still an assertion, and the state
-            # machine keeps no history for us to ask later.
-            self._leak_sensor_reading[event.data["entity_id"]] = new_state.state
+            # machine keeps no history for us to ask later. Filtered to leak
+            # sensors because this subscription also carries the valves, and a
+            # switch-backed valve reports ``on``/``off`` like any binary state.
+            self._leak_sensor_reading[entity_id] = new_state.state
         self._note_leak_observation()
+
+    def _configured_leak_sensors(self) -> set[str]:
+        """Every leak sensor the configuration names right now."""
+        return {zone.config.leak_sensor for zone in self.zones.values() if zone.config.leak_sensor}
 
     def _seed_leak_sensor_readings(self) -> None:
         """Read each configured leak sensor once, in case it spoke before us.
@@ -1748,11 +1786,14 @@ class IrrigationRuntime:
         has no state change left to make, exactly as ``LeakDetector.start``
         judges live state rather than waiting for a transition.
         """
-        for scope in self._leak_detectors:
-            zone = self.zones.get(scope)
-            sensor = zone.config.leak_sensor if zone is not None else None
-            if not sensor:
-                continue
+        configured = self._configured_leak_sensors()
+        # Nothing is remembered about a sensor no zone names any more. The
+        # entry could not be read (every read is keyed by a configured sensor)
+        # but it would outlive its configuration for the life of the process,
+        # and an unbounded dict is a poor thing to leave behind.
+        for entity_id in set(self._leak_sensor_reading) - configured:
+            del self._leak_sensor_reading[entity_id]
+        for sensor in configured:
             state = self.hass.states.get(sensor)
             if state is not None and state.state in _LEAK_SENSOR_REPORTING:
                 self._leak_sensor_reading[sensor] = state.state
