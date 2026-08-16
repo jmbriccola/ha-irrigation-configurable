@@ -823,3 +823,35 @@ get_water_history:
       default: true
       selector:
         boolean:
+
+get_run_history:
+  fields:
+    start_date:
+      example: "2026-07-18"
+      selector:
+        date:
+    end_date:
+      example: "2026-08-16"
+      selector:
+        date:
+    zone_id:
+      example: 1b2f3c4d5e6f
+      selector:
+        text:
+          multiple: true
+    result:
+      selector:
+        select:
+          multiple: true
+          options:
+            - completed
+            - skipped
+            - interrupted
+            - cancelled
+    limit:
+      default: 500
+      selector:
+        number:
+          min: 1
+          max: 5000
+          mode: box

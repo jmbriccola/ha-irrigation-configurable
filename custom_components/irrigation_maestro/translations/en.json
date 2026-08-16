@@ -856,6 +856,32 @@
           "description": "Water a meter measured that no zone claimed. It is returned beside the zones and is never part of their total: it is not consumption."
         }
       }
+    },
+    "get_run_history": {
+      "name": "Run history",
+      "description": "Returns every outcome recorded in a date range — the runs that completed and, just as importantly, the ones that were skipped, interrupted or cancelled, each with the reason. A cycle that does not start leaves no trace anywhere else.",
+      "fields": {
+        "start_date": {
+          "name": "From",
+          "description": "First day of the range, included. Defaults to 29 days before the end date. Earlier than the 730 days kept is clamped, and the response says so."
+        },
+        "end_date": {
+          "name": "To",
+          "description": "Last day of the range, included. Defaults to today, and a future date is clamped to today."
+        },
+        "zone_id": {
+          "name": "Zones",
+          "description": "One or more zones. Left empty, every zone is returned, including zones that were removed but still have runs in the log."
+        },
+        "result": {
+          "name": "Results",
+          "description": "Keep only these outcomes. Left empty, every outcome is returned."
+        },
+        "limit": {
+          "name": "Maximum entries",
+          "description": "At most this many entries, keeping the most recent. The response says whether it had to."
+        }
+      }
     }
   },
   "issues": {
