@@ -241,9 +241,10 @@ exception worth knowing, because nothing on screen will tell you: **a restart
 of Home Assistant takes it down.** The alarm lives in memory and is
 deliberately not persisted (see the entity bullets below), so the notice goes
 with it and comes back only once the evidence has been gathered again over a
-fresh confirmation window. The same is true of the water-supply notice. A
-notice that is gone the morning after a reboot has not been resolved; it has
-been forgotten, and is being re-established.
+fresh confirmation window. The same is true of the water-supply notice. So a
+notice that is gone the morning after a reboot proves nothing on its own: it
+was forgotten rather than resolved, and whether it comes back depends on the
+evidence, not on the notice.
 
 **The leak entities** are `binary_sensor`s with `device_class: problem` — one
 per zone plus one for the system — and they are what an automation should
