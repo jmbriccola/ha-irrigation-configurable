@@ -46,11 +46,23 @@ zona**, dai un nome e un'entità `valve` o `switch` alla zona, e questa nasce
 già con un programma predefinito sensato (tutti i giorni, all'alba, con una
 curva di risposta al caldo di default) pronto da rifinire. I campi
 aggiuntivi della zona — flussometro con la sua unità sovrascrivibile, portata
-nominale/tolleranza, fattore di aggiustamento (default 100% — es. 70% per
-un'aiuola in ombra), ordine, cadenza in giorni, mesi di stagione, gruppo di
-compatibilità — si trovano dietro **✎ Modifica zona → Avanzate**. Gli ID dei
-programmi (cicli) sono stabili: storico e interruttori per ciclo
-sopravvivono alle modifiche.
+nominale/tolleranza, **sensore di perdita**, **sensore di mancanza d'acqua**,
+fattore di aggiustamento (default 100% — es. 70% per un'aiuola in ombra),
+ordine, cadenza in giorni, mesi di stagione, gruppo di compatibilità — si
+trovano dietro **✎ Modifica zona → Avanzate**. Gli ID dei programmi (cicli)
+sono stabili: storico e interruttori per ciclo sopravvivono alle modifiche.
+
+I due campi dei sensori arrivano **precompilati dal dispositivo della
+valvola** quando lì ce n'è uno: creando una zona si risale dall'entità
+valvola al suo dispositivo e si prende come sensore di perdita un
+`binary_sensor` con `device_class: moisture` e come sensore di mancanza
+d'acqua uno con `device_class: problem`. Il riconoscimento guarda solo la
+device class — mai il nome dell'entità — quindi una valvola che non espone
+nulla non ottiene nessuno dei due, e una zona che esiste già non viene
+collegata a tua insaputa: il pannello propone il candidato, che ha effetto
+solo quando salvi. Puoi comunque puntare i due campi dove vuoi: una sonda
+nell'aiuola è una scelta legittima, e lo è anche un contatto di rete
+condiviso da tutto il giardino. Vedi §8.
 
 La curva di un programma — la relazione temperatura→durata, con i limiti
 min/max espliciti ("Mai meno di" / "Mai più di") e un tipo esplicito, durata
@@ -163,7 +175,8 @@ e le impostazioni quotidiane dell'hub, tutto in un unico posto.
    precompilato, più un cassetto **Avanzate** per il flussometro (con la
    sua unità — rilevata automaticamente, o sovrascritta quando non
    dichiara nulla di utilizzabile; svuotare la sovrascrittura riprende il
-   rilevamento), portata nominale/tolleranza, correzione %, ordine,
+   rilevamento), portata nominale/tolleranza, il **sensore di perdita** e
+   il **sensore di mancanza d'acqua** (§2 e §8), correzione %, ordine,
    intervallo di irrigazione, deroga ai mesi di stagione e gruppo di
    compatibilità — si aggiornano solo i campi che modifichi. Il pulsante
    **🗑 Elimina zona** (con richiesta di conferma) rimuove la zona.
@@ -190,7 +203,12 @@ e le impostazioni quotidiane dell'hub, tutto in un unico posto.
    concorrenza** (finestre di conferma apertura/chiusura/switch, timeout di
    chiusura all'avvio, massimo del watchdog, zone simultanee massime e
    gruppi di compatibilità, ritardi pre-apertura/post-chiusura della
-   valvola master).
+   valvola master e — in fondo allo stesso cassetto, salvate con lo stesso
+   pulsante — le **impostazioni di perdita e mancanza d'acqua**: cosa fare
+   con una perdita confermata, la soglia di perdita in L/min, la finestra di
+   conferma, l'intervallo dei promemoria, se un ciclo possa partire senza
+   acqua e quanto a lungo debba durare la mancanza prima del rifiuto; vedi
+   §8).
 
 I parametri esperti — pesi e soglie del motore meteo (§3 sopra) — non sono
 nel pannello: restano nel menu **Configura** dell'hub (il config flow), che
@@ -306,7 +324,114 @@ scorre **fuori** dai cicli è invisibile per costruzione: per quella zona la
 rilevazione dell'acqua non attribuita — e quindi delle perdite — non è
 disponibile.
 
-## 8. Risoluzione dei problemi
+## 8. Perdite e mancanza d'acqua
+
+Sono due problemi diversi, con due sensori diversi, e vale la pena tenerli
+distinti: una **perdita** è acqua che va dove non dovrebbe, una **mancanza
+d'acqua** è acqua che non arriva affatto.
+
+**Una perdita si conferma da due tipi di prova**, e insieme fanno scattare un
+solo allarme, non due:
+
+1. il **sensore di perdita** della zona che segnala mentre la valvola *di
+   quella zona* è chiusa — su alcune valvole (la SONOFF SWV, per esempio)
+   quell'allarme deriva dal flussometro interno della valvola e significa
+   «sta passando acqua mentre io sono chiusa»; su altre è una sonda a terra.
+   In entrambi i casi ciò che si sa è che la valvola segnala acqua che non
+   dovrebbe vedere;
+2. **acqua misurata mentre ogni valvola gestita, master compresa, risulta
+   chiusa** — sopra la soglia di perdita (default 0,5 L/min; sotto è
+   gocciolamento e drenaggio). Questa non richiede nessun sensore, solo un
+   flussometro: un impianto di tre zone con il proprio flussometro ciascuna e
+   nessun sensore di perdita è sorvegliato su ogni zona.
+
+Entrambe devono durare la finestra di conferma (default 300 s) prima che
+venga detto qualcosa. Un flussometro che serve più di una zona non può dire
+*quale* zona perde, quindi il suo allarme viene sollevato per l'**impianto**;
+le zone dietro a quel flussometro mostrano «perdite sorvegliate
+sull'impianto, non su questa zona», che dice dove sono sorvegliate, non se lo
+sono.
+
+**Cosa succede alla conferma**: una notifica ad alta priorità (l'evento
+`leak` è già preselezionato nella procedura guidata, §6), una segnalazione in
+Riparazioni che resta finché resta la condizione, un promemoria ogni 6 ore
+per default, e una delle nuove **entità di perdita** che passa a `on`.
+
+**Le entità di perdita** sono `binary_sensor` con `device_class: problem` —
+una per zona più una per l'impianto — ed è su queste che va scritta
+un'automazione. Da leggere prima di scriverne una:
+
+- **`unavailable` è normale, e può durare per sempre.** Significa *qui non è
+  stato stabilito nulla*: o non c'è niente che possa far scattare l'allarme
+  per questa zona, o la zona non è ancora stata osservata abbastanza a lungo.
+  Un'automazione scritta su un'entità che non esce mai da `unavailable`
+  **non scatta mai, in silenzio**, e il silenzio è identico al buon
+  funzionamento. Verifica che l'entità sia passata a `off` prima di fidartene.
+- **Dopo un riavvio resta `unavailable` per una finestra di conferma prima di
+  dire `off`, ed è voluto.** `off` su un sensore `problem` afferma *non c'è
+  nessun problema*, e pochi istanti dopo l'avvio non è stato stabilito niente
+  del genere. Se dicesse `off` lì, l'automazione gemella naturale — «perdita
+  rientrata → riapri l'acqua» — scatterebbe a un riavvio durante una perdita
+  in corso.
+- Se l'entità di una zona resta bloccata su `unavailable`, dopo un'ora sono i
+  **badge di degrado** della zona a dire perché: *non ha potuto controllare
+  le perdite* (niente è stato in condizione di concludere alcunché) oppure
+  *non riesce a concludere su una possibile perdita* (qualcosa segnala e
+  niente riesce a risolverlo). Nessuno dei due significa che la zona è
+  guasta: un'ora di irrigazione a mano da una linea dell'impianto tiene una
+  valvola aperta e si legge esattamente allo stesso modo, del tutto
+  legittimamente. L'entità dell'**impianto** non ha nessun badge del genere:
+  se tace e nessuna zona spiega perché, il flussometro di linea va guardato
+  di persona.
+- Se hai un flussometro di linea **e** flussometri per zona, una sola perdita
+  fa scattare sia l'entità della zona sia quella dell'impianto: misurano la
+  stessa acqua e nessuna delle due può sapere che l'ha vista anche l'altra.
+  Rendi l'automazione idempotente, oppure scatta su un solo ambito.
+- `since` è quando l'allarme è stato **confermato**, non quando l'acqua ha
+  iniziato a uscire.
+
+**Cosa fa il componente** lo scegli tu, in ⚙️ Impostazioni → *Avanzate:
+valvole e concorrenza*: solo notifica, notifica e richiude le valvole (il
+default), oppure notifica, richiude e blocca i nuovi cicli. Il default non è
+quello che blocca, deliberatamente: richiudere una valvola già chiusa non fa
+nulla, ed è la posizione onesta — una perdita trovata mentre non si sta
+irrigando questa integrazione non può fermarla, può solo segnalarla e
+riaffermare la chiusura nel caso un comando sia andato perso. Il blocco c'è
+per il caso del tubo scoppiato, ed è opt-in perché un falso allarme che
+blocca lascia il giardino a secco.
+
+**Il sensore di mancanza d'acqua** risponde all'altra domanda. È un sensore
+di tipo `problem` la cui polarità si legge al contrario del nome: **`on`
+significa che l'acqua NON c'è**. Con uno configurato, un ciclo viene
+rifiutato invece di partire su una linea vuota — ma solo dopo che la mancanza
+è durata la finestra di conferma (default 180 s), così una singola lettura
+ballerina non nega l'acqua al giardino; e dopo un riavvio quel conteggio
+riparte da zero, perché da quanto tempo manchi l'acqua non è conoscibile.
+L'esito si legge `no_water_supply` invece di un generico `no_flow`, e lo
+stesso vale per un ciclo già partito che non trova flusso.
+
+Riattivare **«parti anche senza acqua»** disattiva il rifiuto e nient'altro:
+la notifica e la segnalazione in Riparazioni arrivano lo stesso. Scegliere di
+irrigare comunque non è scegliere di non esserne informati.
+
+Due limiti onesti, da conoscere prima di contarci:
+
+- **Una zona senza flussometro non ha nessun controllo di flusso nullo.** Il
+  controllo viene costruito solo dove un flussometro si risolve, quindi su
+  una zona stimata un ciclo che parte con il rubinetto chiuso va avanti a
+  secco per tutta la sua durata e registra la sua stima nominale come se
+  avesse irrigato. Nessuno se ne accorge. È esattamente l'impianto su cui un
+  sensore di mancanza d'acqua vale di più: un contatto di rete costa poco, i
+  flussometri per zona no.
+- **Una valvola che si chiude da sola** perché il suo firmware non vede
+  flusso, prima faceva abortire l'intera sessione come intervento manuale.
+  Ora viene letta per quello che è — ma solo per la valvola della zona che
+  sta irrigando, e solo quando il sensore di mancanza d'acqua *di quella
+  zona* dice che l'acqua non c'è, in quell'istante o entro cinque secondi.
+  Senza quel sensore non c'è modo di distinguere il firmware da una mano
+  sull'interruttore, quindi resta il comportamento di prima.
+
+## 9. Risoluzione dei problemi
 
 - **Un ciclo non è partito e nessuno ti ha avvisato** → la sentinella
   giornaliera (default 12:00) notifica e apre una segnalazione in
@@ -327,5 +452,31 @@ disponibile.
 - **La zona mostra il badge `switch_valve`** → la zona usa uno `switch`:
   nessun feedback di posizione, quindi le conferme sono ottimistiche e le
   garanzie ridotte (vedi la matrice di degradazione nel README).
+- **Un'entità di perdita non esce mai da `unavailable`** → per quell'ambito
+  non è stato stabilito nulla. Guarda i badge della zona: *perdite non
+  sorvegliate qui* significa che non è configurata nessuna origine; *non ha
+  potuto controllare le perdite* o *non riesce a concludere su una possibile
+  perdita* (dopo un'ora) significano che un'origine c'è ma niente è stato in
+  condizione di concludere — un sensore che non ha mai parlato, un
+  flussometro la cui unità non si risolve, o una valvola che non risulta mai
+  chiusa, che blocca ogni ambito con flussometro. Di per sé non è un guasto:
+  un'ora di irrigazione a mano si legge allo stesso modo. Finché dura,
+  qualsiasi automazione su quell'entità non sta scattando (§8).
+- **Tutto saltato come `leak`** → l'azione in caso di perdita è impostata su
+  *blocca i nuovi cicli* e c'è un allarme in piedi. Rimuovi la causa: il
+  blocco cade con l'allarme. La segnalazione in Riparazioni nomina la zona e
+  la prova su cui si basa.
+- **Una perdita, due allarmi** → hai un flussometro di linea *e* flussometri
+  per zona, quindi la stessa acqua è misurata due volte ed entrambi gli
+  ambiti la segnalano. È previsto: vedi la matrice di degradazione nel README.
+- **`no_water_supply`** → il sensore di mancanza d'acqua della zona segnala
+  che l'acqua non c'è e la mancanza è durata la finestra di conferma.
+  Controlla il rubinetto, la pressione di rete e ogni intercettazione a
+  monte. Ricorda la polarità: `on` su quel sensore significa acqua
+  **assente**.
+- **«Azione in caso di perdita non riconosciuta»** → il valore salvato non è
+  nessuno fra `notify`, `close` e `close_and_block`; il componente è tornato
+  a `close` e te l'ha detto invece di bloccare in silenzio. Reimpostalo dal
+  pannello.
 - Diagnostica: pagina dell'integrazione → menu a tre puntini → **Scarica
   diagnostica** (configurazione + stato, con dati sensibili oscurati).

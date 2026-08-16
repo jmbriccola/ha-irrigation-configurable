@@ -560,8 +560,8 @@
           "description": "Un binary_sensor che segnala che la valvola rileva una perdita. A seconda dell'hardware può essere una sonda fisica oppure un allarme derivato dal flussometro della valvola stessa. Lascia vuoto se la valvola non ne ha uno."
         },
         "water_supply_sensor": {
-          "name": "Sensore alimentazione idrica",
-          "description": "Un binary_sensor di tipo problem per l'alimentazione idrica di questa zona: acceso significa acqua assente, spento significa acqua disponibile. Lascia vuoto se non è disponibile un sensore del genere."
+          "name": "Sensore di mancanza d'acqua",
+          "description": "Un binary_sensor di tipo problem per l'acqua che alimenta questa zona: acceso significa acqua assente, spento significa acqua disponibile. Lascia vuoto se non è disponibile un sensore del genere."
         },
         "adjustment_pct": {
           "name": "Correzione (%)",
@@ -827,7 +827,7 @@
     },
     "discover_zone_sensors": {
       "name": "Rileva sensori della zona",
-      "description": "Riporta il sensore di perdita e quello di alimentazione idrica già configurati per una zona, più qualsiasi sensore corrispondente trovato sul dispositivo della sua valvola. Un sensore trovato è solo un suggerimento: ha effetto solo una volta salvato con update_zone.",
+      "description": "Riporta il sensore di perdita e quello di mancanza d'acqua già configurati per una zona, più qualsiasi sensore corrispondente trovato sul dispositivo della sua valvola. Un sensore trovato è solo un suggerimento: ha effetto solo una volta salvato con update_zone.",
       "fields": {
         "zone_id": {
           "name": "Zona",
@@ -927,7 +927,7 @@
     },
     "water_supply_missing": {
       "title": "Mancanza d'acqua nella zona {zone}",
-      "description": "Il sensore di presenza d'acqua della zona {zone} segnala che l'acqua manca. Quel sensore ha device class «problem», quindi «on» significa che il problema c'è -- niente acqua -- comunque si legga il suo nome. Non è una perdita: non sta uscendo nulla, semplicemente non c'è nulla con cui irrigare. Controlla il rubinetto, la pressione di rete e ogni intercettazione a monte. Finché la mancanza resta confermata, e se il requisito di presenza d'acqua non è disattivato, nessun nuovo ciclo parte per questa zona. Confermarla richiede la finestra impostata, così una singola lettura ballerina non nega l'acqua al giardino. Un ciclo partito prima viene interrotto dal controllo di flusso nullo, che indica la mancanza d'acqua come motivo. Quel controllo richiede un flussometro; senza, il ciclo va avanti a secco per tutta la sua durata. Se il sensore diventa non disponibile o sconosciuto, questa segnalazione resta ma il rifiuto cade: il silenzio non prova che l'acqua sia tornata. La segnalazione sparisce quando il sensore torna a indicare presenza d'acqua, o quando viene rimosso dalla zona."
+      "description": "Il sensore di mancanza d'acqua della zona {zone} segnala che l'acqua manca. Quel sensore ha device class «problem», quindi «on» significa che il problema c'è -- niente acqua -- comunque si legga il suo nome. Non è una perdita: non sta uscendo nulla, semplicemente non c'è nulla con cui irrigare. Controlla il rubinetto, la pressione di rete e ogni intercettazione a monte. Finché la mancanza resta confermata, e se il requisito di presenza d'acqua non è disattivato, nessun nuovo ciclo parte per questa zona. Confermarla richiede la finestra impostata, così una singola lettura ballerina non nega l'acqua al giardino. Un ciclo partito prima viene interrotto dal controllo di flusso nullo, che indica la mancanza d'acqua come motivo. Quel controllo richiede un flussometro; senza, il ciclo va avanti a secco per tutta la sua durata. Se il sensore diventa non disponibile o sconosciuto, questa segnalazione resta ma il rifiuto cade: il silenzio non prova che l'acqua sia tornata. La segnalazione sparisce quando il sensore torna a indicare presenza d'acqua, o quando viene rimosso dalla zona."
     },
     "leak_action_invalid": {
       "title": "Azione in caso di perdita non riconosciuta",

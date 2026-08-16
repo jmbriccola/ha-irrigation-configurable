@@ -61,6 +61,17 @@ Irrigation Maestro is built around two ideas:
   (with restart close-all that waits for Zigbee availability), daily
   sentinel, session time limits, master valve/pump sequencing, flow anomaly
   detection (leak, no-flow, out-of-range) and a monthly consumption budget.
+- **Per-zone leak detection** from two kinds of evidence that are treated as
+  one alarm: the valve's own `moisture` sensor reporting while that valve is
+  closed, and water measured by a flow meter while *every* managed valve
+  reports closed. Each alarm is published as a `binary_sensor` with
+  `device_class: problem` — one per zone plus one for the system scope — and
+  as an `irrigation_maestro_leak` event; what happens next is configurable
+  (notify, re-close, or re-close and refuse new cycles). A separate optional
+  **water-supply sensor** per zone distinguishes *no water arriving* from *a
+  leak*, refuses to start a cycle into a dry line, and explains a valve that
+  shuts itself off for lack of pressure instead of aborting the session as
+  manual intervention.
 - **Per-event notifications** to any `notify.*` targets, aggregated (one
   message per shared reason, never one per zone), rich bus events
   (`irrigation_maestro_*`) and per-zone outcome sensors. Set up from a
@@ -174,7 +185,12 @@ zones.
 3. **Settle pause** between zones (default 2 min) with a re-check after.
 4. **Surveillance** during the cycle: a foreign managed valve opening, or the
    active valve closed externally → everything closes, cycle interrupted,
-   notification sent.
+   notification sent. One narrow exemption: if the closing valve belongs to
+   the watering zone, the close was not ours, and that zone's own
+   water-supply sensor reports no water within a five-second grace, the close
+   is read as a valve shutting itself off for want of pressure — the cycle
+   ends as `no_water_supply` and the manual-stop block is not armed. Without
+   such a sensor nothing changes: uncertainty still aborts.
 5. **Post-manual-stop block**: after any manual interruption no queued cycle
    starts for the block window (default 60 min).
 
@@ -196,13 +212,19 @@ and the UI (zone attributes + card badges) declares it:
 |---|---|---|
 | Flow readings in the right scale | A meter that declares a convertible unit, or an explicit unit override | Readings are ignored entirely rather than assumed to be L/min: volume mode and flow anomalies are off for that meter and consumption falls back to nominal flow × minutes, with a Repairs issue naming the sensor |
 | Volume mode (liters target) | Flow meter (zone or line) whose unit can be determined | Cycle runs as a plain duration cycle for its safety-timeout minutes; volume mode not offered in the flow |
-| Flow anomalies (leak, no-flow, out-of-range) | Flow meter whose unit can be determined | No flow diagnostics; time-based watering only |
+| Flow anomalies (leak, no-flow, out-of-range) | Flow meter whose unit can be determined | No flow diagnostics; time-based watering only. **There is no zero-flow guard at all** — `FlowMonitor` is built only for a zone whose meter resolves — so a cycle that starts into a closed tap runs its full length dry and books its nominal estimate as if it had watered. Nothing in the integration can notice; this is what the water-supply sensor below exists to compensate for, and that installation — a cheap supply contact, no per-zone meters — is the likeliest one to reach it |
 | Out-of-range diagnosis per zone | Flow meter whose unit can be determined, and per-zone nominal flow rates | With a shared line meter the expected range is the **sum of nominal flows of the open zones** (± tolerance); if any open zone lacks a nominal rate, range checks are skipped. A line meter cannot tell *which* zone misbehaves |
 | Position feedback, open/close confirmation | `valve` entity | `switch` zones run **optimistically**: commands are assumed to actuate after a short configurable delay; surveillance still reacts to state changes, but a stuck-open head cannot be detected — the watchdog and (if present) flow meter are the remaining guards |
 | Hourly rain staging, hourly forecast precision | Weather provider with hourly forecast | Falls back to `daily` forecast with a conservative prorated estimate; stage-and-commit disabled |
 | Measured consumption | Flow meter whose unit can be determined | Consumption estimated as nominal flow × minutes (needs nominal flow; otherwise not tracked) |
 | Continuous water accounting | A flow meter (zone or line) whose unit can be determined, **or** a per-zone nominal flow rate | Litres are estimated once per cycle as nominal flow × minutes and marked `estimated`; water outside cycles is not seen at all, so unattributed-water detection is unavailable for that zone. With **neither** a meter nor a nominal rate nothing is recorded at all, and `zone_water_total` says so with `source: "none"` rather than claiming a measurement |
 | Unattributed-water detection | Same | Unavailable for that zone: with no meter there is nothing to observe while the valves are closed |
+| Leak source 1 — the valve's own sensor | A `binary_sensor` with `device_class: moisture`, found on the valve's own device or picked by hand in the zone form | That source is absent; `capabilities.leak_detection` reads `unavailable` rather than leaving an alarm that looks armed. Source 2 can still cover the zone on its own — which is why a card must read `leak_watch`, not `leak_detection`, before telling anyone whether a zone is watched |
+| Leak source 2 — flow while every valve is closed | A flow meter (the zone's own, or the hub's line meter) whose unit resolves | That source is absent. A zone with neither source has no leak detection at all: `capabilities.leak_watch` says `none` and its `zone_leak` entity is `unavailable` for ever |
+| A leak alarm that names the **zone** | A source on the zone's own scope: its leak sensor, or a meter serving that zone alone | A meter shared by two or more zones (or by none) measures water no single zone can be blamed for, so its alarm is raised on the **system** scope instead — `hub_leak`, with `capabilities.leak_watch: "system"` on each zone behind it. Those zones' own `zone_leak` entities stay `unavailable` permanently, and correctly: nothing can name the zone. Do not render that as uncovered, and do not render it as an all-clear |
+| **One** alarm per leak | Per-zone meters **or** a line meter — not both | A line meter configured *alongside* per-zone meters measures the same water the zone meters already measured, so one physical leak raises `zone_leak` **and** `hub_leak`. Both statements are true and neither scope can know the other saw it; suppressing either would mean choosing which evidence to ignore, and which choice is right depends on the plumbing, not on the code. Since 3.4.0 that is also **two entities an automation can double-count** — trigger on one scope, or make the action idempotent |
+| Water-supply diagnosis, and refusing to start into a dry line | A `binary_sensor` with `device_class: problem` on the zone (`on` = **no** water) | A cycle starts into the dry line and, *if* the zone has a usable meter, is interrupted as generic `no_flow` rather than `no_water_supply`; with no meter it is not interrupted at all (row above). `require_water_supply` (default on) governs **only** the refusal — switching it off still notifies and still raises the Repairs notice, because "do not withhold water" is a different statement from "do not tell me" |
+| A valve that shuts itself off read as legitimate | The zone's own water-supply sensor, reporting no water at the moment of the close or within a five-second grace | An unledgered close of the watering zone's valve is treated as manual intervention: the session aborts and the manual-stop block is armed, exactly as in 3.3.x |
 | Rain measured | Rain sensor (daily mm) | Stage-and-commit forecast estimation (above) |
 | Card auto-install | Lovelace storage mode | Manual resource registration (documented above) |
 
@@ -214,14 +236,79 @@ silent gap. What compensates is redundant marking, not exclusion: the
 `estimated` and `source` attributes on `zone_water_total`, a badge in the
 card, and each day's own estimated flag in the daily history behind it.
 
+### Living with the leak entities
+
+`zone_leak` and `hub_leak` carry `device_class: problem`, so `off` asserts
+*there is no problem*. The integration will not make that assertion until it
+has earned it, and the consequences are worth reading before you automate on
+them.
+
+- **`unavailable` is a first-class state, not an error.** It means *this
+  scope has established nothing* — either no source could ever raise the
+  alarm, or the scope has not yet been **observed** for one confirmation
+  window (`leak_confirm_s`, default 300 s). Only seconds in which a source
+  could actually have concluded something count towards that window, so a
+  boot in the middle of a cycle earns nothing until the valves shut.
+- **An entity can stay `unavailable` indefinitely, and an automation written
+  against it then silently never fires.** This is the single most important
+  thing to understand here, because silence is indistinguishable from
+  working: a sensor that was configured and has never reported, or a scope
+  that is never in a position to observe (a valve held permanently open,
+  with a meter as the scope's only source), never earns its window. The
+  entity itself says nothing about this. What says it is `zone_state`'s
+  `degraded` list, after an hour of *idle* time — `leak_never_observable`
+  (nothing could conclude anything) or `leak_evidence_unresolved` (something
+  *is* reporting and nothing can finish judging it). Test your leak
+  automations by watching the entity leave `unavailable`, not by assuming it
+  has.
+- **That hour is a judgement, not a measurement.** It was chosen as twelve
+  times the confirmation window and, as of 3.4.0, has never met real
+  hardware. The condition it reports is not always a fault either:
+  hand-watering off an irrigation line for more than an hour holds a valve
+  open outside the integration, which is exactly what
+  `leak_never_observable` describes. It is true, and it reads like a defect.
+  Treat both keys as *"this zone could not check, and here is where to
+  look"* — never as *"this zone is broken"*, and never as a leak.
+- **The hub scope has no such signal at all.** `degraded` lives on
+  `zone_state`, and the hub has none. Where the same cause also stalls the
+  zones — a valve that never reports closed blocks every metered scope — the
+  zones declare it and the hub's silence is at least explained nearby. Where
+  it does not, it is explained nowhere: two zones that each have their own
+  leak sensor, behind one shared line meter, both settle on their sensors and
+  report normally while `hub_leak` sits `unavailable` for ever with no
+  surface saying why. A zone whose `leak_watch` is `system` points you at
+  precisely that scope.
+- **After a restart every leak entity is `unavailable` for a confirmation
+  window before it will say `off`, by design.** The alarm lives in memory
+  and is deliberately not persisted, so at boot nothing is known. Publishing
+  `off` there would fire the second half of the obvious automation pair —
+  *"leak → close the mains"* and *"leak cleared → reopen the mains"* — on a
+  restart during a live leak, and put the water back on. A transition into
+  `unavailable` fires no `to: "off"` trigger; a restored alarm was rejected
+  because it can be stale, fixed while Home Assistant was down.
+- **`since` is when the alarm was confirmed, not when the water started.** A
+  source withdrawing and returning yields a fresh one, and a restart moves it
+  forward. No surface may present it as the age of the leak.
+
 ## Entities & services
 
 One **hub device** (water budget, skip threshold, weighted temperature,
 session state with live queue, optional remaining consumption budget,
-**unattributed water**, global pause switch, *Evaluate now* / *Stop all*
-buttons) and one **device per zone** (state, next run, last outcome with
-reason, **total water**, enable switch, per-cycle enable switches, order /
-cadence / adjustment numbers, suspend-until datetime).
+**unattributed water**, **system leak**, global pause switch, *Evaluate now*
+/ *Stop all* buttons) and one **device per zone** (state, next run, last
+outcome with reason, **total water**, **leak**, enable switch, per-cycle
+enable switches, order / cadence / adjustment numbers, suspend-until
+datetime).
+
+The two leak entities are `binary_sensor`s with `device_class: problem` —
+one per zone (`zone_leak`) and one for the system scope (`hub_leak`), which
+is where a leak measured on a meter serving more than one zone is reported,
+because which zone leaked is genuinely unanswerable there. There is
+deliberately no single summary entity: an automation that closes the mains
+needs to know which zone to shut, and a summary cannot say. Each carries
+`sources`, `since` and `describing_source`. Read "Living with the leak
+entities" above before automating on them — `unavailable` is a normal state
+and it can last indefinitely.
 
 The two water sensors carry `device_class: water` and `state_class:
 total_increasing`, so Home Assistant's own statistics engine derives their
@@ -255,13 +342,30 @@ that could no longer be trusted.
 Services: `run_zone`, `run_all`, `skip_today`, `pause`, `suspend_until`,
 `resume`, `stop_all`, `evaluate` (returns the full computed plan),
 `set_zone_order`, `set_curve`, `set_notifications`, `test_notification`,
-`notification_status`, `export_config`, `import_config` — all documented in
+`notification_status`, `export_config`, `import_config` — plus everything
+the panel writes, including `update_zone` (which carries the per-zone
+`leak_sensor` and `water_supply_sensor`; `add_zone` takes neither as input
+and instead writes whatever it detects on the valve's own device),
+`discover_zone_sensors`
+(reports what is configured for a zone *and* what its valve's own device
+offers, as a suggestion only — nothing is adopted until you save it) and
+`set_valve_safety`, which holds the five leak and water-supply settings
+alongside the valve confirmation windows: `leak_action`,
+`leak_threshold_lpm`, `leak_confirm_s`, `leak_repeat_min`,
+`require_water_supply` and `water_supply_confirm_s`. All are documented in
 the UI (Developer tools → Actions) in English and Italian.
 
 Events: `irrigation_maestro_session_started/finished`,
 `irrigation_maestro_cycle_started/finished/skipped/cancelled/interrupted`,
 `irrigation_maestro_anomaly/watchdog/sentinel/session_overrun/consumption_budget`
-with rich payloads for your own automations.
+with rich payloads for your own automations, plus
+`irrigation_maestro_leak`, which is scoped rather than zoned: it carries
+`scope` (a `zone_id` or `"__hub__"`), `zone_id` (`null` for a system-scope
+alarm, so an automation reading it cannot address a zone that was never
+implicated), `state` (`active` | `cleared`), `first_source` and `sources`.
+It fires once when the alarm is confirmed and once when it clears — a
+second source agreeing is not a second alarm, and the repeat reminder fires
+no event at all.
 
 ## Development
 

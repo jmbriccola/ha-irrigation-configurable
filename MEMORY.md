@@ -82,6 +82,28 @@ details harvested from it (kept as engine behaviour):
   passed to `async_call_later` runs in the executor thread → touching futures
   from it raises "Non-thread-safe operation…". All timer callbacks must be
   `@callback`-decorated. Probe tests in tests/components/test_timer_probe.py.
+- **`pyproject.toml` already sets `addopts = "-q"`**, so `.venv/bin/pytest -q`
+  is effectively `-qq` and prints **no summary line at all**. Any test count
+  quoted from that command shape was read from somewhere else. Run bare
+  `.venv/bin/pytest`.
+- **Mutation proofs decay** (3.4.0, the branch's most portable finding). A
+  proof holds against the tree it ran on, exactly as a green suite does; a
+  later change can silently re-arm a mutation the suite once killed, and
+  nothing announces it. Re-run the whole matrix against the *shipped* tree as
+  the last step of a task, not the step after the code it was written for.
+  Six mutations went quiet across this branch and no two shared a cause: a
+  new clause that disarmed the guarding tests, a term that was provably dead,
+  a later fix that masked the mutation, three tests that could no longer
+  reach the line, and one whose scenario had drifted out from under it. A
+  survivor therefore does not by itself mean a weak test — hence the
+  **declared control mutation**: a term known to be constant where it sits is
+  entered in the matrix as expected-to-survive, and the harness fails if it
+  ever starts being killed or if anything else starts surviving.
+- **Verify the revert, do not assume it.** A timeout killed a mutation matrix
+  mid-run and left a gutted function in `runtime.py`; not one of 733 tests
+  failed at that moment, because that mutation's kills live in tests that had
+  already run earlier in the same session. Only a byte-compare against the
+  pre-mutation snapshot caught it.
 
 ## Deliberate design decisions (beyond the spec)
 
@@ -128,7 +150,10 @@ details harvested from it (kept as engine behaviour):
   data because they are config.
 - Command ledger distinguishes our valve commands from manual intervention
   (surveillance): every internal open/close registers (entity, action) with
-  TTL 300 s; unledgered transitions during a session = manual → abort all.
+  TTL `_LEDGER_TTL_S` = **60 s** (the 300 s in earlier drafts of this file was
+  never the shipped value); unledgered transitions during a session = manual →
+  abort all. An entry is only ever consumed by a real transition, so no close
+  path may register one for a valve that is already closed — see the 3.4.0 fix.
 - Session evaluation cached 120 s so near-simultaneous triggers share one
   weather fetch; the frozen evaluation lives for the whole session.
 - Queue is priority-sorted at every enqueue (zone order, name, id) plus a 2 s
@@ -267,6 +292,14 @@ details harvested from it (kept as engine behaviour):
   User-visible Italian now also lives in `services.py`
   (`_TEST_NOTIFICATION_DEFAULTS`, the localized `test_notification` title and
   message) — check there too, not just it.json, it.ts and the docs.
+  **The same defect recurred one feature later and the rule extends (3.4.0):**
+  the leak sensor is *sensore di perdita* and the water-supply sensor is
+  *sensore di mancanza d'acqua*, everywhere. 3.4.0 shipped it.ts calling the
+  latter "sensore di mancanza d'acqua" while it.json called the same field
+  "sensore alimentazione idrica" in the service and "sensore di presenza
+  d'acqua" in the Repairs notice — three names for one field, across the two
+  surfaces that edit it. Swept in the release commit. A new user-visible noun
+  needs its Italian fixed once, in both files, at the moment it is coined.
 - **Water becomes litres in one place (3.3.0).** One `MeterLedger` per meter
   integrates continuously, whether or not anything is watering; `FlowMonitor`
   holds a baseline and reads the ledger's deltas — it does not integrate.
@@ -309,6 +342,161 @@ details harvested from it (kept as engine behaviour):
   used truthiness: an empty-string meter (cleared by `update_zone`) then
   kept silently feeding from the line meter without being labelled as such
   (the `line_meter_shared` bug). Do not re-inline it.
+- **Capabilities are detected, never named (3.4.0).** The registry walk goes
+  valve → device → sibling `binary_sensor` by `device_class` (`moisture` for
+  leak, `problem` for water supply), preferring the user's `device_class`
+  override over the integration's `original_device_class`. Entity ids in
+  field reports are examples from one installation. Do not add name matching,
+  id prefixes or manufacturer assumptions anywhere — the test suite carries a
+  decoy whose id ends in `_water_leak` with the wrong device class precisely
+  so that a substring matcher cannot pass.
+- **Detection proposes, storage decides (3.4.0).** `add_zone` writes what it
+  finds; `discover_zone_sensors` reports candidates and the panel pre-fills
+  them. Nothing is adopted implicitly at runtime, and no migration adopts a
+  sensor for an existing zone — a silently coupled device is a coupling
+  nobody authorised. `add_zone` deliberately does not accept the two sensor
+  keys as input; only `update_zone` does.
+- **Sources 1 and 2 are one alarm (3.4.0).** On SONOFF SWV the valve's
+  `moisture` sensor is derived from its internal flow meter, so both sources
+  see one physical event. A second source at an active alarm records itself
+  and stays quiet. Two facts are kept, and they are not interchangeable:
+  `first_source` (the event payload and the log — provenance, fixed at the
+  raise) and `describing_source` (the Repairs issue key and the entity
+  attribute — the first source *while it still contributes*, a surviving
+  source otherwise). The second exists because an issue keyed to the first
+  kept describing evidence the scope no longer had: source 2 raises, source 1
+  joins, the meter is removed, and the notice still cited flow on a zone with
+  no meter. Do not collapse them back into one.
+- **The detector is per scope, not per zone (3.4.0).** Scopes are the zone
+  ids plus `HUB_SCOPE`, and a meter serving two or more zones (or none)
+  resolves to the hub — where *which* zone leaked is unanswerable but
+  *whether the system* leaks is not. Keyed per zone, an installation on a
+  shared line meter would have had no source-2 alarm at all while the README
+  claimed otherwise. The scope rule is `WaterAccountant.scope_for`, consumed
+  by the alarm's consequences as well as by the litres, and
+  `all_valves_closed` is consumed rather than copied. Do not write a second
+  copy of either: the zones an alarm blocks would drift from the zones its
+  litres came from.
+- **Source 1 is gated on that zone's own valve being closed (3.4.0).** On the
+  SWV the `moisture` alarm means "water is passing while I am shut", so the
+  valve is closed whenever it fires. On hardware where the class is a genuine
+  ground probe, a probe under a sprinkler is wet on every cycle. Gating on
+  the zone's own valve (not on all valves, which would suppress a legitimate
+  alarm on zone A while zone B waters) makes both readings behave. The window
+  is `now - max(sensor.last_changed, valve_closed_since)`: the sensor
+  timestamp alone would confirm instantly at every close.
+- **A de-configured source withdraws its alarm (3.4.0).** Clear the leak
+  sensor — the likely reaction to a sensor you distrust — and the alarm goes
+  with it, along with its repeat reminder. The module's rule is *no evidence
+  → hold; evidence the mechanism itself is gone → withdraw*, and
+  de-configuration is the second. `_resolved_meters` therefore builds from
+  configuration alone and never reads live state, so an unavailable but still
+  configured meter keeps its ledger and its alarm. Do not make either half
+  read the other's kind of evidence.
+- **`water_supply` is `device_class: problem`: `on` means NO water (3.4.0).**
+  Inverted with respect to the entity name. Uncertainty (`unavailable`,
+  `unknown`, missing, unconfigured) never counts as evidence of a missing
+  supply. The gate reads the sensor's own `last_changed` rather than tracking
+  a timestamp, so a restart restarts the clock — the safe direction, since we
+  do not know how long the supply has been out and must not withhold water on
+  that ignorance.
+- **The supply refusal lifts on silence; the supply notice does not (3.4.0).**
+  Same sensor, opposite directions, because the two acts fail differently:
+  *do not withhold water on no evidence*, and *do not assert a recovery on no
+  evidence*. Only `off` or de-configuration withdraws the notice — an
+  unavailable sensor once pushed "the water is back", a claim nobody had
+  established. The cost is that any text promising the refusal must not
+  promise it unconditionally, because silence retracts it; the Repairs
+  description is worded for that. Do not "fix" the asymmetry by making them
+  match.
+- **`require_water_supply: false` still notifies and still raises the repair
+  (3.4.0).** The setting is named for the gate and governs the gate; "do not
+  withhold water" is a different statement from "do not tell me". A user who
+  distrusts the sensor has two honest levers already — remove it from the
+  zone, or mute the anomaly channel — and both say what they mean.
+- **The self-close exemption is narrow on purpose (3.4.0).** The watering
+  zone's own valve, an unledgered close, and that zone's own supply sensor
+  reading `on`. Nothing else. Where a supply sensor is configured but has not
+  spoken, the verdict is deferred `_SUPPLY_EVIDENCE_GRACE_S` (5.0 s) and
+  re-read, because the valve's state and its supply sensor are two entities
+  of one device reported in no guaranteed order — without that the exemption
+  would work intermittently, which is worse than not shipping it. With no
+  sensor there is no delay at all, which is what keeps the weakening bounded.
+  The premise expires on `not valve.is_open`, never on `not is_closed`:
+  `is_closed` is strictly confirmed, so a hand-closed valve that then drops
+  off the radio would answer False and escape judgement entirely — the one
+  site in `session.py` where uncertainty would have resolved to *continue*.
+- **The default leak action re-closes and does not block (3.4.0).** Closing
+  what is already closed is a no-op, and that is the honest position: the
+  component cannot stop a leak it detects while idle. It recovers a valve
+  left open by a lost command and dries nothing on a false positive.
+  `close_and_block` exists for the burst-pipe case and is opt-in. The
+  re-close is skipped while a session is running, because a zone's own sensor
+  can alarm while a *different* zone waters and closing the master there
+  would abort a cycle nothing implicated — so the message must not claim the
+  master was re-closed at the moment the component chose not to touch it.
+- **The leak alarm is an entity, and `off` is an assertion (3.4.0).** One
+  `binary_sensor` per scope, `device_class: problem`, so `off` means *there
+  is no problem* and may not be said before it is earned. Five invariants,
+  each with a defect behind it that was shipped and caught: (1) a standing
+  alarm is publishable always, and that clause comes first — move it and a
+  reload hides a live alarm for a whole window; (2) availability is
+  configuration-only, never liveness, or a silent meter retracts a live
+  warning; (3) unresolved evidence is *held*, never a countdown — a sensor
+  asserting over a valve that never reports closed arms no timer anywhere;
+  (4) the start-up window counts seconds in which a source could actually
+  have concluded, not wall clock, so a boot mid-cycle earns nothing until the
+  valves shut; (5) the latch is written on the wake path, never inside the
+  read — latching inside the query gave a 30 s whole-integration dispatch
+  loop for the life of an alarm, and one that never ends if the entity is
+  disabled. Do not add `RestoreEntity` here: a restored `off` at boot is
+  exactly the clearing edge this design exists to prevent.
+- **Hold what withholds, never hold what permits (3.4.0).** The one sentence
+  to carry forward. Remembering a source's last reading is conservative when
+  that reading was the alarm — it keeps a window open — and permissive when
+  it was the all-clear: the scope goes on accruing observable seconds while
+  its only sensor is mute, then publishes "there is no problem" over a window
+  in which nothing spoke. So the `on` branch may read a remembered value; the
+  `off` branch must read live state. The same test kills the argument for
+  keeping unpruned memory of de-configured sensors — true of a stale `on`,
+  false of a stale `off` — which is why that map is now filtered to
+  configured sensors and pruned on rebuild.
+- **The hub-and-zone double alarm stays (3.4.0, user decision).** A line
+  meter configured alongside per-zone meters measures the same water the zone
+  meters measured, so one physical leak raises `zone_leak` and `hub_leak`.
+  Both are true; neither scope can know the other saw it. Suppressing either
+  would mean choosing which evidence to ignore, and which choice is right
+  depends on the plumbing, not on the code. It is in the README's degradation
+  matrix as a case to be *shown*, including the fact that it is now two
+  entities an automation can double-count. Do not add a deduplication rule.
+- **`leak_watch` answers coverage; `leak_detection` answers the sensor
+  (3.4.0).** They diverge on ordinary hardware and the divergence is the
+  reason the second exists: three metered zones with no leak sensors have
+  full source-2 coverage while `leak_detection` reads `unavailable` on all
+  three, so a card built on it says "no leak sensor" — true, and it produces
+  the belief that nothing is watching. `leak_watch` returns
+  `leak_sources_configured` itself, the same predicate the entity's
+  availability is gated on, so the attribute and the entity cannot disagree.
+  Its `system` value states a *place*, not a verdict. Do not merge the two
+  keys and do not re-derive either in the frontend.
+- **"Configured and missing" is a `degraded` key, not a fourth capability
+  value (3.4.0).** `capabilities` records the user's intent, so a sensor that
+  has vanished still reads `configured` — downgrading it would make the panel
+  offer to overwrite a deliberate choice during, say, a Zigbee re-pair. What
+  must not happen is the user believing they are covered, so
+  `leak_sensor_missing` / `water_supply_sensor_missing` appear in
+  `zone_state.degraded`, detected registry-first so an entity that has not
+  posted a state since restart is not misflagged.
+- **A silent leak entity is declared, after an hour, and only on the zones
+  (3.4.0).** `leak_never_observable` and `leak_evidence_unresolved` exist
+  because an entity stuck at `unavailable` for ever is indistinguishable from
+  a broken integration. They count *idle* time only, never time spent
+  watering. Two honest limits, both documented in the README rather than
+  hidden: the one-hour threshold has never met real hardware, and a valve
+  held open outside the integration — an hour of hand-watering from an
+  irrigation line — produces `leak_never_observable` legitimately, so the
+  wording is "could not check", never "is broken". The hub scope has no such
+  signal at all, because `degraded` lives on `zone_state`.
 
 ## Progress log
 

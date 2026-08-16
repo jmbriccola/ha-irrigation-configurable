@@ -90,4 +90,30 @@ lasciato esito.
   vale una volta sola come saldo di apertura del periodo. Dettagli in
   [istruzioni.md](istruzioni.md) §7.
 
+## Perdite e mancanza d'acqua
+
+- Ogni zona può avere un **sensore di perdita** e un **sensore di mancanza
+  d'acqua**, proposti in automatico se il dispositivo della valvola ne
+  espone (riconosciuti dalla device class, mai dal nome) e modificabili in
+  **✎ Modifica zona → Avanzate**.
+- Una **perdita** si conferma dal sensore della valvola mentre quella valvola
+  è chiusa, oppure da acqua misurata con **tutte** le valvole chiuse: due
+  prove, un solo allarme, dopo una finestra di conferma. Arrivano una
+  notifica, una segnalazione in Riparazioni e una nuova entità di perdita
+  (`binary_sensor`, `device_class: problem`) per zona più una per l'impianto.
+  Di default il componente notifica e richiude le valvole; bloccare i nuovi
+  cicli è possibile e opt-in.
+- Su quelle entità **`unavailable` è uno stato normale**, e può durare
+  indefinitamente: significa che non è stato stabilito nulla. Un'automazione
+  scritta lì sopra in quel caso non scatta mai, senza dire niente. Anche dopo
+  ogni riavvio l'entità resta `unavailable` per una finestra di conferma
+  prima di dire `off`, per non far scattare un «perdita rientrata» che
+  nessuno ha verificato. Leggi [istruzioni.md](istruzioni.md) §8 prima di
+  automatizzare.
+- La **mancanza d'acqua** è un'altra cosa: `on` sul suo sensore significa che
+  l'acqua non c'è. Con quel sensore un ciclo viene rifiutato invece di
+  partire a vuoto (dopo una finestra di conferma), e una valvola che si
+  chiude da sola per mancanza di pressione non fa più abortire la sessione
+  come intervento manuale.
+
 Istruzioni complete: [istruzioni.md](istruzioni.md).
