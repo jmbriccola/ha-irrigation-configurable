@@ -18,6 +18,7 @@ see one. That the role IS published while available -- which is what the card
 needs -- is asserted where an available entity is at hand.
 """
 
+from pathlib import Path
 from typing import Any
 
 from custom_components.irrigation_maestro.const import DOMAIN
@@ -1367,3 +1368,185 @@ async def test_a_restart_during_a_live_leak_re_earns_it_and_never_says_off(
     assert restarted.attributes["since"] > confirmed_at
     # Not one clearing edge anywhere across the restart.
     assert "off" not in published
+
+
+async def test_leak_watch_names_the_scope_that_watches_each_zone(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    """Three zones, three different answers, in one installation.
+
+    `capabilities.leak_detection` cannot carry this: it reports on the valve's
+    own leak SENSOR and knows nothing about flow, so a zone watched entirely
+    by its own meter reads `unavailable` there. Telling that user "no leak
+    sensor" is true and leaves them believing nothing is watching -- which is
+    worse than a false statement, because there is nothing to catch by
+    reading it.
+    """
+    freezer.move_to(START)
+    park = MockValvePark(hass)
+    for valve in ("valve.a", "valve.b", "valve.c"):
+        park.add(valve)
+    hass.states.async_set("sensor.a_flow", "0", {"unit_of_measurement": "L/min"})
+    hass.states.async_set("binary_sensor.c_leak", *_moisture("off"))
+    mock_weather(hass)
+    entry = await setup_hub(
+        hass,
+        [
+            # Its own meter: its own scope watches it, sensor or no sensor.
+            zone_data("Alpha", "valve.a", flow_sensor="sensor.a_flow"),
+            # Nothing at all.
+            zone_data("Beta", "valve.b"),
+            # A leak sensor and nothing else.
+            zone_data("Gamma", "valve.c", leak_sensor="binary_sensor.c_leak"),
+        ],
+    )
+    runtime = entry.runtime_data
+    alpha, beta, gamma = runtime.zone_ids
+
+    assert runtime.leak_watch(alpha) == "zone"
+    assert runtime.leak_watch(beta) == "none"
+    assert runtime.leak_watch(gamma) == "zone"
+
+    # Published where the card reads it, beside the sensor-only verdict it is
+    # deliberately NOT folded into: Alpha is watched and has no sensor, and
+    # both facts are legible at once.
+    state = role_state(hass, "zone_state", alpha)
+    assert state is not None
+    assert state.attributes["capabilities"]["leak_watch"] == "zone"
+    assert state.attributes["capabilities"]["leak_detection"] == "unavailable"
+
+
+async def test_leak_watch_says_system_for_zones_behind_a_shared_line_meter(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    """The awkward state, answered rather than rounded off.
+
+    Two zones on one line meter have no source on their own scopes --
+    `scope_for` sends that meter's water to HUB_SCOPE, because which of the
+    two leaked is unanswerable -- so `zone_leak` for each stays unavailable
+    for ever. But their water IS measured and a leak in it WILL raise an
+    alarm, on `hub_leak`. "Not watched" would be false; "watched" alone would
+    promise a zone-named alarm that can never arrive. The value names the
+    scope doing the watching, so a card can say where.
+    """
+    freezer.move_to(START)
+    park = MockValvePark(hass)
+    park.add("valve.a")
+    park.add("valve.b")
+    hass.states.async_set("sensor.line", "0", {"unit_of_measurement": "L/min"})
+    mock_weather(hass)
+    entry = await setup_hub(
+        hass,
+        [zone_data("Alpha", "valve.a"), zone_data("Beta", "valve.b")],
+        options={"line_flow_sensor": "sensor.line"},
+    )
+    runtime = entry.runtime_data
+    alpha, beta = runtime.zone_ids
+
+    assert runtime.leak_watch(alpha) == "system"
+    assert runtime.leak_watch(beta) == "system"
+    # And the entity agrees about which scope can actually answer: the zones'
+    # own alarms are unavailable while the hub's is the one with a source.
+    assert runtime.leak_sources_configured(alpha) is False
+    assert runtime.leak_sources_configured(beta) is False
+    assert runtime.leak_sources_configured("__hub__") is True
+
+    state = role_state(hass, "zone_state", alpha)
+    assert state is not None
+    assert state.attributes["capabilities"]["leak_watch"] == "system"
+
+
+async def test_leak_watch_prefers_a_zones_own_scope_over_the_shared_one(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    """A leak sensor on a zone behind the shared meter still says `zone`.
+
+    Its own scope has a source, so its own alarm can name it -- which is a
+    stronger statement than "the system is watching your water", and the card
+    must show the stronger one.
+    """
+    freezer.move_to(START)
+    park = MockValvePark(hass)
+    park.add("valve.a")
+    park.add("valve.b")
+    hass.states.async_set("sensor.line", "0", {"unit_of_measurement": "L/min"})
+    hass.states.async_set("binary_sensor.a_leak", *_moisture("off"))
+    mock_weather(hass)
+    entry = await setup_hub(
+        hass,
+        [
+            zone_data("Alpha", "valve.a", leak_sensor="binary_sensor.a_leak"),
+            zone_data("Beta", "valve.b"),
+        ],
+        options={"line_flow_sensor": "sensor.line"},
+    )
+    runtime = entry.runtime_data
+    alpha, beta = runtime.zone_ids
+
+    assert runtime.leak_watch(alpha) == "zone"
+    assert runtime.leak_watch(beta) == "system"
+
+
+async def test_leak_watch_agrees_with_the_entity_about_every_scope(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    """`zone` is `leak_sources_configured` itself, not a second opinion on it.
+
+    That predicate is what `leak_state_established` gates the binary sensor's
+    availability on. If this attribute were derived separately the card could
+    say "watched by this zone" beside an entity that will never publish
+    anything, which is the disagreement the whole field exists to prevent.
+    """
+    freezer.move_to(START)
+    park = MockValvePark(hass)
+    for valve in ("valve.a", "valve.b", "valve.c"):
+        park.add(valve)
+    hass.states.async_set("sensor.a_flow", "0", {"unit_of_measurement": "L/min"})
+    hass.states.async_set("binary_sensor.b_leak", *_moisture("off"))
+    hass.states.async_set("sensor.line", "0", {"unit_of_measurement": "L/min"})
+    mock_weather(hass)
+    entry = await setup_hub(
+        hass,
+        [
+            zone_data("Alpha", "valve.a", flow_sensor="sensor.a_flow"),
+            zone_data("Beta", "valve.b", leak_sensor="binary_sensor.b_leak"),
+            zone_data("Gamma", "valve.c"),
+        ],
+        options={"line_flow_sensor": "sensor.line"},
+    )
+    runtime = entry.runtime_data
+
+    for zone_id in runtime.zone_ids:
+        assert (runtime.leak_watch(zone_id) == "zone") is runtime.leak_sources_configured(
+            zone_id
+        ), zone_id
+
+
+def test_the_card_branches_on_the_stall_keys_by_name() -> None:
+    """The two stall keys are read BY NAME on the other side of the boundary.
+
+    Every other `degraded` key reaches the card as data: it is looked up in a
+    dictionary and, if the label is missing, rendered as the raw key -- ugly,
+    but self-announcing the first time anyone looks. These two are different.
+    `discovery.ts`'s `leakStatus` matches them literally to decide that a zone
+    has an explanation of its own for a silent leak entity; rename one here
+    and that branch simply stops firing, so a stalled zone is reported as
+    "still checking" for ever. Nothing on either side fails, and nothing on
+    screen looks wrong -- it just says something untrue.
+
+    Deliberately NARROW. A parity test over the whole degraded list was
+    considered and rejected: it would mean parsing TypeScript from Python, it
+    would break on a formatting change with a message about a regex rather
+    than about a key, and the defect it guards is the visible kind. These two
+    are the only degraded keys whose divergence is silent, so these two are
+    the ones pinned -- by substring, so no reformatting of the card can
+    break it.
+    """
+    discovery_ts = (Path(__file__).parents[2] / "card" / "src" / "discovery.ts").read_text(
+        encoding="utf-8"
+    )
+    for key in ("leak_never_observable", "leak_evidence_unresolved"):
+        assert f'"{key}"' in discovery_ts, (
+            f"{key} is matched by name in discovery.ts's leakStatus; renaming it "
+            "here without renaming it there silently stops that branch firing"
+        )

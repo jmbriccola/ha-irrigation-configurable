@@ -711,10 +711,15 @@ const ae = {
   // the water starting. Never word this as "leaking since".
   "zone.leak_confirmed_at": "Confirmed {when}",
   "zone.leak_checking": "Leak check not concluded yet",
-  // Named for what the capability actually measures — the leak SENSOR. A
-  // zone with its own flow meter is still covered by the meter while this
-  // reads "unavailable", so it must not say "leak detection is off".
-  "zone.leak_unavailable": "No leak sensor",
+  // Driven by `leak_watch`, not by `leak_detection`: this says nothing
+  // watches the zone AT ALL, which is a coverage statement and not a
+  // statement about the valve's sensor. A metered zone with no sensor never
+  // sees it.
+  "zone.leak_unavailable": "Leaks not watched here",
+  // The shared-line-meter zone: watched, but not by an alarm that can name
+  // it. Says where, because "not watched" would be false and "watched" alone
+  // would promise a zone-named alarm that can never arrive.
+  "zone.leak_system_scope": "Leaks watched for the system, not for this zone",
   "zone.leak_candidate": "This valve's device offers a leak sensor",
   "zone.supply_unavailable": "No water-supply sensor",
   "zone.supply_candidate": "This valve's device offers a water-supply sensor",
@@ -816,6 +821,10 @@ const ae = {
   "zone.field_leak_sensor": "Leak sensor",
   "zone.field_water_supply_sensor": "Water-supply sensor",
   "zone.sensor_detected": "Found on this valve's device: {entity}",
+  // Which one wins, when the user picked something other than what the
+  // device offers -- the same distinction the flow unit's note draws
+  // between an override and the entity's own declaration.
+  "zone.sensor_detected_other": "Using the sensor you picked; this valve's device also offers {entity}",
   "zone.leak_sensor_none": "This valve's device offers no leak sensor. You can still pick one anywhere — a probe in the bed is a deliberate, valid choice.",
   "zone.water_supply_none": "This valve's device offers no water-supply sensor. You can still pick one anywhere.",
   // The polarity is inverted with respect to the field's name, and getting
@@ -1102,11 +1111,14 @@ const ae = {
   // quando l'acqua ha iniziato a uscire. Mai «perde da…».
   "zone.leak_confirmed_at": "Confermata {when}",
   "zone.leak_checking": "Controllo perdite non ancora concluso",
-  // Il nome dice ciò che la capability misura davvero: il SENSORE di perdita.
-  // Una zona con flussometro proprio resta coperta dal flussometro anche
-  // quando qui c'è «non disponibile», quindi non si può scrivere «rilevamento
-  // perdite disattivo».
-  "zone.leak_unavailable": "Nessun sensore di perdita",
+  // Guidata da `leak_watch`, non da `leak_detection`: dice che nessuno
+  // sorveglia la zona, il che riguarda la copertura e non il sensore della
+  // valvola. Una zona con flussometro proprio non la vede mai.
+  "zone.leak_unavailable": "Perdite non sorvegliate qui",
+  // La zona dietro al flussometro condiviso: sorvegliata, ma non da un
+  // allarme che possa nominarla. Dice dove, perché «non sorvegliata» sarebbe
+  // falso e «sorvegliata» prometterebbe un allarme di zona che non arriverà.
+  "zone.leak_system_scope": "Perdite sorvegliate per l'impianto, non per questa zona",
   "zone.leak_candidate": "Il dispositivo di questa valvola offre un sensore di perdita",
   "zone.supply_unavailable": "Nessun sensore di mancanza d'acqua",
   "zone.supply_candidate": "Il dispositivo di questa valvola offre un sensore di mancanza d'acqua",
@@ -1208,6 +1220,10 @@ const ae = {
   "zone.field_leak_sensor": "Sensore di perdita",
   "zone.field_water_supply_sensor": "Sensore di mancanza d'acqua",
   "zone.sensor_detected": "Trovato sul dispositivo di questa valvola: {entity}",
+  // Quale dei due vince, quando l'utente ne ha scelto uno diverso da
+  // quello che offre il dispositivo: la stessa distinzione che la nota
+  // dell'unità del flussometro fa fra una forzatura e l'entità.
+  "zone.sensor_detected_other": "Uso il sensore che hai scelto; il dispositivo della valvola ne offre anche un altro ({entity})",
   "zone.leak_sensor_none": "Il dispositivo di questa valvola non offre un sensore di perdita. Puoi comunque sceglierne uno altrove: una sonda nell'aiuola è una scelta legittima e voluta.",
   "zone.water_supply_none": "Il dispositivo di questa valvola non offre un sensore di mancanza d'acqua. Puoi comunque sceglierne uno altrove.",
   // La polarità è invertita rispetto al nome del campo, e capirla al
@@ -3899,9 +3915,10 @@ var ds = Object.defineProperty, E = (n, e, t, i) => {
 };
 function cs(n, e, t, i) {
   if (!i) return;
-  const s = e === "leak" ? i.leak_candidate : i.supply_candidate;
-  if (s) return r(n, "zone.sensor_detected", { entity: s });
-  if (t.trim() === "")
+  const s = e === "leak" ? i.leak_candidate : i.supply_candidate, o = t.trim();
+  if (s)
+    return o !== "" && o !== s ? r(n, "zone.sensor_detected_other", { entity: s }) : r(n, "zone.sensor_detected", { entity: s });
+  if (o === "")
     return r(n, e === "leak" ? "zone.leak_sensor_none" : "zone.water_supply_none");
 }
 const Ye = class Ye extends P {
@@ -4805,15 +4822,27 @@ const Qe = class Qe extends P {
       })
     );
   }
-  /** A labelled number input that reports its unit and its default. */
-  _num(e, t, i, s) {
+  /**
+   * A labelled number input that reports its unit and its default.
+   *
+   * `step` is explicit because the HTML default is `1`, and an
+   * `<input type="number">` with `step="1"` holding `0.5` is
+   * `:stepMismatch`: the browser marks the field invalid and its spinner
+   * moves in whole units past a value the backend's own default sits
+   * between. Every field routed through here was an integer until leak
+   * detection brought a litres-per-minute threshold, and the zone editor
+   * already spells `step="0.1"` out for its nominal-flow field — same idiom,
+   * now available to this one.
+   */
+  _num(e, t, i, s, o = 1) {
     return l`
       <div class="section-label">${e}</div>
       <input
         class="field"
         type="number"
+        step=${o}
         .value=${i ?? ""}
-        @input=${(o) => s(v(o.target.value))}
+        @input=${(a) => s(v(a.target.value))}
       />
       <div class="hint">${t}</div>
     `;
@@ -5271,7 +5300,10 @@ const Qe = class Qe extends P {
       r(e, "settings.leak_threshold_lpm"),
       r(e, "settings.leak_threshold_lpm_hint"),
       this._valves.leakThresholdLpm,
-      (o) => this._valves = { ...this._valves, leakThresholdLpm: o }
+      (o) => this._valves = { ...this._valves, leakThresholdLpm: o },
+      // Litres per minute, default 0.5, and `services.yaml` declares the
+      // same 0.1 step for this field. The only decimal in the drawer.
+      0.1
     )}
       ${this._num(
       r(e, "settings.leak_confirm_s"),
@@ -5727,12 +5759,7 @@ function Ps(n) {
 function Ts(n) {
   if (typeof n != "object" || n === null || Array.isArray(n)) return;
   const e = n, t = {};
-  for (const i of [
-    "leak_sensor",
-    "water_supply_sensor",
-    "leak_candidate",
-    "supply_candidate"
-  ]) {
+  for (const i of ["leak_candidate", "supply_candidate"]) {
     const s = e[i];
     typeof s == "string" && s !== "" && (t[i] = s);
   }
@@ -5748,13 +5775,13 @@ const Xe = class Xe extends P {
   /* ------------------------------------------------------------ */
   /* Actions → services                                            */
   /* ------------------------------------------------------------ */
-  async _call(e, t, i, s = !1) {
+  async _call(e, t, i, s = !1, o = !1) {
     if (this.hass)
       try {
         return await this.hass.callService(e, t, i, void 0, !1, s);
-      } catch (o) {
-        const a = o instanceof Error ? o.message : String(o);
-        this._showError(a);
+      } catch (a) {
+        const d = a instanceof Error ? a.message : String(a);
+        o || this._showError(d);
         return;
       }
   }
@@ -5799,12 +5826,18 @@ const Xe = class Xe extends P {
    * together. A failure answers `undefined` — the editor then says nothing
    * about candidates rather than claiming the device has none, and every
    * other field still works.
+   *
+   * Quiet on failure, and that is the whole point of calling it survivable:
+   * against a backend without this service the user would otherwise get
+   * "Service not found" thrown at them while the editor they asked for opens
+   * perfectly, for a convenience they never requested.
    */
   async _discoverZoneSensors(e) {
     const t = await this._call(
       "irrigation_maestro",
       "discover_zone_sensors",
       { zone_id: e },
+      !0,
       !0
     );
     return Ts(t?.response);

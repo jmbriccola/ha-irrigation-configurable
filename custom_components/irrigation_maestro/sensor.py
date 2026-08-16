@@ -374,6 +374,15 @@ class ZoneStateSensor(MaestroZoneEntity, SensorEntity):
             "water_accounting": accounting,
             "leak_detection": caps.leak_detection,
             "water_supply": caps.water_supply,
+            # WHERE this zone's leaks are watched, which leak_detection above
+            # cannot answer: that key is about the valve's own sensor and
+            # knows nothing about flow, so a fully metered zone with no sensor
+            # reads "unavailable" there while source 2 watches it. Published
+            # beside it rather than folded into it, because "configured" would
+            # then be ambiguous about WHICH source -- and because the two
+            # genuinely differ, a zone can be watched by the system scope
+            # while having nothing of its own. See runtime.leak_watch.
+            "leak_watch": runtime.leak_watch(config.zone_id),
         }
 
 

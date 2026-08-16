@@ -4,7 +4,7 @@
  * Copyright (c) Jacopo Maria Briccola
  * @license MIT
  */
-const ue = globalThis, $e = ue.ShadowRoot && (ue.ShadyCSS === void 0 || ue.ShadyCSS.nativeShadow) && "adoptedStyleSheets" in Document.prototype && "replace" in CSSStyleSheet.prototype, ze = /* @__PURE__ */ Symbol(), qe = /* @__PURE__ */ new WeakMap();
+const ue = globalThis, $e = ue.ShadowRoot && (ue.ShadyCSS === void 0 || ue.ShadyCSS.nativeShadow) && "adoptedStyleSheets" in Document.prototype && "replace" in CSSStyleSheet.prototype, ze = /* @__PURE__ */ Symbol(), De = /* @__PURE__ */ new WeakMap();
 let et = class {
   constructor(e, t, i) {
     if (this._$cssResult$ = !0, i !== ze) throw Error("CSSResult is not constructable. Use `unsafeCSS` or `css` instead.");
@@ -15,7 +15,7 @@ let et = class {
     const t = this.t;
     if ($e && e === void 0) {
       const i = t !== void 0 && t.length === 1;
-      i && (e = qe.get(t)), e === void 0 && ((this.o = e = new CSSStyleSheet()).replaceSync(this.cssText), i && qe.set(t, e));
+      i && (e = De.get(t)), e === void 0 && ((this.o = e = new CSSStyleSheet()).replaceSync(this.cssText), i && De.set(t, e));
     }
     return e;
   }
@@ -253,22 +253,22 @@ let Z = class extends HTMLElement {
   }
 };
 Z.elementStyles = [], Z.shadowRootOptions = { mode: "open" }, Z[oe("elementProperties")] = /* @__PURE__ */ new Map(), Z[oe("finalized")] = /* @__PURE__ */ new Map(), St?.({ ReactiveElement: Z }), (me.reactiveElementVersions ??= []).push("2.1.2");
-const Se = globalThis, Fe = (n) => n, he = Se.trustedTypes, Ue = he ? he.createPolicy("lit-html", { createHTML: (n) => n }) : void 0, tt = "$lit$", M = `lit$${Math.random().toFixed(9).slice(2)}$`, it = "?" + M, At = `<${it}>`, H = document, ne = () => H.createComment(""), ae = (n) => n === null || typeof n != "object" && typeof n != "function", Ae = Array.isArray, Ct = (n) => Ae(n) || typeof n?.[Symbol.iterator] == "function", ye = `[ 	
-\f\r]`, te = /<(?:(!--|\/[^a-zA-Z])|(\/?[a-zA-Z][^>\s]*)|(\/?$))/g, He = /-->/g, je = />/g, D = RegExp(`>|${ye}(?:([^\\s"'>=/]+)(${ye}*=${ye}*(?:[^ 	
+const Se = globalThis, Fe = (n) => n, he = Se.trustedTypes, Ue = he ? he.createPolicy("lit-html", { createHTML: (n) => n }) : void 0, tt = "$lit$", N = `lit$${Math.random().toFixed(9).slice(2)}$`, it = "?" + N, At = `<${it}>`, H = document, ne = () => H.createComment(""), ae = (n) => n === null || typeof n != "object" && typeof n != "function", Ae = Array.isArray, Ct = (n) => Ae(n) || typeof n?.[Symbol.iterator] == "function", ye = `[ 	
+\f\r]`, te = /<(?:(!--|\/[^a-zA-Z])|(\/?[a-zA-Z][^>\s]*)|(\/?$))/g, He = /-->/g, je = />/g, q = RegExp(`>|${ye}(?:([^\\s"'>=/]+)(${ye}*=${ye}*(?:[^ 	
 \f\r"'\`<>=]|("|')|))|$)`, "g"), Be = /'/g, Ve = /"/g, ot = /^(?:script|style|textarea|title)$/i, nt = (n) => (e, ...t) => ({ _$litType$: n, strings: e, values: t }), p = nt(1), R = nt(2), G = /* @__PURE__ */ Symbol.for("lit-noChange"), u = /* @__PURE__ */ Symbol.for("lit-nothing"), We = /* @__PURE__ */ new WeakMap(), L = H.createTreeWalker(H, 129);
 function at(n, e) {
   if (!Ae(n) || !n.hasOwnProperty("raw")) throw Error("invalid template strings array");
   return Ue !== void 0 ? Ue.createHTML(e) : e;
 }
-const Nt = (n, e) => {
+const Et = (n, e) => {
   const t = n.length - 1, i = [];
   let o, a = e === 2 ? "<svg>" : e === 3 ? "<math>" : "", s = te;
   for (let l = 0; l < t; l++) {
     const r = n[l];
     let d, h, _ = -1, m = 0;
-    for (; m < r.length && (s.lastIndex = m, h = s.exec(r), h !== null); ) m = s.lastIndex, s === te ? h[1] === "!--" ? s = He : h[1] !== void 0 ? s = je : h[2] !== void 0 ? (ot.test(h[2]) && (o = RegExp("</" + h[2], "g")), s = D) : h[3] !== void 0 && (s = D) : s === D ? h[0] === ">" ? (s = o ?? te, _ = -1) : h[1] === void 0 ? _ = -2 : (_ = s.lastIndex - h[2].length, d = h[1], s = h[3] === void 0 ? D : h[3] === '"' ? Ve : Be) : s === Ve || s === Be ? s = D : s === He || s === je ? s = te : (s = D, o = void 0);
-    const f = s === D && n[l + 1].startsWith("/>") ? " " : "";
-    a += s === te ? r + At : _ >= 0 ? (i.push(d), r.slice(0, _) + tt + r.slice(_) + M + f) : r + M + (_ === -2 ? l : f);
+    for (; m < r.length && (s.lastIndex = m, h = s.exec(r), h !== null); ) m = s.lastIndex, s === te ? h[1] === "!--" ? s = He : h[1] !== void 0 ? s = je : h[2] !== void 0 ? (ot.test(h[2]) && (o = RegExp("</" + h[2], "g")), s = q) : h[3] !== void 0 && (s = q) : s === q ? h[0] === ">" ? (s = o ?? te, _ = -1) : h[1] === void 0 ? _ = -2 : (_ = s.lastIndex - h[2].length, d = h[1], s = h[3] === void 0 ? q : h[3] === '"' ? Ve : Be) : s === Ve || s === Be ? s = q : s === He || s === je ? s = te : (s = q, o = void 0);
+    const f = s === q && n[l + 1].startsWith("/>") ? " " : "";
+    a += s === te ? r + At : _ >= 0 ? (i.push(d), r.slice(0, _) + tt + r.slice(_) + N + f) : r + N + (_ === -2 ? l : f);
   }
   return [at(n, a + (n[t] || "<?>") + (e === 2 ? "</svg>" : e === 3 ? "</math>" : "")), i];
 };
@@ -277,7 +277,7 @@ class se {
     let o;
     this.parts = [];
     let a = 0, s = 0;
-    const l = e.length - 1, r = this.parts, [d, h] = Nt(e, t);
+    const l = e.length - 1, r = this.parts, [d, h] = Et(e, t);
     if (this.el = se.createElement(d, i), L.currentNode = this.el.content, t === 2 || t === 3) {
       const _ = this.el.content.firstChild;
       _.replaceWith(..._.childNodes);
@@ -285,11 +285,11 @@ class se {
     for (; (o = L.nextNode()) !== null && r.length < l; ) {
       if (o.nodeType === 1) {
         if (o.hasAttributes()) for (const _ of o.getAttributeNames()) if (_.endsWith(tt)) {
-          const m = h[s++], f = o.getAttribute(_).split(M), w = /([.?@])?(.*)/.exec(m);
-          r.push({ type: 1, index: a, name: w[2], strings: f, ctor: w[1] === "." ? Mt : w[1] === "?" ? Tt : w[1] === "@" ? Pt : fe }), o.removeAttribute(_);
-        } else _.startsWith(M) && (r.push({ type: 6, index: a }), o.removeAttribute(_));
+          const m = h[s++], f = o.getAttribute(_).split(N), w = /([.?@])?(.*)/.exec(m);
+          r.push({ type: 1, index: a, name: w[2], strings: f, ctor: w[1] === "." ? Nt : w[1] === "?" ? Tt : w[1] === "@" ? Pt : fe }), o.removeAttribute(_);
+        } else _.startsWith(N) && (r.push({ type: 6, index: a }), o.removeAttribute(_));
         if (ot.test(o.tagName)) {
-          const _ = o.textContent.split(M), m = _.length - 1;
+          const _ = o.textContent.split(N), m = _.length - 1;
           if (m > 0) {
             o.textContent = he ? he.emptyScript : "";
             for (let f = 0; f < m; f++) o.append(_[f], ne()), L.nextNode(), r.push({ type: 2, index: ++a });
@@ -299,7 +299,7 @@ class se {
       } else if (o.nodeType === 8) if (o.data === it) r.push({ type: 2, index: a });
       else {
         let _ = -1;
-        for (; (_ = o.data.indexOf(M, _ + 1)) !== -1; ) r.push({ type: 7, index: a }), _ += M.length - 1;
+        for (; (_ = o.data.indexOf(N, _ + 1)) !== -1; ) r.push({ type: 7, index: a }), _ += N.length - 1;
       }
       a++;
     }
@@ -315,7 +315,7 @@ function Q(n, e, t = n, i) {
   const a = ae(e) ? void 0 : e._$litDirective$;
   return o?.constructor !== a && (o?._$AO?.(!1), a === void 0 ? o = void 0 : (o = new a(n), o._$AT(n, t, i)), i !== void 0 ? (t._$Co ??= [])[i] = o : t._$Cl = o), o !== void 0 && (e = Q(n, o._$AS(n, e.values), o, i)), e;
 }
-class Et {
+class Mt {
   constructor(e, t) {
     this._$AV = [], this._$AN = void 0, this._$AD = e, this._$AM = t;
   }
@@ -377,7 +377,7 @@ class le {
     const { values: t, _$litType$: i } = e, o = typeof i == "number" ? this._$AC(e) : (i.el === void 0 && (i.el = se.createElement(at(i.h, i.h[0]), this.options)), i);
     if (this._$AH?._$AD === o) this._$AH.p(t);
     else {
-      const a = new Et(o, this), s = a.u(this.options);
+      const a = new Mt(o, this), s = a.u(this.options);
       a.p(t), this.T(s), this._$AH = a;
     }
   }
@@ -427,7 +427,7 @@ class fe {
     e === u ? this.element.removeAttribute(this.name) : this.element.setAttribute(this.name, e ?? "");
   }
 }
-class Mt extends fe {
+class Nt extends fe {
   constructor() {
     super(...arguments), this.type = 3;
   }
@@ -467,9 +467,9 @@ class It {
     Q(this, e);
   }
 }
-const Dt = Se.litHtmlPolyfillSupport;
-Dt?.(se, le), (Se.litHtmlVersions ??= []).push("3.3.3");
-const qt = (n, e, t) => {
+const qt = Se.litHtmlPolyfillSupport;
+qt?.(se, le), (Se.litHtmlVersions ??= []).push("3.3.3");
+const Dt = (n, e, t) => {
   const i = t?.renderBefore ?? e;
   let o = i._$litPart$;
   if (o === void 0) {
@@ -489,7 +489,7 @@ class S extends Z {
   }
   update(e) {
     const t = this.render();
-    this.hasUpdated || (this.renderOptions.isConnected = this.isConnected), super.update(e), this._$Do = qt(t, this.renderRoot, this.renderOptions);
+    this.hasUpdated || (this.renderOptions.isConnected = this.isConnected), super.update(e), this._$Do = Dt(t, this.renderRoot, this.renderOptions);
   }
   connectedCallback() {
     super.connectedCallback(), this._$Do?.setConnected(!0);
@@ -627,15 +627,10 @@ function rt(n) {
 function Bt(n) {
   const e = rt(n), t = [];
   g(e.water_accounting) === "estimated" && t.push({ key: "water_estimated", tone: "muted" });
-  const i = [
-    ["leak_detection", "leak"],
-    ["water_supply", "supply"]
-  ];
-  for (const [o, a] of i) {
-    const s = g(e[o]);
-    s === "unavailable" ? t.push({ key: `${a}_unavailable`, tone: "muted" }) : s === "candidate_available" && t.push({ key: `${a}_candidate`, tone: "hint" });
-  }
-  return t;
+  const i = g(e.leak_watch);
+  i === "none" ? t.push({ key: "leak_unavailable", tone: "muted" }) : i === "system" && t.push({ key: "leak_system_scope", tone: "muted" }), g(e.leak_detection) === "candidate_available" && t.push({ key: "leak_candidate", tone: "hint" });
+  const o = g(e.water_supply);
+  return o === "unavailable" ? t.push({ key: "supply_unavailable", tone: "muted" }) : o === "candidate_available" && t.push({ key: "supply_candidate", tone: "hint" }), t;
 }
 const Vt = ["leak_never_observable", "leak_evidence_unresolved"];
 function lt(n) {
@@ -651,7 +646,7 @@ function Wt(n) {
   if (e) return e;
   if (n.leak?.state === "off") return { coverage: "quiet", sources: [] };
   const t = Y(n.state?.attributes?.degraded).map((i) => g(i));
-  return Vt.some((i) => t.includes(i)) ? { coverage: "unresolved", sources: [] } : g(rt(n).leak_detection) === "configured" ? { coverage: "establishing", sources: [] } : { coverage: "unknown", sources: [] };
+  return Vt.some((i) => t.includes(i)) ? { coverage: "unresolved", sources: [] } : g(rt(n).leak_watch) === "zone" ? { coverage: "establishing", sources: [] } : { coverage: "unknown", sources: [] };
 }
 function Zt(n) {
   const e = lt(n.leak);
@@ -671,7 +666,7 @@ function Gt(n) {
 function Qt(n) {
   return v(n.state?.attributes?.adjustment_pct) ?? 100;
 }
-const N = {
+const E = {
   // Card-level messages
   "card.name": "Irrigation Maestro Card",
   "card.description": "Overview and control of the Irrigation Maestro integration: water budget, zones, queue and curves.",
@@ -825,10 +820,15 @@ const N = {
   // the water starting. Never word this as "leaking since".
   "zone.leak_confirmed_at": "Confirmed {when}",
   "zone.leak_checking": "Leak check not concluded yet",
-  // Named for what the capability actually measures — the leak SENSOR. A
-  // zone with its own flow meter is still covered by the meter while this
-  // reads "unavailable", so it must not say "leak detection is off".
-  "zone.leak_unavailable": "No leak sensor",
+  // Driven by `leak_watch`, not by `leak_detection`: this says nothing
+  // watches the zone AT ALL, which is a coverage statement and not a
+  // statement about the valve's sensor. A metered zone with no sensor never
+  // sees it.
+  "zone.leak_unavailable": "Leaks not watched here",
+  // The shared-line-meter zone: watched, but not by an alarm that can name
+  // it. Says where, because "not watched" would be false and "watched" alone
+  // would promise a zone-named alarm that can never arrive.
+  "zone.leak_system_scope": "Leaks watched for the system, not for this zone",
   "zone.leak_candidate": "This valve's device offers a leak sensor",
   "zone.supply_unavailable": "No water-supply sensor",
   "zone.supply_candidate": "This valve's device offers a water-supply sensor",
@@ -930,6 +930,10 @@ const N = {
   "zone.field_leak_sensor": "Leak sensor",
   "zone.field_water_supply_sensor": "Water-supply sensor",
   "zone.sensor_detected": "Found on this valve's device: {entity}",
+  // Which one wins, when the user picked something other than what the
+  // device offers -- the same distinction the flow unit's note draws
+  // between an override and the entity's own declaration.
+  "zone.sensor_detected_other": "Using the sensor you picked; this valve's device also offers {entity}",
   "zone.leak_sensor_none": "This valve's device offers no leak sensor. You can still pick one anywhere — a probe in the bed is a deliberate, valid choice.",
   "zone.water_supply_none": "This valve's device offers no water-supply sensor. You can still pick one anywhere.",
   // The polarity is inverted with respect to the field's name, and getting
@@ -1216,11 +1220,14 @@ const N = {
   // quando l'acqua ha iniziato a uscire. Mai «perde da…».
   "zone.leak_confirmed_at": "Confermata {when}",
   "zone.leak_checking": "Controllo perdite non ancora concluso",
-  // Il nome dice ciò che la capability misura davvero: il SENSORE di perdita.
-  // Una zona con flussometro proprio resta coperta dal flussometro anche
-  // quando qui c'è «non disponibile», quindi non si può scrivere «rilevamento
-  // perdite disattivo».
-  "zone.leak_unavailable": "Nessun sensore di perdita",
+  // Guidata da `leak_watch`, non da `leak_detection`: dice che nessuno
+  // sorveglia la zona, il che riguarda la copertura e non il sensore della
+  // valvola. Una zona con flussometro proprio non la vede mai.
+  "zone.leak_unavailable": "Perdite non sorvegliate qui",
+  // La zona dietro al flussometro condiviso: sorvegliata, ma non da un
+  // allarme che possa nominarla. Dice dove, perché «non sorvegliata» sarebbe
+  // falso e «sorvegliata» prometterebbe un allarme di zona che non arriverà.
+  "zone.leak_system_scope": "Perdite sorvegliate per l'impianto, non per questa zona",
   "zone.leak_candidate": "Il dispositivo di questa valvola offre un sensore di perdita",
   "zone.supply_unavailable": "Nessun sensore di mancanza d'acqua",
   "zone.supply_candidate": "Il dispositivo di questa valvola offre un sensore di mancanza d'acqua",
@@ -1322,6 +1329,10 @@ const N = {
   "zone.field_leak_sensor": "Sensore di perdita",
   "zone.field_water_supply_sensor": "Sensore di mancanza d'acqua",
   "zone.sensor_detected": "Trovato sul dispositivo di questa valvola: {entity}",
+  // Quale dei due vince, quando l'utente ne ha scelto uno diverso da
+  // quello che offre il dispositivo: la stessa distinzione che la nota
+  // dell'unità del flussometro fa fra una forzatura e l'entità.
+  "zone.sensor_detected_other": "Uso il sensore che hai scelto; il dispositivo della valvola ne offre anche un altro ({entity})",
   "zone.leak_sensor_none": "Il dispositivo di questa valvola non offre un sensore di perdita. Puoi comunque sceglierne uno altrove: una sonda nell'aiuola è una scelta legittima e voluta.",
   "zone.water_supply_none": "Il dispositivo di questa valvola non offre un sensore di mancanza d'acqua. Puoi comunque sceglierne uno altrove.",
   // La polarità è invertita rispetto al nome del campo, e capirla al
@@ -1450,7 +1461,7 @@ const N = {
   "program_editor.volume_safety_timeout_hint": "Minuti dopo i quali una corsa a volume si ferma anche se il flussometro non ha raggiunto il target.",
   "settings.advanced_note": "Parametri avanzati (motore, sicurezza, notifiche) → Impostazioni"
 }, ge = {
-  en: N,
+  en: E,
   it: Yt
 };
 function ct(n) {
@@ -1464,15 +1475,15 @@ function Kt(n, e) {
   }) : n;
 }
 function c(n, e, t) {
-  const i = ge[n] ?? N;
-  return Kt(i[e] ?? N[e], t);
+  const i = ge[n] ?? E;
+  return Kt(i[e] ?? E[e], t);
 }
 function F(n, e, t) {
-  const i = `${e}.${t}`, o = ge[n] ?? N, a = N;
+  const i = `${e}.${t}`, o = ge[n] ?? E, a = E;
   return o[i] ?? a[i] ?? t;
 }
 function Xt(n, e) {
-  const t = ge[n] ?? N, i = N;
+  const t = ge[n] ?? E, i = E;
   for (const o of ["queue_state", "zone_state", "outcome"]) {
     const a = `${o}.${e}`, s = t[a] ?? i[a];
     if (s !== void 0) return s;
@@ -1620,7 +1631,7 @@ var ci = Object.defineProperty, di = (n, e, t, i) => {
     (s = n[a]) && (o = s(e, t, o) || o);
   return o && ci(e, t, o), o;
 };
-const B = 150, V = 44, de = 6, Ye = 6, Ee = class Ee extends S {
+const B = 150, V = 44, de = 6, Ye = 6, Me = class Me extends S {
   render() {
     const e = this.curve, t = pt(e?.points);
     if (t.length === 0) return u;
@@ -1660,7 +1671,7 @@ const B = 150, V = 44, de = 6, Ye = 6, Ee = class Ee extends S {
     `;
   }
 };
-Ee.styles = X`
+Me.styles = X`
     :host {
       display: inline-block;
       line-height: 0;
@@ -1696,7 +1707,7 @@ Ee.styles = X`
       font-family: inherit;
     }
   `;
-let _e = Ee;
+let _e = Me;
 di([
   b({ attribute: !1 })
 ], _e.prototype, "curve");
@@ -1738,7 +1749,7 @@ var gi = Object.defineProperty, A = (n, e, t, i) => {
     (s = n[a]) && (o = s(e, t, o) || o);
   return o && gi(e, t, o), o;
 };
-const E = 320, q = 170, C = 34, O = 12, ie = 16, W = 24, Ke = 5, Xe = 40, Je = 2, Me = class Me extends S {
+const M = 320, D = 170, C = 34, O = 12, ie = 16, W = 24, Ke = 5, Xe = 40, Je = 2, Ne = class Ne extends S {
   constructor() {
     super(...arguments), this.language = "en", this.zoneHasFlowMeter = !1, this.zoneAdjustmentPct = 100, this._points = [[ai, 15]], this._min = 1, this._max = 120, this._kind = "duration", this._error = null;
   }
@@ -1774,12 +1785,12 @@ const E = 320, q = 170, C = 34, O = 12, ie = 16, W = 24, Ke = 5, Xe = 40, Je = 2
   }
   _sx(e) {
     const t = this._axisMin(), i = this._axisMax();
-    return C + (e - t) / (i - t) * (E - C - O);
+    return C + (e - t) / (i - t) * (M - C - O);
   }
   /** The graph's vertical axis, scaled to contain every raw point AND both
    *  clamp lines — see `graphAxis`'s doc comment for why both matter. */
   _axis() {
-    return fi(this._points, this._min, this._max, q, ie, W);
+    return fi(this._points, this._min, this._max, D, ie, W);
   }
   _sy(e) {
     return this._axis().y(e);
@@ -1808,7 +1819,7 @@ const E = 320, q = 170, C = 34, O = 12, ie = 16, W = 24, Ke = 5, Xe = 40, Je = 2
     if (!o) return;
     const a = o[1], s = i.getScreenCTM();
     if (!s) return;
-    const l = this._pointerViewY(i, s, t), r = this._axis().top / (q - ie - W), d = (_) => {
+    const l = this._pointerViewY(i, s, t), r = this._axis().top / (D - ie - W), d = (_) => {
       const m = i.getScreenCTM();
       if (!m) return;
       const f = this._pointerViewY(i, m, _) - l;
@@ -2014,16 +2025,16 @@ const E = 320, q = 170, C = 34, O = 12, ie = 16, W = 24, Ke = 5, Xe = 40, Je = 2
       o.push([this._sx(f), this._sy(ht(this._points, f))]);
     const a = o.map((f, w) => `${w === 0 ? "M" : "L"}${f[0].toFixed(1)},${f[1].toFixed(1)}`).join(" "), s = this.weightedTemp, l = s !== void 0 && !Number.isNaN(s) && s >= t && s <= i, r = this._sy(this._min), d = this._sy(this._max), h = Math.min(r, d), _ = Math.abs(d - r), m = this._unit();
     return R`
-      <svg viewBox="0 0 ${E} ${q}">
+      <svg viewBox="0 0 ${M} ${D}">
         <rect class="clamp-band" x=${C} y=${h.toFixed(1)}
-          width=${(E - C - O).toFixed(1)} height=${_.toFixed(1)}></rect>
-        <line class="clamp-line" x1=${C} y1=${r.toFixed(1)} x2=${E - O} y2=${r.toFixed(1)}></line>
-        <line class="clamp-line" x1=${C} y1=${d.toFixed(1)} x2=${E - O} y2=${d.toFixed(1)}></line>
-        <text class="clamp-text" x=${E - O} y=${(r - 3).toFixed(1)} text-anchor="end">${c(e, "curve.clamp_min")} ${this._min} ${m}</text>
-        <text class="clamp-text" x=${E - O} y=${(d - 3).toFixed(1)} text-anchor="end">${c(e, "curve.clamp_max")} ${this._max} ${m}</text>
-        <line class="axis" x1=${C} y1=${ie} x2=${C} y2=${q - W}></line>
-        <line class="axis" x1=${C} y1=${q - W} x2=${E - O} y2=${q - W}></line>
-        ${l ? R`<line class="today" x1=${this._sx(s)} y1=${ie} x2=${this._sx(s)} y2=${q - W}></line>
+          width=${(M - C - O).toFixed(1)} height=${_.toFixed(1)}></rect>
+        <line class="clamp-line" x1=${C} y1=${r.toFixed(1)} x2=${M - O} y2=${r.toFixed(1)}></line>
+        <line class="clamp-line" x1=${C} y1=${d.toFixed(1)} x2=${M - O} y2=${d.toFixed(1)}></line>
+        <text class="clamp-text" x=${M - O} y=${(r - 3).toFixed(1)} text-anchor="end">${c(e, "curve.clamp_min")} ${this._min} ${m}</text>
+        <text class="clamp-text" x=${M - O} y=${(d - 3).toFixed(1)} text-anchor="end">${c(e, "curve.clamp_max")} ${this._max} ${m}</text>
+        <line class="axis" x1=${C} y1=${ie} x2=${C} y2=${D - W}></line>
+        <line class="axis" x1=${C} y1=${D - W} x2=${M - O} y2=${D - W}></line>
+        ${l ? R`<line class="today" x1=${this._sx(s)} y1=${ie} x2=${this._sx(s)} y2=${D - W}></line>
               <text class="today-text" x=${this._sx(s)} y=${ie - 4} text-anchor="middle">${c(e, "editor.graph.today", { temp: Math.round(s) })}</text>` : u}
         <path class="curve" d=${a}></path>
         ${this._points.map(
@@ -2035,7 +2046,7 @@ const E = 320, q = 170, C = 34, O = 12, ie = 16, W = 24, Ke = 5, Xe = 40, Je = 2
     `;
   }
 };
-Me.styles = X`
+Ne.styles = X`
     :host {
       display: block;
       border: 1px solid var(--divider-color, rgba(127, 127, 127, 0.25));
@@ -2231,7 +2242,7 @@ Me.styles = X`
       color: inherit;
     }
   `;
-let x = Me;
+let x = Ne;
 A([
   b()
 ], x.prototype, "language");
@@ -2279,6 +2290,7 @@ const mt = {
 }, yi = [1, 4, 8, 24], bi = {
   water_estimated: { label: "zone.water_estimated", icon: "mdi:approximately-equal" },
   leak_unavailable: { label: "zone.leak_unavailable", icon: "mdi:water-alert-outline" },
+  leak_system_scope: { label: "zone.leak_system_scope", icon: "mdi:home-flood" },
   leak_candidate: { label: "zone.leak_candidate", icon: "mdi:water-plus-outline" },
   supply_unavailable: { label: "zone.supply_unavailable", icon: "mdi:water-pump-off" },
   supply_candidate: { label: "zone.supply_candidate", icon: "mdi:water-pump" }
@@ -2368,9 +2380,7 @@ const Te = class Te extends S {
     }
     const l = Bt(i);
     for (const r of l) {
-      const d = bi[r.key];
-      if (!d) continue;
-      const h = c(this.language, d.label);
+      const d = bi[r.key], h = c(this.language, d.label);
       a.push(p`
         <span class="badge ${r.tone}" title=${h}>
           <ha-icon icon=${d.icon} style="--mdc-icon-size:12px"></ha-icon>
@@ -2920,7 +2930,7 @@ P([
   z()
 ], $.prototype, "_editingCycle");
 J("imc-zone-row", $);
-var xi = Object.defineProperty, Ne = (n, e, t, i) => {
+var xi = Object.defineProperty, Ee = (n, e, t, i) => {
   for (var o = void 0, a = n.length - 1, s; a >= 0; a--)
     (s = n[a]) && (o = s(e, t, o) || o);
   return o && xi(e, t, o), o;
@@ -3004,13 +3014,13 @@ Pe.styles = X`
     }
   `;
 let K = Pe;
-Ne([
+Ee([
   b()
 ], K.prototype, "language");
-Ne([
+Ee([
   b({ type: Boolean })
 ], K.prototype, "paused");
-Ne([
+Ee([
   b({ type: Boolean })
 ], K.prototype, "hasPauseSwitch");
 J("imc-global-controls", K);
@@ -3515,7 +3525,7 @@ const Ai = [
   { key: "show_queue", label: "editor.show_queue", fallback: !0 },
   { key: "show_controls", label: "editor.show_controls", fallback: !0 },
   { key: "compact", label: "editor.compact", fallback: !1 }
-], De = class De extends S {
+], qe = class qe extends S {
   setConfig(e) {
     this._config = { ...e };
   }
@@ -3596,7 +3606,7 @@ const Ai = [
     `;
   }
 };
-De.styles = X`
+qe.styles = X`
     :host {
       display: block;
       color: var(--primary-text-color);
@@ -3656,7 +3666,7 @@ De.styles = X`
       opacity: 0.9;
     }
   `;
-let re = De;
+let re = qe;
 ft([
   b({ attribute: !1 })
 ], re.prototype, "hass");
@@ -3667,8 +3677,8 @@ J("irrigation-maestro-card-editor", re);
 window.customCards = window.customCards ?? [];
 window.customCards.some((n) => n.type === "irrigation-maestro-card") || window.customCards.push({
   type: "irrigation-maestro-card",
-  name: N["card.name"],
-  description: N["card.description"],
+  name: E["card.name"],
+  description: E["card.description"],
   preview: !0,
   documentationURL: "https://github.com/jmbriccola/ha-irrigation-configurable"
 });

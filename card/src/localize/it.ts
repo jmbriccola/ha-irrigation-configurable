@@ -177,11 +177,14 @@ export const it: Record<keyof typeof en, string> = {
   // quando l'acqua ha iniziato a uscire. Mai «perde da…».
   "zone.leak_confirmed_at": "Confermata {when}",
   "zone.leak_checking": "Controllo perdite non ancora concluso",
-  // Il nome dice ciò che la capability misura davvero: il SENSORE di perdita.
-  // Una zona con flussometro proprio resta coperta dal flussometro anche
-  // quando qui c'è «non disponibile», quindi non si può scrivere «rilevamento
-  // perdite disattivo».
-  "zone.leak_unavailable": "Nessun sensore di perdita",
+  // Guidata da `leak_watch`, non da `leak_detection`: dice che nessuno
+  // sorveglia la zona, il che riguarda la copertura e non il sensore della
+  // valvola. Una zona con flussometro proprio non la vede mai.
+  "zone.leak_unavailable": "Perdite non sorvegliate qui",
+  // La zona dietro al flussometro condiviso: sorvegliata, ma non da un
+  // allarme che possa nominarla. Dice dove, perché «non sorvegliata» sarebbe
+  // falso e «sorvegliata» prometterebbe un allarme di zona che non arriverà.
+  "zone.leak_system_scope": "Perdite sorvegliate per l'impianto, non per questa zona",
   "zone.leak_candidate": "Il dispositivo di questa valvola offre un sensore di perdita",
   "zone.supply_unavailable": "Nessun sensore di mancanza d'acqua",
   "zone.supply_candidate":
@@ -292,6 +295,11 @@ export const it: Record<keyof typeof en, string> = {
   "zone.field_leak_sensor": "Sensore di perdita",
   "zone.field_water_supply_sensor": "Sensore di mancanza d'acqua",
   "zone.sensor_detected": "Trovato sul dispositivo di questa valvola: {entity}",
+  // Quale dei due vince, quando l'utente ne ha scelto uno diverso da
+  // quello che offre il dispositivo: la stessa distinzione che la nota
+  // dell'unità del flussometro fa fra una forzatura e l'entità.
+  "zone.sensor_detected_other":
+    "Uso il sensore che hai scelto; il dispositivo della valvola ne offre anche un altro ({entity})",
   "zone.leak_sensor_none":
     "Il dispositivo di questa valvola non offre un sensore di perdita. Puoi comunque sceglierne uno altrove: una sonda nell'aiuola è una scelta legittima e voluta.",
   "zone.water_supply_none":

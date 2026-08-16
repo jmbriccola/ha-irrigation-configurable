@@ -172,10 +172,15 @@ export const en = {
   // the water starting. Never word this as "leaking since".
   "zone.leak_confirmed_at": "Confirmed {when}",
   "zone.leak_checking": "Leak check not concluded yet",
-  // Named for what the capability actually measures — the leak SENSOR. A
-  // zone with its own flow meter is still covered by the meter while this
-  // reads "unavailable", so it must not say "leak detection is off".
-  "zone.leak_unavailable": "No leak sensor",
+  // Driven by `leak_watch`, not by `leak_detection`: this says nothing
+  // watches the zone AT ALL, which is a coverage statement and not a
+  // statement about the valve's sensor. A metered zone with no sensor never
+  // sees it.
+  "zone.leak_unavailable": "Leaks not watched here",
+  // The shared-line-meter zone: watched, but not by an alarm that can name
+  // it. Says where, because "not watched" would be false and "watched" alone
+  // would promise a zone-named alarm that can never arrive.
+  "zone.leak_system_scope": "Leaks watched for the system, not for this zone",
   "zone.leak_candidate": "This valve's device offers a leak sensor",
   "zone.supply_unavailable": "No water-supply sensor",
   "zone.supply_candidate": "This valve's device offers a water-supply sensor",
@@ -284,6 +289,11 @@ export const en = {
   "zone.field_leak_sensor": "Leak sensor",
   "zone.field_water_supply_sensor": "Water-supply sensor",
   "zone.sensor_detected": "Found on this valve's device: {entity}",
+  // Which one wins, when the user picked something other than what the
+  // device offers -- the same distinction the flow unit's note draws
+  // between an override and the entity's own declaration.
+  "zone.sensor_detected_other":
+    "Using the sensor you picked; this valve's device also offers {entity}",
   "zone.leak_sensor_none":
     "This valve's device offers no leak sensor. You can still pick one anywhere — a probe in the bed is a deliberate, valid choice.",
   "zone.water_supply_none":

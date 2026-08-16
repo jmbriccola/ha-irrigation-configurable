@@ -57,10 +57,14 @@ export interface ZoneRemoveDetail {
  * attributes never carry a `device_id`. Candidates are matched by
  * `device_class` alone, never by entity id or name: the panel must not
  * re-derive them from names either.
+ *
+ * The service also answers with what the zone is already configured with and
+ * with the two capability verdicts. Neither is kept: the form seeds from
+ * `export_config`, which is the authority on stored configuration, and the
+ * verdicts are read off `zone_state`. Carrying them here would be a second
+ * copy of a stored value that could differ from the one the form is showing.
  */
 export interface ZoneSensorDiscovery {
-  leak_sensor?: string;
-  water_supply_sensor?: string;
   leak_candidate?: string;
   supply_candidate?: string;
 }
@@ -68,6 +72,12 @@ export interface ZoneSensorDiscovery {
 /**
  * The `.field-note` under a sensor picker: where the value could come from,
  * in the same idiom the flow unit's note uses.
+ *
+ * When the user has picked something OTHER than what the device offers, the
+ * note has to say which of the two is in use — otherwise it names an entity
+ * beside a picker holding a different one and leaves the reader to guess
+ * which the zone acts on. That is the same distinction the flow unit's note
+ * already draws between an override and the entity's own declaration.
  *
  * `undefined` means "say nothing", and it covers two different silences on
  * purpose:
@@ -88,8 +98,15 @@ export function sensorNote(
 ): string | undefined {
   if (!discovery) return undefined;
   const candidate = kind === "leak" ? discovery.leak_candidate : discovery.supply_candidate;
-  if (candidate) return localize(lang, "zone.sensor_detected", { entity: candidate });
-  if (value.trim() !== "") return undefined;
+  const chosen = value.trim();
+  if (candidate) {
+    // An empty picker is not a competing choice: with nothing chosen — including
+    // right after the user cleared it — the candidate is simply an offer.
+    return chosen !== "" && chosen !== candidate
+      ? localize(lang, "zone.sensor_detected_other", { entity: candidate })
+      : localize(lang, "zone.sensor_detected", { entity: candidate });
+  }
+  if (chosen !== "") return undefined;
   return localize(lang, kind === "leak" ? "zone.leak_sensor_none" : "zone.water_supply_none");
 }
 

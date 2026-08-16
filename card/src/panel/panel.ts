@@ -94,12 +94,11 @@ export function parseSensorDiscovery(raw: unknown): ZoneSensorDiscovery | undefi
   if (typeof raw !== "object" || raw === null || Array.isArray(raw)) return undefined;
   const source = raw as Record<string, unknown>;
   const parsed: ZoneSensorDiscovery = {};
-  for (const key of [
-    "leak_sensor",
-    "water_supply_sensor",
-    "leak_candidate",
-    "supply_candidate",
-  ] as const) {
+  // The candidates only. The service also returns the zone's configured
+  // sensors and its two capability verdicts; the form seeds those from
+  // `export_config` and reads the verdicts off `zone_state`, so keeping them
+  // here would be a second copy of a value nothing reads.
+  for (const key of ["leak_candidate", "supply_candidate"] as const) {
     const value = source[key];
     if (typeof value === "string" && value !== "") parsed[key] = value;
   }
@@ -172,6 +171,7 @@ export class IrrigationMaestroPanel extends LitElement {
     service: string,
     data: Record<string, unknown>,
     returnResponse = false,
+    quiet = false,
   ): Promise<{ context: unknown; response?: Record<string, unknown> } | undefined> {
     if (!this.hass) return undefined;
     try {
@@ -181,7 +181,12 @@ export class IrrigationMaestroPanel extends LitElement {
       return await this.hass.callService(domain, service, data, undefined, false, returnResponse);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      this._showError(message);
+      // `quiet` is for a call whose failure is DESIGNED to be survivable and
+      // is already handled by the caller. A toast there reports a fault to
+      // the user about an action they did not take, over a screen that
+      // opened correctly — which teaches them to ignore the toast that will
+      // one day matter.
+      if (!quiet) this._showError(message);
       return undefined;
     }
   }
@@ -241,12 +246,18 @@ export class IrrigationMaestroPanel extends LitElement {
    * together. A failure answers `undefined` — the editor then says nothing
    * about candidates rather than claiming the device has none, and every
    * other field still works.
+   *
+   * Quiet on failure, and that is the whole point of calling it survivable:
+   * against a backend without this service the user would otherwise get
+   * "Service not found" thrown at them while the editor they asked for opens
+   * perfectly, for a convenience they never requested.
    */
   private async _discoverZoneSensors(zoneId: string): Promise<ZoneSensorDiscovery | undefined> {
     const res = await this._call(
       "irrigation_maestro",
       "discover_zone_sensors",
       { zone_id: zoneId },
+      true,
       true,
     );
     return parseSensorDiscovery(res?.response);

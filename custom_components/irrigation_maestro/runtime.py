@@ -35,6 +35,9 @@ from .const import (
     LEAK_ACTION_CLOSE,
     LEAK_ACTION_CLOSE_AND_BLOCK,
     LEAK_ACTIONS,
+    LEAK_WATCH_NONE,
+    LEAK_WATCH_SYSTEM,
+    LEAK_WATCH_ZONE,
     SUBENTRY_TYPE_ZONE,
 )
 from .engine.curves import CurveKind, curve_value
@@ -1890,6 +1893,54 @@ class IrrigationRuntime:
         if zone is not None and zone.config.leak_sensor:
             return True
         return scope in self.accountant.metered_scopes()
+
+    def leak_watch(self, zone_id: str) -> str:
+        """WHERE this zone's water is watched for leaks -- its scope, or the hub's.
+
+        A different question from ``capabilities.leak_detection``, which
+        reports on the valve's own leak SENSOR and knows nothing about flow.
+        The two answers diverge on ordinary hardware, and the divergence is
+        the reason this exists: an installation of three metered zones and no
+        leak sensors has full source-2 coverage on every zone while
+        ``leak_detection`` says ``unavailable`` for all three. A card built on
+        that alone tells such a user "no leak sensor" -- true, and it produces
+        the belief that nothing is watching, which is worse than a false
+        statement because there is nothing to catch by reading it.
+
+        The ``zone`` answer is ``leak_sources_configured`` itself, not a copy
+        of it: that is the same predicate ``leak_state_established`` gates the
+        binary sensor's availability on, so this attribute and that entity
+        cannot disagree about whether a zone is watched.
+
+        ``system`` is the shared-line-meter case, and it is the honest answer
+        to a genuinely awkward state. Two zones behind one line meter have no
+        source on their own scopes -- ``scope_for`` sends that meter's water to
+        HUB_SCOPE, because which of the two leaked is unanswerable -- yet their
+        water is measured and a leak in it WILL raise an alarm, on
+        ``hub_leak``. "Not watched" would be false; "watched" without saying
+        where would promise a zone-named alarm that can never arrive. So the
+        value names the scope that is watching, and the card says so.
+
+        ``scope_for(meter) == HUB_SCOPE`` cannot be False where it is
+        evaluated: reaching it means this zone is not its own meter's scope,
+        and ``scope_for`` answers either the meter's sole owner or the hub. It
+        is written out anyway rather than inferred, because "a meter that is
+        not mine belongs to the hub" is precisely the rule ``scope_for`` owns
+        (Ruling L1), and a second copy of it here is how the two would drift
+        if that answer set ever grew. Deliberate, and it fails to ``none``
+        rather than to a false ``system`` if it ever does.
+        """
+        if self.leak_sources_configured(zone_id):
+            return LEAK_WATCH_ZONE
+        zone = self.zones.get(zone_id)
+        if zone is None:
+            return LEAK_WATCH_NONE
+        meter = self.resolved_meter_entity(zone.config)
+        if meter is None:
+            return LEAK_WATCH_NONE
+        if self.accountant.scope_for(meter) == HUB_SCOPE:
+            return LEAK_WATCH_SYSTEM
+        return LEAK_WATCH_NONE
 
     def _leak_subject(self, scope: str) -> str:
         """Who an alarm is about, for a log line: a zone's name, or the system.

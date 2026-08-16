@@ -53,6 +53,23 @@ LEAK_ACTION_CLOSE_AND_BLOCK: Final = "close_and_block"
 #: one the runtime silently ignores.
 LEAK_ACTIONS: Final = (LEAK_ACTION_NOTIFY, LEAK_ACTION_CLOSE, LEAK_ACTION_CLOSE_AND_BLOCK)
 
+# WHERE a zone's water is watched for leaks, published per zone in
+# zone_state's `capabilities`. Not the same question as `leak_detection`,
+# which is about the valve's own leak SENSOR: a zone with no sensor at all is
+# still watched by its own meter, and on a shared line meter it is watched by
+# the system scope instead. Saying "no leak sensor" to a user whose three
+# metered zones are all being watched is true and produces a false belief,
+# which is worse than a false statement -- there is nothing to catch by
+# reading it.
+#: This zone's own scope has a source: an alarm will name THIS zone.
+LEAK_WATCH_ZONE: Final = "zone"
+#: No source of its own, but a meter that also serves it reports for the hub
+#: scope -- so its water is watched, and an alarm would name the system.
+LEAK_WATCH_SYSTEM: Final = "system"
+#: Nothing watches this zone's water at all.
+LEAK_WATCH_NONE: Final = "none"
+LEAK_WATCH_VALUES: Final = (LEAK_WATCH_ZONE, LEAK_WATCH_SYSTEM, LEAK_WATCH_NONE)
+
 # Restrictions keys (hub-level and zone override)
 CONF_ALLOWED_WEEKDAYS: Final = "allowed_weekdays"
 CONF_PARITY: Final = "parity"
