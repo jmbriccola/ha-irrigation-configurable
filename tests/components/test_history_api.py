@@ -109,6 +109,23 @@ async def test_the_unattributed_row_is_a_sibling_of_the_zones_never_a_member(
     assert response["unattributed"]["closed_l"] == 5.0
 
 
+async def test_the_reserved_unattributed_key_cannot_be_requested_as_a_zone(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    """sum_period skips it unconditionally while daily_series does not, so a
+    zones row for it would report a total of zero over days holding real
+    litres. Summing the zones has to stay the right operation."""
+    freezer.move_to(START)
+    await _hub(hass)
+    runtime = hass.config_entries.async_entries(DOMAIN)[0].runtime_data
+    runtime.state.add_unattributed("__hub__", 5.0, day=dt_util.now().date(), valves_closed=True)
+
+    response = await _water(hass, zone_id=metering.UNATTRIBUTED_KEY)
+
+    assert response["zones"] == []
+    assert response["unattributed"]["total_l"] == 5.0
+
+
 async def test_est_and_gap_s_reach_the_response(
     hass: HomeAssistant, freezer: FrozenDateTimeFactory
 ) -> None:
