@@ -126,7 +126,26 @@ call the same value `program_id` in their fields, for the user-facing name):
 `leak_sensor_missing`, `water_supply_sensor_missing` (a sensor is configured
 but no longer resolves in either the entity registry or the state machine —
 see "Zone capabilities" below for why this is not folded into `capabilities`
-itself).
+itself), and two that explain a silent leak entity:
+
+- `leak_never_observable` — for an hour of **idle** time (never counting time
+  spent watering, when no leak conclusion is possible by design) nothing has
+  been in a position to conclude anything for this zone: a leak sensor that
+  has never reported, a meter that is not measuring, or a valve somewhere that
+  never reports closed — which blocks every metered scope, since a meter's
+  seconds only count with the whole system shut.
+- `leak_evidence_unresolved` — same hour, but something **is** reporting a
+  leak and nothing can finish judging it: a sensor asserting over a valve that
+  never reports closed, or measured seconds frozen by a meter that stopped
+  reading.
+
+Both accompany a `zone_leak` entity that is `unavailable` and will stay so
+until the condition clears — which is correct (see "Leak entities" below) and
+is exactly why it is declared: an entity that is silent for ever is otherwise
+indistinguishable from a broken integration. They are diagnostics, not alarms:
+render them as "this zone cannot currently check for leaks, and here is why",
+never as a leak. The two are distinct because they send the user to different
+places — the plumbing and its sensors, versus a valve that never reports.
 
 ### Water accounting sensors (`zone_water_total`, `hub_unattributed_water`)
 
@@ -307,8 +326,11 @@ problem* and neither case can claim that:
    should send the user there: `leak_sensor_missing` (the sensor no longer
    exists) and `flow_unit_unknown` (the meter's unit will not resolve). The
    others — a sensor that exists and has never reported, and a scope that has
-   never been observable — have no separate signal today; the unavailable leak
-   entity is it.
+   never been observable — are declared after an hour of idle time as
+   `leak_never_observable` / `leak_evidence_unresolved` in `degraded` (above),
+   so that a permanently silent entity is never left looking like a broken
+   one. The hub scope has no `zone_state` of its own, so a hub-scope stall is
+   visible only through the zones it also blocks.
 
 Four consequences worth stating, because they are easy to get backwards:
 

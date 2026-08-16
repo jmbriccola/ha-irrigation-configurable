@@ -110,6 +110,15 @@ _LEAK_SENSOR_REPORTING = frozenset({_LEAK_SENSOR_ALARM, _LEAK_SENSOR_CLEAR})
 #: accumulating, which on a healthy installation is post-cycle drainage and
 #: nothing else.
 _LEAK_CONFIRMING_RECHECK_S = 30.0
+#: How long a scope may go without being able to conclude anything before the
+#: zone says so out loud. Counted in IDLE seconds only -- a zone that is
+#: watering cannot conclude and is not supposed to -- so no session length can
+#: reach it. An hour is twelve times the confirmation window and far beyond any
+#: plausible start-up: a Zigbee re-pair, a cloud integration's rate-limit
+#: backoff and a restart are all minutes. Long enough that an ordinary slow
+#: boot never trips it, short enough that a user who notices a silent entity in
+#: the morning finds the reason beside it.
+_LEAK_STALL_NOTICE_S = 3600.0
 #: The reading of a ``device_class: problem`` supply sensor that means the
 #: water is GONE. "on" is the problem, which is the opposite of how the
 #: entity's name reads, and the mistake everyone makes on the first attempt.
@@ -174,6 +183,12 @@ class IrrigationRuntime:
         #: Scopes whose window has been served. Latched, so a confirmation
         #: window starting later cannot take a settled answer back.
         self._leak_observation_done: set[str] = set()
+        #: Idle seconds each unsettled scope has spent unable to conclude
+        #: anything, and the open interval of the same, so that a refusal that
+        #: lasts can be reported rather than merely endured. Idle only: a zone
+        #: that is watering cannot conclude and is not meant to.
+        self._leak_stalled_s: dict[str, float] = {}
+        self._leak_stalled_since: dict[str, datetime] = {}
         self._leak_observation_unsub: CALLBACK_TYPE | None = None
         self._leak_source_unsub: CALLBACK_TYPE | None = None
         #: Zones whose outage has been ANNOUNCED -- confirmed, notified and
@@ -257,6 +272,8 @@ class IrrigationRuntime:
         self._leak_detectors.clear()
         self._leak_observed_s.clear()
         self._leak_observing_since.clear()
+        self._leak_stalled_s.clear()
+        self._leak_stalled_since.clear()
         self._leak_sensor_reading.clear()
         self._leak_source_ids.clear()
         self._leak_observation_done.clear()
@@ -1427,6 +1444,8 @@ class IrrigationRuntime:
         """This scope must earn its observation window again from scratch."""
         self._leak_observed_s.pop(scope, None)
         self._leak_observing_since.pop(scope, None)
+        self._leak_stalled_s.pop(scope, None)
+        self._leak_stalled_since.pop(scope, None)
         self._leak_observation_done.discard(scope)
 
     def _reconcile_leak_issues(self) -> None:
@@ -1619,13 +1638,70 @@ class IrrigationRuntime:
                 self._leak_observing_since[scope] = now
             else:
                 self._leak_observing_since.pop(scope, None)
+            self._note_leak_stall(scope, now)
             if self._leak_observation_satisfied(scope):
                 self._leak_observation_done.add(scope)
                 self._leak_observing_since.pop(scope, None)
+                self._leak_stalled_s.pop(scope, None)
+                self._leak_stalled_since.pop(scope, None)
                 settled.append(scope)
         self._arm_leak_observation_wake()
         if settled:
             self.dispatch_update()
+
+    def _note_leak_stall(self, scope: str, now: datetime) -> None:
+        """Integrate the idle time this scope has spent unable to conclude.
+
+        Idle only, and that is the whole of why this measure is trustworthy: a
+        zone that is watering cannot conclude anything, by design, and counting
+        those minutes would report every long session as a fault. What is left
+        is time in which a healthy scope would have settled within one window.
+        """
+        since = self._leak_stalled_since.get(scope)
+        if since is not None:
+            self._leak_stalled_s[scope] = (
+                self._leak_stalled_s.get(scope, 0.0) + (now - since).total_seconds()
+            )
+        session = self.session
+        if session.active or session.active_runs:
+            self._leak_stalled_since.pop(scope, None)
+        else:
+            self._leak_stalled_since[scope] = now
+
+    def leak_observation_stall(self, scope: str) -> str | None:
+        """Why this scope has been unable to conclude, once that has lasted.
+
+        ``None`` while the scope is settled, alarming, sourceless, or simply
+        has not been stuck long enough to be worth saying. Otherwise one of two
+        keys, because the two send a user to different places:
+
+        * ``leak_evidence_unresolved`` -- something IS reporting a leak and
+          nothing can finish judging it: a sensor asserting over a valve that
+          never reports closed, or measured seconds frozen by a meter that
+          stopped reading. Look at the sensor, the meter, or that valve;
+        * ``leak_never_observable`` -- nothing has been in a position to say
+          anything at all: a sensor that has never reported, a meter that is
+          not measuring, or a valve somewhere that never reports closed, which
+          blocks every meter-scope in the installation.
+
+        This exists because an entity stuck at ``unavailable`` for ever is
+        indistinguishable from a broken integration, and a user will reasonably
+        assume the second. The refusal is correct; being silent about it is
+        not.
+        """
+        if scope in self._leak_observation_done or not self.leak_sources_configured(scope):
+            return None
+        if self.leak_state(scope).active:
+            return None
+        stalled_s = self._leak_stalled_s.get(scope, 0.0)
+        since = self._leak_stalled_since.get(scope)
+        if since is not None:
+            stalled_s += (dt_util.utcnow() - since).total_seconds()
+        if stalled_s < _LEAK_STALL_NOTICE_S:
+            return None
+        if self._leak_evidence_pending(scope):
+            return "leak_evidence_unresolved"
+        return "leak_never_observable"
 
     def _track_leak_sources(self) -> None:
         """Watch everything that can change what this scope could conclude.
