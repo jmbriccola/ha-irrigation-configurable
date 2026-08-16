@@ -90,14 +90,19 @@ async def setup_hub(
     hass: HomeAssistant,
     zones: list[dict[str, Any]],
     options: dict[str, Any] | None = None,
+    *,
+    time_zone: str | None = "UTC",
 ) -> MockConfigEntry:
-    if hass.config.time_zone == "US/Pacific":
-        # "US/Pacific" is the pytest-homeassistant fixture's untouched default,
-        # never a zone a caller picked on purpose. A caller that has already
-        # set a different one (a DST-boundary test exercising a local-day
-        # conversion, say) is left alone -- silently overriding it here would
-        # discard a choice the test made on purpose.
-        await hass.config.async_set_time_zone("UTC")
+    """Set up a hub config entry with the given zones.
+
+    ``time_zone`` defaults to UTC because almost every test wants a clock with
+    no offset and no DST. A test exercising a local-day conversion passes its
+    own; passing None leaves whatever the caller already set. Inferring this
+    from the fixture's current default would tie ~150 call sites to a literal
+    this repo does not own.
+    """
+    if time_zone is not None:
+        await hass.config.async_set_time_zone(time_zone)
     entry = MockConfigEntry(
         domain=DOMAIN,
         version=3,

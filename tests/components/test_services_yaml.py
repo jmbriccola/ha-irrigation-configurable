@@ -59,28 +59,38 @@ def test_the_run_result_options_match_what_the_schema_accepts() -> None:
 
 
 def test_every_event_list_in_services_yaml_is_complete() -> None:
-    """Identified by field name (``event``/``events``), not by option overlap.
+    """Complete, and reachable -- two failures, because they are different.
 
-    get_run_history's own ``result`` options (completed/skipped/interrupted/
-    cancelled) happen to share their literal strings with four of ALL_EVENTS --
-    session outcomes and notification events are independent vocabularies that
-    were spelled the same on purpose. An overlap-based heuristic would misread
-    that intentional four-word coincidence as an incomplete nine-word event
-    list, so a genuine event-list field is recognised by name instead.
+    A genuine event list is identified by field name, using the same constants
+    the schemas use rather than a second written-out copy of them. But a check
+    that only looks at known names cannot notice a NEW event field added under
+    a name it has never seen, so a second assertion catches that one by shape:
+    an event list offers the whole vocabulary, while an accidental coincidence
+    does not. get_run_history's ``result`` options are the coincidence this
+    guards against misreading -- completed/skipped/interrupted/cancelled are
+    all four members of ALL_EVENTS, because session outcomes and notification
+    events describe the same four things from two angles, and an overlap-any
+    heuristic read that as an event list missing six entries.
     """
     raw = yaml.safe_load(_SERVICES_YAML.read_text(encoding="utf-8"))
+    event_fields = {services.ATTR_EVENT, services.ATTR_EVENTS}
     found = 0
-    for service in raw.values():
+    for service_name, service in raw.items():
         # A service with no fields at all (run_all, stop_all, ...) parses as
         # None, not {} -- yaml.safe_load drops the mapping entirely rather
         # than giving it an empty one.
         for field_name, field in ((service or {}).get("fields") or {}).items():
-            if field_name not in ("event", "events"):
-                continue
             options = (field.get("selector") or {}).get("select", {}).get("options")
             if not options:
                 continue
             values = {option if isinstance(option, str) else option["value"] for option in options}
-            found += 1
-            assert values >= set(ALL_EVENTS), f"incomplete event list: {values}"
+            if field_name in event_fields:
+                found += 1
+                assert values >= set(ALL_EVENTS), f"incomplete event list: {values}"
+                continue
+            assert len(values & set(ALL_EVENTS)) <= len(ALL_EVENTS) // 2, (
+                f"{service_name}.{field_name} offers most of the event vocabulary "
+                f"but is not named {' or '.join(sorted(event_fields))}, so the "
+                f"completeness check above never sees it"
+            )
     assert found >= 3, f"expected at least three event lists, found {found}"
