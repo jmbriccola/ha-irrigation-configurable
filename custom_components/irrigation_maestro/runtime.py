@@ -31,6 +31,8 @@ from homeassistant.util import dt as dt_util
 from .accounting import WaterAccountant
 from .const import (
     CONF_LEAK_ACTION,
+    DEGRADED_LEAK_EVIDENCE_UNRESOLVED,
+    DEGRADED_LEAK_NEVER_OBSERVABLE,
     DOMAIN,
     LEAK_ACTION_CLOSE,
     LEAK_ACTION_CLOSE_AND_BLOCK,
@@ -1730,8 +1732,8 @@ class IrrigationRuntime:
         if stalled_s < _LEAK_STALL_NOTICE_S:
             return None
         if self._leak_evidence_pending(scope):
-            return "leak_evidence_unresolved"
-        return "leak_never_observable"
+            return DEGRADED_LEAK_EVIDENCE_UNRESOLVED
+        return DEGRADED_LEAK_NEVER_OBSERVABLE
 
     def _track_leak_sources(self) -> None:
         """Watch everything that can change what this scope could conclude.
@@ -1922,13 +1924,23 @@ class IrrigationRuntime:
         value names the scope that is watching, and the card says so.
 
         ``scope_for(meter) == HUB_SCOPE`` cannot be False where it is
-        evaluated: reaching it means this zone is not its own meter's scope,
-        and ``scope_for`` answers either the meter's sole owner or the hub. It
-        is written out anyway rather than inferred, because "a meter that is
-        not mine belongs to the hub" is precisely the rule ``scope_for`` owns
-        (Ruling L1), and a second copy of it here is how the two would drift
-        if that answer set ever grew. Deliberate, and it fails to ``none``
-        rather than to a false ``system`` if it ever does.
+        evaluated, and the step that carries that is easy to skip: every
+        entity ``resolved_meter_entity`` can return is necessarily a ledger
+        key. ``WaterAccountant._resolved_meters`` collects exactly the zones'
+        ``flow_sensor`` values plus the hub's ``line_flow_sensor`` -- from
+        CONFIGURATION, with no usability test -- and a ledger is opened for
+        each, so ``metered_scopes`` covers this meter's scope whatever that
+        scope turns out to be. Only that makes "absent from ``metered_scopes``"
+        mean "my meter's scope is not me": reaching this line therefore means
+        this zone is not its own meter's scope, and ``scope_for`` answers
+        either the meter's sole owner or the hub.
+
+        It is written out anyway rather than inferred, because "a meter that
+        is not mine belongs to the hub" is precisely the rule ``scope_for``
+        owns, and this branch consumes that one definition instead of keeping
+        a second copy of it that could drift if the answer set ever grew.
+        Deliberate, and it fails to ``none`` rather than to a false ``system``
+        if it ever does.
         """
         if self.leak_sources_configured(zone_id):
             return LEAK_WATCH_ZONE

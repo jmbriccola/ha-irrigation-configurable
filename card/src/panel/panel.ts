@@ -58,6 +58,24 @@ function calendarFields(calendar: CalendarConfig): Record<string, unknown> {
 }
 
 /**
+ * What a service call needs beyond its data, named rather than positional.
+ *
+ * These were two adjacent booleans, and `(…, true, true)` typechecks exactly
+ * as well transposed: a caller that swapped them would ask for no response
+ * and get its failures silenced, so the editor would report "no candidates"
+ * on a backend that answered perfectly. Nothing in the suite could tell the
+ * two apart — the shape that ships broken and looks tested.
+ */
+interface CallOptions {
+  /** Ask Home Assistant for the service's response (`SupportsResponse`). */
+  response?: boolean;
+  /** Swallow a failure instead of raising the panel's error toast. Only for
+   *  a call whose failure is designed to be survivable and is handled by the
+   *  caller. */
+  quiet?: boolean;
+}
+
+/**
  * `test_notification`'s payload, checked rather than asserted — the same
  * treatment `_loadNotificationStatus` gives the status read, and for the same
  * reason: a service response is data crossing a process boundary, not a
@@ -170,15 +188,15 @@ export class IrrigationMaestroPanel extends LitElement {
     domain: string,
     service: string,
     data: Record<string, unknown>,
-    returnResponse = false,
-    quiet = false,
+    options: CallOptions = {},
   ): Promise<{ context: unknown; response?: Record<string, unknown> } | undefined> {
     if (!this.hass) return undefined;
+    const { response = false, quiet = false } = options;
     try {
       // notifyOnError=false: this wrapper already surfaces failures via the
       // panel's own `_error` toast below — HA's own error dialog on top of
       // that would be a redundant, double error UI for the same failure.
-      return await this.hass.callService(domain, service, data, undefined, false, returnResponse);
+      return await this.hass.callService(domain, service, data, undefined, false, response);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       // `quiet` is for a call whose failure is DESIGNED to be survivable and
@@ -228,7 +246,7 @@ export class IrrigationMaestroPanel extends LitElement {
    * shape as the other response services above.
    */
   private async _readConfig(): Promise<ExportedConfig | undefined> {
-    const res = await this._call("irrigation_maestro", "export_config", {}, true);
+    const res = await this._call("irrigation_maestro", "export_config", {}, { response: true });
     const payload = res?.response?.["payload"];
     if (typeof payload !== "string") return undefined;
     try {
@@ -257,8 +275,7 @@ export class IrrigationMaestroPanel extends LitElement {
       "irrigation_maestro",
       "discover_zone_sensors",
       { zone_id: zoneId },
-      true,
-      true,
+      { response: true, quiet: true },
     );
     return parseSensorDiscovery(res?.response);
   }
@@ -315,7 +332,7 @@ export class IrrigationMaestroPanel extends LitElement {
     // Cleared first, so a retry shows the reading line again instead of
     // leaving the failure standing while the new read is in flight.
     this._notifyStatusFailed = false;
-    const res = await this._call("irrigation_maestro", "notification_status", {}, true);
+    const res = await this._call("irrigation_maestro", "notification_status", {}, { response: true });
     const response = res?.response;
     if (Array.isArray(response?.["events"])) {
       this._notifyStatus = response as unknown as NotificationStatusResponse;
@@ -388,7 +405,7 @@ export class IrrigationMaestroPanel extends LitElement {
           title: localize(lang, "notify.test_title"),
           message: localize(lang, "notify.test_message"),
         },
-        true,
+        { response: true },
       );
       // The spread carries any recipient the backend answered for that the
       // caller did not name (an alias resolving to another service); the loop
@@ -434,7 +451,7 @@ export class IrrigationMaestroPanel extends LitElement {
       const add: Record<string, unknown> = { name: p.name, valve_entity: p.valve_entity };
       if (p.area_m2 !== undefined) add["area_m2"] = p.area_m2;
       if (p.icon !== undefined) add["icon"] = p.icon;
-      const res = await this._call("irrigation_maestro", "add_zone", add, true);
+      const res = await this._call("irrigation_maestro", "add_zone", add, { response: true });
       const zoneId = res?.response?.["zone_id"];
       success = typeof zoneId === "string" && zoneId !== "";
       if (success) this._selectedZoneId = zoneId as string;
@@ -589,7 +606,7 @@ export class IrrigationMaestroPanel extends LitElement {
       "irrigation_maestro",
       "add_program",
       { zone_id: d.zoneId, ...(d.name ? { name: d.name } : {}) },
-      /* returnResponse */ true,
+      { response: true },
     );
     const programId = res?.response?.["program_id"];
     if (typeof programId !== "string" || !programId) return;

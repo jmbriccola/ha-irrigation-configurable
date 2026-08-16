@@ -70,6 +70,15 @@ LEAK_WATCH_SYSTEM: Final = "system"
 LEAK_WATCH_NONE: Final = "none"
 LEAK_WATCH_VALUES: Final = (LEAK_WATCH_ZONE, LEAK_WATCH_SYSTEM, LEAK_WATCH_NONE)
 
+# The two `degraded` keys that explain a silent leak entity. Named constants,
+# unlike every other degraded key, for one reason: the card MATCHES THESE BY
+# NAME (discovery.ts's leakStatus branches on them to decide a zone has an
+# explanation of its own), so a rename here silently stops that branch firing.
+# A cross-boundary test asserts each value appears in the card source; it
+# imports these, so it cannot hold a stale copy of a name nobody updated.
+DEGRADED_LEAK_EVIDENCE_UNRESOLVED: Final = "leak_evidence_unresolved"
+DEGRADED_LEAK_NEVER_OBSERVABLE: Final = "leak_never_observable"
+
 # Restrictions keys (hub-level and zone override)
 CONF_ALLOWED_WEEKDAYS: Final = "allowed_weekdays"
 CONF_PARITY: Final = "parity"

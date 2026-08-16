@@ -828,7 +828,7 @@ const E = {
   // The shared-line-meter zone: watched, but not by an alarm that can name
   // it. Says where, because "not watched" would be false and "watched" alone
   // would promise a zone-named alarm that can never arrive.
-  "zone.leak_system_scope": "Leaks watched for the system, not for this zone",
+  "zone.leak_system_scope": "Leaks watched at system level, not for this zone",
   "zone.leak_candidate": "This valve's device offers a leak sensor",
   "zone.supply_unavailable": "No water-supply sensor",
   "zone.supply_candidate": "This valve's device offers a water-supply sensor",
@@ -1227,7 +1227,7 @@ const E = {
   // La zona dietro al flussometro condiviso: sorvegliata, ma non da un
   // allarme che possa nominarla. Dice dove, perché «non sorvegliata» sarebbe
   // falso e «sorvegliata» prometterebbe un allarme di zona che non arriverà.
-  "zone.leak_system_scope": "Perdite sorvegliate per l'impianto, non per questa zona",
+  "zone.leak_system_scope": "Perdite sorvegliate sull'impianto, non su questa zona",
   "zone.leak_candidate": "Il dispositivo di questa valvola offre un sensore di perdita",
   "zone.supply_unavailable": "Nessun sensore di mancanza d'acqua",
   "zone.supply_candidate": "Il dispositivo di questa valvola offre un sensore di mancanza d'acqua",

@@ -52,11 +52,21 @@ function panelWith(respond: Responder, language = "en"): {
   const hass: HomeAssistant = {
     states: {},
     language,
-    async callService(domain, service, data) {
+    // The double honours `returnResponse`, as the real thing does: Home
+    // Assistant returns no `response` unless the caller asked for one. A
+    // double that answers regardless makes "forgot to ask for the response"
+    // invisible — every test passes while the panel reads `undefined` off a
+    // service that answered perfectly.
+    async callService(domain, service, data, _target, _notifyOnError, returnResponse) {
       const call: ServiceCall = { domain, service, data: data ?? {} };
       calls.push(call);
       const response = await respond(call);
-      return { context: {}, response: response as Record<string, unknown> | undefined };
+      return {
+        context: {},
+        response: returnResponse
+          ? (response as Record<string, unknown> | undefined)
+          : undefined,
+      };
     },
   };
   const panel = new IrrigationMaestroPanel();
