@@ -4,6 +4,153 @@ All notable changes to this project are documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/).
 
+## [3.4.0] - 2026-08-16
+
+### Per-zone leak detection
+
+- **Two optional sensors per zone, detected rather than named.** When a zone
+  is created, the integration walks from its valve entity to that valve's
+  device and looks for sibling `binary_sensor`s by **device class** —
+  `moisture` becomes the zone's *leak sensor*, `problem` its *water-supply
+  sensor*. Nothing is matched on entity names, id prefixes or manufacturer:
+  the ids in any field report are examples from one installation.
+  `add_zone` writes what it finds; for a zone that already exists nothing is
+  adopted behind your back — `discover_zone_sensors` reports the candidates,
+  the panel pre-fills them in **✎ Modifica zona → Avanzate**, and they take
+  effect only when you save. Either field can be pointed anywhere: a probe in
+  the flower bed is a legitimate, deliberate choice.
+- **A leak is confirmed from two independent kinds of evidence, and raises
+  one alarm.** Source 1 is the valve's own leak sensor, counted only while
+  *that zone's* valve reports closed — on the SONOFF SWV the `moisture`
+  alarm already means "water is passing while I am shut", and on hardware
+  where it is a genuine ground probe the gate is what stops a probe under a
+  sprinkler alarming on every cycle. Source 2 is flow above
+  `leak_threshold_lpm` (default **0.5 L/min**) measured while **every**
+  managed valve, master included, reports closed. Both must persist for
+  `leak_confirm_s` (default **300 s**) — source 1 in wall-clock time from
+  the later of the sensor asserting and the valve reporting closed, source 2
+  in seconds the meter actually measured, so a reporting gap neither confirms
+  nor denies. Whichever notices first raises the alarm; a second source
+  agreeing records itself and stays quiet.
+- **The alarm belongs to a scope, which is not always a zone.** A meter that
+  serves two or more zones — or none — cannot say which zone leaked, only
+  that the *system* is losing water, so its alarm is raised on the hub scope
+  instead. Zones behind such a meter report
+  `capabilities.leak_watch: "system"`, which states *where* their water is
+  watched rather than passing a verdict on whether it is.
+- **Two new entities: `zone_leak` (one per zone) and `hub_leak`**, both
+  `binary_sensor` with `device_class: problem` and the attributes `sources`,
+  `since` and `describing_source`. There is deliberately no summary entity:
+  an automation that closes the mains needs to know which zone to shut.
+  `unavailable` is a first-class state here and means *nothing has been
+  established* — either no source could ever raise the alarm, or the scope
+  has not yet been **observed** for one confirmation window, counting only
+  seconds in which a source could actually have concluded something. That is
+  what makes the obvious automation pair safe: `off` under `problem` asserts
+  *there is no problem*, and publishing it at boot would fire "leak cleared →
+  reopen the mains" during a live leak. The alarm is deliberately not
+  persisted, because a restored alarm can be stale. **An entity can therefore
+  stay `unavailable` indefinitely** — a configured sensor that never reports,
+  or a scope never in a position to observe — and an automation written
+  against it then silently never fires. After an hour of idle time that is
+  declared on `zone_state.degraded` as `leak_never_observable` or
+  `leak_evidence_unresolved`. Read the README's *Living with the leak
+  entities* before automating on either.
+- **`irrigation_maestro_leak`**, a new bus event and a new notification
+  event. The event carries `scope`, `zone_id` (`null` for a hub-scope alarm),
+  `state` (`active` | `cleared`), `first_source` and `sources`; it fires once
+  when the alarm is confirmed and once when it clears, and the repeat
+  reminder fires no event at all. As a notification it joins the four events
+  an irrigation system should never miss, so it is pre-selected by the wizard
+  and defaults to high priority — one message on the transition, then a
+  reminder every `leak_repeat_min` (default **360 min**; zero turns the
+  reminders off without touching the alarm), and a standing Repairs issue for
+  as long as the condition lasts.
+- **`leak_action` decides what happens next**: `notify` (message and Repairs
+  notice only), `close` (the default — additionally one re-close attempt of
+  the master and the implicated valves) or `close_and_block` (also refuses to
+  start new cycles for the zones concerned while the alarm stands). The
+  default is deliberately not the blocking one: re-closing a valve that is
+  already closed is a no-op, which is the honest position — a leak found
+  while idle cannot be stopped by this component, only reported, with the
+  closure re-asserted in case a command was lost. It recovers a valve left
+  open by a lost command and dries nothing on a false positive. The re-close
+  is skipped while a cycle is running, because a zone's own sensor can alarm
+  while a *different* zone waters and closing the master there would abort a
+  cycle nothing implicated. An unrecognised value falls back to `close` and
+  says so in Repairs instead of doing it silently.
+- **A leak in progress is described by evidence the scope still has.** The
+  Repairs notice is keyed on `describing_source` — the first source to notice
+  while it is still contributing, a surviving source otherwise — so removing
+  the meter from a zone whose sensor is still asserting re-describes the
+  notice instead of leaving it citing flow nobody is measuring. `first_source`
+  keeps its own meaning on the event payload and in the log. Withdrawing a
+  source by de-configuring it withdraws its alarm too, reminders included.
+
+### Water that never arrives, which is not a leak
+
+- **An optional water-supply sensor per zone** (`device_class: problem`,
+  where **`on` means there is NO water** — inverted with respect to how the
+  name reads). It answers a question the flow meter cannot: whether the
+  cycle delivered nothing because something is broken, or because there was
+  nothing to deliver.
+- **A cycle is refused rather than run dry**, once the outage has lasted
+  `water_supply_confirm_s` (default **180 s**). A single flaky reading
+  cannot withhold water, and after a restart the clock restarts — we do not
+  know how long the supply has been out, so we do not withhold water on that
+  ignorance. The outcome is `no_water_supply`. `require_water_supply`
+  (default on) governs **only** the refusal: switching it off still notifies
+  and still raises the Repairs notice, because "do not withhold water" is a
+  different statement from "do not tell me".
+- **A cycle interrupted for want of flow now names the missing supply**, as
+  `no_water_supply` rather than a generic `no_flow`. That diagnosis is
+  deliberately *not* gated on the confirmation window: it explains an event
+  that already happened, and the reading at that instant is the evidence.
+- **The notice does not lift on silence, though the refusal does.** Only the
+  sensor reading `off`, or being removed from the zone, withdraws the notice;
+  an `unavailable` sensor used to push "the water is back", a claim nobody
+  had established. The refusal, by contrast, lifts on silence — one must not
+  withhold water on no evidence, and one must not assert a recovery on no
+  evidence either.
+
+### Behaviour changes
+
+- **A valve that shuts itself off for lack of water is no longer treated as
+  manual intervention.** Some valves (the SONOFF SWV among them) close
+  themselves when their firmware notices no flow. Until now that was an
+  unledgered close during a cycle, which aborted the whole session and armed
+  the 60-minute manual-stop block. It is now read for what it is — the
+  segment ends as `no_water_supply` and the queue keeps its place —
+  **provided** the closing valve belongs to the watering zone and that zone's
+  own water-supply sensor reports no water, at that instant or within a
+  five-second grace (the valve's state and its sensor are two entities of one
+  device, reported in no guaranteed order). With no such sensor nothing
+  changes: there is no way to tell firmware from a hand on the switch, and
+  uncertainty still aborts.
+- **`set_valve_safety` now also writes the leak and water-supply settings**
+  (`leak_action`, `leak_threshold_lpm`, `leak_confirm_s`, `leak_repeat_min`,
+  `require_water_supply`, `water_supply_confirm_s`), and the panel edits them
+  in **⚙️ Impostazioni → Advanced: valves and concurrency**. The service is
+  slightly misnamed for it; renaming would break every existing automation
+  for a gain in discoverability only, so it keeps its name.
+- **`update_zone` accepts `leak_sensor` and `water_supply_sensor`**; passing
+  an empty string clears either. `add_zone` takes neither — it writes only
+  what it detects.
+- Italian: the water-supply sensor is now called *sensore di mancanza
+  d'acqua* everywhere, including in the service fields and the Repairs
+  notice, which had two other names for it.
+
+### Fixed
+
+- **Closing an already-closed valve no longer disarms surveillance.** Every
+  internal close registered a command-ledger entry, which exists solely to
+  tell our own valve transitions apart from manual ones. A valve that is
+  already closed produces no transition, so that entry was never consumed and
+  sat for its full 60-second TTL — where it would absorb the *next* genuine
+  manual close and let it pass unnoticed. `runtime.async_close_all_valves`
+  already guarded against this; the session runner's own close path was the
+  one that did not. Every re-close path in leak handling goes through it.
+
 ## [3.3.0] - 2026-08-14
 
 ### Water is metered continuously, not only during a cycle
