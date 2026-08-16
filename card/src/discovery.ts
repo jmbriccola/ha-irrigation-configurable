@@ -13,6 +13,8 @@ export interface HubBundle {
   weightedTemp?: HassEntity;
   session?: HassEntity;
   consumptionLeft?: HassEntity;
+  /** `hub_leak`. Absent whenever the entity is unavailable — see `leakStatus`. */
+  leak?: HassEntity;
   pauseSwitch?: HassEntity;
   evaluateButton?: HassEntity;
   stopAllButton?: HassEntity;
@@ -36,6 +38,8 @@ export interface ZoneBundle extends ZoneEntities {
   state?: HassEntity;
   nextRun?: HassEntity;
   lastOutcome?: HassEntity;
+  /** `zone_leak`. Absent whenever the entity is unavailable — see `leakStatus`. */
+  leak?: HassEntity;
   enabledSwitch?: HassEntity;
   orderNumber?: HassEntity;
   suspendUntil?: HassEntity;
@@ -63,6 +67,7 @@ const HUB_ROLE_TO_SLOT: Record<string, keyof HubBundle> = {
   hub_weighted_temp: "weightedTemp",
   hub_session: "session",
   hub_consumption_left: "consumptionLeft",
+  hub_leak: "leak",
   hub_pause: "pauseSwitch",
   hub_evaluate: "evaluateButton",
   hub_stop_all: "stopAllButton",
@@ -76,6 +81,7 @@ const ZONE_ROLE_TO_SLOT: Record<
   zone_next_run: "nextRun",
   zone_last_outcome: "lastOutcome",
   zone_water_total: "zone_water_total",
+  zone_leak: "leak",
   zone_enabled: "enabledSwitch",
   zone_order: "orderNumber",
   zone_suspend_until: "suspendUntil",
@@ -152,6 +158,176 @@ export function zoneHasFlowMeter(zone: ZoneBundle): boolean {
   if (isUnavailable(zone.state)) return false;
   const degraded = asArray(zone.state?.attributes?.["degraded"]);
   return !degraded.some((item) => asString(item) === "no_flow_meter");
+}
+
+/** What a capability badge is saying, which decides how it is drawn.
+ *  `muted` states a declared absence — this is not covered, and the user
+ *  should know rather than assume they are protected. `hint` is an
+ *  invitation — the hardware could do it and has not been told to — and must
+ *  never be drawn as a warning (docs/design/card-contract.md). */
+export type BadgeTone = "muted" | "hint";
+
+export interface CapabilityBadge {
+  key: string;
+  tone: BadgeTone;
+}
+
+/**
+ * `zone_state.capabilities`, or `{}` when the zone has told us nothing.
+ *
+ * There is deliberately no `isUnavailable(zone.state)` guard here, unlike in
+ * `zoneHasFlowMeter` above: an unavailable entity publishes no attributes at
+ * all, so this already answers `{}` for one, and both readers below turn `{}`
+ * into silence rather than into a claim. A guard would be a term with no
+ * observable effect — which on this branch is worse than none, because
+ * nothing could ever prove it still worked.
+ */
+function zoneCapabilities(zone: ZoneBundle): Record<string, unknown> {
+  const raw = zone.state?.attributes?.["capabilities"];
+  return raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
+}
+
+/**
+ * What this zone plainly cannot do, and what it could do if asked — from
+ * `zone_state.capabilities` (docs/design/card-contract.md).
+ *
+ * A pure helper rather than logic inside `zone-row.ts`, which has no test
+ * harness of its own: the difference between a declared absence and an
+ * invitation is the whole point of the capability model, and it needs to be
+ * pinned by tests rather than by a reviewer reading a template.
+ *
+ * Three deliberate silences:
+ *
+ * - **A zone whose state entity is unavailable** publishes no attributes at
+ *   all, so `capabilities` is simply missing. That is "we have not been
+ *   told", not "declared absent", and badging it would put on screen a claim
+ *   nothing supports — the same fail-closed reasoning `zoneHasFlowMeter`
+ *   above is built on.
+ * - **`water_accounting: "unavailable"`** is left to the `degraded` badges.
+ *   It can only arise when no meter is usable, and such a zone always
+ *   carries `no_flow_meter` or `flow_unit_unknown` in `degraded` (sensor.py's
+ *   `_degraded` derives both from the same `zone_flow_meter_usable` call), so
+ *   a second chip would restate what the row already shows.
+ * - **A configured capability** says nothing at all: it is the normal state,
+ *   and the card contract asks for it to read as active, not as a notice.
+ *
+ * `leak_unavailable` deliberately means "no leak SENSOR", which is exactly
+ * what `capabilities.leak_detection` measures — it knows nothing about the
+ * flow meter, and a zone with a meter of its own is covered by leak source 2
+ * whatever this key says. The label must therefore never be worded as "leak
+ * detection is off for this zone", which would be false on a metered zone.
+ */
+export function capabilityBadges(zone: ZoneBundle): CapabilityBadge[] {
+  const caps = zoneCapabilities(zone);
+  const badges: CapabilityBadge[] = [];
+  if (asString(caps["water_accounting"]) === "estimated") {
+    badges.push({ key: "water_estimated", tone: "muted" });
+  }
+  const detectors = [
+    ["leak_detection", "leak"],
+    ["water_supply", "supply"],
+  ] as const;
+  for (const [attribute, prefix] of detectors) {
+    const value = asString(caps[attribute]);
+    if (value === "unavailable") {
+      badges.push({ key: `${prefix}_unavailable`, tone: "muted" });
+    } else if (value === "candidate_available") {
+      badges.push({ key: `${prefix}_candidate`, tone: "hint" });
+    }
+  }
+  return badges;
+}
+
+/**
+ * What a leak scope has established, in the five states a surface has to
+ * keep apart (docs/design/card-contract.md, "Leak entities").
+ *
+ * - `alarm` — the entity reads `on`: a leak is confirmed on this scope.
+ * - `quiet` — the entity reads `off`: for one confirmation window the scope
+ *   was in a position to see a leak and saw none. NOT a promise about the
+ *   seconds since.
+ * - `unresolved` — no entity, and the zone says why in `degraded`. Render
+ *   the zone's own explanation; do not add a vaguer one on top.
+ * - `establishing` — no entity, a leak sensor IS configured, and no stall is
+ *   declared: the scope is serving its confirmation window.
+ * - `unknown` — no entity and nothing that could tell us either way.
+ */
+export type LeakCoverage = "alarm" | "quiet" | "unresolved" | "establishing" | "unknown";
+
+export interface LeakStatus {
+  coverage: LeakCoverage;
+  /** When the alarm was **confirmed** — the contract's `since`. Named for
+   *  what it is: a source withdrawing and returning yields a fresh one, and
+   *  no surface may present it as when the water started escaping. */
+  confirmedAt?: string;
+  /** Raw contract source keys (`valve_sensor`, `no_flow_closed`), as the
+   *  entity sorted them. Unlocalised — translate via `leak_source.<key>`. */
+  sources: string[];
+  /** The source a description should cite, when the alarm names one. */
+  describingSource?: string;
+}
+
+/** The stall keys `zone_state.degraded` uses to explain a silent entity. */
+const LEAK_STALL_KEYS = ["leak_never_observable", "leak_evidence_unresolved"];
+
+/** The alarm itself, read from the entity and from nowhere else. */
+function leakAlarm(entity: HassEntity | undefined): LeakStatus | null {
+  if (!entity || entity.state !== "on") return null;
+  return {
+    coverage: "alarm",
+    confirmedAt: asString(entity.attributes["since"]),
+    sources: asArray(entity.attributes["sources"])
+      .map((item) => asString(item))
+      .filter((item): item is string => item !== undefined),
+    describingSource: asString(entity.attributes["describing_source"]),
+  };
+}
+
+/**
+ * One zone's leak coverage.
+ *
+ * The entity answers the alarm and only the alarm. Coverage is read from
+ * `zone_state.capabilities.leak_detection` because **an unavailable entity
+ * publishes no attributes at all**, `maestro_role` included — so
+ * `discover()`'s attribute walk cannot see one, and "this zone has no leak
+ * entity" and "its leak entity is unavailable" are the same observation. A
+ * helper that concluded "no leak" from a missing entity would publish
+ * exactly the silence the availability rule exists to withhold.
+ *
+ * `unknown` rather than `uncovered` for a zone with no configured sensor:
+ * `capabilities.leak_detection` describes the SENSOR, and a zone with its
+ * own meter is still covered by leak source 2 while that says
+ * `unavailable`. The muted capability badge declares the missing sensor;
+ * this helper adds no claim it cannot support.
+ */
+export function leakStatus(zone: ZoneBundle): LeakStatus {
+  const alarm = leakAlarm(zone.leak);
+  if (alarm) return alarm;
+  if (zone.leak?.state === "off") return { coverage: "quiet", sources: [] };
+  const degraded = asArray(zone.state?.attributes?.["degraded"]).map((item) => asString(item));
+  if (LEAK_STALL_KEYS.some((key) => degraded.includes(key))) {
+    return { coverage: "unresolved", sources: [] };
+  }
+  if (asString(zoneCapabilities(zone)["leak_detection"]) === "configured") {
+    return { coverage: "establishing", sources: [] };
+  }
+  return { coverage: "unknown", sources: [] };
+}
+
+/**
+ * The hub scope's leak alarm — water measured on a meter serving more than
+ * one zone (or none), where which zone leaks is unanswerable but whether the
+ * system leaks is not.
+ *
+ * Only three states are reachable here: the hub has no `zone_state` and
+ * therefore no `degraded`, so a hub scope that can never conclude is
+ * explained nowhere at all (the contract says so in as many words). `unknown`
+ * is rendered as silence — what a card must not do is present it as healthy.
+ */
+export function hubLeakStatus(hub: HubBundle): LeakStatus {
+  const alarm = leakAlarm(hub.leak);
+  if (alarm) return alarm;
+  return { coverage: hub.leak?.state === "off" ? "quiet" : "unknown", sources: [] };
 }
 
 /** The zone's water figures, or null when there is nothing trustworthy to

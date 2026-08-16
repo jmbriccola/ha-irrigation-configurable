@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { IrrigationMaestroPanel, parseTestResults } from "./panel";
+import { IrrigationMaestroPanel, parseSensorDiscovery, parseTestResults } from "./panel";
 import type { HomeAssistant } from "../types";
 import type { NotificationStatusResponse, SetNotificationsCall } from "./notification-wizard-state";
 import type { NotificationTestDetail, NotifyTestResult } from "./settings-view";
@@ -38,6 +38,9 @@ interface PanelInternals {
   _onTestNotification(ev: CustomEvent<NotificationTestDetail>): Promise<void>;
   _loadNotificationStatus(): Promise<void>;
   _onOpenSettings(): Promise<void>;
+  _editingZone?: Record<string, unknown> | null;
+  _editingZoneSensors?: Record<string, string>;
+  _onEditZone(zoneId: string): Promise<void>;
 }
 
 function panelWith(respond: Responder, language = "en"): {
@@ -383,5 +386,91 @@ describe("opening the settings view", () => {
 
     expect(inner._view).toBe("zones");
     expect(inner._error).toBe("Couldn't read the current configuration.");
+  });
+});
+
+describe("what discover_zone_sensors answers", () => {
+  it("keeps the configured sensors and the device's candidates", () => {
+    expect(
+      parseSensorDiscovery({
+        leak_sensor: "binary_sensor.chosen_leak",
+        water_supply_sensor: null,
+        leak_candidate: "binary_sensor.valve_water_leak",
+        supply_candidate: "binary_sensor.valve_water_supply",
+        // The service answers with the capability verdicts too; the editor
+        // reads them off `zone_state` instead, so they are simply not kept.
+        leak_detection: "configured",
+        water_supply: "candidate_available",
+      }),
+    ).toEqual({
+      leak_sensor: "binary_sensor.chosen_leak",
+      leak_candidate: "binary_sensor.valve_water_leak",
+      supply_candidate: "binary_sensor.valve_water_supply",
+    });
+  });
+
+  it("refuses a payload that is not an object", () => {
+    expect(parseSensorDiscovery(undefined)).toBeUndefined();
+    expect(parseSensorDiscovery("binary_sensor.x")).toBeUndefined();
+    expect(parseSensorDiscovery([])).toBeUndefined();
+  });
+});
+
+describe("opening the zone editor", () => {
+  const exported = {
+    payload: JSON.stringify({
+      options: {},
+      zones: { z1: { name: "Lawn", valve_entity: "valve.lawn" } },
+    }),
+  };
+
+  it("asks the backend what this zone's valve device offers", async () => {
+    // The frontend cannot answer this itself: `hass` carries states only, no
+    // entity or device registry, and a state's attributes never name a
+    // device. Hence a service call, made once, when the editor opens.
+    const { inner, calls } = panelWith((call) =>
+      call.service === "export_config"
+        ? exported
+        : { leak_candidate: "binary_sensor.valve_water_leak", supply_candidate: null },
+    );
+
+    await inner._onEditZone("z1");
+
+    expect(calls.map((c) => c.service)).toContain("discover_zone_sensors");
+    expect(calls.find((c) => c.service === "discover_zone_sensors")?.data).toEqual({
+      zone_id: "z1",
+    });
+    expect(inner._editingZoneSensors).toEqual({
+      leak_candidate: "binary_sensor.valve_water_leak",
+    });
+  });
+
+  it("still opens the editor when the discovery cannot be read", async () => {
+    // A backend that cannot answer this must not make a zone uneditable —
+    // and the editor must then say nothing about candidates rather than
+    // reporting a device that has none.
+    const { inner } = panelWith((call) => {
+      if (call.service === "discover_zone_sensors") throw new Error("unknown service");
+      return exported;
+    });
+
+    await inner._onEditZone("z1");
+
+    expect(inner._editingZone).toEqual({ name: "Lawn", valve_entity: "valve.lawn" });
+    expect(inner._editingZoneSensors).toBeUndefined();
+  });
+
+  it("does not carry one zone's candidates into the next zone's form", async () => {
+    // `_editingZoneSensors` outliving its zone would offer zone A's sibling
+    // sensor as zone B's, on a device that never had one.
+    const { inner } = panelWith((call) => {
+      if (call.service === "export_config") return exported;
+      throw new Error("unknown service");
+    });
+    inner._editingZoneSensors = { leak_candidate: "binary_sensor.other_zone_leak" };
+
+    await inner._onEditZone("z1");
+
+    expect(inner._editingZoneSensors).toBeUndefined();
   });
 });

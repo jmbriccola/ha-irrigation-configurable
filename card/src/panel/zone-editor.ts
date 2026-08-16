@@ -36,6 +36,8 @@ export interface ZoneSaveDetail {
     flow_sensor_unit?: string;
     nominal_flow_lpm?: number;
     flow_tolerance_pct?: number;
+    leak_sensor?: string;
+    water_supply_sensor?: string;
     adjustment_pct?: number;
     order?: number;
     compatibility_group?: string;
@@ -44,6 +46,51 @@ export interface ZoneSaveDetail {
 
 export interface ZoneRemoveDetail {
   zoneId: string;
+}
+
+/**
+ * What `discover_zone_sensors` answers for one zone: what it is already
+ * configured with, and what the valve's own device could offer.
+ *
+ * Server-side because the frontend cannot do it — the card's `hass` object
+ * exposes states only, with no entity or device registry, and a state's
+ * attributes never carry a `device_id`. Candidates are matched by
+ * `device_class` alone, never by entity id or name: the panel must not
+ * re-derive them from names either.
+ */
+export interface ZoneSensorDiscovery {
+  leak_sensor?: string;
+  water_supply_sensor?: string;
+  leak_candidate?: string;
+  supply_candidate?: string;
+}
+
+/**
+ * The `.field-note` under a sensor picker: where the value could come from,
+ * in the same idiom the flow unit's note uses.
+ *
+ * `undefined` means "say nothing", and it covers two different silences on
+ * purpose:
+ *
+ * - **The discovery was never read** (the service failed, or has not
+ *   answered). "This device offers no leak sensor" would then be an
+ *   assertion about hardware nobody asked about.
+ * - **A sensor is chosen and the device offers no candidate.** That is a
+ *   probe somewhere else in the garden, which the capability model calls a
+ *   legitimate, deliberate choice — warning about it would push the user to
+ *   "fix" a configuration that is already right.
+ */
+export function sensorNote(
+  lang: string,
+  kind: "leak" | "supply",
+  value: string,
+  discovery: ZoneSensorDiscovery | undefined,
+): string | undefined {
+  if (!discovery) return undefined;
+  const candidate = kind === "leak" ? discovery.leak_candidate : discovery.supply_candidate;
+  if (candidate) return localize(lang, "zone.sensor_detected", { entity: candidate });
+  if (value.trim() !== "") return undefined;
+  return localize(lang, kind === "leak" ? "zone.leak_sensor_none" : "zone.water_supply_none");
 }
 
 const MONTH_LABELS: Record<string, string[]> = {
@@ -59,6 +106,10 @@ export class ImcZoneEditor extends LitElement {
   @property({ attribute: false }) hass?: HomeAssistant;
   @property({ attribute: false }) zone?: ZoneData;
   @property() zoneId?: string;
+  /** `discover_zone_sensors`' answer for this zone, read by the panel when
+   *  the editor opens. Undefined until it lands, and after a failed read —
+   *  see `sensorNote` for why that is not the same as "nothing found". */
+  @property({ attribute: false }) sensorDiscovery?: ZoneSensorDiscovery;
 
   @state() private _name = "";
   @state() private _valve = "";
@@ -68,6 +119,8 @@ export class ImcZoneEditor extends LitElement {
   // the class doc comment + `_save` for why they must never reach `add_zone`.
   @state() private _flowSensor = "";
   @state() private _flowSensorUnit = "";
+  @state() private _leakSensor = "";
+  @state() private _waterSupplySensor = "";
   @state() private _nominalFlowLpm?: number;
   @state() private _flowTolerancePct?: number;
   @state() private _adjustmentPct?: number;
@@ -171,6 +224,14 @@ export class ImcZoneEditor extends LitElement {
     }
   `;
 
+  /**
+   * Seeding happens once per zone. `sensorDiscovery` therefore has to be set
+   * in the SAME update as `zone`/`zoneId` — the panel reads the config and
+   * the discovery together and assigns both before the editor renders. A
+   * discovery arriving in a later update would be ignored rather than
+   * re-seeding, which is the right trade: re-seeding on any later property
+   * change would throw away whatever the user had already typed.
+   */
   protected override willUpdate(changed: Map<string, unknown>): void {
     if ((changed.has("zone") || changed.has("zoneId")) && this.zoneId !== this._seededZoneId) {
       this._seededZoneId = this.zoneId;
@@ -185,6 +246,18 @@ export class ImcZoneEditor extends LitElement {
     this._areaM2 = zone?.area_m2;
     this._flowSensor = zone?.flow_sensor ?? "";
     this._flowSensorUnit = zone?.flow_sensor_unit ?? "";
+    // Detection proposes, storage decides. `??` is doing real work here:
+    // it fires on a key that was NEVER written and not on an empty string,
+    // and the backend keeps those two apart on purpose (`update_zone` stores
+    // "" verbatim; a zone it never touched carries no key at all). So a zone
+    // predating this feature is offered its device's candidate, while a
+    // sensor the user deliberately cleared stays cleared instead of being
+    // re-proposed on every visit — which, since this field is sent on every
+    // save, would make un-choosing a sensor impossible.
+    const discovery = this.sensorDiscovery;
+    this._leakSensor = zone?.leak_sensor ?? discovery?.leak_candidate ?? "";
+    this._waterSupplySensor =
+      zone?.water_supply_sensor ?? discovery?.supply_candidate ?? "";
     this._nominalFlowLpm = zone?.nominal_flow_lpm;
     this._flowTolerancePct = zone?.flow_tolerance_pct;
     this._adjustmentPct = zone?.adjustment_pct;
@@ -307,6 +380,52 @@ export class ImcZoneEditor extends LitElement {
     `;
   }
 
+  /**
+   * One of the two `binary_sensor` fields, with the provenance underneath it
+   * in the same `.field-note` idiom the flow unit uses.
+   *
+   * The picker is filtered by `device_class` rather than by domain alone,
+   * mirroring how the backend finds candidates: `moisture` for a leak,
+   * `problem` for the water supply. It is a filter, not a rule — the user is
+   * free to pick anything the selector will show them, and a probe elsewhere
+   * in the garden is a legitimate choice.
+   *
+   * The supply field carries one extra line, always: its polarity is
+   * inverted with respect to its name (`on` means there is NO water), and a
+   * user who reads it the other way round configures a zone that refuses to
+   * water whenever everything is fine.
+   */
+  private _renderSensorPicker(lang: string, kind: "leak" | "supply"): TemplateResult {
+    const isLeak = kind === "leak";
+    const label = localize(
+      lang,
+      isLeak ? "zone.field_leak_sensor" : "zone.field_water_supply_sensor",
+    );
+    const value = isLeak ? this._leakSensor : this._waterSupplySensor;
+    const note = sensorNote(lang, kind, value, this.sensorDiscovery);
+    return html`
+      <div class="section-label">${label}</div>
+      <imc-entity-picker
+        .hass=${this.hass}
+        .selector=${{
+          entity: { domain: "binary_sensor", device_class: isLeak ? "moisture" : "problem" },
+        }}
+        .value=${value}
+        .label=${label}
+        @value-changed=${(e: CustomEvent<{ value: string }>) => {
+          if (isLeak) this._leakSensor = e.detail.value;
+          else this._waterSupplySensor = e.detail.value;
+        }}
+      ></imc-entity-picker>
+      ${note ? html`<div class="field-note">${note}</div>` : nothing}
+      ${isLeak
+        ? nothing
+        : html`<div class="field-note">
+            ${localize(lang, "zone.water_supply_polarity")}
+          </div>`}
+    `;
+  }
+
   private _renderAdvanced(lang: string): TemplateResult {
     return html`
       <div class="section-label">${localize(lang, "zone.field_flow_sensor")}</div>
@@ -319,6 +438,9 @@ export class ImcZoneEditor extends LitElement {
           (this._flowSensor = e.detail.value)}
       ></imc-entity-picker>
       ${this._renderFlowUnit(lang)}
+
+      ${this._renderSensorPicker(lang, "leak")}
+      ${this._renderSensorPicker(lang, "supply")}
 
       <div class="section-label">${localize(lang, "zone.field_flow_nominal")}</div>
       <input
@@ -397,6 +519,14 @@ export class ImcZoneEditor extends LitElement {
       // automatically), and `update_zone` reads `""` as "clear the override".
       // Omitting it when empty would leave a stored override unremovable.
       patch.flow_sensor_unit = this._flowSensorUnit.trim();
+      // Also always sent, for the same reason and a second one. "No sensor"
+      // is a state the user can choose here — clearing a leak sensor they
+      // have stopped trusting is the very reaction the backend's
+      // source-withdrawal path was written for — and `update_zone` stores ""
+      // verbatim, which every consumer reads as unset. Omitting them when
+      // empty would leave a chosen sensor unremovable from this panel.
+      patch.leak_sensor = this._leakSensor.trim();
+      patch.water_supply_sensor = this._waterSupplySensor.trim();
       if (this._nominalFlowLpm !== undefined) patch.nominal_flow_lpm = this._nominalFlowLpm;
       if (this._flowTolerancePct !== undefined) {
         patch.flow_tolerance_pct = this._flowTolerancePct;

@@ -86,6 +86,40 @@ describe("settings patches", () => {
   it("drops an empty compatibility-groups string", () => {
     expect(buildConcurrencyPatch({ compatibilityGroups: "  " })).toEqual({});
   });
+
+  it("maps every leak and water-supply field to its service key", () => {
+    expect(
+      buildValveSafetyPatch({
+        leakAction: "close_and_block",
+        leakThresholdLpm: 0.5,
+        leakConfirmS: 300,
+        leakRepeatMin: 360,
+        requireWaterSupply: true,
+        waterSupplyConfirmS: 180,
+      }),
+    ).toEqual({
+      leak_action: "close_and_block",
+      leak_threshold_lpm: 0.5,
+      leak_confirm_s: 300,
+      leak_repeat_min: 360,
+      require_water_supply: true,
+      water_supply_confirm_s: 180,
+    });
+  });
+
+  it("passes `false` through rather than treating it as empty", () => {
+    // The boolean's version of the zero trap above, and it points the
+    // dangerous way: dropping `false` as falsy would leave the gate switched
+    // ON while the form showed it off, so the user would think they had
+    // stopped the component refusing to water and it would carry on.
+    expect(buildValveSafetyPatch({ requireWaterSupply: false })).toEqual({
+      require_water_supply: false,
+    });
+  });
+
+  it("passes a zero reminder interval through, which switches reminders off", () => {
+    expect(buildValveSafetyPatch({ leakRepeatMin: 0 })).toEqual({ leak_repeat_min: 0 });
+  });
 });
 
 /** Just enough of a status to answer "what priority does this event have?". */
@@ -215,6 +249,59 @@ describe("the line meter's unit", () => {
       inner._setLineFlowSensor("");
     });
     expect(detail?.line_flow_sensor_unit).toBe("");
+  });
+});
+
+/** The valve-safety drawer's save, and the state it saves from. */
+function savedValveSafety(options: Record<string, unknown>): Record<string, unknown> | undefined {
+  const element = new ImcSettingsView();
+  element.options = options;
+  (element as unknown as { willUpdate(changed: Map<string, unknown>): void }).willUpdate(
+    new Map([["options", undefined]]),
+  );
+  let detail: Record<string, unknown> | undefined;
+  element.addEventListener("imc-settings-save-valve-safety", (event) => {
+    detail = (event as CustomEvent<Record<string, unknown>>).detail;
+  });
+  (element as unknown as { _saveValveSafety(): void })._saveValveSafety();
+  return detail;
+}
+
+describe("the leak settings in the advanced drawer", () => {
+  it("round-trips what is stored through seeding, untouched", () => {
+    // Both of these are sent on EVERY save of this drawer — a select always
+    // has a value and a checkbox always has a state — so they are only safe
+    // because seeding puts the stored values back into the form first. Drop
+    // the seeding lines and saving an unrelated field in this drawer rewrites
+    // the hub's leak behaviour.
+    const detail = savedValveSafety({
+      leak_action: "close_and_block",
+      require_water_supply: false,
+      leak_repeat_min: 0,
+      leak_confirm_s: 600,
+    });
+    expect(detail?.["leak_action"]).toBe("close_and_block");
+    expect(detail?.["require_water_supply"]).toBe(false);
+    expect(detail?.["leak_repeat_min"]).toBe(0);
+    expect(detail?.["leak_confirm_s"]).toBe(600);
+  });
+
+  it("shows the backend's own defaults, so an untouched save changes nothing", () => {
+    // A hub that has never been told: `leak_action` defaults to `close` and
+    // `require_water_supply` to True in models.py. The form must display the
+    // same two values, or the first save of anything in this drawer silently
+    // moves the installation onto a different leak policy.
+    const detail = savedValveSafety({});
+    expect(detail?.["leak_action"]).toBe("close");
+    expect(detail?.["require_water_supply"]).toBe(true);
+  });
+
+  it("keeps an unrecognised stored action out of the form", () => {
+    // `leak_action` falls back to the default silently in the backend too,
+    // so a value written by import_config or Developer Tools must not be
+    // offered back as if it were a real choice — the select would show
+    // nothing selected and save whatever the first option happened to be.
+    expect(savedValveSafety({ leak_action: "explode" })?.["leak_action"]).toBe("close");
   });
 });
 

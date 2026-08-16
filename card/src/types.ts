@@ -59,6 +59,13 @@ export const REASON_KEYS = [
   "no_flow",
   "flow_out_of_range",
   "close_failed",
+  // Deliberately UNLABELLED, and excluded by name from the locale-coverage
+  // test in localize/localize.test.ts, which states the reason: the card
+  // contract says a restart leaves no per-cycle outcome by design, so this
+  // key cannot reach a rendered outcome. Nothing in the component emits it
+  // as a reason_key (checked across custom_components/ when the leak work
+  // added the two keys below). Do not invent a label for it; if the
+  // component ever starts emitting it, label it and drop the exclusion.
   "restart",
   // A confirmed leak alarm under the close_and_block action.
   "leak",
@@ -75,8 +82,32 @@ export const DEGRADED_KEYS = [
   "line_meter_shared",
   "no_hourly_forecast",
   "volume_mode_unavailable",
+  // A sensor the user chose that no longer resolves. `capabilities` keeps
+  // reporting it as `configured` on purpose (it records intent), so this is
+  // the only place "configured, and gone" is visible.
+  "leak_sensor_missing",
+  "water_supply_sensor_missing",
+  // Why a leak entity has been silent for an hour of idle time. Diagnostics,
+  // NOT alarms: word them as "this zone could not check", never as a leak
+  // (docs/design/card-contract.md).
+  "leak_never_observable",
+  "leak_evidence_unresolved",
 ] as const;
 export type DegradedKey = (typeof DEGRADED_KEYS)[number];
+
+/**
+ * The leak sources, as `zone_leak`/`hub_leak` publish them raw in `sources`
+ * and `describing_source` and as the `leak` event carries them in
+ * `first_source`. Unlocalised contract keys: every surface must translate
+ * them (`leak_source.<key>`), the way `reason_key` is translated.
+ *
+ * They are OBSERVATIONS, never conclusions — `valve_sensor` is "the valve's
+ * own sensor reports a leak" for both readings of a `moisture` sensor, and
+ * must never become "water detected on the ground", which is false on the
+ * reference hardware (docs/design/card-contract.md).
+ */
+export const LEAK_SOURCE_KEYS = ["valve_sensor", "no_flow_closed"] as const;
+export type LeakSourceKey = (typeof LEAK_SOURCE_KEYS)[number];
 
 export type HubRole =
   | "hub_water_budget"
@@ -89,6 +120,11 @@ export type HubRole =
   // here, same as zone_interval/zone_adjustment below, so it counts as a
   // discovery hit ahead of whichever task first renders it.
   | "hub_unattributed_water"
+  // The system scope's leak alarm: water on a meter no single zone owns.
+  // `unavailable` here is a first-class state meaning "nothing established",
+  // and an unavailable entity publishes no attributes at all -- so this role
+  // is simply absent from the discovery walk while that lasts.
+  | "hub_leak"
   | "hub_pause"
   | "hub_evaluate"
   | "hub_stop_all";
@@ -100,6 +136,10 @@ export type ZoneRole =
   // Water accounting (docs/design/card-contract.md): the zone's cumulative
   // litres, `waterSummary()` in discovery.ts reads this role's entity.
   | "zone_water_total"
+  // This zone's leak alarm (`discovery.ts`'s `leakStatus` reads it). Same
+  // caveat as `hub_leak` above: unavailable means nothing established, and
+  // an unavailable entity is invisible to the attribute walk.
+  | "zone_leak"
   | "zone_enabled"
   | "cycle_enabled"
   | "zone_order"

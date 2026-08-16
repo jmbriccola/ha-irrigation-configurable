@@ -7,6 +7,11 @@ export interface ZoneData {
   flow_sensor_unit?: string;
   nominal_flow_lpm?: number;
   flow_tolerance_pct?: number;
+  // Leak source 1 and the water-supply gate. Stored verbatim, empty string
+  // included: every consumer reads them with truthiness, so "" is how a
+  // sensor is un-chosen (capabilities.py says so at the point of use).
+  leak_sensor?: string;
+  water_supply_sensor?: string;
   adjustment_pct?: number;
   order?: number;
   compatibility_group?: string;
@@ -30,6 +35,16 @@ export interface HubOptions {
   compatibility_groups?: string;
   master_pre_open_s?: number;
   master_post_close_s?: number;
+  // Leak detection and the water-supply gate. They live under
+  // `set_valve_safety` rather than a service of their own: the same kind of
+  // setting as the confirmation windows above — what the component does when
+  // a valve, or the water behind it, does not behave.
+  leak_action?: string;
+  leak_threshold_lpm?: number;
+  leak_confirm_s?: number;
+  leak_repeat_min?: number;
+  require_water_supply?: boolean;
+  water_supply_confirm_s?: number;
   notifications?: Record<string, { enabled?: boolean; services?: string[] }>;
   weather_entity?: string;
   rain_sensor?: string;

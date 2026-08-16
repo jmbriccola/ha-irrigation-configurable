@@ -1,12 +1,17 @@
 import { describe, it, expect } from "vitest";
 import {
   buildCopyCandidates,
+  capabilityBadges,
+  discover,
+  hubLeakStatus,
+  leakStatus,
   readCycles,
   waterSummary,
   zoneAdjustmentPct,
   zoneHasFlowMeter,
 } from "./discovery";
 import type { ZoneBundle } from "./discovery";
+import type { HomeAssistant } from "./types";
 
 function zoneWithCycles(cycles: unknown): ZoneBundle {
   return {
@@ -267,5 +272,339 @@ describe("waterSummary", () => {
         },
       } as never),
     ).toBeNull();
+  });
+});
+
+/**
+ * A zone as `discover()` builds it. The `zone_state` role lands on the
+ * `state` slot (see ZONE_ROLE_TO_SLOT), so a fixture keyed `zone_state`
+ * would type-check through a cast and then read as an empty zone — the
+ * helper would see nothing and the assertions would be about nothing.
+ */
+function zoneWith(
+  attributes: Record<string, unknown>,
+  leak?: { state: string; attributes?: Record<string, unknown> },
+): ZoneBundle {
+  return {
+    zoneId: "z1",
+    name: "Lawn",
+    order: 1,
+    cycleSwitches: [],
+    state: { entity_id: "sensor.z1_state", state: "idle", attributes },
+    ...(leak
+      ? {
+          leak: {
+            entity_id: "binary_sensor.z1_leak",
+            state: leak.state,
+            attributes: { maestro_role: "zone_leak", ...(leak.attributes ?? {}) },
+          },
+        }
+      : {}),
+  };
+}
+
+const capabilities = (caps: Record<string, string>, degraded: string[] = []) => ({
+  maestro_role: "zone_state",
+  capabilities: caps,
+  degraded,
+});
+
+describe("capabilityBadges", () => {
+  it("badges nothing when everything is configured", () => {
+    expect(
+      capabilityBadges(
+        zoneWith(
+          capabilities({
+            water_accounting: "measured",
+            leak_detection: "configured",
+            water_supply: "configured",
+          }),
+        ),
+      ),
+    ).toEqual([]);
+  });
+
+  it("declares an absent capability rather than staying silent", () => {
+    const badges = capabilityBadges(
+      zoneWith(
+        capabilities({
+          water_accounting: "estimated",
+          leak_detection: "unavailable",
+          water_supply: "unavailable",
+        }),
+      ),
+    );
+    expect(badges.map((badge) => badge.key)).toEqual([
+      "water_estimated",
+      "leak_unavailable",
+      "supply_unavailable",
+    ]);
+    expect(badges.every((badge) => badge.tone === "muted")).toBe(true);
+  });
+
+  it("invites configuration when the hardware could do it", () => {
+    const badges = capabilityBadges(
+      zoneWith(
+        capabilities({
+          water_accounting: "measured",
+          leak_detection: "candidate_available",
+          water_supply: "configured",
+        }),
+      ),
+    );
+    expect(badges).toEqual([{ key: "leak_candidate", tone: "hint" }]);
+  });
+
+  /**
+   * The tone is the whole difference between "you are not protected" and
+   * "you could be, with one click". Collapsing the two into one tone is the
+   * single mutation this pair of cases exists to catch.
+   */
+  it("keeps the invitation apart from the declared absence", () => {
+    const invited = capabilityBadges(
+      zoneWith(
+        capabilities({
+          water_accounting: "measured",
+          leak_detection: "candidate_available",
+          water_supply: "candidate_available",
+        }),
+      ),
+    );
+    expect(invited).toEqual([
+      { key: "leak_candidate", tone: "hint" },
+      { key: "supply_candidate", tone: "hint" },
+    ]);
+  });
+
+  it("says nothing about a zone whose state entity is unavailable", () => {
+    // An unavailable entity publishes no attributes at all, so `capabilities`
+    // reads as absent -- which is "we have not been told", not "declared
+    // absent". Badging it would put a claim on screen nothing supports.
+    const zone: ZoneBundle = {
+      zoneId: "z1",
+      name: "Lawn",
+      order: 1,
+      cycleSwitches: [],
+      state: { entity_id: "sensor.z1_state", state: "unavailable", attributes: {} },
+    };
+    expect(capabilityBadges(zone)).toEqual([]);
+    expect(capabilityBadges({ zoneId: "z1", name: "Lawn", order: 1, cycleSwitches: [] })).toEqual(
+      [],
+    );
+  });
+
+  it("leaves water_accounting: unavailable to the degraded badge that already explains it", () => {
+    // `water_accounting` can only be "unavailable" when no meter is usable,
+    // and that zone always carries `no_flow_meter` or `flow_unit_unknown` in
+    // `degraded` (sensor.py's `_degraded`), which the row already renders. A
+    // second chip saying the same thing is noise, not a declaration.
+    expect(
+      capabilityBadges(
+        zoneWith(
+          capabilities(
+            {
+              water_accounting: "unavailable",
+              leak_detection: "configured",
+              water_supply: "configured",
+            },
+            ["no_flow_meter"],
+          ),
+        ),
+      ),
+    ).toEqual([]);
+  });
+});
+
+/**
+ * The three states the row must keep apart, and the reason this helper is
+ * not allowed to read coverage off the leak entity: Home Assistant publishes
+ * NO attributes while an entity is unavailable, `maestro_role` included, so
+ * `discover()`'s attribute walk cannot see one. "No leak entity" and "its
+ * leak entity is unavailable" are the same observation.
+ */
+describe("leakStatus", () => {
+  it("reads the alarm, its confirmation instant and its sources from the entity", () => {
+    const status = leakStatus(
+      zoneWith(
+        capabilities({
+          water_accounting: "measured",
+          leak_detection: "configured",
+          water_supply: "configured",
+        }),
+        {
+          state: "on",
+          attributes: {
+            sources: ["no_flow_closed", "valve_sensor"],
+            since: "2026-08-16T05:30:00+00:00",
+            describing_source: "valve_sensor",
+          },
+        },
+      ),
+    );
+    expect(status.coverage).toBe("alarm");
+    // Named `confirmedAt`, not `since`: the contract's `since` is when the
+    // alarm was CONFIRMED, never when the water began escaping.
+    expect(status.confirmedAt).toBe("2026-08-16T05:30:00+00:00");
+    expect(status.sources).toEqual(["no_flow_closed", "valve_sensor"]);
+    expect(status.describingSource).toBe("valve_sensor");
+  });
+
+  it("reads the alarm from the entity even where the capability declares no sensor", () => {
+    // A zone with no leak sensor still has source 2 -- water measured on its
+    // own meter with every valve shut -- and `capabilities.leak_detection`
+    // describes the SENSOR only. Gating the alarm on the capability would
+    // hide a confirmed leak on every meter-only zone.
+    const status = leakStatus(
+      zoneWith(
+        capabilities({
+          water_accounting: "measured",
+          leak_detection: "unavailable",
+          water_supply: "unavailable",
+        }),
+        { state: "on", attributes: { sources: ["no_flow_closed"], since: null } },
+      ),
+    );
+    expect(status.coverage).toBe("alarm");
+    expect(status.confirmedAt).toBeUndefined();
+    expect(status.sources).toEqual(["no_flow_closed"]);
+  });
+
+  it("reads `off` as watched-and-quiet", () => {
+    const status = leakStatus(
+      zoneWith(
+        capabilities({
+          water_accounting: "measured",
+          leak_detection: "configured",
+          water_supply: "configured",
+        }),
+        { state: "off", attributes: { sources: [], since: null } },
+      ),
+    );
+    expect(status.coverage).toBe("quiet");
+  });
+
+  it("does NOT read a missing entity as quiet when a sensor is configured", () => {
+    // The defect this whole helper exists to prevent. The entity is
+    // unavailable (so absent from discovery) while the scope serves its
+    // first confirmation window; rendering that as "no leak" throws away
+    // every round the availability rule cost.
+    const status = leakStatus(
+      zoneWith(
+        capabilities({
+          water_accounting: "measured",
+          leak_detection: "configured",
+          water_supply: "configured",
+        }),
+      ),
+    );
+    expect(status.coverage).toBe("establishing");
+  });
+
+  it("defers to the zone's own explanation when it has one", () => {
+    for (const stall of ["leak_never_observable", "leak_evidence_unresolved"]) {
+      const status = leakStatus(
+        zoneWith(
+          capabilities(
+            {
+              water_accounting: "measured",
+              leak_detection: "configured",
+              water_supply: "configured",
+            },
+            [stall],
+          ),
+        ),
+      );
+      expect(status.coverage).toBe("unresolved");
+    }
+  });
+
+  it("says nothing it cannot know for a zone with no configured sensor", () => {
+    // No entity and no configured sensor: the zone may still be served by a
+    // meter whose window has not run, so neither "still looking" nor "no
+    // leak" is knowable. The muted capability badge declares the missing
+    // sensor; this helper adds no second claim.
+    const status = leakStatus(
+      zoneWith(
+        capabilities({
+          water_accounting: "measured",
+          leak_detection: "unavailable",
+          water_supply: "unavailable",
+        }),
+      ),
+    );
+    expect(status.coverage).toBe("unknown");
+    expect(status.sources).toEqual([]);
+  });
+});
+
+describe("discover: the leak roles reach a slot", () => {
+  /**
+   * The wire between the backend and everything above. An unmapped role is
+   * still counted as a discovery hit, so it fails completely silently: the
+   * alarm entity exists, the walk sees it, and no surface can read it.
+   */
+  it("puts zone_leak and hub_leak on their bundles", () => {
+    const hass = {
+      states: {
+        "sensor.z1_state": {
+          entity_id: "sensor.z1_state",
+          state: "idle",
+          attributes: { maestro_role: "zone_state", zone_id: "z1", zone_name: "Lawn" },
+        },
+        "binary_sensor.z1_leak": {
+          entity_id: "binary_sensor.z1_leak",
+          state: "on",
+          attributes: { maestro_role: "zone_leak", zone_id: "z1", sources: ["valve_sensor"] },
+        },
+        "binary_sensor.hub_leak": {
+          entity_id: "binary_sensor.hub_leak",
+          state: "off",
+          attributes: { maestro_role: "hub_leak" },
+        },
+      },
+    } as unknown as HomeAssistant;
+
+    const model = discover(hass);
+
+    expect(model.zones[0]?.leak?.entity_id).toBe("binary_sensor.z1_leak");
+    expect(model.hub.leak?.entity_id).toBe("binary_sensor.hub_leak");
+    expect(leakStatus(model.zones[0]!).coverage).toBe("alarm");
+    expect(hubLeakStatus(model.hub).coverage).toBe("quiet");
+  });
+});
+
+describe("hubLeakStatus", () => {
+  it("reports the system alarm the hub scope raises", () => {
+    const status = hubLeakStatus({
+      leak: {
+        entity_id: "binary_sensor.hub_leak",
+        state: "on",
+        attributes: {
+          maestro_role: "hub_leak",
+          sources: ["no_flow_closed"],
+          since: "2026-08-16T04:00:00+00:00",
+          describing_source: "no_flow_closed",
+        },
+      },
+    });
+    expect(status.coverage).toBe("alarm");
+    expect(status.confirmedAt).toBe("2026-08-16T04:00:00+00:00");
+    expect(status.describingSource).toBe("no_flow_closed");
+  });
+
+  it("has nothing to say when the hub entity is unavailable", () => {
+    // The hub has no `zone_state` and therefore no `degraded`, so a hub scope
+    // that can never conclude is explained nowhere. Silence is the honest
+    // rendering; what must not happen is a chip claiming the system is fine.
+    expect(hubLeakStatus({}).coverage).toBe("unknown");
+    expect(
+      hubLeakStatus({
+        leak: {
+          entity_id: "binary_sensor.hub_leak",
+          state: "off",
+          attributes: { maestro_role: "hub_leak" },
+        },
+      }).coverage,
+    ).toBe("quiet");
   });
 });

@@ -23,7 +23,7 @@ import type {
   ProgramToggleDetail,
 } from "./program-list";
 import type { WizardFinishDetail } from "./program-wizard";
-import type { ZoneRemoveDetail, ZoneSaveDetail } from "./zone-editor";
+import type { ZoneRemoveDetail, ZoneSaveDetail, ZoneSensorDiscovery } from "./zone-editor";
 import type {
   BudgetSaveDetail,
   NotificationTestDetail,
@@ -81,6 +81,32 @@ export function parseTestResults(raw: unknown): Record<string, NotifyTestResult>
 }
 
 /**
+ * `discover_zone_sensors`' answer, checked the same way and for the same
+ * reason: it is data crossing a process boundary. Every field is optional —
+ * the service answers with `null` for anything the zone has not got — so the
+ * only thing to establish is that each present field is a non-empty string.
+ *
+ * `undefined` means "no usable answer", which the editor renders as SILENCE
+ * rather than as "this device has nothing": the difference matters, because
+ * the second is a claim about hardware nobody managed to ask about.
+ */
+export function parseSensorDiscovery(raw: unknown): ZoneSensorDiscovery | undefined {
+  if (typeof raw !== "object" || raw === null || Array.isArray(raw)) return undefined;
+  const source = raw as Record<string, unknown>;
+  const parsed: ZoneSensorDiscovery = {};
+  for (const key of [
+    "leak_sensor",
+    "water_supply_sensor",
+    "leak_candidate",
+    "supply_candidate",
+  ] as const) {
+    const value = source[key];
+    if (typeof value === "string" && value !== "") parsed[key] = value;
+  }
+  return parsed;
+}
+
+/**
  * Sidebar panel shell: zone tabs + the selected zone's read-only program
  * list. Registered via panel_custom (see custom_components/.../panel.py),
  * which sets `hass`/`narrow`/`route`/`panel` on the element.
@@ -96,6 +122,11 @@ export class IrrigationMaestroPanel extends LitElement {
   // `_readConfig`/`_onEditZone` below).
   @state() private _editingZone?: ZoneData | null;
   @state() private _editingZoneId?: string;
+  // What the edited zone's valve device offers, read once when the editor
+  // opens. Assigned in the SAME update as `_editingZone`, because the editor
+  // seeds itself once per zone and a discovery landing later would be
+  // ignored (see `ImcZoneEditor.willUpdate`).
+  @state() private _editingZoneSensors?: ZoneSensorDiscovery;
   // "zones" = the normal zone tabs/program-list view (default), "settings" =
   // the everyday-settings view (spec §1.3), opened via the header's ⚙️
   // button — see `_onOpenSettings`/`_options` below.
@@ -202,10 +233,35 @@ export class IrrigationMaestroPanel extends LitElement {
     }
   }
 
+  /**
+   * What the zone's valve device could offer, for the editor to propose.
+   *
+   * Read here rather than in the editor because it is a service call, and
+   * because the editor seeds once: config and discovery have to arrive
+   * together. A failure answers `undefined` — the editor then says nothing
+   * about candidates rather than claiming the device has none, and every
+   * other field still works.
+   */
+  private async _discoverZoneSensors(zoneId: string): Promise<ZoneSensorDiscovery | undefined> {
+    const res = await this._call(
+      "irrigation_maestro",
+      "discover_zone_sensors",
+      { zone_id: zoneId },
+      true,
+    );
+    return parseSensorDiscovery(res?.response);
+  }
+
   private async _onEditZone(zoneId: string): Promise<void> {
-    const cfg = await this._readConfig();
+    // In parallel, and the discovery is deliberately NOT allowed to fail the
+    // open: a zone must stay editable on a backend that cannot answer it.
+    const [cfg, sensors] = await Promise.all([
+      this._readConfig(),
+      this._discoverZoneSensors(zoneId),
+    ]);
     if (cfg) {
       this._editingZoneId = zoneId;
+      this._editingZoneSensors = sensors;
       this._editingZone = cfg.zones[zoneId] ?? {};
     } else {
       // `_readConfig()` returning undefined here is NOT a `_call` exception
@@ -381,6 +437,7 @@ export class IrrigationMaestroPanel extends LitElement {
     if (success) {
       this._editingZone = undefined;
       this._editingZoneId = undefined;
+      this._editingZoneSensors = undefined;
       this._showNotice(localize(pickLanguage(this.hass), "panel.saved_zone"));
     }
   }
@@ -391,6 +448,7 @@ export class IrrigationMaestroPanel extends LitElement {
     });
     this._editingZone = undefined;
     this._editingZoneId = undefined;
+    this._editingZoneSensors = undefined;
     this._selectedZoneId = undefined;
     if (res) {
       this._showNotice(localize(pickLanguage(this.hass), "panel.removed_zone"));
@@ -400,6 +458,7 @@ export class IrrigationMaestroPanel extends LitElement {
   private _onZoneCancel(): void {
     this._editingZone = undefined;
     this._editingZoneId = undefined;
+    this._editingZoneSensors = undefined;
   }
 
   /**
@@ -764,6 +823,7 @@ export class IrrigationMaestroPanel extends LitElement {
             .hass=${hass}
             .zone=${this._editingZone ?? undefined}
             .zoneId=${this._editingZoneId}
+            .sensorDiscovery=${this._editingZoneSensors}
           ></imc-zone-editor>
         </div>
       `;
@@ -825,6 +885,7 @@ export class IrrigationMaestroPanel extends LitElement {
               @click=${() => {
                 this._editingZone = null;
                 this._editingZoneId = undefined;
+                this._editingZoneSensors = undefined;
               }}
             >
               ＋ ${localize(lang, "zone.add")}
@@ -885,6 +946,7 @@ export class IrrigationMaestroPanel extends LitElement {
             @click=${() => {
               this._editingZone = null;
               this._editingZoneId = undefined;
+              this._editingZoneSensors = undefined;
             }}
           >
             ＋ ${localize(lang, "zone.add")}

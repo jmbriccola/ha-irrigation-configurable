@@ -70,6 +70,9 @@ export const en = {
   "header.global_pause": "Globally paused",
   "header.stale_weather": "Stale weather data",
   "header.consumption_left": "Water left",
+  // The hub scope: water on a meter no single zone owns. There is no zone to
+  // name, which is exactly why the hub has an alarm of its own.
+  "header.leak": "System leak",
 
   // Session states
   "session.idle": "Idle",
@@ -137,6 +140,19 @@ export const en = {
   "degraded.line_meter_shared": "Shared line meter",
   "degraded.no_hourly_forecast": "No hourly forecast",
   "degraded.volume_mode_unavailable": "Volume mode unavailable",
+  "degraded.leak_sensor_missing": "The chosen leak sensor no longer exists",
+  "degraded.water_supply_sensor_missing": "The chosen water-supply sensor no longer exists",
+  // Diagnostics, never alarms: "could not check", not "is broken" and not
+  // "is leaking". A valve held open outside the integration reads exactly
+  // like this, and an afternoon of hand-watering is entirely benign.
+  "degraded.leak_never_observable": "This zone has had no way to check for leaks",
+  "degraded.leak_evidence_unresolved": "This zone cannot finish judging a possible leak",
+
+  // Leak sources, as `zone_leak`/`hub_leak` publish them. Observations, not
+  // conclusions: a `moisture` sensor on this hardware means "water passed
+  // while I was shut", not "there is water on the ground".
+  "leak_source.valve_sensor": "the valve's own sensor reports a leak",
+  "leak_source.no_flow_closed": "water measured with every valve closed",
 
   // Zone rows
   "zone.next_run": "Next run",
@@ -151,6 +167,18 @@ export const en = {
   "zone.water_estimated": "estimated",
   "zone.water_today": "today",
   "zone.water_month": "this month",
+  "zone.leak_alarm": "Leak",
+  // `since` is when the alarm was CONFIRMED — the evidence completing, not
+  // the water starting. Never word this as "leaking since".
+  "zone.leak_confirmed_at": "Confirmed {when}",
+  "zone.leak_checking": "Leak check not concluded yet",
+  // Named for what the capability actually measures — the leak SENSOR. A
+  // zone with its own flow meter is still covered by the meter while this
+  // reads "unavailable", so it must not say "leak detection is off".
+  "zone.leak_unavailable": "No leak sensor",
+  "zone.leak_candidate": "This valve's device offers a leak sensor",
+  "zone.supply_unavailable": "No water-supply sensor",
+  "zone.supply_candidate": "This valve's device offers a water-supply sensor",
 
   // Cycle triggers
   "trigger.sunrise": "Sunrise",
@@ -253,6 +281,16 @@ export const en = {
   "zone.field_interval": "Watering interval (days)",
   "zone.field_season": "Season months override",
   "zone.field_group": "Compatibility group",
+  "zone.field_leak_sensor": "Leak sensor",
+  "zone.field_water_supply_sensor": "Water-supply sensor",
+  "zone.sensor_detected": "Found on this valve's device: {entity}",
+  "zone.leak_sensor_none":
+    "This valve's device offers no leak sensor. You can still pick one anywhere — a probe in the bed is a deliberate, valid choice.",
+  "zone.water_supply_none":
+    "This valve's device offers no water-supply sensor. You can still pick one anywhere.",
+  // The polarity is inverted with respect to the field's name, and getting
+  // it backwards would block every cycle instead of none.
+  "zone.water_supply_polarity": "A “problem” sensor: on means there is NO water.",
 
   // Settings view (panel)
   "settings.title": "Settings",
@@ -363,6 +401,27 @@ export const en = {
   "settings.master_pre_open_s_hint": "Seconds the master valve opens before a zone. Default 0.",
   "settings.master_post_close_s": "Master post-close",
   "settings.master_post_close_s_hint": "Seconds the master valve stays open after a zone. Default 0.",
+  "settings.leak_action": "On a confirmed leak",
+  "settings.leak_action_hint":
+    "What to do once a leak is confirmed. Re-closing a valve that is already shut is a no-op — it recovers a valve left open by a lost command, and dries nothing on a false positive. Default: notify and re-close.",
+  "settings.leak_action_notify": "Notify only",
+  "settings.leak_action_close": "Notify and re-close the valves",
+  "settings.leak_action_close_and_block": "Notify, re-close and block new cycles",
+  "settings.leak_threshold_lpm": "Leak threshold",
+  "settings.leak_threshold_lpm_hint":
+    "Litres per minute measured with every valve closed before it counts as a leak. Default 0.5.",
+  "settings.leak_confirm_s": "Leak confirmation",
+  "settings.leak_confirm_s_hint":
+    "Seconds the evidence must last before the alarm is raised. Each leak entity also stays unavailable until its scope has been watched this long, so raising it postpones a first answer. Default 300.",
+  "settings.leak_repeat_min": "Leak reminder",
+  "settings.leak_repeat_min_hint":
+    "Minutes between reminders while the alarm stands. 0 turns the reminders off without touching the alarm. Default 360.",
+  "settings.require_water_supply": "Refuse to start without water",
+  "settings.require_water_supply_hint":
+    "Refuse to start a cycle while the zone's water-supply sensor reports no water. The notification and the repair notice are raised either way — this governs the refusal, not the telling.",
+  "settings.water_supply_confirm_s": "Water-supply confirmation",
+  "settings.water_supply_confirm_s_hint":
+    "Seconds the outage must have lasted before a start is refused and a notice sent. It never delays the diagnosis of a run already interrupted. Default 180.",
   "program_editor.soak_max_run": "Maximum run length",
   "program_editor.soak_max_run_hint": "Minutes. Splits the watering into shorter runs so the soil can absorb between them. Empty = one continuous run.",
   "program_editor.soak_pause": "Soak pause",
