@@ -338,6 +338,93 @@ Two honest limits worth knowing before you rely on any of this:
   seconds. Without such a sensor there is no way to tell firmware from a hand
   on the switch, so the old behaviour stands.
 
+### Trip it on purpose, before you need it
+
+None of this proves itself. The alarm lives in memory, the entity says
+nothing until it has watched long enough, and a correctly configured system
+that is quiet looks exactly like a misconfigured one that is quiet. Test it
+deliberately, once, on a day nothing is wrong.
+
+**A false trip is free.** The default action re-closes the master and the
+implicated valve, and on an idle system both are already shut — closing a
+closed valve does nothing at all, and since 3.4.0 it does not even register
+in the command ledger. Nothing is watered, nothing is stopped, no valve
+moves. Only `close_and_block` has a cost worth thinking about, and only
+because it refuses new cycles until you clear the alarm.
+
+**Shorten the wait first.** ⚙️ Impostazioni → *Advanced: valves and
+concurrency* → **leak confirmation window**, set to 60 seconds, Save. The
+water-supply window beside it can go to 30. **Put both back afterwards** —
+300 s and 180 s are the defaults, and they are what keeps a flaky sensor
+from crying leak. Lowering it during a test takes nothing back: a scope that
+has already settled stays settled.
+
+Two of the three sources have a physical condition you cannot safely create,
+so **Developer tools → States → pick the entity → Set state** is the honest
+way in. One caveat that matters: *the real device overwrites your value on
+its next report.* A battery sensor that only reports on change may stay
+quiet for hours and let the test run; a flow meter that reports every few
+seconds will overwrite you almost at once, which is why the flow source is
+better tested with real water. **Keep the attributes exactly as shown** when
+you set a state — a meter without its `unit_of_measurement` records nothing
+at all, and the test would fail for the wrong reason.
+
+**Source 1 — the valve's leak sensor.** Set the zone's leak sensor to `on`
+while its valve is closed (it will be, if nothing is watering). The clock
+starts at the later of your edit and that valve last reporting closed, so in
+practice: from now.
+
+**Source 2 — flow while everything is shut.** The honest test is real water:
+open a hand tap fed from the metered line while nothing is watering. As far
+as the component is concerned that *is* a leak, which is exactly the point.
+Otherwise set the flow sensor to a value above the leak threshold (default
+0.5 L/min) and leave it there. The meter is sampled every 30 seconds and the
+window counts **measured** seconds, so about ten samples are needed at the
+default — and a meter that stops reporting pauses that count rather than
+resetting it. A zone with no meter at all cannot test this source; there is
+nothing to observe with.
+
+**Source 3 — the water supply.** Set the zone's water-supply sensor to `on`,
+remembering that `on` means the water is **gone**. This one is not a leak
+and the leak entities correctly do not move.
+
+**What should happen, in order:**
+
+1. **Nothing, for the whole window.** This is the single most common reason
+   to conclude the feature is broken. At the defaults that is five minutes of
+   silence for a leak and three for the supply.
+2. Then, for a leak: a high-priority **notification** to your configured
+   targets; a **Repairs issue** (Settings → Devices & services → Repairs)
+   naming the zone and which evidence it is citing; the zone's **leak entity**
+   turns `on`; the **card row** shows its leak badge. A reminder repeats every
+   6 hours (default) until it clears.
+3. For the supply: notification and Repairs notice, and no leak anywhere.
+   The interesting outcome is the **refused start** — call `run_zone` on that
+   zone, or press play on its card row, and the run is skipped with the
+   outcome `no_water_supply`. Manual runs are deliberately not exempt: asking
+   by hand does not conjure water into the pipe. (With *start without water*
+   switched off, the notice still arrives and only the refusal is gone.)
+
+**Clearing, and what it looks like.** Set the leak sensor back to `off` and
+the source withdraws immediately; drop the flow back to zero, or close the
+tap, and it withdraws on the next meter sample — a *measured* zero is what
+withdraws it, which is also why post-cycle drainage never leaves an alarm
+standing. When the last source withdraws you get a "cleared" notification,
+the Repairs issue disappears, the entity returns to `off` and the badge
+clears. Under `close_and_block` the message also tells you whether cycles
+are actually allowed again — they are not, if another scope still holds an
+alarm of its own.
+
+**And to see what the component actually thinks**, download diagnostics
+(integration page → three-dot menu → **Download diagnostics**) and read the
+`leaks` section. It is the only window into any of this, because none of it
+is written to disk: per scope it reports whether a source is configured,
+whether a state has been established, how many observable seconds have been
+earned against the confirmation window, whether the scope can observe right
+now, whether it is holding evidence it cannot resolve, whether it has
+latched — and which meters report for it, which is the only way to confirm
+from outside that a shared line meter really is routed to the system scope.
+
 ## 8. Troubleshooting
 
 - **A cycle didn't run and nobody told you** → the daily sentinel (default

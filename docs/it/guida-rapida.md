@@ -115,5 +115,9 @@ lasciato esito.
   partire a vuoto (dopo una finestra di conferma), e una valvola che si
   chiude da sola per mancanza di pressione non fa più abortire la sessione
   come intervento manuale.
+- **Provala apposta una volta**, prima di averne bisogno: un impianto
+  configurato bene che tace è identico a uno configurato male che tace, e un
+  falso allarme a impianto fermo non costa nulla. La ricetta, con i tempi e
+  come si rientra, è in [istruzioni.md](istruzioni.md) §8.
 
 Istruzioni complete: [istruzioni.md](istruzioni.md).

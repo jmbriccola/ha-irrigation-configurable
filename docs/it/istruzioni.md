@@ -463,6 +463,100 @@ Due limiti onesti, da conoscere prima di contarci:
   Senza quel sensore non c'è modo di distinguere il firmware da una mano
   sull'interruttore, quindi resta il comportamento di prima.
 
+### Provocala apposta, prima di averne bisogno
+
+Niente di tutto questo si dimostra da solo. L'allarme vive in memoria,
+l'entità non dice nulla finché non ha osservato abbastanza a lungo, e un
+impianto configurato bene che tace è identico a uno configurato male che
+tace. Provalo apposta, una volta, in un giorno in cui non c'è niente che non
+va.
+
+**Un falso allarme non costa nulla.** L'azione predefinita richiude la master
+e la valvola implicata, e a impianto fermo sono già chiuse entrambe:
+richiudere una valvola chiusa non fa assolutamente niente e dalla 3.4.0 non
+lascia nemmeno una traccia nel registro dei comandi. Non si irriga nulla, non
+si ferma nulla, nessuna valvola si muove. L'unica azione con un costo da
+valutare è *blocca i nuovi cicli*, e solo perché rifiuta le partenze finché
+non togli l'allarme.
+
+**Prima accorcia l'attesa.** ⚙️ Impostazioni → *Avanzate: valvole e
+concorrenza* → **conferma della perdita**, mettila a 60 secondi e salva. La
+finestra della mancanza d'acqua qui accanto può andare a 30. **Rimettile
+com'erano dopo**: 300 s e 180 s sono i valori di default ed è ciò che impedisce
+a un sensore ballerino di gridare alla perdita. Abbassarle durante una prova
+non toglie nulla di acquisito: un ambito che si è già assestato resta
+assestato.
+
+Due delle tre origini hanno una condizione fisica che non puoi creare in
+sicurezza, quindi la via onesta è **Strumenti per sviluppatori → Stati →
+scegli l'entità → Imposta stato**. Un avvertimento che conta: *il dispositivo
+vero sovrascrive il tuo valore alla sua prossima segnalazione.* Un sensore a
+batteria che parla solo quando cambia qualcosa può restare zitto per ore e
+lasciar correre la prova; un flussometro che segnala ogni pochi secondi ti
+sovrascrive quasi subito, ed è il motivo per cui l'origine da flusso conviene
+provarla con acqua vera. **Lascia gli attributi esattamente come li trovi**:
+un flussometro senza `unit_of_measurement` non registra niente, e la prova
+fallirebbe per il motivo sbagliato.
+
+**Origine 1 — il sensore di perdita della valvola.** Metti a `on` il sensore
+di perdita della zona mentre la sua valvola è chiusa (lo è, se non si sta
+irrigando). Il conteggio parte dal più tardo fra la tua modifica e l'ultima
+volta che quella valvola ha segnalato di essere chiusa: in pratica, da adesso.
+
+**Origine 2 — acqua misurata con tutto chiuso.** La prova onesta è con acqua
+vera: apri un rubinetto a mano alimentato dalla linea con il flussometro
+mentre non si sta irrigando. Per il componente quella *è* una perdita, ed è
+esattamente il punto. In alternativa porta il flussometro a un valore sopra
+la soglia di perdita (default 0,5 L/min) e lascialo lì. Il flussometro viene
+campionato ogni 30 secondi e la finestra conta i secondi **misurati**, quindi
+al default servono una decina di campioni — e un flussometro che smette di
+segnalare mette in pausa quel conteggio invece di azzerarlo. Una zona senza
+flussometro non può provare questa origine: non c'è niente con cui osservare.
+
+**Origine 3 — la mancanza d'acqua.** Metti a `on` il sensore di mancanza
+d'acqua della zona, ricordando che `on` significa che l'acqua **non c'è**.
+Questa non è una perdita, e le entità di perdita giustamente non si muovono.
+
+**Cosa deve succedere, nell'ordine:**
+
+1. **Niente, per tutta la finestra.** È il motivo numero uno per concludere
+   che la funzione è rotta. Ai valori di default sono cinque minuti di
+   silenzio per una perdita e tre per la mancanza d'acqua.
+2. Poi, per una perdita: una **notifica** ad alta priorità ai destinatari che
+   hai configurato; una **segnalazione in Riparazioni** (Impostazioni →
+   Dispositivi e servizi → Riparazioni) che nomina la zona e la prova che sta
+   citando; l'**entità di perdita** della zona che passa a `on`; il badge
+   nella **riga della card**. Un promemoria si ripete ogni 6 ore (default)
+   finché non rientra.
+3. Per la mancanza d'acqua: notifica e segnalazione in Riparazioni, e nessuna
+   perdita da nessuna parte. L'esito interessante è l'**avvio rifiutato**:
+   chiama `run_zone` su quella zona, o premi play sulla sua riga nella card, e
+   il ciclo viene saltato con esito `no_water_supply`. Gli avvii manuali non
+   sono esentati, deliberatamente: chiedere a mano non fa comparire l'acqua
+   nel tubo. (Con *parti anche senza acqua* attivo, la segnalazione arriva
+   comunque e sparisce solo il rifiuto.)
+
+**Come si rientra, e cosa si vede.** Rimetti a `off` il sensore di perdita e
+l'origine si ritira subito; riporta il flusso a zero, o chiudi il rubinetto, e
+si ritira al campione successivo del flussometro — è uno zero *misurato* a
+ritirarla, ed è anche il motivo per cui il drenaggio dopo un ciclo non lascia
+mai un allarme in piedi. Quando si ritira l'ultima origine arrivano una
+notifica di rientro, la sparizione della segnalazione in Riparazioni,
+l'entità che torna a `off` e il badge che si spegne. Con *blocca i nuovi
+cicli* il messaggio dice anche se i cicli sono davvero di nuovo permessi: non
+lo sono, se un altro ambito ha ancora un allarme suo.
+
+**E per vedere cosa pensa davvero il componente**, scarica la diagnostica
+(pagina dell'integrazione → menu a tre puntini → **Scarica diagnostica**) e
+leggi la sezione `leaks`. È l'unica finestra su tutto questo, perché niente
+di ciò viene scritto su disco: per ogni ambito dice se un'origine è
+configurata, se uno stato è stato stabilito, quanti secondi osservabili sono
+stati accumulati rispetto alla finestra di conferma, se l'ambito può
+osservare adesso, se sta trattenendo una prova che non riesce a risolvere, se
+si è assestato — e quali flussometri riportano per lui, che è l'unico modo di
+confermare dall'esterno che un flussometro di linea condiviso finisce davvero
+sull'ambito dell'impianto.
+
 ## 9. Risoluzione dei problemi
 
 - **Un ciclo non è partito e nessuno ti ha avvisato** → la sentinella

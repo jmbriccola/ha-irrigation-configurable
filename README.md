@@ -326,6 +326,13 @@ If you have both a line meter and per-zone meters, one leak turns on two of
 these entities (see the matrix above) — either trigger on a single scope, or
 keep the action idempotent, which closing a valve already is.
 
+None of this proves itself, and a correctly configured system that is quiet
+looks exactly like a misconfigured one that is quiet — so trip each source on
+purpose once, before you need it. A false trip is free on an idle system.
+[INSTRUCTIONS.md](INSTRUCTIONS.md) §7 has the recipe, the timings and how to
+clear it; the diagnostics download's `leaks` section is the only window into
+state that is otherwise memory-only.
+
 ## Entities & services
 
 One **hub device** (water budget, skip threshold, weighted temperature,
