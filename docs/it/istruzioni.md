@@ -669,7 +669,7 @@ stessa dichiara se ha dovuto tagliare.
 Entrambi rifiutano un intervallo con **Dal** successivo ad **Al** anziché
 scambiarli in silenzio, e riportano a oggi una data futura in **Al**. Lo
 storico delle esecuzioni riparte da zero con questa versione: il registro
-precedente teneva solo tre giorni di esiti come stringhe nude e senza motivo,
+precedente teneva solo quattro giorni di esiti come stringhe nude e senza motivo,
 non abbastanza per ricostruire nulla di onesto.
 
 ## 10. Risoluzione dei problemi

@@ -718,6 +718,7 @@ unattributed water beside it:
   "end": "2026-08-16",
   "retention_days": 730,
   "oldest_available": "2024-08-17",
+  "oldest_recorded": "2026-01-05",
   "truncated_by_retention": false,
   "unit": "L",
   "zones": [
@@ -746,7 +747,19 @@ instead of `est` (see statement 2 below). `unattributed` is present only when
 `include_unattributed` is true (the default) — omitted, not an empty object,
 when the caller asked it off. `zones` is sorted by the same order used
 elsewhere in this contract: configured zones by `order` then name, zones no
-longer configured last, by id.
+longer configured last, by id. `total_l` per zone is the sum of the *returned*
+range, not the zone's all-time cumulative — that figure is
+`sensor.<zone>_acqua_totale`, and a card printing this one as "total water
+used" beside that sensor's value would be showing two different numbers under
+one label. `days[].est` mirrors `zone_water_total`'s own `estimated`
+attribute at day granularity: `true` when any of that day's litres came from
+the nominal-flow estimate rather than a meter reading, so a card can avoid
+drawing an estimated day as if it were measured.
+
+A 730-day, 40-zone `get_water_history` response is on the order of 29,200 day
+objects and roughly 1.87 MB of JSON over the websocket — a card should
+request the window it is actually about to draw rather than defaulting to
+everything.
 
 `get_run_history` — every outcome recorded in the range, skips and their
 reasons included:
@@ -784,9 +797,23 @@ and the same order the log itself is kept in. `oldest_kept` is the `at` of
 the log's oldest surviving entry, an ISO instant, or `null` for a log that
 has recorded nothing yet. A skip, an interruption or a cancellation carries
 `reason_key`; `duration_min` and `volume_l` are `null` on any run that never
-measured them, a completed run included when no meter was usable.
+measured them, a completed run included when no meter was usable. `count` is
+the length of `runs` **after** every filter and after `limit` — not the
+pre-limit match count, so a card printing "showing 500 of {count}" is
+describing the list it is holding, not a bigger number behind it. `scheduled`
+distinguishes a program firing on its own trigger from a manual *Irriga ora*
+press; a card computing "this program has not run for eleven days" must
+filter to `scheduled: true`, or three manual presses reset a count they
+should not touch. `partial` marks a run that stopped before its planned
+duration and, like `reason_key` / `duration_min` / `volume_l`, is normalised
+to a concrete value in the response (`false`) rather than left absent.
+`program_name` is nullable despite the example above showing a string: the
+handler reads it with `.get("program_name")`, so a run whose program has
+since been renamed away or removed reaches the card as `null` — the same
+"denormalised at write time" reasoning as `zone_name` on a removed zone's
+runs (statement 4), applied to the program instead of the zone.
 
-Five statements a card author must not have to infer:
+Six statements a card author must not have to infer:
 
 1. Both windows default to the last 30 inclusive local days, both clamp a
    future `end_date` to today, both refuse a backwards range with
@@ -799,13 +826,39 @@ Five statements a card author must not have to infer:
 3. `unattributed` is a sibling of `zones` and is **never** part of their
    sum. `closed_l` on its days is the subset measured with every managed
    valve shut — the only figure leak detection reads.
-4. A zone that is no longer configured is returned with `zone_name: null`
-   and sorts last. Its water and its runs stay on the books; nothing is
-   deleted when a zone is removed.
+4. A zone that is no longer configured keeps both its water and its runs —
+   nothing is deleted when a zone is removed — but the two report its name
+   differently, and a card must not treat them the same way. In
+   `get_water_history` it is returned with `zone_name: null` and sorts last;
+   `zone_name: null` is a usable signal there for "this zone no longer
+   exists." In `get_run_history` it is **not**: `build_entry` requires a
+   non-optional `zone_name: str`, so every run carries the name its zone had
+   at the moment it ran — the more honest reading, since a later zone reusing
+   the same id, or none at all, should not rewrite what already happened. A
+   card that filters `get_run_history` on `zone_name === null` to find
+   removed-zone runs finds nothing, ever.
 5. `truncated_by_retention` means the caller asked for more than the
    component ever keeps; `truncated_by_cap` means this installation
    produces more runs than the log holds at once. They are different
    sentences and a card should not merge them.
+6. Both services distinguish *unrecorded* from *absent*, and only one field
+   on each says so. On `get_run_history`, a window starting before
+   `oldest_kept` on a log that has never hit the cap returns zero runs with
+   `truncated_by_retention`, `truncated_by_cap` and `truncated_by_limit` all
+   `false` — correctly, by design: the cap genuinely has not bitten. Nothing
+   but `oldest_kept` tells "nothing ran in that window" apart from "the log
+   did not exist yet," and **every 3.5.0 installation is in that second state
+   for its first month**, because the log starts empty on purpose. On
+   `get_water_history` the equivalent trap is `oldest_available`, which is
+   the retention floor (`today − 729`), never the oldest day actually holding
+   data — a three-month-old installation asking for the full 730 days gets
+   dense zeros for the ~630 days before it existed, and those zeros are
+   indistinguishable from statement 2's "fully observed, no water passed"
+   without a second field. `oldest_recorded` is that second field: the oldest
+   day the water history actually holds anything for, or `null` when it holds
+   nothing. On both services, a card must compare its `start` against
+   `oldest_kept` / `oldest_recorded` and grey out the part of the range that
+   precedes it, rather than drawing it as either data or silence.
 
 ## Events
 
