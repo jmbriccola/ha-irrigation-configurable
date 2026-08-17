@@ -174,6 +174,8 @@ export interface CycleCurve {
 export interface CalendarInfo {
   mode: "weekdays" | "interval" | "parity";
   days?: number[];
+  /** Present only in `interval` mode — `to_config` emits the active mode's keys only. */
+  interval_days?: number;
   parity?: "odd" | "even";
 }
 
@@ -194,6 +196,12 @@ export interface CycleInfo {
   intensity_pct?: number;
   /** Per-weekday override of `intensity_pct`, keyed by weekday-as-string. */
   day_intensity_pct?: Record<string, number>;
+  /**
+   * The cadence marker: the last day this program COMPLETED a scheduled run,
+   * ISO date or null. Gates `interval` mode only, and is what turns "every 3
+   * days" from half an answer into a checkable one.
+   */
+  last_completed?: string | null;
 }
 
 export interface QueueItem {
