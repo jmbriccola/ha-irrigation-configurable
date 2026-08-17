@@ -268,6 +268,16 @@ class ZoneStateSensor(MaestroZoneEntity, SensorEntity):
             "enabled": self._runtime.state.cycle_enabled(self._zone_id, cycle.cycle_id),
             "trigger": _trigger_dict(cycle.trigger),
             "calendar": cycle.calendar.to_config(),
+            # The cadence marker, per zone AND program: a shared one let one
+            # program consume another's cadence (the 1.3.3 defect). It gates
+            # INTERVAL mode only, but the card renders it beside the interval
+            # because "every 3 days" is half an answer without the date the
+            # count restarted.
+            "last_completed": (
+                marker.isoformat()
+                if (marker := self._runtime.state.last_completed(self._zone_id, cycle.cycle_id))
+                else None
+            ),
             "season_months": sorted(cycle.season_months) if cycle.season_months else None,
             "soak_max_run_min": cycle.soak_max_run_min,
             "soak_pause_min": cycle.soak_pause_min or None,

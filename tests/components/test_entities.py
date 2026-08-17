@@ -4,7 +4,7 @@ Entities are located exactly the way the card does it: by their
 ``maestro_role`` (and ``zone_id``) attributes, never by entity id.
 """
 
-from datetime import timedelta
+from datetime import date, timedelta
 from typing import Any
 
 import pytest
@@ -1267,3 +1267,36 @@ async def test_meter_entity_is_none_when_no_meter_resolves(
 
     state = role_state(hass, "zone_water_total", zone_id=runtime.zone_ids[0])
     assert state.attributes["meter_entity"] is None
+
+
+async def test_zone_state_publishes_the_cadence_marker_per_program(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    """"Every 3 days" is half an answer without the date the count restarted.
+
+    The marker gates INTERVAL mode only, and it is keyed per zone AND program --
+    a shared one let a program consume another's cadence, which is the 1.3.3
+    defect. The card renders it as "ultimo completato il ..." beside the
+    interval, so a cadence counted from an unexpected date becomes visible
+    instead of being inferred from a zone that has not watered in nine days.
+    """
+    freezer.move_to(START)
+    park = MockValvePark(hass)
+    park.add("valve.pots")
+    mock_weather(hass)
+    entry = await setup_hub(hass, [zone_data("Pots", "valve.pots")])
+    runtime = entry.runtime_data
+    zone_id = runtime.zone_ids[0]
+    cycle_id = runtime.zones[zone_id].config.cycles[0].cycle_id
+
+    before = role_state(hass, "zone_state", zone_id)
+    assert before is not None
+    assert before.attributes["cycles"][0]["last_completed"] is None
+
+    runtime.state.set_last_completed(zone_id, cycle_id, date(2026, 7, 14))
+    runtime.dispatch_update()
+    await hass.async_block_till_done()
+
+    after = role_state(hass, "zone_state", zone_id)
+    assert after is not None
+    assert after.attributes["cycles"][0]["last_completed"] == "2026-07-14"
