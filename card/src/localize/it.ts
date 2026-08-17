@@ -441,4 +441,24 @@ export const it: Record<keyof typeof en, string> = {
   "program_editor.volume_safety_timeout": "Timeout di sicurezza volumetrico",
   "program_editor.volume_safety_timeout_hint": "Minuti dopo i quali una corsa a volume si ferma anche se il flussometro non ha raggiunto il target.",
   "settings.advanced_note": "Parametri avanzati (motore, sicurezza, notifiche) → Impostazioni",
+
+  // Calendario del programma, in parole. Diagnostico #5 del brief: "lun e
+  // gio" e "ogni 3 giorni con ritentativo" sono comportamenti molto diversi
+  // e si distinguevano solo leggendo il JSON. I nomi dei giorni stanno qui e
+  // non vengono da toLocaleDateString, così la lingua della card vince su
+  // quella del browser.
+  "weekday.0": "lun",
+  "weekday.1": "mar",
+  "weekday.2": "mer",
+  "weekday.3": "gio",
+  "weekday.4": "ven",
+  "weekday.5": "sab",
+  "weekday.6": "dom",
+  "list.and": "e",
+  "calendar.every_day": "ogni giorno",
+  "calendar.interval": "ogni {n} giorni",
+  "calendar.parity_odd": "giorni dispari",
+  "calendar.parity_even": "giorni pari",
+  "calendar.last_completed": "ultimo completato il {date}",
+  "calendar.never_completed": "mai completato",
 };
