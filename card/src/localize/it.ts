@@ -461,4 +461,15 @@ export const it: Record<keyof typeof en, string> = {
   "calendar.parity_even": "giorni pari",
   "calendar.last_completed": "ultimo completato il {date}",
   "calendar.never_completed": "mai completato",
+
+  // Grafico dello storico dei consumi. I tre marcatori portano il significato
+  // nella FORMA (pieno, tratteggiato, tacca sulla base) e non nel solo colore:
+  // la card non forza colori, deve funzionare su temi chiari e scuri e deve
+  // restare leggibile a chi non distingue due token del tema.
+  "chart.no_data": "Nessun consumo registrato in questo periodo.",
+  "chart.measured": "misurato",
+  "chart.estimated": "litri stimati",
+  "chart.gap": "flussometro non leggibile",
+  "chart.unrecorded": "non ancora registrato",
+  "chart.aria": "Consumo giornaliero su {days} giorni, {liters} litri in totale",
 };

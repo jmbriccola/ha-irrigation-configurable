@@ -459,4 +459,15 @@ export const en = {
   "calendar.parity_even": "even days",
   "calendar.last_completed": "last completed {date}",
   "calendar.never_completed": "never completed",
+
+  // Consumption history chart. The three marks carry their meaning in SHAPE
+  // (solid, hatched, baseline tick) and not in hue alone: the card may force
+  // no colours, must work on light and dark themes, and must stay readable to
+  // someone who cannot tell two theme tokens apart.
+  "chart.no_data": "No consumption recorded for this period.",
+  "chart.measured": "measured",
+  "chart.estimated": "estimated",
+  "chart.gap": "meter unreadable",
+  "chart.unrecorded": "not recorded yet",
+  "chart.aria": "Daily water use over {days} days, {liters} litres in total",
 } as const;

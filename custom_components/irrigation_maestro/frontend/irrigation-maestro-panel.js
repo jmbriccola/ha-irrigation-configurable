@@ -955,7 +955,36 @@ const ae = {
   "program_editor.soak_pause_hint": "Minutes to wait between runs. Needs a maximum run length to have any effect.",
   "program_editor.volume_safety_timeout": "Volume safety timeout",
   "program_editor.volume_safety_timeout_hint": "Minutes after which a volume-target run stops even if the meter has not reached the target.",
-  "settings.advanced_note": "Advanced parameters (engine, safety, notifications) live in Settings"
+  "settings.advanced_note": "Advanced parameters (engine, safety, notifications) live in Settings",
+  // Program calendar, rendered in words. Diagnostic #5 from the brief: "Mon
+  // and Thu" and "every 3 days with a retry" are very different behaviours
+  // and were distinguishable only by reading the stored JSON. Weekday names
+  // live here rather than coming from toLocaleDateString, so the card's
+  // language wins over the browser's.
+  "weekday.0": "Mon",
+  "weekday.1": "Tue",
+  "weekday.2": "Wed",
+  "weekday.3": "Thu",
+  "weekday.4": "Fri",
+  "weekday.5": "Sat",
+  "weekday.6": "Sun",
+  "list.and": "and",
+  "calendar.every_day": "every day",
+  "calendar.interval": "every {n} days",
+  "calendar.parity_odd": "odd days",
+  "calendar.parity_even": "even days",
+  "calendar.last_completed": "last completed {date}",
+  "calendar.never_completed": "never completed",
+  // Consumption history chart. The three marks carry their meaning in SHAPE
+  // (solid, hatched, baseline tick) and not in hue alone: the card may force
+  // no colours, must work on light and dark themes, and must stay readable to
+  // someone who cannot tell two theme tokens apart.
+  "chart.no_data": "No consumption recorded for this period.",
+  "chart.measured": "measured",
+  "chart.estimated": "estimated",
+  "chart.gap": "meter unreadable",
+  "chart.unrecorded": "not recorded yet",
+  "chart.aria": "Daily water use over {days} days, {liters} litres in total"
 }, ui = {
   // Messaggi a livello di scheda
   "card.name": "Scheda Irrigation Maestro",
@@ -1350,7 +1379,36 @@ const ae = {
   "program_editor.soak_pause_hint": "Minuti di attesa fra una corsa e l'altra. Senza una durata massima per corsa non ha alcun effetto.",
   "program_editor.volume_safety_timeout": "Timeout di sicurezza volumetrico",
   "program_editor.volume_safety_timeout_hint": "Minuti dopo i quali una corsa a volume si ferma anche se il flussometro non ha raggiunto il target.",
-  "settings.advanced_note": "Parametri avanzati (motore, sicurezza, notifiche) → Impostazioni"
+  "settings.advanced_note": "Parametri avanzati (motore, sicurezza, notifiche) → Impostazioni",
+  // Calendario del programma, in parole. Diagnostico #5 del brief: "lun e
+  // gio" e "ogni 3 giorni con ritentativo" sono comportamenti molto diversi
+  // e si distinguevano solo leggendo il JSON. I nomi dei giorni stanno qui e
+  // non vengono da toLocaleDateString, così la lingua della card vince su
+  // quella del browser.
+  "weekday.0": "lun",
+  "weekday.1": "mar",
+  "weekday.2": "mer",
+  "weekday.3": "gio",
+  "weekday.4": "ven",
+  "weekday.5": "sab",
+  "weekday.6": "dom",
+  "list.and": "e",
+  "calendar.every_day": "ogni giorno",
+  "calendar.interval": "ogni {n} giorni",
+  "calendar.parity_odd": "giorni dispari",
+  "calendar.parity_even": "giorni pari",
+  "calendar.last_completed": "ultimo completato il {date}",
+  "calendar.never_completed": "mai completato",
+  // Grafico dello storico dei consumi. I tre marcatori portano il significato
+  // nella FORMA (pieno, tratteggiato, tacca sulla base) e non nel solo colore:
+  // la card non forza colori, deve funzionare su temi chiari e scuri e deve
+  // restare leggibile a chi non distingue due token del tema.
+  "chart.no_data": "Nessun consumo registrato in questo periodo.",
+  "chart.measured": "misurato",
+  "chart.estimated": "litri stimati",
+  "chart.gap": "flussometro non leggibile",
+  "chart.unrecorded": "non ancora registrato",
+  "chart.aria": "Consumo giornaliero su {days} giorni, {liters} litri in totale"
 }, qe = {
   en: ae,
   it: ui

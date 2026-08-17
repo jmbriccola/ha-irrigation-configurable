@@ -253,14 +253,14 @@ let Z = class extends HTMLElement {
   }
 };
 Z.elementStyles = [], Z.shadowRootOptions = { mode: "open" }, Z[ie("elementProperties")] = /* @__PURE__ */ new Map(), Z[ie("finalized")] = /* @__PURE__ */ new Map(), St?.({ ReactiveElement: Z }), (me.reactiveElementVersions ??= []).push("2.1.2");
-const Se = globalThis, Fe = (n) => n, he = Se.trustedTypes, Ue = he ? he.createPolicy("lit-html", { createHTML: (n) => n }) : void 0, tt = "$lit$", N = `lit$${Math.random().toFixed(9).slice(2)}$`, ot = "?" + N, At = `<${ot}>`, H = document, ne = () => H.createComment(""), ae = (n) => n === null || typeof n != "object" && typeof n != "function", Ae = Array.isArray, Ct = (n) => Ae(n) || typeof n?.[Symbol.iterator] == "function", ye = `[ 	
+const Se = globalThis, Fe = (n) => n, he = Se.trustedTypes, Ue = he ? he.createPolicy("lit-html", { createHTML: (n) => n }) : void 0, tt = "$lit$", E = `lit$${Math.random().toFixed(9).slice(2)}$`, ot = "?" + E, At = `<${ot}>`, H = document, ne = () => H.createComment(""), ae = (n) => n === null || typeof n != "object" && typeof n != "function", Ae = Array.isArray, Ct = (n) => Ae(n) || typeof n?.[Symbol.iterator] == "function", ye = `[ 	
 \f\r]`, te = /<(?:(!--|\/[^a-zA-Z])|(\/?[a-zA-Z][^>\s]*)|(\/?$))/g, He = /-->/g, je = />/g, q = RegExp(`>|${ye}(?:([^\\s"'>=/]+)(${ye}*=${ye}*(?:[^ 	
 \f\r"'\`<>=]|("|')|))|$)`, "g"), Be = /'/g, Ve = /"/g, it = /^(?:script|style|textarea|title)$/i, nt = (n) => (e, ...t) => ({ _$litType$: n, strings: e, values: t }), p = nt(1), R = nt(2), G = /* @__PURE__ */ Symbol.for("lit-noChange"), u = /* @__PURE__ */ Symbol.for("lit-nothing"), We = /* @__PURE__ */ new WeakMap(), L = H.createTreeWalker(H, 129);
 function at(n, e) {
   if (!Ae(n) || !n.hasOwnProperty("raw")) throw Error("invalid template strings array");
   return Ue !== void 0 ? Ue.createHTML(e) : e;
 }
-const Et = (n, e) => {
+const Nt = (n, e) => {
   const t = n.length - 1, o = [];
   let i, a = e === 2 ? "<svg>" : e === 3 ? "<math>" : "", s = te;
   for (let l = 0; l < t; l++) {
@@ -268,7 +268,7 @@ const Et = (n, e) => {
     let d, h, _ = -1, m = 0;
     for (; m < r.length && (s.lastIndex = m, h = s.exec(r), h !== null); ) m = s.lastIndex, s === te ? h[1] === "!--" ? s = He : h[1] !== void 0 ? s = je : h[2] !== void 0 ? (it.test(h[2]) && (i = RegExp("</" + h[2], "g")), s = q) : h[3] !== void 0 && (s = q) : s === q ? h[0] === ">" ? (s = i ?? te, _ = -1) : h[1] === void 0 ? _ = -2 : (_ = s.lastIndex - h[2].length, d = h[1], s = h[3] === void 0 ? q : h[3] === '"' ? Ve : Be) : s === Ve || s === Be ? s = q : s === He || s === je ? s = te : (s = q, i = void 0);
     const f = s === q && n[l + 1].startsWith("/>") ? " " : "";
-    a += s === te ? r + At : _ >= 0 ? (o.push(d), r.slice(0, _) + tt + r.slice(_) + N + f) : r + N + (_ === -2 ? l : f);
+    a += s === te ? r + At : _ >= 0 ? (o.push(d), r.slice(0, _) + tt + r.slice(_) + E + f) : r + E + (_ === -2 ? l : f);
   }
   return [at(n, a + (n[t] || "<?>") + (e === 2 ? "</svg>" : e === 3 ? "</math>" : "")), o];
 };
@@ -277,7 +277,7 @@ class se {
     let i;
     this.parts = [];
     let a = 0, s = 0;
-    const l = e.length - 1, r = this.parts, [d, h] = Et(e, t);
+    const l = e.length - 1, r = this.parts, [d, h] = Nt(e, t);
     if (this.el = se.createElement(d, o), L.currentNode = this.el.content, t === 2 || t === 3) {
       const _ = this.el.content.firstChild;
       _.replaceWith(..._.childNodes);
@@ -285,11 +285,11 @@ class se {
     for (; (i = L.nextNode()) !== null && r.length < l; ) {
       if (i.nodeType === 1) {
         if (i.hasAttributes()) for (const _ of i.getAttributeNames()) if (_.endsWith(tt)) {
-          const m = h[s++], f = i.getAttribute(_).split(N), w = /([.?@])?(.*)/.exec(m);
-          r.push({ type: 1, index: a, name: w[2], strings: f, ctor: w[1] === "." ? Nt : w[1] === "?" ? Tt : w[1] === "@" ? Pt : fe }), i.removeAttribute(_);
-        } else _.startsWith(N) && (r.push({ type: 6, index: a }), i.removeAttribute(_));
+          const m = h[s++], f = i.getAttribute(_).split(E), w = /([.?@])?(.*)/.exec(m);
+          r.push({ type: 1, index: a, name: w[2], strings: f, ctor: w[1] === "." ? Et : w[1] === "?" ? Tt : w[1] === "@" ? Pt : fe }), i.removeAttribute(_);
+        } else _.startsWith(E) && (r.push({ type: 6, index: a }), i.removeAttribute(_));
         if (it.test(i.tagName)) {
-          const _ = i.textContent.split(N), m = _.length - 1;
+          const _ = i.textContent.split(E), m = _.length - 1;
           if (m > 0) {
             i.textContent = he ? he.emptyScript : "";
             for (let f = 0; f < m; f++) i.append(_[f], ne()), L.nextNode(), r.push({ type: 2, index: ++a });
@@ -299,7 +299,7 @@ class se {
       } else if (i.nodeType === 8) if (i.data === ot) r.push({ type: 2, index: a });
       else {
         let _ = -1;
-        for (; (_ = i.data.indexOf(N, _ + 1)) !== -1; ) r.push({ type: 7, index: a }), _ += N.length - 1;
+        for (; (_ = i.data.indexOf(E, _ + 1)) !== -1; ) r.push({ type: 7, index: a }), _ += E.length - 1;
       }
       a++;
     }
@@ -427,7 +427,7 @@ class fe {
     e === u ? this.element.removeAttribute(this.name) : this.element.setAttribute(this.name, e ?? "");
   }
 }
-class Nt extends fe {
+class Et extends fe {
   constructor() {
     super(...arguments), this.type = 3;
   }
@@ -666,7 +666,7 @@ function Gt(n) {
 function Qt(n) {
   return v(n.state?.attributes?.adjustment_pct) ?? 100;
 }
-const E = {
+const N = {
   // Card-level messages
   "card.name": "Irrigation Maestro Card",
   "card.description": "Overview and control of the Irrigation Maestro integration: water budget, zones, queue and curves.",
@@ -1064,7 +1064,36 @@ const E = {
   "program_editor.soak_pause_hint": "Minutes to wait between runs. Needs a maximum run length to have any effect.",
   "program_editor.volume_safety_timeout": "Volume safety timeout",
   "program_editor.volume_safety_timeout_hint": "Minutes after which a volume-target run stops even if the meter has not reached the target.",
-  "settings.advanced_note": "Advanced parameters (engine, safety, notifications) live in Settings"
+  "settings.advanced_note": "Advanced parameters (engine, safety, notifications) live in Settings",
+  // Program calendar, rendered in words. Diagnostic #5 from the brief: "Mon
+  // and Thu" and "every 3 days with a retry" are very different behaviours
+  // and were distinguishable only by reading the stored JSON. Weekday names
+  // live here rather than coming from toLocaleDateString, so the card's
+  // language wins over the browser's.
+  "weekday.0": "Mon",
+  "weekday.1": "Tue",
+  "weekday.2": "Wed",
+  "weekday.3": "Thu",
+  "weekday.4": "Fri",
+  "weekday.5": "Sat",
+  "weekday.6": "Sun",
+  "list.and": "and",
+  "calendar.every_day": "every day",
+  "calendar.interval": "every {n} days",
+  "calendar.parity_odd": "odd days",
+  "calendar.parity_even": "even days",
+  "calendar.last_completed": "last completed {date}",
+  "calendar.never_completed": "never completed",
+  // Consumption history chart. The three marks carry their meaning in SHAPE
+  // (solid, hatched, baseline tick) and not in hue alone: the card may force
+  // no colours, must work on light and dark themes, and must stay readable to
+  // someone who cannot tell two theme tokens apart.
+  "chart.no_data": "No consumption recorded for this period.",
+  "chart.measured": "measured",
+  "chart.estimated": "estimated",
+  "chart.gap": "meter unreadable",
+  "chart.unrecorded": "not recorded yet",
+  "chart.aria": "Daily water use over {days} days, {liters} litres in total"
 }, Yt = {
   // Messaggi a livello di scheda
   "card.name": "Scheda Irrigation Maestro",
@@ -1459,9 +1488,38 @@ const E = {
   "program_editor.soak_pause_hint": "Minuti di attesa fra una corsa e l'altra. Senza una durata massima per corsa non ha alcun effetto.",
   "program_editor.volume_safety_timeout": "Timeout di sicurezza volumetrico",
   "program_editor.volume_safety_timeout_hint": "Minuti dopo i quali una corsa a volume si ferma anche se il flussometro non ha raggiunto il target.",
-  "settings.advanced_note": "Parametri avanzati (motore, sicurezza, notifiche) → Impostazioni"
+  "settings.advanced_note": "Parametri avanzati (motore, sicurezza, notifiche) → Impostazioni",
+  // Calendario del programma, in parole. Diagnostico #5 del brief: "lun e
+  // gio" e "ogni 3 giorni con ritentativo" sono comportamenti molto diversi
+  // e si distinguevano solo leggendo il JSON. I nomi dei giorni stanno qui e
+  // non vengono da toLocaleDateString, così la lingua della card vince su
+  // quella del browser.
+  "weekday.0": "lun",
+  "weekday.1": "mar",
+  "weekday.2": "mer",
+  "weekday.3": "gio",
+  "weekday.4": "ven",
+  "weekday.5": "sab",
+  "weekday.6": "dom",
+  "list.and": "e",
+  "calendar.every_day": "ogni giorno",
+  "calendar.interval": "ogni {n} giorni",
+  "calendar.parity_odd": "giorni dispari",
+  "calendar.parity_even": "giorni pari",
+  "calendar.last_completed": "ultimo completato il {date}",
+  "calendar.never_completed": "mai completato",
+  // Grafico dello storico dei consumi. I tre marcatori portano il significato
+  // nella FORMA (pieno, tratteggiato, tacca sulla base) e non nel solo colore:
+  // la card non forza colori, deve funzionare su temi chiari e scuri e deve
+  // restare leggibile a chi non distingue due token del tema.
+  "chart.no_data": "Nessun consumo registrato in questo periodo.",
+  "chart.measured": "misurato",
+  "chart.estimated": "litri stimati",
+  "chart.gap": "flussometro non leggibile",
+  "chart.unrecorded": "non ancora registrato",
+  "chart.aria": "Consumo giornaliero su {days} giorni, {liters} litri in totale"
 }, ge = {
-  en: E,
+  en: N,
   it: Yt
 };
 function ct(n) {
@@ -1475,15 +1533,15 @@ function Kt(n, e) {
   }) : n;
 }
 function c(n, e, t) {
-  const o = ge[n] ?? E;
-  return Kt(o[e] ?? E[e], t);
+  const o = ge[n] ?? N;
+  return Kt(o[e] ?? N[e], t);
 }
 function F(n, e, t) {
-  const o = `${e}.${t}`, i = ge[n] ?? E, a = E;
+  const o = `${e}.${t}`, i = ge[n] ?? N, a = N;
   return i[o] ?? a[o] ?? t;
 }
 function Xt(n, e) {
-  const t = ge[n] ?? E, o = E;
+  const t = ge[n] ?? N, o = N;
   for (const i of ["queue_state", "zone_state", "outcome"]) {
     const a = `${i}.${e}`, s = t[a] ?? o[a];
     if (s !== void 0) return s;
@@ -1749,7 +1807,7 @@ var vo = Object.defineProperty, A = (n, e, t, o) => {
     (s = n[a]) && (i = s(e, t, i) || i);
   return i && vo(e, t, i), i;
 };
-const M = 320, D = 170, C = 34, O = 12, oe = 16, W = 24, Ke = 5, Xe = 40, Je = 2, Ne = class Ne extends S {
+const M = 320, D = 170, C = 34, O = 12, oe = 16, W = 24, Ke = 5, Xe = 40, Je = 2, Ee = class Ee extends S {
   constructor() {
     super(...arguments), this.language = "en", this.zoneHasFlowMeter = !1, this.zoneAdjustmentPct = 100, this._points = [[ao, 15]], this._min = 1, this._max = 120, this._kind = "duration", this._error = null;
   }
@@ -2046,7 +2104,7 @@ const M = 320, D = 170, C = 34, O = 12, oe = 16, W = 24, Ke = 5, Xe = 40, Je = 2
     `;
   }
 };
-Ne.styles = X`
+Ee.styles = X`
     :host {
       display: block;
       border: 1px solid var(--divider-color, rgba(127, 127, 127, 0.25));
@@ -2242,7 +2300,7 @@ Ne.styles = X`
       color: inherit;
     }
   `;
-let x = Ne;
+let x = Ee;
 A([
   b()
 ], x.prototype, "language");
@@ -2930,7 +2988,7 @@ P([
   z()
 ], $.prototype, "_editingCycle");
 J("imc-zone-row", $);
-var $o = Object.defineProperty, Ee = (n, e, t, o) => {
+var $o = Object.defineProperty, Ne = (n, e, t, o) => {
   for (var i = void 0, a = n.length - 1, s; a >= 0; a--)
     (s = n[a]) && (i = s(e, t, i) || i);
   return i && $o(e, t, i), i;
@@ -3014,13 +3072,13 @@ Pe.styles = X`
     }
   `;
 let K = Pe;
-Ee([
+Ne([
   b()
 ], K.prototype, "language");
-Ee([
+Ne([
   b({ type: Boolean })
 ], K.prototype, "paused");
-Ee([
+Ne([
   b({ type: Boolean })
 ], K.prototype, "hasPauseSwitch");
 J("imc-global-controls", K);
@@ -3677,8 +3735,8 @@ J("irrigation-maestro-card-editor", re);
 window.customCards = window.customCards ?? [];
 window.customCards.some((n) => n.type === "irrigation-maestro-card") || window.customCards.push({
   type: "irrigation-maestro-card",
-  name: E["card.name"],
-  description: E["card.description"],
+  name: N["card.name"],
+  description: N["card.description"],
   preview: !0,
   documentationURL: "https://github.com/jmbriccola/ha-irrigation-configurable"
 });
