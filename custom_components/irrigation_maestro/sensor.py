@@ -144,6 +144,19 @@ class HubWeightedTempSensor(MaestroHubEntity, SensorEntity):
             "temp_today_eff": evaluation.today_max_eff,
             "temp_tomorrow": evaluation.tomorrow_max,
             "stale_weather": evaluation.stale_weather,
+            # The CONFIGURED weights, in the order of the five values above.
+            # Deliberately not the effective ones: weighted_temperature
+            # renormalises over the days that are available, redistributing a
+            # missing day's weight rather than counting it as 0 °C. Computing
+            # that here would be a second implementation of a rule that lives
+            # in a frozen engine file -- the defect resolved_meter_entity and
+            # scope_for each exist to have removed. A card must therefore mark
+            # a missing day AS missing instead of presenting its configured
+            # weight as the one that applied.
+            "temp_weights": list(self._runtime.hub.engine_params.temp_weights),
+            # The source behind all of it. Published here so a card does not
+            # have to fetch the whole export_config payload to learn one id.
+            "weather_entity": self._runtime.hub.weather_entity,
         }
 
 
