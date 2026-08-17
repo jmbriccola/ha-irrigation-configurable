@@ -1,4 +1,5 @@
 import { describe, it, expect } from "vitest";
+import budgetMeterSource from "./budget-meter?raw";
 import waterChartSource from "./water-chart?raw";
 
 /**
@@ -25,6 +26,7 @@ import waterChartSource from "./water-chart?raw";
  */
 const NEW_COMPONENTS: [name: string, source: string][] = [
   ["water-chart.ts", waterChartSource],
+  ["budget-meter.ts", budgetMeterSource],
 ];
 
 const NAMED_COLOURS = [

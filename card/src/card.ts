@@ -15,7 +15,6 @@ import {
   asArray,
   asNumber,
   asString,
-  clamp,
   CONFIG_DEFAULTS,
   defineElement,
   isUnavailable,
@@ -27,6 +26,7 @@ import {
   localizeQueueState,
   pickLanguage,
 } from "./localize/localize";
+import "./budget-meter";
 import "./zone-row";
 import "./global-controls";
 
@@ -259,48 +259,23 @@ export class IrrigationMaestroCard extends LitElement {
   private _renderHeader(model: MaestroModel, lang: string): unknown {
     const hub = model.hub;
 
-    // Water budget vs skip threshold meter.
+    // Water budget vs skip threshold. The markup lives in <imc-budget-meter>,
+    // shared with the hub card: two meters for one comparison would diverge,
+    // and the divergence would be invisible because both would look plausible.
     const budget = !isUnavailable(hub.waterBudget)
       ? asNumber(hub.waterBudget?.state)
       : undefined;
     const threshold = !isUnavailable(hub.skipThreshold)
       ? asNumber(hub.skipThreshold?.state)
       : undefined;
-    let meter: unknown = nothing;
-    if (budget !== undefined || threshold !== undefined) {
-      const scale = Math.max(budget ?? 0, threshold ?? 0, 0.001);
-      const fill = clamp((budget ?? 0) / scale, 0, 1);
-      const mark =
-        threshold !== undefined ? clamp(threshold / scale, 0, 1) : undefined;
-      const sufficient =
-        budget !== undefined &&
-        threshold !== undefined &&
-        budget >= threshold;
-      meter = html`
-        <div
-          class="budget"
-          title=${`${localize(lang, "header.water_budget")} / ${localize(lang, "header.skip_threshold")}`}
-        >
-          <span class="budget-label">${localize(lang, "header.water_budget")}</span>
-          <div class="meter">
-            <div
-              class="meter-fill ${sufficient ? "sufficient" : ""}"
-              style="width:${(fill * 100).toFixed(1)}%"
-            ></div>
-            ${mark !== undefined
-              ? html`<div
-                  class="meter-mark"
-                  style="left:${(mark * 100).toFixed(1)}%"
-                ></div>`
-              : nothing}
-          </div>
-          <span class="budget-numbers">
-            ${formatNumber(budget, 2) ?? "—"} /
-            ${formatNumber(threshold, 1) ?? "—"} mm
-          </span>
-        </div>
-      `;
-    }
+    const meter =
+      budget !== undefined || threshold !== undefined
+        ? html`<imc-budget-meter
+            .budget=${budget}
+            .threshold=${threshold}
+            .language=${lang}
+          ></imc-budget-meter>`
+        : nothing;
 
     // Weighted temperature + stale-weather badge.
     const tempEntity = hub.weightedTemp;
@@ -542,51 +517,6 @@ export class IrrigationMaestroCard extends LitElement {
       align-items: center;
       gap: 10px;
       padding: 12px 16px;
-    }
-    .budget {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      flex: 1 1 220px;
-      min-width: 200px;
-    }
-    .budget-label {
-      font-size: 11px;
-      color: var(--secondary-text-color, #727272);
-      white-space: nowrap;
-    }
-    .meter {
-      position: relative;
-      flex: 1;
-      height: 8px;
-      border-radius: 4px;
-      background: var(
-        --secondary-background-color,
-        rgba(127, 127, 127, 0.15)
-      );
-      min-width: 60px;
-    }
-    .meter-fill {
-      height: 100%;
-      border-radius: 4px;
-      background: var(--primary-color, #03a9f4);
-      transition: width 0.3s ease;
-    }
-    .meter-fill.sufficient {
-      background: var(--success-color, #43a047);
-    }
-    .meter-mark {
-      position: absolute;
-      top: -2px;
-      bottom: -2px;
-      width: 2px;
-      background: var(--primary-text-color, #212121);
-      opacity: 0.6;
-    }
-    .budget-numbers {
-      font-size: 12px;
-      font-variant-numeric: tabular-nums;
-      white-space: nowrap;
     }
     .chips {
       display: flex;
