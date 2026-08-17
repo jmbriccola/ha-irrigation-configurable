@@ -1086,6 +1086,43 @@ weekday names and calendar phrasing, which come from the card's dictionary and
 weekdays because the browser is English.
 
 
+## The hub card (`irrigation-maestro-hub-card`)
+
+Session, decision panel and system health. Same bundle, same resource, same
+default-on block policy as the zone card. No `zone` key: there is one hub.
+
+```yaml
+type: custom:irrigation-maestro-hub-card
+title: Impianto     # optional
+blocks:             # session | decision | health | actions; UNSET MEANS ON
+  health: false
+```
+
+**The decision block is the point.** Every number it shows was already
+published; what was missing was the *relation* — a budget of 3.79 mm means
+nothing until it is drawn against a threshold of 4.5 mm. It renders, in the
+order a person reasons: the verdict and its reason, the budget-against-
+threshold meter, the rain history with the forecast credit, and the weighted
+temperature expanded into its five days.
+
+**The weights obey `hub_weighted_temp.temp_weights`' caveat** (see that
+section): a day whose value is `null` is struck through and its weight is
+**not** shown, with a note that it was redistributed. A card that printed the
+configured weight beside a missing day would be a diagnostic screen lying about
+how a decision was made.
+
+**Health refuses three claims.** `hub_leak` unavailable renders as "nothing
+established", never a tick — the hub has no `degraded` list to explain its
+silence and the contract says a card must not present that as healthy. A
+`notification_status` call that fails renders "could not be checked", never
+"fine". And unattributed water is labelled as not being consumption, with
+`closed_l` named as the subset leak detection actually reads.
+
+**Before the first evaluation** every hub sensor publishes `{}` for its
+attributes, so the card branches on an attribute being present rather than on
+the state, and renders "not evaluated yet".
+
+
 ## The sidebar panel (`irrigation-maestro-panel`)
 
 Alongside the dashboard card, the integration registers a **custom sidebar

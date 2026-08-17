@@ -11,6 +11,8 @@ import "./card";
 import "./editor";
 import "./zone-card";
 import "./zone-card-editor";
+import "./hub-card";
+import "./hub-card-editor";
 import { en } from "./localize/en";
 
 const DOCS = "https://github.com/jmbriccola/ha-irrigation-configurable";
@@ -27,6 +29,11 @@ for (const entry of [
     type: "irrigation-maestro-zone-card",
     name: en["zone_card.name"],
     description: en["zone_card.description"],
+  },
+  {
+    type: "irrigation-maestro-hub-card",
+    name: en["hub_card.name"],
+    description: en["hub_card.description"],
   },
 ]) {
   if (!window.customCards.some((card) => card.type === entry.type)) {
