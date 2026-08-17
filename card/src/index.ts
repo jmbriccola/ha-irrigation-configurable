@@ -1,19 +1,35 @@
 /**
  * Entry point: loads the card + editor custom elements and registers
- * the card in the Lovelace card picker.
+ * the cards in the Lovelace card picker.
+ *
+ * Both card types ship in ONE bundle and therefore one Lovelace resource:
+ * `resources.py` registers a single file, and adding a second would mean a
+ * second static path, a second registration and a second thing to keep
+ * cache-busted for no gain.
  */
 import "./card";
 import "./editor";
+import "./zone-card";
+import "./zone-card-editor";
 import { en } from "./localize/en";
 
+const DOCS = "https://github.com/jmbriccola/ha-irrigation-configurable";
+
 window.customCards = window.customCards ?? [];
-if (!window.customCards.some((card) => card.type === "irrigation-maestro-card")) {
-  window.customCards.push({
+
+for (const entry of [
+  {
     type: "irrigation-maestro-card",
     name: en["card.name"],
     description: en["card.description"],
-    preview: true,
-    documentationURL:
-      "https://github.com/jmbriccola/ha-irrigation-configurable",
-  });
+  },
+  {
+    type: "irrigation-maestro-zone-card",
+    name: en["zone_card.name"],
+    description: en["zone_card.description"],
+  },
+]) {
+  if (!window.customCards.some((card) => card.type === entry.type)) {
+    window.customCards.push({ ...entry, preview: true, documentationURL: DOCS });
+  }
 }
