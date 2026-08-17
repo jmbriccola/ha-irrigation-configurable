@@ -753,18 +753,44 @@ class IrrigationRuntime:
             period_start, today
         )
 
-    def _consumption_factor(self) -> tuple[float, bool]:
-        """(duration_factor, suspend_all) from the consumption budget."""
+    def _over_consumption_budget(self) -> bool:
+        """Whether the month's litres have reached the configured budget.
+
+        Short-circuits on an unconfigured budget, so an installation without
+        one pays nothing for this check -- which matters because the next-run
+        verdict calls it on every sensor attribute read, and
+        ``consumption_used_liters`` walks the whole daily history.
+        """
         budget = self.hub.consumption_budget_liters
-        used = self.consumption_used_liters()
-        if budget is None or used < budget:
+        return budget is not None and self.consumption_used_liters() >= budget
+
+    def _consumption_gate(self) -> tuple[float, bool]:
+        """(duration_factor, suspend_all) from the consumption budget, silently.
+
+        The pure half. It exists because the next-run verdict runs inside a
+        sensor attribute read: the notifying version below would dispatch a
+        budget notification because a card was rendered, which is not a moment
+        at which anything about the budget happened. Callers that are *acting*
+        on the budget use ``_consumption_factor``; callers that are only
+        *reporting* it use this. Do not merge them back.
+        """
+        if not self._over_consumption_budget():
             return 1.0, False
-        self._notify_budget_exceeded_once()
         if self.hub.consumption_action == "reduce":
             return self.hub.consumption_reduce_pct / 100, False
         if self.hub.consumption_action == "suspend":
             return 1.0, True
         return 1.0, False
+
+    def _consumption_factor(self) -> tuple[float, bool]:
+        """(duration_factor, suspend_all), notifying once per period when over.
+
+        The session paths use this: crossing the budget while deciding whether
+        to water genuinely is an event.
+        """
+        if self._over_consumption_budget():
+            self._notify_budget_exceeded_once()
+        return self._consumption_gate()
 
     def _notify_budget_exceeded_once(self) -> None:
         used = self.consumption_used_liters()
