@@ -139,3 +139,28 @@ async def test_unattributed_water_stays_out_of_the_budget(
 
     assert runtime.consumption_used_liters() == 0.0
     assert runtime._consumption_factor() == (1.0, False)
+
+
+async def test_the_consumption_gate_reports_without_notifying(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    """The notifying half and the reporting half are different jobs.
+
+    The next-run verdict is computed inside a sensor attribute read, so a gate
+    that notified would dispatch a budget notification because a card was
+    rendered -- a moment at which nothing about the budget happened.
+    """
+    _entry, runtime, _park = await _hub_over_budget(hass, freezer, "suspend")
+    events: list[dict] = []
+    hass.bus.async_listen("irrigation_maestro_consumption_budget", lambda e: events.append(e.data))
+
+    gate = runtime._consumption_gate()
+    await hass.async_block_till_done()
+
+    assert gate == (1.0, True), "an over-budget suspend hub must still report suspend_all"
+    assert events == [], "the gate must not fire the budget event"
+
+    runtime._consumption_factor()
+    await hass.async_block_till_done()
+
+    assert len(events) == 1, "the notifying half must still notify"
