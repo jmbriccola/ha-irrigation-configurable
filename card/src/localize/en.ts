@@ -493,6 +493,8 @@ export const en = {
   // Zone card blocks
   "programs.none": "No programs configured.",
   "programs.minutes": "{n} min today",
+  "programs.never_run": "no run in the last 30 days",
+  "programs.manual": "run by hand",
   "programs.enable": "Enable",
   "programs.disable": "Disable",
   "consumption.today": "Today",
@@ -522,6 +524,7 @@ export const en = {
   "zone_card.description": "One zone in detail: state, next run, programs, curve, hardware and consumption.",
   "zone_card.missing_zone": "This card is set to zone {id}, which no longer exists. Pick another in the card editor.",
   "zone_card.programs": "Programs",
+  "zone_card.curve": "Curve",
   "zone_card.hardware": "Hardware and capabilities",
   "zone_card.consumption": "Consumption",
   "zone_card.remaining": "{n} min left",

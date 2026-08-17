@@ -2,7 +2,9 @@ import { css, html, LitElement, nothing } from "lit";
 import type { TemplateResult } from "lit";
 import { property } from "lit/decorators.js";
 import { calendarText } from "../calendar-text";
-import { localize } from "../localize/localize";
+import { describeTrigger, formatNumber, formatRelative } from "../format";
+import type { RunEntry } from "../run-history";
+import { localize, localizeDynamic } from "../localize/localize";
 import { dayDelivery } from "../schedule-math";
 import { defineElement } from "../types";
 import type { CycleInfo } from "../types";
@@ -25,6 +27,8 @@ export interface ProgramRow {
   /** Delivery minutes for today, adjustment folded in. Null when not derivable. */
   minutes: number | null;
   calendar: string;
+  /** When it starts — a clock time or a sun event with its offset. */
+  start: string;
 }
 
 /**
@@ -48,6 +52,9 @@ export function programRows(
     minutes:
       weightedTemp === undefined ? null : Math.round(dayDelivery(cycle, weekday, adjustmentPct)),
     calendar: calendarText(lang, cycle.calendar, cycle.last_completed),
+    // Absent since 3.7.0 despite being in that spec, and arguably the first
+    // thing anyone wants from a program list.
+    start: describeTrigger(cycle.trigger, lang),
   }));
 }
 
@@ -57,6 +64,15 @@ export class ImcProgramsBlock extends LitElement {
   @property({ type: Number }) adjustmentPct = 100;
   @property() language = "en";
   @property({ type: Boolean }) showControls = true;
+  /**
+   * The latest run per program, from the run log.
+   *
+   * `undefined` means the history has not been fetched (or failed); an empty
+   * map means it was fetched and this zone has no runs in the window. The two
+   * are rendered differently, because "we do not know" and "it has not run"
+   * are different statements.
+   */
+  @property({ attribute: false }) lastRuns?: Map<string, RunEntry>;
 
   static override styles = css`
     :host {
@@ -106,6 +122,15 @@ export class ImcProgramsBlock extends LitElement {
       background: transparent;
       color: var(--primary-text-color);
     }
+    .last-run {
+      font-size: 11px;
+      color: var(--secondary-text-color, #727272);
+      padding: 0 0 4px 8px;
+    }
+    .last-run.muted {
+      font-style: italic;
+      opacity: 0.8;
+    }
     .empty {
       font-size: 12px;
       color: var(--secondary-text-color, #727272);
@@ -122,6 +147,39 @@ export class ImcProgramsBlock extends LitElement {
         composed: true,
       }),
     );
+  }
+
+  /**
+   * How this program's last run went — the answer `zone_last_outcome` cannot
+   * give, because it is per zone and a zone may have several programs.
+   *
+   * A skip is shown as prominently as a completion: a cycle that does not
+   * start leaves no other trace, and those are the ones that get away.
+   */
+  private _lastRun(cycle: CycleInfo): TemplateResult | typeof nothing {
+    if (this.lastRuns === undefined) return nothing;
+    const lang = this.language;
+    const id = cycle.cycle_id ?? "";
+    const run = this.lastRuns.get(id);
+    if (!run) {
+      // Fetched, and this program has not run in the window. Saying so beats
+      // an empty line, which reads as "no data" rather than "no runs".
+      return html`<div class="last-run muted">${localize(lang, "programs.never_run")}</div>`;
+    }
+    const when = formatRelative(run.at, lang, Date.now()) ?? run.at;
+    const figures = [
+      run.durationMin !== null ? `${run.durationMin} min` : null,
+      run.volumeL !== null ? `${formatNumber(run.volumeL, 0)} L` : null,
+    ].filter((part): part is string => part !== null);
+    return html`
+      <div class="last-run">
+        ${when} — ${localizeDynamic(lang, "outcome", run.result)}${run.reasonKey
+          ? `: ${localizeDynamic(lang, "reason", run.reasonKey)}`
+          : ""}${figures.length > 0 ? ` · ${figures.join(" · ")}` : ""}${run.scheduled
+          ? ""
+          : ` · ${localize(lang, "programs.manual")}`}
+      </div>
+    `;
   }
 
   protected override render(): TemplateResult {
@@ -142,7 +200,7 @@ export class ImcProgramsBlock extends LitElement {
         (row) => html`
           <div class="row ${row.cycle.enabled === false ? "off" : ""}">
             <span class="name">${row.cycle.name ?? row.cycle.cycle_id}</span>
-            <span class="meta">${row.calendar}</span>
+            <span class="meta">${row.start ? `${row.start} · ` : ""}${row.calendar}</span>
             <span class="minutes">
               ${row.minutes === null
                 ? "—"
@@ -157,6 +215,7 @@ export class ImcProgramsBlock extends LitElement {
                 </button>`
               : nothing}
           </div>
+          ${this._lastRun(row.cycle)}
         `,
       )}
     `;

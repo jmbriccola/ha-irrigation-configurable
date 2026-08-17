@@ -495,6 +495,8 @@ export const it: Record<keyof typeof en, string> = {
   // Blocchi della card zona
   "programs.none": "Nessun programma configurato.",
   "programs.minutes": "{n} min oggi",
+  "programs.never_run": "nessuna esecuzione negli ultimi 30 giorni",
+  "programs.manual": "avviato a mano",
   "programs.enable": "Attiva",
   "programs.disable": "Disattiva",
   "consumption.today": "Oggi",
@@ -524,6 +526,7 @@ export const it: Record<keyof typeof en, string> = {
   "zone_card.description": "Una zona in dettaglio: stato, prossima irrigazione, programmi, curva, hardware e consumi.",
   "zone_card.missing_zone": "Questa card punta alla zona {id}, che non esiste più. Scegline un'altra nell'editor.",
   "zone_card.programs": "Programmi",
+  "zone_card.curve": "Curva",
   "zone_card.hardware": "Hardware e capacità",
   "zone_card.consumption": "Consumi",
   "zone_card.remaining": "mancano {n} min",

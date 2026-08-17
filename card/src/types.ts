@@ -119,6 +119,7 @@ export type HubRole =
   // zone claimed. Not yet surfaced by the card -- the role is registered
   // here, same as zone_interval/zone_adjustment below, so it counts as a
   // discovery hit ahead of whichever task first renders it.
+  | "hub_water_total"
   | "hub_unattributed_water"
   // The system scope's leak alarm: water on a meter no single zone owns.
   // `unavailable` here is a first-class state meaning "nothing established",

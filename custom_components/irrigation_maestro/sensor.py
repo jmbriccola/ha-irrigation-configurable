@@ -54,6 +54,7 @@ async def async_setup_entry(
     # Always created: it reports "unavailable" until a budget is configured,
     # so enabling the budget later via options needs no reload.
     hub_entities.append(HubConsumptionLeftSensor(runtime))
+    hub_entities.append(HubWaterTotalSensor(runtime))
     hub_entities.append(HubUnattributedWaterSensor(runtime))
     async_add_entities(hub_entities)
 
@@ -274,6 +275,13 @@ class ZoneStateSensor(MaestroZoneEntity, SensorEntity):
             # sensor is unavailable for a disabled zone -- the case where the
             # explanation is the only thing left to say.
             "next_run": runtime.zone_next_run_verdict(runtime.zones[self._zone_id]),
+            # "This zone is watering" and "this valve is open" are different
+            # facts, and the difference is where the hardest bugs here live: a
+            # failed close leaves a valve open with no run in progress. Until
+            # now a card could not show the physical state at all -- nothing
+            # said which entity to watch. A card should render both and say
+            # when they disagree.
+            "valve_entity": config.valve_entity,
         }
         active = runtime.session.active_runs.get(self._zone_id)
         if active is not None:
@@ -625,6 +633,33 @@ class ZoneWaterTotalSensor(MaestroZoneEntity, SensorEntity):
             # water seen", which the litres alone cannot say.
             "last_gap_at": state.zone_last_gap_at(self._zone_id),
         }
+
+
+class HubWaterTotalSensor(MaestroHubEntity, SensorEntity):
+    """Every zone's litres, summed: what the installation has used.
+
+    device_class + state_class are not decoration. They are what puts this into
+    Home Assistant's long-term statistics and its Water dashboard, which is the
+    whole reason it is an entity rather than a figure a card adds up: a number
+    summed inside a card exists only inside that card.
+
+    Unattributed water is excluded, for the same reason ``sum_period`` excludes
+    it -- it is not consumption, and folding a leak in here would make a leak
+    look like irrigation. It has a sensor of its own.
+    """
+
+    _attr_device_class = SensorDeviceClass.WATER
+    _attr_native_unit_of_measurement = UnitOfVolume.LITERS
+    _attr_state_class = SensorStateClass.TOTAL_INCREASING
+    _attr_suggested_display_precision = 1
+
+    def __init__(self, runtime: IrrigationRuntime) -> None:
+        super().__init__(runtime, "hub_water_total")
+
+    @property
+    def native_value(self) -> float:
+        state = self._runtime.state
+        return round(sum(state.zone_water_total(zone) for zone in self._runtime.zone_ids), 3)
 
 
 class HubUnattributedWaterSensor(MaestroHubEntity, SensorEntity):

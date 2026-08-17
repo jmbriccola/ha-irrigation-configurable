@@ -801,6 +801,29 @@ details harvested from it (kept as engine behaviour):
   someone is already editing beat consistency with a card they may not have
   added. `rowLineEnabled` is still the one definition of "unset means on".
 
+- **A service with no consumer, and a block that drew nothing (3.10.0).** The
+  user installed 3.9.0 and called the cards poor. They were right, and the
+  causes were structural: `get_run_history` was built, documented and released
+  in 3.5.0 and then **called by nothing for three releases** while three cards
+  were built; the curve block was in `ZONE_CARD_BLOCKS`, listed by the editor,
+  and never rendered — a checkbox that did nothing, for the brief's own
+  diagnostic #1. `valve_entity` and an installation-wide water total did not
+  exist at all, so two of the three things the user asked for first were
+  unreachable from the published data.
+
+  **The method was the root cause**: the cards were built from the brief's list
+  of blocks rather than from the questions a person asks looking at a
+  dashboard, and then judged against "the tests pass" — which could never
+  answer "does this read at a glance". Build surfaces from questions, and
+  accept that only a person using it can close that loop.
+
+  Two checks now catch the class `wiring.test.ts` cannot see, one level up:
+  every block key must have a render branch (`card/src/block-coverage.test.ts`),
+  and every response service must have a card consumer or be listed as
+  deliberately unused with a reason (`test_services_yaml.py`). Both were proved
+  by reintroducing the original defects. **Invisible work is worse than absent
+  work, because it looks finished.**
+
 ## Progress log
 
 - 2026-07-17: Repo recon (LICENSE only + source YAML). §8 math verified by

@@ -4,6 +4,52 @@ All notable changes to this project are documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/).
 
+## [3.10.0] - 2026-08-17
+
+### The cards answer the questions
+
+After using 3.9.0 the cards were, fairly, called poor — they did not tell you
+much at a glance. Investigating found causes rather than taste, and this
+release closes them.
+
+- **Every program now shows how its last run went.** Not the zone's last run —
+  each program's, with the outcome, the reason, the minutes and the litres:
+  *"ieri 06:30 — saltato: bilancio idrico sufficiente"*. A skip is shown as
+  prominently as a completion, because a cycle that does not start leaves no
+  other trace. A program that has not run in the last thirty days says so
+  rather than showing an empty line.
+- **Programs show their start time**, which was promised in 3.7.0 and never
+  drawn.
+- **The curve is drawn.** The curve block was offered in the card's options
+  from 3.7.0 and rendered nothing — a checkbox that did nothing, for the one
+  view that makes a wrong curve visible at a glance instead of by comparing
+  numbers. It now shows each program's curve with today's value on it, and it
+  is editable, as it always was in the panel.
+- **A new sensor totals the whole installation's water.** It carries the same
+  device and state class as the per-zone sensors, so it appears in Home
+  Assistant's own statistics and Water dashboard — not only inside these cards.
+  Unattributed water stays out of it: it is not consumption.
+- **The zone now publishes which valve is its own**, so a card can show the
+  physical state — open, closed, unavailable — beside the logical one. They are
+  different facts, and where they disagree is where the hardest faults live.
+
+### Why it happened, and what stops it recurring
+
+The cards were built from the brief's list of blocks instead of from the
+questions a person asks looking at a dashboard. So `get_run_history` — built,
+documented and released in 3.5.0 to make skipped cycles visible — was never
+called by anything for three releases, and the curve block shipped as an option
+that drew nothing.
+
+Two checks now make that impossible to repeat quietly: every block a card
+offers in its options must draw something, and every service that returns data
+must either be used by a card or be listed as deliberately unused, with a
+reason. Both were verified by reintroducing the original defects and watching
+them fail.
+
+**Still to come**: a visual pass — icons, hierarchy, colour — which is the other
+half of "at a glance" and needs a look together rather than a guess.
+
 ## [3.9.0] - 2026-08-17
 
 ### The compact card, and the end of the card work
