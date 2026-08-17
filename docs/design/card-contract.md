@@ -995,6 +995,73 @@ conclusions — `valve_sensor` is "the valve's own sensor reports a leak" for
 both readings of a `moisture` sensor, and must never become "water detected
 on the ground", which is false on the reference hardware.
 
+## The zone card (`irrigation-maestro-zone-card`)
+
+The detailed card for **one** zone, shipped in the same bundle and the same
+Lovelace resource as `irrigation-maestro-card` — a second resource would mean a
+second static path and a second thing to keep cache-busted, for nothing.
+
+```yaml
+type: custom:irrigation-maestro-zone-card
+zone: 1b2f3c4d5e6f          # required: the subentry id
+title: Vasi                  # optional, defaults to the zone's name
+blocks:                      # every key optional; UNSET MEANS ON
+  curve: false
+chart_days: 30               # 30 | 90 | 365
+consumption_source: internal # internal | entity
+battery_entity: sensor.vasi_battery
+```
+
+**One card, one zone.** The detailed view is per-zone by nature: rendering N
+would duplicate what the compact card exists to do and would make the height
+unbounded. A card whose zone no longer exists renders one line naming the id
+and never falls back to another zone.
+
+**Eight blocks, all on by default**: `state`, `next_run`, `last_outcome`,
+`programs`, `curve`, `hardware`, `consumption`, `actions`. An unset key means
+*default*, never `false` — the editor writes only what the user set, so a
+config toggled twice returns to exactly what it was.
+
+### What the card degrades to
+
+A block whose data does not exist **disappears**. It never renders
+"unavailable", which is what makes a card feel broken.
+
+| condition | effect |
+|---|---|
+| `capabilities.water_accounting: "unavailable"` | the chart is not drawn — nothing is being recorded and nothing will be |
+| `consumption_source: entity` | the chart is not drawn: the integration's series under someone else's totals would present two accountings as though they agreed |
+| `degraded` contains `flow_unit_unknown` | figures and chart still shown; the hardware block names the unresolved unit, which is what makes an m³/h-read-as-L/min mismatch visible before it becomes a wrong number |
+| `next_run.verdict: "unknown"` | "not evaluated yet", **never** "will not water" |
+| a leak entity absent or unavailable | "nothing established" — never an all-clear, never a fault. Branch on `capabilities.leak_watch`, not on `leak_detection` |
+| `capabilities.*: "candidate_available"` | an invitation, never a warning. One action, adopt |
+| the configured zone is missing | one line naming the id |
+
+### The hardware block adopts; it does not edit
+
+A `candidate_available` capability offers exactly one action: adopt the entity
+`discover_zone_sensors` itself named, which the card sends as a single
+`update_zone` call. It never grows a sensor-picking form.
+
+This is a **deliberate, bounded exception** to the 2.1.0 rule that every
+setting has one editor, and it is recorded as such so a reviewer can overrule
+it. The panel remains the editor for these sensors and the block links there
+for anything beyond adopting a discovered value. The alternative — showing the
+invitation and sending the user away — was considered and rejected as a worse
+answer to "your hardware could do this": it names a capability and then
+declines to enable it. The card never derives candidates by name; the
+contract forbids it and `capabilities.py`'s own tests carry a decoy whose id
+looks right and whose device class is wrong.
+
+### Localizable keys added by the card
+
+`next_run.verdict`'s `would_run` / `blocked` / `unknown`; the chart's
+`measured` / `estimated` / `meter unreadable` / `not recorded yet`; the
+weekday names and calendar phrasing, which come from the card's dictionary and
+**never** from `toLocaleDateString` — an Italian card must not print English
+weekdays because the browser is English.
+
+
 ## The sidebar panel (`irrigation-maestro-panel`)
 
 Alongside the dashboard card, the integration registers a **custom sidebar

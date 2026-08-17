@@ -1272,7 +1272,7 @@ async def test_meter_entity_is_none_when_no_meter_resolves(
 async def test_zone_state_publishes_the_cadence_marker_per_program(
     hass: HomeAssistant, freezer: FrozenDateTimeFactory
 ) -> None:
-    """"Every 3 days" is half an answer without the date the count restarted.
+    """ "Every 3 days" is half an answer without the date the count restarted.
 
     The marker gates INTERVAL mode only, and it is keyed per zone AND program --
     a shared one let a program consume another's cadence, which is the 1.3.3

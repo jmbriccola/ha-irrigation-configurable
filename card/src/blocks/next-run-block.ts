@@ -40,6 +40,22 @@ export function disagreeingPrograms(verdict: NextRunVerdict | undefined): Progra
 }
 
 /**
+ * Which of the three lines to render.
+ *
+ * Extracted and exported because the `undefined` case is the one that matters
+ * and is invisible inside a render method: a zone that published no `next_run`
+ * at all — an older backend, an attribute lost to a partial refresh — must
+ * read as "not evaluated yet", never fall through to "would not water". That
+ * would be asserting a verdict nothing produced, which is the one thing this
+ * whole feature refuses to do.
+ */
+export function todayVerdict(verdict: NextRunVerdict | undefined): Verdict {
+  const raw = verdict?.verdict;
+  if (raw === "would_run" || raw === "blocked") return raw;
+  return "unknown";
+}
+
+/**
  * "2 h fa" — the verdict's age, not its timestamp.
  *
  * An absolute time reads as authority; the point here is the opposite. The
@@ -123,8 +139,8 @@ export class ImcNextRunBlock extends LitElement {
   }
 
   private _today(): TemplateResult {
-    const verdict = this.verdict?.verdict as Verdict | undefined;
-    if (verdict === "unknown" || verdict === undefined) {
+    const verdict = todayVerdict(this.verdict);
+    if (verdict === "unknown") {
       // Not "will not water": no evaluation has run, which is a different
       // statement and the contract requires it be read as one.
       return html`<span class="value muted">${localize(this.language, "next_run.not_evaluated")}</span>`;

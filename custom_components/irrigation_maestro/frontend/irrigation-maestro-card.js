@@ -3981,7 +3981,11 @@ var gn = Object.defineProperty, xe = (i, e, t, o) => {
 function fn(i) {
   return !i || i.verdict !== "blocked" || i.reason_key ? [] : P(i.programs).map((e) => e).filter((e) => e.verdict === "blocked");
 }
-function vn(i, e, t) {
+function vn(i) {
+  const e = i?.verdict;
+  return e === "would_run" || e === "blocked" ? e : "unknown";
+}
+function yn(i, e, t) {
   if (!e) return null;
   const o = Date.parse(e);
   if (Number.isNaN(o)) return null;
@@ -4009,8 +4013,8 @@ const ct = class ct extends x {
     return this.nextRunProgram ? `${t} — ${this.nextRunProgram}` : t;
   }
   _today() {
-    const e = this.verdict?.verdict;
-    if (e === "unknown" || e === void 0)
+    const e = vn(this.verdict);
+    if (e === "unknown")
       return d`<span class="value muted">${s(this.language, "next_run.not_evaluated")}</span>`;
     if (e === "would_run")
       return d`<span class="value">${s(this.language, "next_run.would_run")}</span>`;
@@ -4020,7 +4024,7 @@ const ct = class ct extends x {
     >`;
   }
   render() {
-    const e = fn(this.verdict), t = vn(this.language, this.verdict?.evaluated_at, this.now);
+    const e = fn(this.verdict), t = yn(this.language, this.verdict?.evaluated_at, this.now);
     return d`
       <div class="line">
         <span class="label">${s(this.language, "next_run.next")}</span>
@@ -4098,7 +4102,7 @@ xe([
   m({ attribute: !1 })
 ], j.prototype, "now");
 S("imc-next-run-block", j);
-const yn = [
+const bn = [
   "weekday.0",
   "weekday.1",
   "weekday.2",
@@ -4107,26 +4111,26 @@ const yn = [
   "weekday.5",
   "weekday.6"
 ];
-function bn(i, e) {
-  const t = e.map((n) => yn[n]).filter((n) => n !== void 0).map((n) => s(i, n));
+function xn(i, e) {
+  const t = e.map((n) => bn[n]).filter((n) => n !== void 0).map((n) => s(i, n));
   if (t.length <= 1) return t[0] ?? "";
   const o = t[t.length - 1];
   return `${t.slice(0, -1).join(", ")} ${s(i, "list.and")} ${o}`;
 }
-function xn(i) {
+function wn(i) {
   const e = /^(\d{4})-(\d{2})-(\d{2})$/.exec(i);
   if (!e) return null;
   const [, t, o, n] = e, a = /* @__PURE__ */ new Date(`${t}-${o}-${n}T00:00:00Z`);
   return Number.isNaN(a.getTime()) ? null : `${n}/${o}`;
 }
-function wn(i, e, t) {
+function $n(i, e, t) {
   const o = s(i, "calendar.every_day");
   if (e?.mode === "weekdays") {
     const n = [...new Set(e.days ?? [])].filter((a) => a >= 0 && a <= 6).sort((a, r) => a - r);
-    return n.length === 0 || n.length === 7 ? o : bn(i, n);
+    return n.length === 0 || n.length === 7 ? o : xn(i, n);
   }
   if (e?.mode === "interval") {
-    const n = e.interval_days ?? 1, a = n === 1 ? o : s(i, "calendar.interval", { n }), r = t ? xn(t) : null, c = r ? s(i, "calendar.last_completed", { date: r }) : s(i, "calendar.never_completed");
+    const n = e.interval_days ?? 1, a = n === 1 ? o : s(i, "calendar.interval", { n }), r = t ? wn(t) : null, c = r ? s(i, "calendar.last_completed", { date: r }) : s(i, "calendar.never_completed");
     return `${a} · ${c}`;
   }
   return e?.mode === "parity" ? s(
@@ -4134,26 +4138,26 @@ function wn(i, e, t) {
     e.parity === "even" ? "calendar.parity_even" : "calendar.parity_odd"
   ) : o;
 }
-function $n(i, e) {
+function zn(i, e) {
   return i.day_intensity_pct?.[String(e)] ?? i.intensity_pct ?? 100;
 }
-function zn(i, e, t) {
-  const o = et(i.curve?.points), n = $n(i, e) * t / 100;
+function kn(i, e, t) {
+  const o = et(i.curve?.points), n = zn(i, e) * t / 100;
   return Je(Kt(o, Gt, n, i.curve?.min, i.curve?.max));
 }
-var kn = Object.defineProperty, we = (i, e, t, o) => {
+var Sn = Object.defineProperty, we = (i, e, t, o) => {
   for (var n = void 0, a = i.length - 1, r; a >= 0; a--)
     (r = i[a]) && (n = r(e, t, n) || n);
-  return n && kn(e, t, n), n;
+  return n && Sn(e, t, n), n;
 };
-function Sn(i, e, t, o, n) {
+function An(i, e, t, o, n) {
   return e.map((a) => ({
     cycle: a,
     // Delivery, never the setting: the contract calls this out because the two
     // differ whenever the zone's adjustment is not 100%, and the list is
     // describing what gets watered.
-    minutes: n === void 0 ? null : Math.round(zn(a, t, o)),
-    calendar: wn(i, a.calendar, a.last_completed)
+    minutes: n === void 0 ? null : Math.round(kn(a, t, o)),
+    calendar: $n(i, a.calendar, a.last_completed)
   }));
 }
 const dt = class dt extends x {
@@ -4172,7 +4176,7 @@ const dt = class dt extends x {
   render() {
     if (this.cycles.length === 0)
       return d`<div class="empty">${s(this.language, "programs.none")}</div>`;
-    const e = ((/* @__PURE__ */ new Date()).getDay() + 6) % 7, t = Sn(
+    const e = ((/* @__PURE__ */ new Date()).getDay() + 6) % 7, t = An(
       this.language,
       this.cycles,
       e,
@@ -4270,12 +4274,12 @@ we([
   m({ type: Boolean })
 ], U.prototype, "showControls");
 S("imc-programs-block", U);
-var An = Object.defineProperty, ee = (i, e, t, o) => {
+var Cn = Object.defineProperty, ee = (i, e, t, o) => {
   for (var n = void 0, a = i.length - 1, r; a >= 0; a--)
     (r = i[a]) && (n = r(e, t, n) || n);
-  return n && An(e, t, n), n;
+  return n && Cn(e, t, n), n;
 };
-function Cn(i, e) {
+function Tn(i, e) {
   const t = i ?? {}, o = [];
   for (const n of ["water_accounting", "leak_watch", "leak_detection", "water_supply"]) {
     const a = typeof t[n] == "string" ? t[n] : "unavailable", r = n === "leak_detection" ? "leak_candidate" : "supply_candidate";
@@ -4302,7 +4306,7 @@ const ut = class ut extends x {
     );
   }
   render() {
-    const e = Cn(this.capabilities, this.candidates);
+    const e = Tn(this.capabilities, this.candidates);
     return d`
       ${e.map(
       (t) => d`
@@ -4398,16 +4402,16 @@ ee([
   m()
 ], q.prototype, "language");
 S("imc-hardware-block", q);
-var Tn = Object.defineProperty, eo = (i, e, t, o) => {
+var Pn = Object.defineProperty, eo = (i, e, t, o) => {
   for (var n = void 0, a = i.length - 1, r; a >= 0; a--)
     (r = i[a]) && (n = r(e, t, n) || n);
-  return n && Tn(e, t, n), n;
+  return n && Pn(e, t, n), n;
 };
-const He = 320, Ae = 96, ot = 4, to = 4, Me = 6, Pn = 10, En = 3, De = {
+const He = 320, Ae = 96, ot = 4, to = 4, Me = 6, En = 10, Nn = 3, De = {
   width: (i) => i - ot - to,
-  height: (i) => i - Me - Pn
+  height: (i) => i - Me - En
 };
-function Nn(i, e, t) {
+function Mn(i, e, t) {
   const o = i.days;
   if (o.length === 0) return [];
   const n = De.width(e), a = De.height(t), r = n / o.length, c = Math.max(r - Math.min(1, r * 0.15), r * 0.5), l = Math.max(...o.map((p) => p.l), 0);
@@ -4435,7 +4439,7 @@ const pt = class pt extends x {
     const e = this.series;
     if (!e || e.days.length === 0)
       return d`<div class="empty">${s(this.language, "chart.no_data")}</div>`;
-    const t = Nn(e, He, Ae), o = Me + De.height(Ae), n = t.some((c) => c.est), a = t.some((c) => c.gap), r = t.some((c) => c.unrecorded);
+    const t = Mn(e, He, Ae), o = Me + De.height(Ae), n = t.some((c) => c.est), a = t.some((c) => c.gap), r = t.some((c) => c.unrecorded);
     return d`
       <svg viewBox="0 0 ${He} ${Ae}" role="img"
            aria-label=${s(this.language, "chart.aria", {
@@ -4457,7 +4461,7 @@ const pt = class pt extends x {
               x2=${He - to} y2=${o}></line>
         ${t.filter((c) => c.gap).map(
       (c) => M`<rect class="gap" x=${c.x} y=${o + 1}
-                        width=${c.w} height=${En}></rect>`
+                        width=${c.w} height=${Nn}></rect>`
     )}
       </svg>
       <div class="legend">
@@ -4554,12 +4558,12 @@ eo([
   m()
 ], ve.prototype, "language");
 S("imc-water-chart", ve);
-var Mn = Object.defineProperty, $e = (i, e, t, o) => {
+var Dn = Object.defineProperty, $e = (i, e, t, o) => {
   for (var n = void 0, a = i.length - 1, r; a >= 0; a--)
     (r = i[a]) && (n = r(e, t, n) || n);
-  return n && Mn(e, t, n), n;
+  return n && Dn(e, t, n), n;
 };
-function Dn(i, e) {
+function In(i, e) {
   return i !== "internal" ? !1 : e !== "unavailable";
 }
 const ht = class ht extends x {
@@ -4583,7 +4587,7 @@ const ht = class ht extends x {
         ${this._figure("consumption.total", e?.total)}
         ${e?.estimated ? d`<span class="badge">${s(this.language, "consumption.estimated")}</span>` : u}
       </div>
-      ${Dn(this.source, this.accounting) ? d`<imc-water-chart
+      ${In(this.source, this.accounting) ? d`<imc-water-chart
             .series=${this.series ?? void 0}
             .language=${this.language}
           ></imc-water-chart>` : u}
@@ -4642,10 +4646,10 @@ $e([
   m()
 ], H.prototype, "language");
 S("imc-consumption-block", H);
-var In = Object.defineProperty, ze = (i, e, t, o) => {
+var qn = Object.defineProperty, ze = (i, e, t, o) => {
   for (var n = void 0, a = i.length - 1, r; a >= 0; a--)
     (r = i[a]) && (n = r(e, t, n) || n);
-  return n && In(e, t, n), n;
+  return n && qn(e, t, n), n;
 };
 const ie = "irrigation_maestro", _t = class _t extends x {
   constructor() {
@@ -5016,12 +5020,12 @@ ze([
   $()
 ], B.prototype, "_candidates");
 S("irrigation-maestro-zone-card", B);
-var qn = Object.defineProperty, Fe = (i, e, t, o) => {
+var On = Object.defineProperty, Fe = (i, e, t, o) => {
   for (var n = void 0, a = i.length - 1, r; a >= 0; a--)
     (r = i[a]) && (n = r(e, t, n) || n);
-  return n && qn(e, t, n), n;
+  return n && On(e, t, n), n;
 };
-function On() {
+function Rn() {
   return typeof customElements < "u" && !!customElements.get("ha-selector");
 }
 const mt = class mt extends x {
@@ -5034,7 +5038,7 @@ const mt = class mt extends x {
     );
   }
   render() {
-    return On() ? d`<ha-selector
+    return Rn() ? d`<ha-selector
         .hass=${this.hass}
         .selector=${this.selector}
         .value=${this.value || void 0}
@@ -5073,10 +5077,10 @@ Fe([
   m()
 ], J.prototype, "label");
 S("imc-entity-picker", J);
-var Rn = Object.defineProperty, oo = (i, e, t, o) => {
+var Ln = Object.defineProperty, oo = (i, e, t, o) => {
   for (var n = void 0, a = i.length - 1, r; a >= 0; a--)
     (r = i[a]) && (n = r(e, t, n) || n);
-  return n && Rn(e, t, n), n;
+  return n && Ln(e, t, n), n;
 };
 const gt = class gt extends x {
   setConfig(e) {
@@ -5288,7 +5292,7 @@ oo([
   $()
 ], ye.prototype, "_config");
 S("irrigation-maestro-zone-card-editor", ye);
-const Ln = "https://github.com/jmbriccola/ha-irrigation-configurable";
+const Fn = "https://github.com/jmbriccola/ha-irrigation-configurable";
 window.customCards = window.customCards ?? [];
 for (const i of [
   {
@@ -5302,4 +5306,4 @@ for (const i of [
     description: T["zone_card.description"]
   }
 ])
-  window.customCards.some((e) => e.type === i.type) || window.customCards.push({ ...i, preview: !0, documentationURL: Ln });
+  window.customCards.some((e) => e.type === i.type) || window.customCards.push({ ...i, preview: !0, documentationURL: Fn });
