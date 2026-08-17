@@ -1006,6 +1006,8 @@ const ae = {
   // Zone card blocks
   "programs.none": "No programs configured.",
   "programs.minutes": "{n} min today",
+  "programs.never_run": "no run in the last 30 days",
+  "programs.manual": "run by hand",
   "programs.enable": "Enable",
   "programs.disable": "Disable",
   "consumption.today": "Today",
@@ -1034,6 +1036,7 @@ const ae = {
   "zone_card.description": "One zone in detail: state, next run, programs, curve, hardware and consumption.",
   "zone_card.missing_zone": "This card is set to zone {id}, which no longer exists. Pick another in the card editor.",
   "zone_card.programs": "Programs",
+  "zone_card.curve": "Curve",
   "zone_card.hardware": "Hardware and capabilities",
   "zone_card.consumption": "Consumption",
   "zone_card.remaining": "{n} min left",
@@ -1546,6 +1549,8 @@ const ae = {
   // Blocchi della card zona
   "programs.none": "Nessun programma configurato.",
   "programs.minutes": "{n} min oggi",
+  "programs.never_run": "nessuna esecuzione negli ultimi 30 giorni",
+  "programs.manual": "avviato a mano",
   "programs.enable": "Attiva",
   "programs.disable": "Disattiva",
   "consumption.today": "Oggi",
@@ -1574,6 +1579,7 @@ const ae = {
   "zone_card.description": "Una zona in dettaglio: stato, prossima irrigazione, programmi, curva, hardware e consumi.",
   "zone_card.missing_zone": "Questa card punta alla zona {id}, che non esiste più. Scegline un'altra nell'editor.",
   "zone_card.programs": "Programmi",
+  "zone_card.curve": "Curva",
   "zone_card.hardware": "Hardware e capacità",
   "zone_card.consumption": "Consumi",
   "zone_card.remaining": "mancano {n} min",

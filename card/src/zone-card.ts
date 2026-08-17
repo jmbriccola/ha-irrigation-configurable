@@ -1,7 +1,14 @@
 import { css, html, LitElement, nothing } from "lit";
 import type { PropertyValues, TemplateResult } from "lit";
 import { property, state } from "lit/decorators.js";
-import { discover, leakStatus, readCycles, waterSummary, zoneAdjustmentPct } from "./discovery";
+import {
+  discover,
+  leakStatus,
+  readCycles,
+  waterSummary,
+  zoneAdjustmentPct,
+  zoneHasFlowMeter,
+} from "./discovery";
 import type { ZoneBundle } from "./discovery";
 import { describeLeakAlarm, formatNumber } from "./format";
 import { localize, localizeDynamic, pickLanguage } from "./localize/localize";
@@ -16,10 +23,12 @@ import {
 } from "./types";
 import type { HomeAssistant, ZoneCardBlock, ZoneCardConfig } from "./types";
 import { WaterHistoryCache } from "./water-history";
+import { lastRunPerProgram, RunHistoryCache } from "./run-history";
 import "./blocks/next-run-block";
 import "./blocks/programs-block";
 import "./blocks/hardware-block";
 import "./blocks/consumption-block";
+import "./curve-editor";
 
 /**
  * The detailed card for one zone.
@@ -45,6 +54,7 @@ export class IrrigationMaestroZoneCard extends LitElement {
   @state() private _candidates?: Record<string, string | null>;
 
   private readonly _history = new WaterHistoryCache();
+  private readonly _runs = new RunHistoryCache();
   private _relevantIds: string[] = [];
   private _statesCount = 0;
   private _timer?: number;
@@ -144,6 +154,9 @@ export class IrrigationMaestroZoneCard extends LitElement {
         Date.now(),
         new Date(),
       );
+    }
+    if (this.hass && zone && config && zoneBlockEnabled(config, "programs")) {
+      this._runs.request(this.hass, zone.zoneId, Date.now(), new Date());
     }
     if (this.hass && zone && config && zoneBlockEnabled(config, "hardware")) {
       this._discoverSensors(zone.zoneId);
@@ -339,6 +352,7 @@ export class IrrigationMaestroZoneCard extends LitElement {
     // declares, and reading a meter that reports m3/h while the engine works in
     // L/min is diagnostic #4 -- invisible until someone looks at the litres.
     const meterEntity = asString(zone.zone_water_total?.attributes["meter_entity"]);
+    const runs = this._runs.get(zone.zoneId);
     const degraded = asArray(zone.state?.attributes["degraded"])
       .map((item) => asString(item))
       .filter((item): item is string => item !== undefined);
@@ -376,7 +390,26 @@ export class IrrigationMaestroZoneCard extends LitElement {
                 .adjustmentPct=${zoneAdjustmentPct(zone)}
                 .weightedTemp=${asNumber(model.hub.weightedTemp?.state)}
                 .showControls=${zoneBlockEnabled(config, "actions")}
+                .lastRuns=${runs === null ? undefined : lastRunPerProgram(runs)}
               ></imc-programs-block>
+            </div>`
+          : nothing}
+        ${zoneBlockEnabled(config, "curve")
+          ? html`<div class="block">
+              <div class="block-title">${localize(lang, "zone_card.curve")}</div>
+              ${cycles.length === 0
+                ? html`<div class="message">${localize(lang, "programs.none")}</div>`
+                : cycles.map(
+                    (cycle) => html`
+                      <imc-curve-editor
+                        .cycle=${cycle}
+                        .language=${lang}
+                        .weightedTemp=${asNumber(model.hub.weightedTemp?.state)}
+                        .zoneHasFlowMeter=${zoneHasFlowMeter(zone)}
+                        .zoneAdjustmentPct=${zoneAdjustmentPct(zone)}
+                      ></imc-curve-editor>
+                    `,
+                  )}
             </div>`
           : nothing}
         ${zoneBlockEnabled(config, "hardware")

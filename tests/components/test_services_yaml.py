@@ -9,6 +9,7 @@ declaring it in services.yaml are two distinct places, and a field present in
 only one of them either cannot be picked or cannot be validated.
 """
 
+import re
 from pathlib import Path
 from typing import Any
 
@@ -94,3 +95,52 @@ def test_every_event_list_in_services_yaml_is_complete() -> None:
                 f"completeness check above never sees it"
             )
     assert found >= 3, f"expected at least three event lists, found {found}"
+
+
+def test_every_response_service_reaches_a_surface() -> None:
+    """A service built, documented and called by nothing.
+
+    `get_run_history` shipped in 3.5.0 with its own storage, its own tests and
+    its own section of the card contract -- and sat unused for three releases
+    while three cards were built. Invisible work is worse than absent work,
+    because it looks finished.
+
+    The exemption list is the point: an absence that is DECLARED is a decision,
+    while an absence that is merely true is an oversight nobody can tell apart
+    from one.
+    """
+    root = Path(__file__).parents[2]
+    services_py = (root / "custom_components/irrigation_maestro/services.py").read_text("utf-8")
+    raw = yaml.safe_load(_SERVICES_YAML.read_text(encoding="utf-8"))
+
+    responding = {
+        name
+        for name in raw
+        if re.search(
+            rf"SERVICE_{name.upper()},\s*\n\s*_async_\w+,[\s\S]{{0,240}}?SupportsResponse\.",
+            services_py,
+        )
+    }
+    assert responding, "found no response services -- the pattern stopped matching"
+
+    # Consumed by the panel, which is a separate bundle and a separate surface.
+    panel_only = {"export_config", "add_program", "duplicate_program", "test_notification"}
+    # The full plan is a scripting surface; the cards read the published
+    # attributes instead, which are reactive where a service call is not.
+    deliberately_uncalled = {"evaluate"}
+
+    card_sources = "\n".join(
+        path.read_text("utf-8")
+        for path in (root / "card/src").rglob("*.ts")
+        if not path.name.endswith(".test.ts")
+    )
+    orphaned = sorted(
+        name
+        for name in responding - panel_only - deliberately_uncalled
+        if f'"{name}"' not in card_sources
+    )
+
+    assert not orphaned, (
+        f"{', '.join(orphaned)} is built and documented but no card calls it. "
+        "Wire it, or list it above with a reason."
+    )

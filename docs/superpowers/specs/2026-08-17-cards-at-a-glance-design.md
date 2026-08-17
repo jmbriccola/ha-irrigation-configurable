@@ -196,6 +196,22 @@ Two checks close that:
 
 ---
 
+## Scope split, decided after the backend landed
+
+**The visual pass (§ Question 4's last bullet — icons, hierarchy) is deferred to
+its own round.** Everything else here ships as 3.10.0.
+
+The reason is the same one that produced the poverty this branch is fixing: I
+can measure whether the run log is wired and whether the curve block renders,
+and I cannot measure whether a row reads well at a glance. Shipping more
+rows I cannot judge, on the strength of having judged the last set wrong,
+would repeat the mistake with more code in it. The visual round starts from the
+user describing or showing what a row should look like, instead of from me
+inferring it.
+
+What that leaves in 3.10.0 is the part with a definition of done: the data the
+cards could not reach.
+
 ## Delivery
 
 One branch, one PR, 3.10.0. The PR leads with what was wrong rather than with

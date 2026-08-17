@@ -1407,3 +1407,56 @@ async def test_water_budget_reports_no_reason_when_it_would_water(
     state = role_state(hass, "hub_water_budget")
     assert state is not None
     assert state.attributes["skip_reason"] is None
+
+
+async def test_zone_state_names_the_valve_so_a_card_can_watch_it(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    """ "The zone is watering" and "the valve is open" are different facts.
+
+    The difference is where this integration's hardest bugs live: a failed close
+    leaves a valve open with no run in progress. A card could not show the
+    physical state at all, because nothing published which entity to watch.
+    """
+    freezer.move_to(START)
+    park = MockValvePark(hass)
+    park.add("valve.pots")
+    mock_weather(hass)
+    await setup_hub(hass, [zone_data("Pots", "valve.pots")])
+
+    state = role_state(hass, "zone_state", zone_id=None)
+    assert state is not None
+    assert state.attributes["valve_entity"] == "valve.pots"
+
+
+async def test_hub_publishes_an_installation_wide_water_total(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    """Per-zone totals existed; nothing summed the installation.
+
+    device_class + state_class are not decoration: they are what puts the
+    entity into long-term statistics and the Water dashboard. A figure summed
+    inside a card exists only inside that card.
+    """
+    freezer.move_to(START)
+    park = MockValvePark(hass)
+    park.add("valve.a")
+    park.add("valve.b")
+    mock_weather(hass)
+    entry = await setup_hub(hass, [zone_data("Alpha", "valve.a"), zone_data("Beta", "valve.b")])
+    runtime = entry.runtime_data
+    a, b = runtime.zone_ids
+    today = dt_util.now().date()
+    runtime.state.add_water(a, 120.0, day=today, estimated=False)
+    runtime.state.add_water(b, 80.0, day=today, estimated=False)
+    # Unattributed water is NOT consumption: folding a leak into the total
+    # would make a leak look like irrigation.
+    runtime.state.add_unattributed("__hub__", 500.0, day=today, valves_closed=True)
+    runtime.dispatch_update()
+    await hass.async_block_till_done()
+
+    total = role_state(hass, "hub_water_total")
+    assert total is not None
+    assert float(total.state) == pytest.approx(200.0)
+    assert total.attributes["device_class"] == "water"
+    assert total.attributes["state_class"] == "total_increasing"
