@@ -267,6 +267,38 @@ export interface CardConfig {
   compact?: boolean;
   /** Optional filter: list of zone_ids (subentry ids) to display. */
   zones?: string[];
+  /**
+   * Per-row content. Flat booleans rather than the nested `blocks` object the
+   * zone and hub cards use: this config is published and users have it in
+   * their YAML beside `show_header` and `show_controls`, and consistency with
+   * the file someone is already editing beats consistency with a card they
+   * may not have added. All default true.
+   */
+  show_verdict?: boolean;
+  show_next_run?: boolean;
+  show_last_outcome?: boolean;
+  show_water?: boolean;
+}
+
+/** The per-row toggles, in the order the editor lists them. */
+export const ROW_TOGGLES = [
+  "show_verdict",
+  "show_next_run",
+  "show_last_outcome",
+  "show_water",
+] as const;
+
+export type RowToggle = (typeof ROW_TOGGLES)[number];
+
+/**
+ * Whether a row line renders.
+ *
+ * One definition of "unset means on", as in both other cards — and for the
+ * same reason: two copies would drift, and the way it shows is a checkbox
+ * saying one thing while the row does another.
+ */
+export function rowLineEnabled(config: CardConfig, toggle: RowToggle): boolean {
+  return config[toggle] !== false;
 }
 
 /**
