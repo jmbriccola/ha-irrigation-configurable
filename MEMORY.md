@@ -730,6 +730,37 @@ details harvested from it (kept as engine behaviour):
   a failing CI run: a command that says nothing is not a command that succeeded.
   Use `set -o pipefail`, or check the two separately.
 
+- **The published `temp_weights` are the CONFIGURED weights, never the
+  effective ones (3.8.0).** `weighted_temperature` renormalises over the days
+  that actually arrived — a missing day is redistributed, never counted as
+  0 °C — so on a day with no forecast for tomorrow the five configured weights
+  are not the ones that produced the number. The effective weights are
+  deliberately not published and not computed in the sensor: that would be a
+  second implementation of a rule living in a frozen engine file. The card
+  marks a missing day AS missing and leaves its weight blank. A diagnostic
+  screen lying about how a decision was made is the worst place for a
+  plausible-but-false number, which is why this is written in three places.
+- **One budget meter, extracted rather than copied (3.8.0).** The
+  budget-against-threshold drawing lived in `card.ts`; the hub card needed it.
+  Two meters for one comparison would diverge and the divergence would be
+  invisible, because both would look plausible. `budget >= threshold` is the
+  engine's own comparison (`evaluate_session`), so a meter turning green one
+  drop later would disagree with the decision it exists to explain. The scale is
+  floored at 0.001 rather than the division being guarded: both numbers are
+  legitimately zero at the start of a dry spell, and a meter that blanked there
+  would vanish exactly when the budget is most interesting.
+- **`hub_leak` unavailable is never a tick (3.8.0).** It means the scope has
+  established nothing, and unlike a zone the hub has no `degraded` list to say
+  why. The health block renders "nothing established". Likewise a
+  `notification_status` call that fails renders "could not be checked", never
+  "fine" — claiming the alarms are healthy because we could not ask is the exact
+  failure that screen exists to prevent.
+- **`hub_unattributed_water` gained its first card consumer in 3.8.0** and is
+  now collected by `discovery.ts`. `zone_interval` / `zone_adjustment` remain
+  deliberately uncollected for the original reason: an unmapped role still
+  counts as a discovery hit, it just has nowhere to land until something reads
+  it.
+
 ## Progress log
 
 - 2026-07-17: Repo recon (LICENSE only + source YAML). §8 math verified by

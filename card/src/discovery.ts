@@ -13,6 +13,8 @@ export interface HubBundle {
   weightedTemp?: HassEntity;
   session?: HassEntity;
   consumptionLeft?: HassEntity;
+  /** `hub_unattributed_water`. Its state is the grand total; `closed_l` is the leak-relevant subset. */
+  unattributedWater?: HassEntity;
   /** `hub_leak`. Absent whenever the entity is unavailable — see `leakStatus`. */
   leak?: HassEntity;
   pauseSwitch?: HassEntity;
@@ -56,17 +58,18 @@ export interface MaestroModel {
   entityIds: string[];
 }
 
-// hub_unattributed_water (docs/design/card-contract.md) is a registered
-// role -- see types.ts's HubRole -- but has no card consumer yet, so it is
-// deliberately absent here, same as zone_interval/zone_adjustment below:
-// unmapped roles still count as discovery hits, they just have nowhere to
-// land on the bundle until something reads them.
+// hub_unattributed_water gained its first consumer in 3.8.0 -- the hub card's
+// health block -- and is collected from then on. zone_interval/zone_adjustment
+// below remain deliberately absent for the original reason: unmapped roles
+// still count as discovery hits, they just have nowhere to land on the bundle
+// until something reads them.
 const HUB_ROLE_TO_SLOT: Record<string, keyof HubBundle> = {
   hub_water_budget: "waterBudget",
   hub_skip_threshold: "skipThreshold",
   hub_weighted_temp: "weightedTemp",
   hub_session: "session",
   hub_consumption_left: "consumptionLeft",
+  hub_unattributed_water: "unattributedWater",
   hub_leak: "leak",
   hub_pause: "pauseSwitch",
   hub_evaluate: "evaluateButton",

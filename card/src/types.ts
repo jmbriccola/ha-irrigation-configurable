@@ -322,6 +322,29 @@ export function zoneBlockEnabled(config: ZoneCardConfig, block: ZoneCardBlock): 
   return config.blocks?.[block] !== false;
 }
 
+/** The hub card's blocks. Same default-on policy as the zone card. */
+export const HUB_CARD_BLOCKS = ["session", "decision", "health", "actions"] as const;
+
+export type HubCardBlock = (typeof HUB_CARD_BLOCKS)[number];
+
+export interface HubCardConfig {
+  type: string;
+  title?: string;
+  blocks?: Partial<Record<HubCardBlock, boolean>>;
+}
+
+/**
+ * Whether a hub block renders.
+ *
+ * Deliberately a second function rather than a generic over both card types:
+ * the two block vocabularies are different closed sets, and a shared generic
+ * would accept a zone key here and a hub key there. The RULE is what matters
+ * and it is one line, stated identically in both.
+ */
+export function hubBlockEnabled(config: HubCardConfig, block: HubCardBlock): boolean {
+  return config.blocks?.[block] !== false;
+}
+
 export const CONFIG_DEFAULTS = {
   show_header: true,
   show_queue: true,

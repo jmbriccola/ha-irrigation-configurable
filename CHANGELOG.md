@@ -4,6 +4,40 @@ All notable changes to this project are documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/).
 
+## [3.8.0] - 2026-08-17
+
+### The hub card
+
+- **A new card, `irrigation-maestro-hub-card`: the session, the decision, and
+  whether the system can still tell you things.** Four blocks, each switchable,
+  all on by default.
+- **The decision panel makes the comparison visible.** Every number was already
+  published; what was missing was the relation between them. A water budget of
+  3.79 mm means nothing until you see it drawn against a skip threshold of
+  4.5 mm — that comparison *is* the decision to water, and in numeric form
+  nobody catches it. Beneath it: the rain of today and the three days before,
+  the forecast credit, and the weighted temperature opened up into the five
+  daily maxima that produced it.
+- **The weights are shown, and a missing day is shown as missing.** The engine
+  redistributes the weight of a day it never got a reading for, rather than
+  counting it as 0 °C. So a day with no reading is struck through and its weight
+  is left blank, with a note explaining where it went. Printing the configured
+  weight beside a missing day would be a screen built to explain a decision,
+  lying about how it was made.
+- **"Enabled but silent" is now visible.** The health block reports what the
+  notification settings would actually deliver, naming any event that is on with
+  no recipient and any recipient that no longer exists, and offers a test send
+  from there — because the moment you learn the system might be mute is the
+  moment you want to check. If the check itself fails it says so, rather than
+  reporting that everything is fine.
+- **Three things it refuses to claim.** A system leak sensor that has
+  established nothing reads "nothing established", never a green tick. Weather
+  that is stale is flagged beside its source rather than folded silently into
+  the numbers. Unattributed water is labelled as not being consumption.
+- **One meter, shared.** The budget-against-threshold drawing that the overview
+  card already had now lives in one component used by both, so the two can never
+  drift apart.
+
 ## [3.7.0] - 2026-08-17
 
 ### The zone card
