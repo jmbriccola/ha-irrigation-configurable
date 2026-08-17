@@ -680,6 +680,56 @@ details harvested from it (kept as engine behaviour):
   the retraction visible, because a design whose stated reason is wrong invites
   the next person to reason from the wrong thing.
 
+- **One zone card is one zone (3.7.0).** The detailed view is per-zone by
+  nature: rendering N would duplicate what the compact card exists to do and
+  would make the height unbounded, and every entity-detail card in Home
+  Assistant works this way. A card whose zone was deleted names the id and
+  never falls back to another zone — silently showing the wrong zone's water is
+  worse than showing none. The brief's "choose which zones appear" is a
+  requirement on the compact and hub cards, where a list is the point.
+- **Blocks default ON, and "unset" is never written out (3.7.0).** The
+  acceptance criterion is a dashboard built without assembling anything, so a
+  user who adds the card sees what the zone has and turns off what they do not
+  want; clean degradation removes the rest by itself. `zoneBlockEnabled` is the
+  ONE definition of "unset means on", shared by the card and its editor —
+  two copies would eventually disagree, and the way it would show is a checkbox
+  saying one thing while the card does another. The editor deletes a key rather
+  than writing `true`, so toggling twice returns the config to exactly what it
+  was: a config that gains noise every time it is opened is one the user stops
+  trusting.
+- **The chart carries its meaning in SHAPE, not in hue (3.7.0).** A solid bar,
+  a hatch for estimated litres, a baseline tick for a day the meter could not
+  be read. The card forces no colours and must survive both a theme that maps
+  several tokens to one hue and a reader who cannot tell them apart.
+  `theme-safety.test.ts` enforces the no-forced-colour rule mechanically, which
+  is the one requirement no rendering test can check — and its `var()` stripper
+  counts paren depth, because a fallback legitimately contains parentheses and
+  the naive pattern flagged the fallbacks the rule exists to permit.
+- **The gap mark rides on `gap_s` alone, never on the litres (3.7.0).**
+  Diagnostic #7 is that a day with six hours of unreadable meter must never
+  look like a quiet day — and a day with 40 L and a ten-minute hole is still
+  incompletely observed, so the mark is not conditional on the day being empty.
+- **The hardware block adopts; it does not edit (3.7.0).** A
+  `candidate_available` capability offers exactly one action: adopt the entity
+  `discover_zone_sensors` itself named, sent as a single `update_zone` call. A
+  deliberate, bounded exception to the 2.1.0 one-editor rule, recorded as such
+  so it can be overruled. Showing the invitation and sending the user to the
+  panel was considered and rejected: it names a capability and then declines to
+  enable it. Anything beyond adopting a discovered value stays in the panel.
+- **Never fetch on render (3.7.0).** A Lit render can run many times a second,
+  so the history cache is asked from `updated()` and read from `render()`. A
+  failed attempt ages exactly like a successful one — without that, a card whose
+  hub is down retries on every render forever. `discover_zone_sensors` is called
+  once per zone for the same reason: the answer changes only when hardware does.
+- **The card's weekday names come from its own dictionary (3.7.0).** Never
+  `toLocaleDateString`: an Italian card must not print English weekdays because
+  the browser is English. The same rule that makes the reason keys card-side.
+- **A pipe swallows an exit code (3.7.0, process).** `npm run typecheck 2>&1 |
+  tail -3 && git commit` committed code that did not compile, because `tail`
+  exits 0 whatever `tsc` did. Same shape as a monitor that stays silent through
+  a failing CI run: a command that says nothing is not a command that succeeded.
+  Use `set -o pipefail`, or check the two separately.
+
 ## Progress log
 
 - 2026-07-17: Repo recon (LICENSE only + source YAML). §8 math verified by

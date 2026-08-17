@@ -210,6 +210,8 @@ and the UI (zone attributes + card badges) declares it:
 
 | Feature | Requires | Without it |
 |---|---|---|
+| The zone card's consumption chart | Water accounting active for the zone, and the internal consumption source | The chart is not drawn at all. An "unavailable" chart would be worse than none, and with an external source the integration's series would sit under someone else's totals as though they agreed |
+| The zone card's hardware proposals | `discover_zone_sensors` finding a matching sibling on the valve's own device | The capability is stated as absent rather than hidden: a sensor-shaped badge that would never fire is worse than a plain statement that the sensor is not there |
 | The next-run verdict (`zone_state.next_run`) | One evaluation having run — a session start, or the `evaluate` action | `verdict: "unknown"`, which means *not evaluated yet* and never *will not water*. It resolves by itself at the first evaluation. `evaluated_at` carries the verdict's age thereafter: nothing re-evaluates on a timer, so between sessions it can be hours old |
 | Flow readings in the right scale | A meter that declares a convertible unit, or an explicit unit override | Readings are ignored entirely rather than assumed to be L/min: volume mode and flow anomalies are off for that meter and consumption falls back to nominal flow × minutes, with a Repairs issue naming the sensor |
 | Volume mode (liters target) | Flow meter (zone or line) whose unit can be determined | Cycle runs as a plain duration cycle for its safety-timeout minutes; volume mode not offered in the flow |

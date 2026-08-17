@@ -4,6 +4,47 @@ All notable changes to this project are documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/).
 
+## [3.7.0] - 2026-08-17
+
+### The zone card
+
+- **A new card, `irrigation-maestro-zone-card`: one zone in full.** State and
+  live progress, the next run with today's verdict beside it, the last outcome,
+  the programs with their calendar **in words**, the hardware the zone has and
+  the hardware it could have, the consumption with a daily history chart, and
+  the actions. Eight blocks, each switchable on its own — because nobody with
+  ten zones wants ten full cards — and all on by default, so adding the card
+  shows you what the zone has rather than an empty frame to assemble.
+- **The calendar is written out, not left as JSON.** "lun e gio", "giorni
+  dispari", and for an interval **"ogni 3 giorni · ultimo completato il 14/08"**
+  — because "every 3 days" alone does not let anyone check a cadence: a zone
+  that has not watered in nine days looks the same whether its marker is stale,
+  its runs were skipped, or the count is running from a day nobody expected.
+  Publishing that marker is this release's one backend change.
+- **The consumption chart marks what it does not know.** One bar per day
+  including the zeros, an estimated day hatched rather than merely coloured, a
+  day whose flow meter could not be read marked on the baseline whatever its
+  litres, and the period before this installation was recording drawn as a band
+  rather than as confident zeros. The marks are shapes, not hues: the card
+  forces no colours, works on light and dark themes, and stays readable to
+  someone who cannot tell two theme tokens apart.
+- **Hardware is proposed, never hidden.** A capability your valve offers but
+  that is not set up shows as an invitation with one button — *use it* — which
+  adopts the entity the integration itself discovered. A capability that is
+  genuinely absent is stated as absent, because a sensor-shaped badge that
+  would never fire is worse than a plain sentence. The flow meter's entity and
+  the unit it declares are shown, which is what makes an m³/h read as L/min
+  visible before it becomes a wrong number.
+- **Blocks whose data does not exist disappear** rather than showing
+  "unavailable". A zone with no water accounting has no consumption block; a
+  verdict that has not been computed reads "not evaluated yet" and never "will
+  not water".
+- **Your own meters still work.** The consumption figures can come from your
+  entities instead of the integration's; the chart then steps aside rather than
+  drawing one accounting underneath another.
+- **A visual editor**, and a config that round-trips: it writes only the keys
+  you set, so toggling a block twice leaves your YAML exactly as it was.
+
 ## [3.6.0] - 2026-08-17
 
 ### The next-run verdict
