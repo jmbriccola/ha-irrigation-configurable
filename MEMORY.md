@@ -631,6 +631,55 @@ details harvested from it (kept as engine behaviour):
   cap 1..6 × length 0..6. Declaring an equivalent mutant is what stops the
   next person writing a test for an unreachable state.
 
+- **The next-run verdict is about NOW, and cannot be about a future day
+  (3.6.0).** `zone_next_run` has resolved every projectable gate since 2.0.0 —
+  calendar with its `last_completed` marker, season, suspension, pause,
+  skip-today, the enable switches. The brief that called it "ignores the gates"
+  was three releases out of date. What remained is not a gap in that sensor: the
+  weather skips, the budget against the threshold and the consumption budget
+  exist only in the present, and a component that projected them onto a future
+  day would manufacture the plausible-but-false number this architecture exists
+  to refuse. So `zone_state.next_run` answers *"would this water if it fired
+  right now"*, every surface words it in the present tense, and `evaluated_at`
+  carries its age — which can be hours, because nothing re-evaluates on a timer
+  and the hub's own budget/threshold/temperature sensors are already exactly
+  this fresh.
+- **`unknown` is not `weather_unavailable` (3.6.0).** The first means no
+  evaluation has run at all; the second means one ran and could not reach the
+  weather. A card must render `unknown` as "not evaluated yet", never as "will
+  not water" — the same discipline `zone_leak`'s `unavailable` applies, for the
+  same reason: asserting a verdict on no information is an answer nobody has
+  earned.
+- **The verdict calls the planner; it does not re-derive the decision
+  (3.6.0).** `build_session_plan` is the one place that decides run-or-skip.
+  A second implementation over the same inputs is two answers that drift — the
+  defect already removed twice here, in `resolved_meter_entity` and `scope_for`.
+- **`_consumption_factor` notifies; `_consumption_gate` does not, and they must
+  not be merged back (3.6.0).** The verdict runs inside a sensor attribute read,
+  and the original single function dispatched a budget notification on the way
+  to returning its verdict — so a card refreshing would have fired it. The
+  once-per-period guard bounds that to one wrong notification a month, which is
+  not the same as none. Callers *acting* on the budget take the notifying
+  wrapper; callers *reporting* it take the gate.
+- **The zone-level reason is named only when every program agrees (3.6.0).** A
+  zone whose morning program is blocked by the calendar and whose evening
+  program is blocked by the budget is not "blocked because of the calendar", and
+  a compact card that said so would send the user to the wrong setting. When
+  they disagree the reason is `null` and the card reads the per-program list. A
+  zone with no programs lands there too: blocked, unnamed, because no
+  `SkipReason` describes "there is nothing to run".
+- **A rationale retracted in the open, rather than swapped (3.6.0).** The spec
+  first justified putting the verdict on `zone_state` with the
+  unavailable-attribute trap — Home Assistant publishes no attributes at all
+  while an entity is unavailable. That is true, and **false for this entity**:
+  `ZoneNextRunSensor` never overrides `available`, so with no occurrence it is
+  available and `unknown`, attributes intact. The rule was generalised from the
+  leak binary sensors, which do override it. The narrower true statement is that
+  its `_role_attributes` returns an empty dict then, so it is *silent*, not
+  absent. The location stands on scope, company and reader cost; the spec keeps
+  the retraction visible, because a design whose stated reason is wrong invites
+  the next person to reason from the wrong thing.
+
 ## Progress log
 
 - 2026-07-17: Repo recon (LICENSE only + source YAML). §8 math verified by

@@ -31,7 +31,7 @@ config entry).
 
 | maestro_role        | platform | state | extra attributes |
 |---------------------|----------|-------|------------------|
-| `zone_state`        | sensor   | `idle` \| `queued` \| `watering` \| `soaking` \| `paused` \| `suspended` \| `disabled` | `zone_name`, `order`, `adjustment_pct` (float, 10–300), `degraded` (list of keys, see below), `run_started_at` (ISO, while watering), `run_duration_min` (frozen total), `run_planned_runs` (soak split list), `active_cycle_id`, `suspended_until` (ISO or null), `cycles` (list, see below), `capabilities` (object, see "Zone capabilities" below) |
+| `zone_state`        | sensor   | `idle` \| `queued` \| `watering` \| `soaking` \| `paused` \| `suspended` \| `disabled` | `zone_name`, `order`, `adjustment_pct` (float, 10–300), `degraded` (list of keys, see below), `run_started_at` (ISO, while watering), `run_duration_min` (frozen total), `run_planned_runs` (soak split list), `active_cycle_id`, `suspended_until` (ISO or null), `cycles` (list, see below), `capabilities` (object, see "Zone capabilities" below), `next_run` (object, see "Next-run verdict" below) |
 | `zone_next_run`     | sensor   | ISO timestamp or unavailable | `cycle_id`, `cycle_name` |
 | `zone_last_outcome` | sensor   | `completed` \| `skipped` \| `interrupted` \| `cancelled` \| `none` | `reason_key` (see keys), `finished_at` (ISO), `cycle_id`, `duration_min`, `volume_l` |
 | `zone_water_total`  | sensor   | liters (float), `device_class: water`, `state_class: total_increasing` | `estimated` (bool), `source` (`measured` \| `nominal` \| `mixed` \| `none`), `today_l` (float), `month_l` (float), `meter_entity` (entity id or null), `last_gap_at` (ISO or null) — see "Water accounting sensors" below |
@@ -553,6 +553,77 @@ longer there" looks like from the attributes alone, and is exactly what
 distinguishes it from a zone whose configured sensor is present and
 healthy (`"configured"`, nothing in `degraded`).
 
+### Next-run verdict (`zone_state.next_run`)
+
+**Would this zone water if its programs fired right now, and if not, why.**
+
+```json
+"next_run": {
+  "verdict": "would_run" | "blocked" | "unknown",
+  "reason_key": "budget_sufficient" | null,
+  "evaluated_at": "2026-08-17T05:30:12+00:00" | null,
+  "programs": [{"cycle_id": "a1b2c3d4", "verdict": "blocked", "reason_key": "calendar_not_today"}]
+}
+```
+
+**It is about NOW, and a card must word it in the present tense.** It is not a
+prediction about the instant `zone_next_run` reports, and no surface may present
+it as one. That sensor already resolves every gate that *can* be projected
+forward — calendar (including the interval cadence and its `last_completed`
+marker), season, suspension, pause, skip-today, and the enable switches. What
+this adds is the layer that exists only in the present: the immediate weather
+skips (`precipitation`, `frost_risk`, `cold_day`, `wind`), the water budget
+against the skip threshold (`budget_sufficient`), the consumption budget, and
+`weather_unavailable`. Tomorrow's weather is not knowable, and a card that
+implied otherwise would manufacture exactly the plausible-but-false number this
+architecture exists to refuse.
+
+The pairing a card should render is the two together: *"next: Tue 19/08 06:30 ·
+today it would be skipped — budget sufficient"*. The instant comes from
+`zone_next_run`; it is **deliberately not duplicated here**, because a second
+representation of one fact is a second thing that can drift.
+
+- **`verdict`**
+  - `would_run` — at least one program would water if it fired now. At program
+    level, that program would.
+  - `blocked` — it would not, and `reason_key` says why when it can. The key is
+    a `SkipReason` value, already in the localizable list below; no new
+    vocabulary is coined.
+  - `unknown` — **no evaluation has run yet**, so nothing can be said. Reached
+    at start-up before the first session or `evaluate` call. `reason_key` is
+    `null` and `programs` is empty. **This is not `weather_unavailable`**: that
+    reason means an evaluation ran and could not reach the weather. Render
+    `unknown` as "not evaluated yet", never as "will not water" — the same
+    discipline `zone_leak`'s `unavailable` applies one module over.
+- **`reason_key` at zone level is set only when every program agrees.** When
+  they are blocked for different reasons it is `null` and the card must read
+  `programs[]`. A zone whose morning program is blocked by the calendar and
+  whose evening program is blocked by the budget is not "blocked because of the
+  calendar", and a compact card that said so would send the user to the wrong
+  setting. A zone with **no programs at all** also reports `blocked` with a
+  `null` reason and an empty list: no `SkipReason` describes "there is nothing
+  to run".
+- **`evaluated_at`** is the UTC instant of the evaluation the verdict rests on,
+  or `null` when the verdict is `unknown`. **It can be hours old**: the cached
+  evaluation refreshes when a session starts or `evaluate` is called, and
+  nothing re-evaluates on a timer. This is not new — `hub_water_budget`,
+  `hub_skip_threshold` and `hub_weighted_temp` already publish from the same
+  cache — and a card showing the verdict should show its age beside it.
+  `stale_weather` is **not** copied in here: it lives on `hub_weighted_temp`,
+  read once, rather than as N per-zone copies that can disagree with the hub's.
+
+**Why here and not on `zone_next_run`.** Three reasons, and one that was
+considered and found false. The verdict covers *every* program while
+`zone_next_run` is scoped to the single earliest one; `zone_state` already
+carries the zone's other structured diagnostics (`degraded`, `capabilities`,
+`cycles`); and the compact card reads `zone_state` anyway for the state itself,
+so it costs no second lookup. What is **not** a reason: an unavailable entity
+publishing no attributes. `ZoneNextRunSensor` never overrides `available` — that
+behaviour belongs to the leak binary sensors, and generalising it here was a
+mistake. With no next occurrence it is available and `unknown`; what it loses is
+its *contents*, since its `_role_attributes` returns an empty dict, so it
+carries no `cycle_id` and nothing that could name a reason.
+
 ## Services (domain `irrigation_maestro`)
 
 | service | fields |
@@ -897,6 +968,10 @@ Anomaly-only keys (fired in `anomaly` events, not as run outcomes):
 `flow_out_of_range`, `close_failed`. A restart leaves no per-cycle outcome
 by design — the startup watchdog closes valves and the sentinel flags the
 missing outcome.
+
+`next_run.verdict`'s three values — `would_run`, `blocked`, `unknown` — are
+localizable, and `unknown` must read as "not evaluated yet" rather than as a
+refusal to water.
 
 Zone/session states and degraded keys above are localizable too, as are the
 `capabilities` values (`measured`, `estimated`, `configured`,
