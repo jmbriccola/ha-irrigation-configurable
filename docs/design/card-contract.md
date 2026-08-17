@@ -54,10 +54,20 @@ call the same value `program_id` in their fields, for the user-facing name):
   "trigger": {"kind": "sun", "event": "sunrise", "offset_s": -3600},
   "days": [0, 2, 4],
   "intensity_pct": 100.0, "day_intensity_pct": {"0": 150.0},
+  "last_completed": "2026-08-14",
   "curve": {"points": [[10, 5], [25, 15], [35, 30]], "min": 10, "max": 55,
              "kind": "duration"}}]
 ```
 
+- `last_completed` (ISO date or `null`): the cadence marker — the last day this
+  program **completed** a scheduled run. It gates `interval` mode only, and it
+  is keyed per zone **and** program: a shared marker once let one program
+  consume another's cadence. A card renders it beside the interval, because
+  "every 3 days" is half an answer without the date the count restarted — a
+  zone that has not watered in nine days looks identical whether its marker is
+  stale, its runs were skipped, or the interval is counted from a day the user
+  did not expect. `null` means the program has never completed a scheduled run;
+  a manual run deliberately does not set it.
 - `days`: sorted list of weekdays (0=Monday..6=Sunday) the program is
   scheduled on, or `null` when unset (every day). Set via
   `set_program_schedule`.
