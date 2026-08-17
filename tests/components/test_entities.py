@@ -1300,3 +1300,40 @@ async def test_zone_state_publishes_the_cadence_marker_per_program(
     after = role_state(hass, "zone_state", zone_id)
     assert after is not None
     assert after.attributes["cycles"][0]["last_completed"] == "2026-07-14"
+
+
+async def test_weighted_temp_publishes_its_weights_and_its_source(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    """The five maxima were already published; the weights that combined them
+    were not, and a decision panel showing the temperatures without them shows
+    five numbers and no reasoning.
+
+    The weights are the CONFIGURED ones. weighted_temperature renormalises over
+    the days that are actually available -- a missing day is redistributed, not
+    counted as 0 °C -- so a card must mark a missing day as missing rather than
+    present its configured weight as the effective one. Computing the effective
+    weights here would be a second implementation of a rule that lives in a
+    frozen engine file.
+    """
+    freezer.move_to(START)
+    park = MockValvePark(hass)
+    park.add("valve.pots")
+    mock_weather(hass)
+    await setup_hub(hass, [zone_data("Pots", "valve.pots")])
+
+    before = role_state(hass, "hub_weighted_temp")
+    assert before is not None
+    assert "temp_weights" not in before.attributes, "nothing is claimed before an evaluation"
+
+    button = role_state(hass, "hub_evaluate")
+    assert button is not None
+    await hass.services.async_call(
+        "button", "press", {"entity_id": button.entity_id}, blocking=True
+    )
+    await hass.async_block_till_done()
+
+    after = role_state(hass, "hub_weighted_temp")
+    assert after is not None
+    assert after.attributes["temp_weights"] == [0.05, 0.15, 0.30, 0.35, 0.15]
+    assert after.attributes["weather_entity"] == "weather.test"

@@ -18,7 +18,7 @@ config entry).
 |---------------------|----------|--------------------------------|------------------|
 | `hub_water_budget`  | sensor   | mm (float)                     | `rain_today`, `rain_d1`, `rain_d2`, `rain_d3`, `forecast_0_24`, `forecast_24_48`, `forecast_credit` |
 | `hub_skip_threshold`| sensor   | mm (float)                     | — |
-| `hub_weighted_temp` | sensor   | °C (float) or unavailable      | `temp_d3`, `temp_d2`, `temp_d1`, `temp_today_eff`, `temp_tomorrow`, `stale_weather` (bool) |
+| `hub_weighted_temp` | sensor   | °C (float) or unavailable      | `temp_d3`, `temp_d2`, `temp_d1`, `temp_today_eff`, `temp_tomorrow`, `stale_weather` (bool), `temp_weights` (five floats, see below), `weather_entity` |
 | `hub_session`       | sensor   | `idle` \| `evaluating` \| `running` | `queue`: ordered list of `{zone_id, zone_name, cycle_id, duration_min, state}`; `started_at` (ISO); `active_zone_id` |
 | `hub_consumption_left` | sensor | liters left (float) or unavailable | `budget_liters`, `used_liters`, `unattributed_liters`, `period_start`, `action` — entity always exists; unavailable when no budget is configured |
 | `hub_unattributed_water` | sensor | liters (float), `device_class: water`, `state_class: total_increasing` | `closed_l` (float), `per_scope` (`{scope: liters}`, only scopes with water > 0; scope is a `zone_id` or `"__hub__"`) — see "Water accounting sensors" below |
@@ -26,6 +26,30 @@ config entry).
 | `hub_pause`         | switch   | on = globally paused           | — |
 | `hub_evaluate`      | button   | press = evaluate now           | — |
 | `hub_stop_all`      | button   | press = stop everything        | — |
+
+### `hub_weighted_temp.temp_weights` — configured, not effective
+
+The five weights the engine combines `temp_d3`, `temp_d2`, `temp_d1`,
+`temp_today_eff` and `temp_tomorrow` with, in that order — the
+`EngineParams.temp_weights` defaults being `[0.05, 0.15, 0.30, 0.35, 0.15]`.
+
+**They are the configured weights, and on a day when one of the five values is
+`null` they are not the weights that produced the number.**
+`weighted_temperature` renormalises over the days that are actually available:
+a missing day is never counted as 0 °C, its weight is redistributed
+proportionally across the rest. The effective weights are deliberately not
+published, because computing them outside the engine would be a second
+implementation of a rule that lives inside it.
+
+So a card **must mark a missing day as missing** — and must not print its
+configured weight beside a `null` value as though it had applied. When all five
+values are present, which is the ordinary case, the configured weights *are*
+the effective ones and nothing needs saying.
+
+`weather_entity` is the hub's configured weather source, published here so a
+card need not fetch the whole `export_config` payload to learn one entity id.
+Both attributes appear only once an evaluation has run, like every other
+attribute on this sensor.
 
 ## Zone entities (one set per zone)
 
