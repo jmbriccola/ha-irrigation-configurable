@@ -4,6 +4,45 @@ All notable changes to this project are documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/).
 
+## [3.6.0] - 2026-08-17
+
+### The next-run verdict
+
+- **`zone_state` gains `next_run`: would this zone water if its programs fired
+  right now, and if not, why.** `sensor.<zone>_prossima_irrigazione` gives the
+  instant and has resolved every projectable gate since 2.0.0 — the calendar
+  including an interval cadence and its last-completed marker, the season, a
+  suspension, a pause, a skip-today, the enable switches. What it could never
+  answer is the layer that exists only in the present: rain or frost or wind
+  right now, the water budget standing above the skip threshold, a consumption
+  budget already spent. A cadence that quietly suppresses a cycle was already
+  visible in the instant; a budget that will suppress today's was visible
+  nowhere.
+- **It is about now, and nothing here claims otherwise.** Tomorrow's weather is
+  not knowable, so the verdict is not a prediction about the instant beside it,
+  and the card contract requires every surface to word it in the present tense.
+  The pairing to render is the two together: *next Tuesday 06:30 · today it
+  would be skipped, budget sufficient*.
+- **Three values, and the third is not a failure.** `would_run`, `blocked` with
+  a reason, and `unknown` — which means **no evaluation has run yet**, at
+  start-up before the first session or `evaluate` call. `unknown` is not
+  `weather_unavailable`: that reason means an evaluation ran and could not reach
+  the weather. Read as "not evaluated yet", never as "will not water".
+- **`evaluated_at` says how old the verdict is, and it can be hours.** Nothing
+  re-evaluates on a timer; the cached evaluation refreshes when a session starts
+  or `evaluate` runs. That is the freshness the hub's water-budget, skip-
+  threshold and weighted-temperature sensors have always had — now it is stated
+  rather than implied.
+- **The zone-level reason is named only when every program agrees.** A zone
+  whose morning program is out of calendar and whose evening program is over
+  budget is not "blocked by the calendar", so the reason is left empty and the
+  per-program list carries both. Naming one would send you to the wrong setting.
+- **A budget notification no longer fires because a card was rendered.** The
+  consumption check did two jobs — decide, and notify — and the verdict needs
+  the first from inside a sensor read. The two halves are now separate: the
+  session paths still notify when the budget is crossed while deciding whether
+  to water, which is when it means something.
+
 ## [3.5.0] - 2026-08-16
 
 ### Read-only history services
