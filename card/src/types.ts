@@ -269,6 +269,59 @@ export interface CardConfig {
   zones?: string[];
 }
 
+/**
+ * The eight blocks of the zone card.
+ *
+ * Ordered as they render. Every one defaults ON: the acceptance criterion is a
+ * dashboard built without assembling anything, so a user who adds the card
+ * sees what the zone has and turns off what they do not want. Clean
+ * degradation removes the rest by itself -- a zone with no meter shows no
+ * consumption block whether or not its key is set.
+ */
+export const ZONE_CARD_BLOCKS = [
+  "state",
+  "next_run",
+  "last_outcome",
+  "programs",
+  "curve",
+  "hardware",
+  "consumption",
+  "actions",
+] as const;
+
+export type ZoneCardBlock = (typeof ZONE_CARD_BLOCKS)[number];
+
+export interface ZoneCardConfig {
+  type: string;
+  /** Required: the subentry id of the zone this card shows. */
+  zone?: string;
+  title?: string;
+  blocks?: Partial<Record<ZoneCardBlock, boolean>>;
+  /** Days of history the chart draws. */
+  chart_days?: 30 | 90 | 365;
+  /** Where the consumption figures come from. */
+  consumption_source?: "internal" | "entity";
+  total_entity?: string;
+  today_entity?: string;
+  month_entity?: string;
+  /** The integration knows nothing about batteries; this is the user's mapping. */
+  battery_entity?: string;
+}
+
+export const ZONE_CARD_CHART_DAYS = [30, 90, 365] as const;
+
+/**
+ * Whether a block renders.
+ *
+ * **One definition of "unset means on"**, used by both the card and its
+ * editor. Two copies of this rule would eventually disagree, and the way it
+ * would show is an editor whose checkbox says one thing while the card does
+ * another.
+ */
+export function zoneBlockEnabled(config: ZoneCardConfig, block: ZoneCardBlock): boolean {
+  return config.blocks?.[block] !== false;
+}
+
 export const CONFIG_DEFAULTS = {
   show_header: true,
   show_queue: true,
