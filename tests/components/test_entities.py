@@ -1337,3 +1337,73 @@ async def test_weighted_temp_publishes_its_weights_and_its_source(
     assert after is not None
     assert after.attributes["temp_weights"] == [0.05, 0.15, 0.30, 0.35, 0.15]
     assert after.attributes["weather_entity"] == "weather.test"
+
+
+async def test_water_budget_publishes_the_decision_it_produced(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    """The evaluation's verdict was reachable only through the `evaluate`
+    service response, so a card had no way to say WHY the system would skip.
+
+    It lives on hub_water_budget beside the evaluation's other derived values
+    (forecast_credit is already here and is no more a "budget" than this is).
+    The reason may have nothing to do with the budget -- `wind`, `frost_risk` --
+    because it is the session evaluation's verdict, not the budget's.
+    """
+    freezer.move_to(START)
+    park = MockValvePark(hass)
+    park.add("valve.pots")
+    # Rain in the forecast: the evaluation lands on a skip we can name.
+    mock_weather(hass, condition="rainy", temp=14.0)
+    await setup_hub(hass, [zone_data("Pots", "valve.pots")])
+
+    before = role_state(hass, "hub_water_budget")
+    assert before is not None
+    assert "skip_reason" not in before.attributes, "nothing is claimed before an evaluation"
+
+    button = role_state(hass, "hub_evaluate")
+    assert button is not None
+    await hass.services.async_call(
+        "button", "press", {"entity_id": button.entity_id}, blocking=True
+    )
+    await hass.async_block_till_done()
+
+    after = role_state(hass, "hub_water_budget")
+    assert after is not None
+    assert "skip_reason" in after.attributes
+    # A named reason, not a bare truthy value: the card renders it through the
+    # reason dictionary and an unknown key would show as a raw string.
+    assert after.attributes["skip_reason"] in {
+        None,
+        "out_of_season",
+        "precipitation",
+        "frost_risk",
+        "cold_day",
+        "wind",
+        "budget_sufficient",
+        "consumption_budget",
+        "weather_unavailable",
+    }
+
+
+async def test_water_budget_reports_no_reason_when_it_would_water(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    """None means "it would water" and must be distinguishable from absent,
+    which means "nothing has been evaluated"."""
+    freezer.move_to(START)
+    park = MockValvePark(hass)
+    park.add("valve.pots")
+    mock_weather(hass)
+    await setup_hub(hass, [zone_data("Pots", "valve.pots")])
+
+    button = role_state(hass, "hub_evaluate")
+    assert button is not None
+    await hass.services.async_call(
+        "button", "press", {"entity_id": button.entity_id}, blocking=True
+    )
+    await hass.async_block_till_done()
+
+    state = role_state(hass, "hub_water_budget")
+    assert state is not None
+    assert state.attributes["skip_reason"] is None
