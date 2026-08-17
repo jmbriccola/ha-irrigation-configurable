@@ -18,6 +18,7 @@ import {
   CONFIG_DEFAULTS,
   defineElement,
   isUnavailable,
+  rowLineEnabled,
 } from "./types";
 import { describeLeakAlarm, formatNumber } from "./format";
 import {
@@ -468,6 +469,10 @@ export class IrrigationMaestroCard extends LitElement {
                   .now=${this._now}
                   .compact=${config.compact === true}
                   .showControls=${config.show_controls !== false}
+                  .showVerdict=${rowLineEnabled(config, "show_verdict")}
+                  .showNextRun=${rowLineEnabled(config, "show_next_run")}
+                  .showLastOutcome=${rowLineEnabled(config, "show_last_outcome")}
+                  .showWater=${rowLineEnabled(config, "show_water")}
                   .weightedTemp=${asNumber(model.hub.weightedTemp?.state)}
                 ></imc-zone-row>
               `,

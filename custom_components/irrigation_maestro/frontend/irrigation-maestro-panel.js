@@ -41,7 +41,7 @@ const qt = (n) => new bt(typeof n == "string" ? n : n + "", void 0, Fe), O = (n,
   for (const i of e.cssRules) t += i.cssText;
   return qt(t);
 })(n) : n;
-const { is: Zt, defineProperty: Bt, getOwnPropertyDescriptor: Ht, getOwnPropertyNames: Vt, getOwnPropertySymbols: Gt, getPrototypeOf: Kt } = Object, ge = globalThis, tt = ge.trustedTypes, Yt = tt ? tt.emptyScript : "", Qt = ge.reactiveElementPolyfillSupport, se = (n, e) => n, _e = { toAttribute(n, e) {
+const { is: Zt, defineProperty: Bt, getOwnPropertyDescriptor: Vt, getOwnPropertyNames: Ht, getOwnPropertySymbols: Gt, getPrototypeOf: Kt } = Object, ge = globalThis, tt = ge.trustedTypes, Yt = tt ? tt.emptyScript : "", Qt = ge.reactiveElementPolyfillSupport, se = (n, e) => n, _e = { toAttribute(n, e) {
   switch (e) {
     case Boolean:
       n = n ? Yt : null;
@@ -69,7 +69,7 @@ const { is: Zt, defineProperty: Bt, getOwnPropertyDescriptor: Ht, getOwnProperty
       }
   }
   return t;
-} }, Re = (n, e) => !Zt(n, e), it = { attribute: !0, type: String, converter: _e, reflect: !1, useDefault: !1, hasChanged: Re };
+} }, Le = (n, e) => !Zt(n, e), it = { attribute: !0, type: String, converter: _e, reflect: !1, useDefault: !1, hasChanged: Le };
 Symbol.metadata ??= /* @__PURE__ */ Symbol("metadata"), ge.litPropertyMetadata ??= /* @__PURE__ */ new WeakMap();
 let Y = class extends HTMLElement {
   static addInitializer(e) {
@@ -85,7 +85,7 @@ let Y = class extends HTMLElement {
     }
   }
   static getPropertyDescriptor(e, t, i) {
-    const { get: s, set: o } = Ht(this.prototype, e) ?? { get() {
+    const { get: s, set: o } = Vt(this.prototype, e) ?? { get() {
       return this[t];
     }, set(a) {
       this[t] = a;
@@ -106,7 +106,7 @@ let Y = class extends HTMLElement {
   static finalize() {
     if (this.hasOwnProperty(se("finalized"))) return;
     if (this.finalized = !0, this._$Ei(), this.hasOwnProperty(se("properties"))) {
-      const t = this.properties, i = [...Vt(t), ...Gt(t)];
+      const t = this.properties, i = [...Ht(t), ...Gt(t)];
       for (const s of i) this.createProperty(s, t[s]);
     }
     const e = this[Symbol.metadata];
@@ -184,7 +184,7 @@ let Y = class extends HTMLElement {
   requestUpdate(e, t, i, s = !1, o) {
     if (e !== void 0) {
       const a = this.constructor;
-      if (s === !1 && (o = this[e]), i ??= a.getPropertyOptions(e), !((i.hasChanged ?? Re)(o, t) || i.useDefault && i.reflect && o === this._$Ej?.get(e) && !this.hasAttribute(a._$Eu(e, i)))) return;
+      if (s === !1 && (o = this[e]), i ??= a.getPropertyOptions(e), !((i.hasChanged ?? Le)(o, t) || i.useDefault && i.reflect && o === this._$Ej?.get(e) && !this.hasAttribute(a._$Eu(e, i)))) return;
       this.C(e, t, i);
     }
     this.isUpdatePending === !1 && (this._$ES = this._$EP());
@@ -253,9 +253,9 @@ let Y = class extends HTMLElement {
   }
 };
 Y.elementStyles = [], Y.shadowRootOptions = { mode: "open" }, Y[se("elementProperties")] = /* @__PURE__ */ new Map(), Y[se("finalized")] = /* @__PURE__ */ new Map(), Qt?.({ ReactiveElement: Y }), (ge.reactiveElementVersions ??= []).push("2.1.2");
-const Le = globalThis, st = (n) => n, he = Le.trustedTypes, nt = he ? he.createPolicy("lit-html", { createHTML: (n) => n }) : void 0, wt = "$lit$", q = `lit$${Math.random().toFixed(9).slice(2)}$`, $t = "?" + q, Xt = `<${$t}>`, V = document, ne = () => V.createComment(""), oe = (n) => n === null || typeof n != "object" && typeof n != "function", Ue = Array.isArray, Jt = (n) => Ue(n) || typeof n?.[Symbol.iterator] == "function", ze = `[ 	
+const Re = globalThis, st = (n) => n, he = Re.trustedTypes, nt = he ? he.createPolicy("lit-html", { createHTML: (n) => n }) : void 0, wt = "$lit$", q = `lit$${Math.random().toFixed(9).slice(2)}$`, $t = "?" + q, Xt = `<${$t}>`, H = document, ne = () => H.createComment(""), oe = (n) => n === null || typeof n != "object" && typeof n != "function", Ue = Array.isArray, Jt = (n) => Ue(n) || typeof n?.[Symbol.iterator] == "function", ze = `[ 	
 \f\r]`, ee = /<(?:(!--|\/[^a-zA-Z])|(\/?[a-zA-Z][^>\s]*)|(\/?$))/g, ot = /-->/g, rt = />/g, W = RegExp(`>|${ze}(?:([^\\s"'>=/]+)(${ze}*=${ze}*(?:[^ 	
-\f\r"'\`<>=]|("|')|))|$)`, "g"), at = /'/g, lt = /"/g, xt = /^(?:script|style|textarea|title)$/i, kt = (n) => (e, ...t) => ({ _$litType$: n, strings: e, values: t }), l = kt(1), Se = kt(2), Q = /* @__PURE__ */ Symbol.for("lit-noChange"), p = /* @__PURE__ */ Symbol.for("lit-nothing"), dt = /* @__PURE__ */ new WeakMap(), H = V.createTreeWalker(V, 129);
+\f\r"'\`<>=]|("|')|))|$)`, "g"), at = /'/g, lt = /"/g, xt = /^(?:script|style|textarea|title)$/i, kt = (n) => (e, ...t) => ({ _$litType$: n, strings: e, values: t }), l = kt(1), Se = kt(2), Q = /* @__PURE__ */ Symbol.for("lit-noChange"), p = /* @__PURE__ */ Symbol.for("lit-nothing"), dt = /* @__PURE__ */ new WeakMap(), V = H.createTreeWalker(H, 129);
 function zt(n, e) {
   if (!Ue(n) || !n.hasOwnProperty("raw")) throw Error("invalid template strings array");
   return nt !== void 0 ? nt.createHTML(e) : e;
@@ -278,11 +278,11 @@ class re {
     this.parts = [];
     let o = 0, a = 0;
     const d = e.length - 1, c = this.parts, [_, g] = ei(e, t);
-    if (this.el = re.createElement(_, i), H.currentNode = this.el.content, t === 2 || t === 3) {
+    if (this.el = re.createElement(_, i), V.currentNode = this.el.content, t === 2 || t === 3) {
       const m = this.el.content.firstChild;
       m.replaceWith(...m.childNodes);
     }
-    for (; (s = H.nextNode()) !== null && c.length < d; ) {
+    for (; (s = V.nextNode()) !== null && c.length < d; ) {
       if (s.nodeType === 1) {
         if (s.hasAttributes()) for (const m of s.getAttributeNames()) if (m.endsWith(wt)) {
           const S = g[a++], w = s.getAttribute(m).split(q), U = /([.?@])?(.*)/.exec(S);
@@ -292,7 +292,7 @@ class re {
           const m = s.textContent.split(q), S = m.length - 1;
           if (S > 0) {
             s.textContent = he ? he.emptyScript : "";
-            for (let w = 0; w < S; w++) s.append(m[w], ne()), H.nextNode(), c.push({ type: 2, index: ++o });
+            for (let w = 0; w < S; w++) s.append(m[w], ne()), V.nextNode(), c.push({ type: 2, index: ++o });
             s.append(m[S], ne());
           }
         }
@@ -305,7 +305,7 @@ class re {
     }
   }
   static createElement(e, t) {
-    const i = V.createElement("template");
+    const i = H.createElement("template");
     return i.innerHTML = e, i;
   }
 }
@@ -326,17 +326,17 @@ class ti {
     return this._$AM._$AU;
   }
   u(e) {
-    const { el: { content: t }, parts: i } = this._$AD, s = (e?.creationScope ?? V).importNode(t, !0);
-    H.currentNode = s;
-    let o = H.nextNode(), a = 0, d = 0, c = i[0];
+    const { el: { content: t }, parts: i } = this._$AD, s = (e?.creationScope ?? H).importNode(t, !0);
+    V.currentNode = s;
+    let o = V.nextNode(), a = 0, d = 0, c = i[0];
     for (; c !== void 0; ) {
       if (a === c.index) {
         let _;
         c.type === 2 ? _ = new le(o, o.nextSibling, this, e) : c.type === 1 ? _ = new c.ctor(o, c.name, c.strings, this, e) : c.type === 6 && (_ = new oi(o, this, e)), this._$AV.push(_), c = i[++d];
       }
-      a !== c?.index && (o = H.nextNode(), a++);
+      a !== c?.index && (o = V.nextNode(), a++);
     }
-    return H.currentNode = V, s;
+    return V.currentNode = H, s;
   }
   p(e) {
     let t = 0;
@@ -371,7 +371,7 @@ class le {
     this._$AH !== e && (this._$AR(), this._$AH = this.O(e));
   }
   _(e) {
-    this._$AH !== p && oe(this._$AH) ? this._$AA.nextSibling.data = e : this.T(V.createTextNode(e)), this._$AH = e;
+    this._$AH !== p && oe(this._$AH) ? this._$AA.nextSibling.data = e : this.T(H.createTextNode(e)), this._$AH = e;
   }
   $(e) {
     const { values: t, _$litType$: i } = e, s = typeof i == "number" ? this._$AC(e) : (i.el === void 0 && (i.el = re.createElement(zt(i.h, i.h[0]), this.options)), i);
@@ -467,8 +467,8 @@ class oi {
     X(this, e);
   }
 }
-const ri = Le.litHtmlPolyfillSupport;
-ri?.(re, le), (Le.litHtmlVersions ??= []).push("3.3.3");
+const ri = Re.litHtmlPolyfillSupport;
+ri?.(re, le), (Re.litHtmlVersions ??= []).push("3.3.3");
 const ai = (n, e, t) => {
   const i = t?.renderBefore ?? e;
   let s = i._$litPart$;
@@ -505,7 +505,7 @@ P._$litElement$ = !0, P.finalized = !0, je.litElementHydrateSupport?.({ LitEleme
 const li = je.litElementPolyfillSupport;
 li?.({ LitElement: P });
 (je.litElementVersions ??= []).push("4.2.2");
-const di = { attribute: !0, type: String, converter: _e, reflect: !1, hasChanged: Re }, ci = (n = di, e, t) => {
+const di = { attribute: !0, type: String, converter: _e, reflect: !1, hasChanged: Le }, ci = (n = di, e, t) => {
   const { kind: i, metadata: s } = t;
   let o = globalThis.litPropertyMetadata.get(s);
   if (o === void 0 && globalThis.litPropertyMetadata.set(s, o = /* @__PURE__ */ new Map()), i === "setter" && ((n = Object.create(n)).wrapped = !0), o.set(t.name, n), i === "accessor") {
@@ -554,7 +554,7 @@ function pe(n) {
 function me(n, e, t) {
   return Math.min(t, Math.max(e, n));
 }
-function L(n, e) {
+function R(n, e) {
   customElements.get(n) || customElements.define(n, e);
 }
 const ae = {
@@ -694,6 +694,7 @@ const ae = {
   "leak_source.valve_sensor": "the valve's own sensor reports a leak",
   "leak_source.no_flow_closed": "water measured with every valve closed",
   // Zone rows
+  "zone.today": "Today",
   "zone.next_run": "Next run",
   "zone.no_next_run": "No run scheduled",
   "zone.last_outcome": "Last outcome",
@@ -763,6 +764,10 @@ const ae = {
   "editor.show_queue": "Show queue while running",
   "editor.show_controls": "Show controls",
   "editor.compact": "Compact layout",
+  "editor.show_verdict": "Today's verdict per zone",
+  "editor.show_next_run": "Next run per zone",
+  "editor.show_last_outcome": "Last outcome per zone",
+  "editor.show_water": "Water used per zone",
   "editor.zones": "Zones",
   "editor.zones_hint": "Select the zones to display. Leave all unchecked to show every zone.",
   "editor.no_zones": "No zones discovered yet.",
@@ -1234,6 +1239,7 @@ const ae = {
   "leak_source.valve_sensor": "il sensore della valvola segnala una perdita",
   "leak_source.no_flow_closed": "acqua misurata con tutte le valvole chiuse",
   // Righe zona
+  "zone.today": "Oggi",
   "zone.next_run": "Prossima irrigazione",
   "zone.no_next_run": "Nessuna irrigazione programmata",
   "zone.last_outcome": "Ultimo esito",
@@ -1302,6 +1308,10 @@ const ae = {
   "editor.show_queue": "Mostra la coda durante l'esecuzione",
   "editor.show_controls": "Mostra comandi",
   "editor.compact": "Layout compatto",
+  "editor.show_verdict": "Verdetto di oggi per zona",
+  "editor.show_next_run": "Prossima irrigazione per zona",
+  "editor.show_last_outcome": "Ultimo esito per zona",
+  "editor.show_water": "Consumi per zona",
   "editor.zones": "Zone",
   "editor.zones_hint": "Seleziona le zone da mostrare. Lascia tutto deselezionato per mostrarle tutte.",
   "editor.no_zones": "Nessuna zona rilevata al momento.",
@@ -2064,7 +2074,7 @@ let fe = Ze;
 Mi([
   h({ attribute: !1 })
 ], fe.prototype, "calendar");
-L("imc-calendar-editor", fe);
+R("imc-calendar-editor", fe);
 const Pi = /* @__PURE__ */ new Set(["unavailable", "unknown"]);
 function Ti(n) {
   return !n || Pi.has(n.state) ? { on: !1, available: !1 } : { on: n.state === "on", available: !0 };
@@ -2157,10 +2167,10 @@ function Di(n, e) {
 function Fi(n) {
   return n.intensity_pct !== void 0 && n.intensity_pct !== 100 ? !0 : Object.keys(n.day_intensity_pct ?? {}).length > 0;
 }
-function Ri(n, e, t) {
+function Li(n, e, t) {
   return e === 0 ? n : Math.max(0, de(n - e * t));
 }
-function Li(n, e, t, i, s, o) {
+function Ri(n, e, t, i, s, o) {
   const a = [...n.map((_) => _[1]), e, t], d = Math.max(12, ...a) + 4, c = i - s - o;
   return {
     top: d,
@@ -2213,7 +2223,7 @@ const j = 320, Z = 170, F = 34, B = 12, te = 16, K = 24, ut = 5, pt = 40, _t = 2
   /** The graph's vertical axis, scaled to contain every raw point AND both
    *  clamp lines — see `graphAxis`'s doc comment for why both matter. */
   _axis() {
-    return Li(this._points, this._min, this._max, Z, te, K);
+    return Ri(this._points, this._min, this._max, Z, te, K);
   }
   _sy(e) {
     return this._axis().y(e);
@@ -2250,7 +2260,7 @@ const j = 320, Z = 170, F = 34, B = 12, te = 16, K = 24, ut = 5, pt = 40, _t = 2
         this._points,
         e,
         s[0],
-        Ri(o, w, c)
+        Li(o, w, c)
       ), this._error = null;
     }, g = () => {
       window.removeEventListener("pointermove", _), window.removeEventListener("pointerup", g);
@@ -2696,7 +2706,7 @@ D([
 D([
   u()
 ], T.prototype, "_error");
-L("imc-curve-editor", T);
+R("imc-curve-editor", T);
 var ji = Object.defineProperty, z = (n, e, t, i) => {
   for (var s = void 0, o = n.length - 1, a; o >= 0; o--)
     (a = n[o]) && (s = a(e, t, s) || s);
@@ -2723,7 +2733,7 @@ function Zi(n) {
   const e = {};
   return n.soakMaxRunMin !== void 0 && (e.soak_max_run_min = n.soakMaxRunMin), n.soakPauseMin !== void 0 && (e.soak_pause_min = n.soakPauseMin), n.volumeSafetyTimeoutMin !== void 0 && (e.volume_safety_timeout_min = n.volumeSafetyTimeoutMin), e;
 }
-const Me = 15, ht = 1, mt = 1440, Bi = -360, Hi = 360, Vi = 5, He = class He extends P {
+const Me = 15, ht = 1, mt = 1440, Bi = -360, Vi = 360, Hi = 5, Ve = class Ve extends P {
   constructor() {
     super(...arguments), this.zoneId = "", this.zoneHasFlowMeter = !1, this.zoneAdjustmentPct = 100, this.allZones = [], this._calendar = { mode: "weekdays", days: [...Te] }, this._seasonMonths = [], this._startKind = "time", this._startAt = "06:00", this._startEvent = "sunrise", this._startOffsetMin = 0, this._uniformMinutes = Me, this._dayMinutes = {}, this._sameForAll = !0, this._advancedOpen = !1, this._advanced = {}, this._seededUniformMinutes = Me, this._seededDayMinutes = {}, this._seededSameForAll = !0;
   }
@@ -2841,8 +2851,8 @@ const Me = 15, ht = 1, mt = 1440, Bi = -360, Hi = 360, Vi = 5, He = class He ext
               @input=${(s) => this._startAt = s.target.value}
             />` : this._stepper(this._startOffsetMin, (s) => this._startOffsetMin = s, {
       min: Bi,
-      max: Hi,
-      step: Vi,
+      max: Vi,
+      step: Hi,
       suffix: "min",
       signed: !0
     })}
@@ -3137,7 +3147,7 @@ const Me = 15, ht = 1, mt = 1440, Bi = -360, Hi = 360, Vi = 5, He = class He ext
     );
   }
 };
-He.styles = O`
+Ve.styles = O`
     ${Ni}
     :host {
       display: block;
@@ -3349,7 +3359,7 @@ He.styles = O`
       cursor: not-allowed;
     }
   `;
-let b = He;
+let b = Ve;
 z([
   h({ attribute: !1 })
 ], b.prototype, "hass");
@@ -3407,7 +3417,7 @@ z([
 z([
   u()
 ], b.prototype, "_advanced");
-L("imc-program-editor", b);
+R("imc-program-editor", b);
 var Gi = Object.defineProperty, I = (n, e, t, i) => {
   for (var s = void 0, o = n.length - 1, a; o >= 0; o--)
     (a = n[o]) && (s = a(e, t, s) || s);
@@ -3423,7 +3433,7 @@ const Oe = 15, Ki = 8, Yi = 1, Qi = 60, Xi = {
     min: Yi,
     max: Qi
   }
-}, Ji = 1, es = 1440, ts = -360, is = 360, ss = 5, Ve = class Ve extends P {
+}, Ji = 1, es = 1440, ts = -360, is = 360, ss = 5, He = class He extends P {
   constructor() {
     super(...arguments), this.zoneId = "", this.zoneAdjustmentPct = 100, this._step = 1, this._calendar = { mode: "weekdays", days: [...Te] }, this._startKind = "sun", this._startAt = "06:00", this._startEvent = "sunrise", this._startOffsetMin = 0, this._minutes = Oe;
   }
@@ -3584,7 +3594,7 @@ const Oe = 15, Ki = 8, Yi = 1, Qi = 60, Xi = {
     );
   }
 };
-Ve.styles = O`
+He.styles = O`
     :host {
       display: block;
       border: 1px solid var(--divider-color, rgba(127, 127, 127, 0.25));
@@ -3778,7 +3788,7 @@ Ve.styles = O`
       cursor: not-allowed;
     }
   `;
-let M = Ve;
+let M = He;
 I([
   h({ attribute: !1 })
 ], M.prototype, "hass");
@@ -3812,7 +3822,7 @@ I([
 I([
   u()
 ], M.prototype, "_minutes");
-L("imc-program-wizard", M);
+R("imc-program-wizard", M);
 var ns = Object.defineProperty, J = (n, e, t, i) => {
   for (var s = void 0, o = n.length - 1, a; o >= 0; o--)
     (a = n[o]) && (s = a(e, t, s) || s);
@@ -4083,26 +4093,26 @@ Ge.styles = O`
       opacity: 0.85;
     }
   `;
-let R = Ge;
+let L = Ge;
 J([
   h({ attribute: !1 })
-], R.prototype, "hass");
+], L.prototype, "hass");
 J([
   h({ attribute: !1 })
-], R.prototype, "zone");
+], L.prototype, "zone");
 J([
   h({ attribute: !1 })
-], R.prototype, "weightedTemp");
+], L.prototype, "weightedTemp");
 J([
   h({ attribute: !1 })
-], R.prototype, "allZones");
+], L.prototype, "allZones");
 J([
   u()
-], R.prototype, "_editingId");
+], L.prototype, "_editingId");
 J([
   u()
-], R.prototype, "_wizardOpen");
-L("imc-program-list", R);
+], L.prototype, "_wizardOpen");
+R("imc-program-list", L);
 const xe = [
   "L/min",
   "L/h",
@@ -4188,7 +4198,7 @@ ke([
 ke([
   h()
 ], G.prototype, "label");
-L("imc-entity-picker", G);
+R("imc-entity-picker", G);
 var ds = Object.defineProperty, E = (n, e, t, i) => {
   for (var s = void 0, o = n.length - 1, a; o >= 0; o--)
     (a = n[o]) && (s = a(e, t, s) || s);
@@ -4603,7 +4613,7 @@ E([
 E([
   u()
 ], x.prototype, "_advancedOpen");
-L("imc-zone-editor", x);
+R("imc-zone-editor", x);
 const us = ["critical", "operational", "informational"], Ft = [
   "watchdog",
   "anomaly",
@@ -4616,12 +4626,12 @@ const us = ["critical", "operational", "informational"], Ft = [
   "session_overrun",
   "consumption_budget"
 ], ps = /* @__PURE__ */ new Set(["send_message"]);
-function Rt(n) {
+function Lt(n) {
   const e = n.services?.notify;
   return e ? Object.keys(e).filter((t) => !ps.has(t)).sort().map((t) => ({ service: t, label: e[t]?.name || t })) : [];
 }
 function _s(n, e) {
-  const t = Rt(n), i = new Set(t.map((o) => o.service)), s = [...new Set(e)].filter((o) => !i.has(o)).sort().map((o) => ({ service: o, label: o, missing: !0 }));
+  const t = Lt(n), i = new Set(t.map((o) => o.service)), s = [...new Set(e)].filter((o) => !i.has(o)).sort().map((o) => ({ service: o, label: o, missing: !0 }));
   return [...t, ...s];
 }
 function vt(n, e) {
@@ -4721,12 +4731,12 @@ function Ss(n, e) {
   const t = new Set(n), i = new Set(e);
   return t.size === i.size && [...t].every((s) => i.has(s));
 }
-const Lt = ["notify", "close", "close_and_block"], Ut = "close", ft = !0, As = { start: "22:00", end: "06:00" };
+const Rt = ["notify", "close", "close_and_block"], Ut = "close", ft = !0, As = { start: "22:00", end: "06:00" };
 function Es(n) {
   return n === "reduce" || n === "suspend" ? n : "notify";
 }
 function gt(n) {
-  return Lt.includes(n ?? "") ? n : Ut;
+  return Rt.includes(n ?? "") ? n : Ut;
 }
 const Qe = class Qe extends P {
   constructor() {
@@ -5305,7 +5315,7 @@ const Qe = class Qe extends P {
   /** Step 3: exactly what Save will write, in the backend's own event order. */
   _renderSummary(e) {
     const t = new Map(
-      (this.hass ? Rt(this.hass) : []).map((s) => [s.service, s.label])
+      (this.hass ? Lt(this.hass) : []).map((s) => [s.service, s.label])
     ), i = Ft.filter((s) => this._selection.events.includes(s));
     return l`
       <div class="section-label">${r(e, "notify.step_recipients")}</div>
@@ -5569,7 +5579,7 @@ const Qe = class Qe extends P {
       leakAction: gt(o.target.value)
     }}
       >
-        ${Lt.map(
+        ${Rt.map(
       (o) => l`<option value=${o} ?selected=${i === o}>
             ${r(e, `settings.leak_action_${o}`)}
           </option>`
@@ -6013,7 +6023,7 @@ y([
 y([
   u()
 ], f.prototype, "_saveError");
-L("imc-settings-view", f);
+R("imc-settings-view", f);
 function Ms(n) {
   const e = JSON.parse(n);
   return { options: e.options ?? {}, zones: e.zones ?? {} };
@@ -6739,4 +6749,4 @@ C([
 C([
   u()
 ], A.prototype, "_testPending");
-L("irrigation-maestro-panel", A);
+R("irrigation-maestro-panel", A);

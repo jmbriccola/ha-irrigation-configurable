@@ -160,6 +160,7 @@ export const it: Record<keyof typeof en, string> = {
   "leak_source.no_flow_closed": "acqua misurata con tutte le valvole chiuse",
 
   // Righe zona
+  "zone.today": "Oggi",
   "zone.next_run": "Prossima irrigazione",
   "zone.no_next_run": "Nessuna irrigazione programmata",
   "zone.last_outcome": "Ultimo esito",
@@ -234,6 +235,10 @@ export const it: Record<keyof typeof en, string> = {
   "editor.show_queue": "Mostra la coda durante l'esecuzione",
   "editor.show_controls": "Mostra comandi",
   "editor.compact": "Layout compatto",
+  "editor.show_verdict": "Verdetto di oggi per zona",
+  "editor.show_next_run": "Prossima irrigazione per zona",
+  "editor.show_last_outcome": "Ultimo esito per zona",
+  "editor.show_water": "Consumi per zona",
   "editor.zones": "Zone",
   "editor.zones_hint":
     "Seleziona le zone da mostrare. Lascia tutto deselezionato per mostrarle tutte.",

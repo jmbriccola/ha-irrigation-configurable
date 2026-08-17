@@ -28,6 +28,8 @@ import {
   formatNumber,
   formatRelative,
 } from "./format";
+import { todayVerdict } from "./blocks/next-run-block";
+import type { NextRunVerdict } from "./blocks/next-run-block";
 import { localize, localizeDynamic } from "./localize/localize";
 import type { TranslationKey } from "./localize/localize";
 import "./curve-sparkline";
@@ -77,6 +79,11 @@ export class ImcZoneRow extends LitElement {
   @property({ attribute: false }) now: number = Date.now();
   @property({ type: Boolean, reflect: true }) compact = false;
   @property({ type: Boolean }) showControls = true;
+  /** Per-line toggles; each defaults on, resolved by the card via rowLineEnabled. */
+  @property({ type: Boolean }) showVerdict = true;
+  @property({ type: Boolean }) showNextRun = true;
+  @property({ type: Boolean }) showLastOutcome = true;
+  @property({ type: Boolean }) showWater = true;
   @property({ attribute: false }) weightedTemp?: number;
 
   @state() private _expanded = false;
@@ -552,9 +559,36 @@ export class ImcZoneRow extends LitElement {
       lines.push(html`<span class="leak-line">${this._leakTitle(leak)}</span>`);
     }
 
+    // Today's verdict, from zone_state.next_run (3.6.0). It goes ABOVE the
+    // instant on purpose: on a home view, "Tue 06:30" beside a zone that would
+    // be skipped today for a sufficient budget is exactly the misleading
+    // reading this whole initiative exists to remove.
+    //
+    // A verdict of `unknown` renders NOTHING rather than "not evaluated yet".
+    // The compact row has one line to spend per fact, and spending it on the
+    // absence of information is worse than leaving the fact out -- unlike the
+    // zone card, which has the room to say so.
+    if (this.showVerdict) {
+      const verdict = zone.state?.attributes["next_run"] as NextRunVerdict | undefined;
+      const today = todayVerdict(verdict);
+      if (today !== "unknown") {
+        const reason = asString(verdict?.reason_key);
+        lines.push(html`
+          <span>
+            ${localize(lang, "zone.today")}:
+            ${localize(lang, today === "would_run" ? "next_run.would_run" : "next_run.blocked")}${
+              today === "blocked" && reason
+                ? ` — ${localizeDynamic(lang, "reason", reason)}`
+                : ""
+            }
+          </span>
+        `);
+      }
+    }
+
     // Next scheduled run: relative + absolute (+ cycle name).
-    const nextRun = zone.nextRun;
-    if (nextRun && !isUnavailable(nextRun)) {
+    const nextRun = this.showNextRun ? zone.nextRun : undefined;
+    if (this.showNextRun && nextRun && !isUnavailable(nextRun)) {
       const relative = formatRelative(nextRun.state, lang, this.now);
       const absolute = formatDateTime(nextRun.state, lang);
       const cycleName = asString(nextRun.attributes["cycle_name"]);
@@ -570,12 +604,12 @@ export class ImcZoneRow extends LitElement {
           </span>
         `);
       }
-    } else {
+    } else if (this.showNextRun) {
       lines.push(html`<span>${localize(lang, "zone.no_next_run")}</span>`);
     }
 
     // Last outcome with localized reason.
-    const outcome = zone.lastOutcome;
+    const outcome = this.showLastOutcome ? zone.lastOutcome : undefined;
     if (outcome && !isUnavailable(outcome) && outcome.state !== "none") {
       const outcomeLabel = localizeDynamic(lang, "outcome", outcome.state);
       const reasonKey = asString(outcome.attributes["reason_key"]);
@@ -596,7 +630,7 @@ export class ImcZoneRow extends LitElement {
     // Cumulative water, with today/this-month as secondary figures. Absent
     // entirely (rather than shown as zero) when waterSummary() has nothing
     // trustworthy -- an unavailable sensor is not the same fact as "0 L".
-    if (water) {
+    if (water && this.showWater) {
       const unit = localize(lang, "curve.unit_volume");
       lines.push(html`
         <span>

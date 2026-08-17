@@ -4,6 +4,30 @@ All notable changes to this project are documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/).
 
+## [3.9.0] - 2026-08-17
+
+### The compact card, and the end of the card work
+
+- **Every zone's row now says what would happen today.** The overview card
+  showed when a zone runs next; it now shows, above that, whether it would
+  actually water right now and why not — *"Oggi: non irrigherebbe — bilancio
+  idrico sufficiente"*. On a home view, a time beside a zone that today will be
+  skipped is precisely the misleading reading this whole run of work set out to
+  remove.
+- **Each line can be turned off.** Verdict, next run, last outcome and water
+  used are four independent switches, so ten zones on a home view can be four
+  lines each or one. They default on and are never written into your YAML when
+  they are on, so a card you never configure stays a card with no configuration.
+- **A verdict that has not been computed shows nothing**, rather than a line
+  saying so. The zone card has room to explain; a row does not, and a line
+  spent on the absence of information is worse than the fact being absent.
+- **The card keeps its type.** A dashboard that already has it is untouched and
+  simply gains the new lines.
+
+With this the five cards of the original request are complete: a zone in
+detail, the hub, and the compact overview — a dashboard buildable with no YAML,
+no templates, no utility meters and no hand-assembled tiles.
+
 ## [3.8.1] - 2026-08-17
 
 ### Fixed

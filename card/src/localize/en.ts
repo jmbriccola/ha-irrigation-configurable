@@ -155,6 +155,7 @@ export const en = {
   "leak_source.no_flow_closed": "water measured with every valve closed",
 
   // Zone rows
+  "zone.today": "Today",
   "zone.next_run": "Next run",
   "zone.no_next_run": "No run scheduled",
   "zone.last_outcome": "Last outcome",
@@ -229,6 +230,10 @@ export const en = {
   "editor.show_queue": "Show queue while running",
   "editor.show_controls": "Show controls",
   "editor.compact": "Compact layout",
+  "editor.show_verdict": "Today's verdict per zone",
+  "editor.show_next_run": "Next run per zone",
+  "editor.show_last_outcome": "Last outcome per zone",
+  "editor.show_water": "Water used per zone",
   "editor.zones": "Zones",
   "editor.zones_hint": "Select the zones to display. Leave all unchecked to show every zone.",
   "editor.no_zones": "No zones discovered yet.",

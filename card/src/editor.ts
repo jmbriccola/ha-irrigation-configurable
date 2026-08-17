@@ -7,7 +7,15 @@ import { defineElement } from "./types";
 import { localize, pickLanguage } from "./localize/localize";
 import type { TranslationKey } from "./localize/localize";
 
-type BooleanOption = "show_header" | "show_queue" | "show_controls" | "compact";
+type BooleanOption =
+  | "show_header"
+  | "show_queue"
+  | "show_controls"
+  | "compact"
+  | "show_verdict"
+  | "show_next_run"
+  | "show_last_outcome"
+  | "show_water";
 
 const BOOLEAN_OPTIONS: ReadonlyArray<{
   key: BooleanOption;
@@ -18,6 +26,12 @@ const BOOLEAN_OPTIONS: ReadonlyArray<{
   { key: "show_queue", label: "editor.show_queue", fallback: true },
   { key: "show_controls", label: "editor.show_controls", fallback: true },
   { key: "compact", label: "editor.compact", fallback: false },
+  // Per-row content. Listed after the card-level options because they are a
+  // narrower choice: what each zone's line says, not what the card contains.
+  { key: "show_verdict", label: "editor.show_verdict", fallback: true },
+  { key: "show_next_run", label: "editor.show_next_run", fallback: true },
+  { key: "show_last_outcome", label: "editor.show_last_outcome", fallback: true },
+  { key: "show_water", label: "editor.show_water", fallback: true },
 ];
 
 /**

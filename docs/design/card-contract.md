@@ -1038,6 +1038,44 @@ conclusions — `valve_sensor` is "the valve's own sensor reports a leak" for
 both readings of a `moisture` sensor, and must never become "water detected
 on the ground", which is false on the reference hardware.
 
+## The compact card (`irrigation-maestro-card`)
+
+The original card, and from 3.9.0 the **compact** one: one line per zone for a
+home view. It keeps its type, so a dashboard that already has it keeps working
+and gains the new lines without being touched.
+
+```yaml
+type: custom:irrigation-maestro-card
+compact: true
+show_header: true       # the budget meter and status chips
+show_queue: true
+show_controls: true
+zones: [1b2f…]          # omitted = every zone
+show_verdict: true      # per-row content; all default true
+show_next_run: true
+show_last_outcome: true
+show_water: true
+```
+
+The per-row toggles are **flat booleans**, not the nested `blocks` object the
+zone and hub cards use. Deliberate: this config is published, users have it in
+their YAML beside `show_header` and `show_controls`, and consistency with the
+file someone is already editing beats consistency with a card they may not have
+added.
+
+**The verdict line sits above the instant.** `zone_next_run` says *when*;
+`zone_state.next_run` says what would happen *now*. On a home view "Tue 06:30"
+beside a zone that would be skipped today for a sufficient budget is exactly
+the misleading reading this initiative exists to remove, so the row shows both
+and puts the one about today first.
+
+**A verdict of `unknown` renders nothing at all** — not "not evaluated yet".
+The zone card has room for that sentence; a compact row has one line per fact,
+and spending it on the absence of information is worse than leaving the fact
+out. This is the one place the two cards deliberately differ in how they treat
+the same value.
+
+
 ## The zone card (`irrigation-maestro-zone-card`)
 
 The detailed card for **one** zone, shipped in the same bundle and the same

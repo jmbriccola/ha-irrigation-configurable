@@ -787,6 +787,20 @@ details harvested from it (kept as engine behaviour):
   do; the reason may name `wind` or `frost_risk` and have nothing to do with the
   budget, because it is the evaluation's verdict, not the budget's.
 
+- **The compact row shows the verdict ABOVE the instant, and shows nothing for
+  `unknown` (3.9.0).** `zone_next_run` says when; `zone_state.next_run` says
+  what would happen now. On a home view a time beside a zone that today will be
+  skipped is the misleading reading the whole card initiative existed to
+  remove, so the row leads with today. And where the zone card writes "not
+  evaluated yet", the row writes nothing: it has one line per fact, and a line
+  spent on the absence of information is worse than the fact being absent. The
+  two cards deliberately differ here on the same value.
+- **The row's toggles are FLAT booleans, not a nested `blocks` object
+  (3.9.0).** The zone and hub cards nest theirs; this config is published and
+  users have it in their YAML beside `show_header`, so consistency with the file
+  someone is already editing beat consistency with a card they may not have
+  added. `rowLineEnabled` is still the one definition of "unset means on".
+
 ## Progress log
 
 - 2026-07-17: Repo recon (LICENSE only + source YAML). §8 math verified by
