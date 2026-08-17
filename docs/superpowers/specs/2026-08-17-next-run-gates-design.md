@@ -48,18 +48,35 @@ number reveals.
 On **`zone_state`**, as a `next_run` object. Not on `zone_next_run`, whose state
 is the instant itself and where the verdict would appear to belong.
 
-Home Assistant publishes **no state attributes at all while an entity is
-unavailable** — a fact this repo already documents, under "Discovery caveat" in
-the card contract, because it made unavailable leak entities invisible to the
-attribute walk. `zone_next_run` is `unavailable` whenever there is no next
-occurrence: a disabled zone, a zone whose every program is disabled, a zone
-suspended past the search window. Those are precisely the cases where the user
-most needs to be told why nothing is coming. Putting the explanation there means
-it vanishes exactly when it is the only thing worth saying.
+**A correction, made during implementation and kept visible on purpose.** The
+first draft of this section justified the choice with the unavailable-attribute
+trap: Home Assistant publishes no state attributes at all while an entity is
+unavailable, so an explanation living on `zone_next_run` would vanish for a
+disabled zone. **That is false for this entity.** `ZoneNextRunSensor` never
+overrides `available` — only the leak binary sensors do, which is where the card
+contract's "Discovery caveat" comes from and where the rule was generalised from
+by mistake. With no next occurrence the sensor is *available* with a state of
+`unknown`, and its attributes are published normally.
 
-`zone_state` is never unavailable — it reports `disabled` and `suspended` as
-*states* — and it already carries the zone's other structured diagnostics
-(`degraded`, `capabilities`, `cycles`). The verdict joins them.
+What survives is weaker and true: `ZoneNextRunSensor._role_attributes` returns
+an **empty dict** whenever there is no next occurrence, so on a disabled zone it
+carries no `cycle_id`, no `cycle_name` and nothing that could name a reason. It
+is silent exactly when the explanation is the only thing left to say. The test
+`test_a_disabled_zone_explains_itself_where_zone_next_run_says_nothing` asserts
+that behaviour as it actually is.
+
+The location stands, on three reasons that do not depend on the retracted one:
+
+1. **Scope.** The verdict covers *every* program of the zone. `zone_next_run` is
+   scoped to the single earliest one — its whole identity is "the next one", and
+   its attributes describe that one program. A per-program list does not belong
+   on an entity that exists to name one.
+2. **Company.** `zone_state` already carries the zone's structured diagnostics —
+   `degraded`, `capabilities`, `cycles`. The verdict is one of those, and it
+   joins a family rather than founding one.
+3. **Cost to the consumer.** The compact card reads `zone_state` already, for
+   the state itself. Publishing the verdict there costs it no second lookup,
+   while `zone_next_run` is a read the compact row may not otherwise need.
 
 **The instant is not duplicated into it.** `zone_next_run`'s state is the one
 representation of "when", and a second copy is a second thing that can drift —
