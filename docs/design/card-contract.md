@@ -16,7 +16,7 @@ config entry).
 
 | maestro_role        | platform | state                          | extra attributes |
 |---------------------|----------|--------------------------------|------------------|
-| `hub_water_budget`  | sensor   | mm (float)                     | `rain_today`, `rain_d1`, `rain_d2`, `rain_d3`, `forecast_0_24`, `forecast_24_48`, `forecast_credit` |
+| `hub_water_budget`  | sensor   | mm (float)                     | `rain_today`, `rain_d1`, `rain_d2`, `rain_d3`, `forecast_0_24`, `forecast_24_48`, `forecast_credit`, `skip_reason` (see below) |
 | `hub_skip_threshold`| sensor   | mm (float)                     | — |
 | `hub_weighted_temp` | sensor   | °C (float) or unavailable      | `temp_d3`, `temp_d2`, `temp_d1`, `temp_today_eff`, `temp_tomorrow`, `stale_weather` (bool), `temp_weights` (five floats, see below), `weather_entity` |
 | `hub_session`       | sensor   | `idle` \| `evaluating` \| `running` | `queue`: ordered list of `{zone_id, zone_name, cycle_id, duration_min, state}`; `started_at` (ISO); `active_zone_id` |
@@ -26,6 +26,25 @@ config entry).
 | `hub_pause`         | switch   | on = globally paused           | — |
 | `hub_evaluate`      | button   | press = evaluate now           | — |
 | `hub_stop_all`      | button   | press = stop everything        | — |
+
+### `hub_water_budget.skip_reason` — the evaluation's verdict, not the budget's
+
+The session evaluation's own decision: a `SkipReason` key when the current
+evaluation would skip, `null` when it would water, and **absent entirely**
+before any evaluation has run. Those three states are distinct and a card must
+keep them distinct — `null` is a decision, absence is the lack of one.
+
+It lives on this sensor because this is where the evaluation's derived values
+already are (`forecast_credit` is no more a "budget" than this is). **The reason
+may have nothing to do with the budget** — `wind`, `frost_risk`,
+`precipitation` — because it is the *session evaluation's* verdict, not the
+water budget's.
+
+Until 3.8.1 this was reachable only through the `evaluate` service response, so
+a card could draw the budget against the threshold and still not say why the
+system would skip. The hub card shipped in 3.8.0 reading it from `hub_session`,
+which publishes no such attribute, and therefore reported "it would water" in
+every state including the ones where the engine had decided otherwise.
 
 ### `hub_weighted_temp.temp_weights` — configured, not effective
 

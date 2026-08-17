@@ -335,6 +335,10 @@ export class IrrigationMaestroZoneCard extends LitElement {
     const capabilities = zone.state?.attributes["capabilities"] as
       | Record<string, unknown>
       | undefined;
+    // Resolved once: the hardware block needs the entity AND the unit it
+    // declares, and reading a meter that reports m3/h while the engine works in
+    // L/min is diagnostic #4 -- invisible until someone looks at the litres.
+    const meterEntity = asString(zone.zone_water_total?.attributes["meter_entity"]);
     const degraded = asArray(zone.state?.attributes["degraded"])
       .map((item) => asString(item))
       .filter((item): item is string => item !== undefined);
@@ -371,6 +375,7 @@ export class IrrigationMaestroZoneCard extends LitElement {
                 .language=${lang}
                 .adjustmentPct=${zoneAdjustmentPct(zone)}
                 .weightedTemp=${asNumber(model.hub.weightedTemp?.state)}
+                .showControls=${zoneBlockEnabled(config, "actions")}
               ></imc-programs-block>
             </div>`
           : nothing}
@@ -381,7 +386,10 @@ export class IrrigationMaestroZoneCard extends LitElement {
                 .capabilities=${capabilities}
                 .candidates=${this._candidates}
                 .degraded=${degraded}
-                .meterEntity=${asString(zone.zone_water_total?.attributes["meter_entity"])}
+                .meterEntity=${meterEntity}
+                .meterUnit=${meterEntity
+                  ? asString(hass.states[meterEntity]?.attributes["unit_of_measurement"])
+                  : undefined}
                 .batteryState=${config.battery_entity
                   ? hass.states[config.battery_entity]?.state
                   : undefined}

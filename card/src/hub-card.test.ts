@@ -53,3 +53,31 @@ describe("hub config round-trip", () => {
     expect(config.blocks).toEqual({ session: false });
   });
 });
+
+/**
+ * The decision verdict, which shipped in 3.8.0 reading an attribute no entity
+ * publishes — so the most prominent line on the card said "it would water" in
+ * every state, including the ones where the engine had decided to skip.
+ *
+ * The fix is one identifier. The test is the point: it asserts the SOURCE, not
+ * just the rendering, because the rendering was never wrong — it was faithfully
+ * displaying `undefined`.
+ */
+describe("where the hub card reads its decision from", () => {
+  it("reads skip_reason from the evaluation sensor, not from the session sensor", async () => {
+    const source = (await import("./hub-card?raw")).default;
+
+    expect(source).toContain('hub.waterBudget?.attributes["skip_reason"]');
+    expect(source).not.toContain('hub.session?.attributes["skip_reason"]');
+  });
+
+  it("reads the session sensor only for things the session sensor publishes", async () => {
+    // queue / started_at / active_zone_id are its whole contract. Anything else
+    // read from it is the same mistake in a different attribute.
+    const source = (await import("./hub-card?raw")).default;
+    const published = new Set(["queue", "started_at", "active_zone_id"]);
+    const read = [...source.matchAll(/session\?\.attributes\["([^"]+)"\]/g)].map((m) => m[1]!);
+
+    expect(read.filter((name) => !published.has(name))).toEqual([]);
+  });
+});

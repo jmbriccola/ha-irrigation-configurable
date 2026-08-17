@@ -98,6 +98,18 @@ class HubWaterBudgetSensor(MaestroHubEntity, SensorEntity):
             "forecast_0_24": evaluation.forecast_0_24,
             "forecast_24_48": evaluation.forecast_24_48,
             "forecast_credit": round(evaluation.forecast_credit, 2),
+            # The evaluation's own verdict, which was reachable only through
+            # the `evaluate` service response -- so a card could draw the
+            # budget against the threshold and still not say WHY the system
+            # would skip. It lives here beside the evaluation's other derived
+            # values (forecast_credit is no more a "budget" than this is).
+            #
+            # The reason may have nothing to do with the budget -- `wind`,
+            # `frost_risk` -- because it is the SESSION EVALUATION's verdict,
+            # not the budget's. `None` means it would water; the attribute
+            # being absent entirely means nothing has been evaluated yet, and
+            # the two must not be conflated.
+            "skip_reason": str(evaluation.skip_reason) if evaluation.skip_reason else None,
         }
 
 

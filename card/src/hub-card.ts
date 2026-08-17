@@ -236,7 +236,7 @@ export class IrrigationMaestroHubCard extends LitElement {
                 .budgetAttrs=${hub.waterBudget?.attributes}
                 .tempAttrs=${hub.weightedTemp?.attributes}
                 .weightedTemp=${asNumber(hub.weightedTemp?.state)}
-                .skipReason=${asString(hub.session?.attributes["skip_reason"])}
+                .skipReason=${asString(hub.waterBudget?.attributes["skip_reason"])}
                 .evaluated=${evaluated}
                 .language=${lang}
               ></imc-decision-block>

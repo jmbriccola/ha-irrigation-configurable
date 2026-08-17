@@ -761,6 +761,32 @@ details harvested from it (kept as engine behaviour):
   counts as a discovery hit, it just has nowhere to land until something reads
   it.
 
+- **Three card defects of one shape, and the check that now catches them
+  (3.8.1).** A value wired at one end only. `hardware-block.meterUnit` was
+  declared, rendered and never passed — diagnostic #4 was dead code.
+  `programs-block.showControls` likewise. And the hub card read `skip_reason`
+  from `hub_session`, which publishes no such attribute, so the decision panel's
+  headline said "it would water" in *every* state, including the ones where the
+  engine had decided to skip. The rendering was never wrong; it faithfully
+  displayed `undefined`.
+
+  **The cause was the test strategy, not three slips.** Every card test was on a
+  pure helper — `weightRows`, `todayVerdict`, `chartBars`, `meterGeometry` —
+  and none crossed the boundary between what a shell hands over and what a
+  block declares it needs. `wiring.test.ts` now closes it statically in both
+  directions (every declared `@property` is passed; no shell passes one that is
+  not declared), reading sources through Vite's `?raw` import so it costs no DOM
+  and no dependency. Its first assertion is that the regex matched anything at
+  all — the failure mode of every static check is matching nothing and passing.
+  The other half — an attribute that IS passed but is never published — is
+  pinned on the Python side instead, because no card-side check can see it.
+- **`hub_water_budget` carries `skip_reason` (3.8.1)**: a `SkipReason` key when
+  the evaluation would skip, `null` when it would water, **absent** before any
+  evaluation. Three distinct states, and `null` is a decision while absence is
+  the lack of one. It sits there because the evaluation's other derived values
+  do; the reason may name `wind` or `frost_risk` and have nothing to do with the
+  budget, because it is the evaluation's verdict, not the budget's.
+
 ## Progress log
 
 - 2026-07-17: Repo recon (LICENSE only + source YAML). §8 math verified by

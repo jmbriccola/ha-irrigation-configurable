@@ -4,6 +4,34 @@ All notable changes to this project are documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/).
 
+## [3.8.1] - 2026-08-17
+
+### Fixed
+
+- **The hub card's decision line was always wrong.** It read the skip reason
+  from the session sensor, which publishes no such thing, so the most prominent
+  line on the card reported *"it would water"* in every state — including the
+  ones where the engine had decided to skip for rain, frost, wind or a
+  sufficient water budget. The reason is now published on
+  `sensor.irrigation_maestro_bilancio_idrico`, beside the other values the same
+  evaluation produced, and the card reads it from there.
+- **The zone card never showed the flow meter's unit.** The hardware block was
+  built to display it and was never handed it — so a meter reporting m³/h while
+  the engine works in L/min stayed exactly as invisible as it was before the
+  card existed, which is the thing that block was for.
+- **Per-program enable buttons ignored the actions setting.** Turning the
+  actions block off left them on.
+
+### Why all three happened, and what now stops them
+
+The three defects are one shape: a value wired at one end only. Every card test
+was on a pure helper — none crossed the boundary between what a card hands over
+and what a block declares it needs. Two new checks close it from both sides: the
+card suite now asserts that every input a block declares is actually passed to
+it, and that no shell passes one a block never reads; and the integration's own
+tests pin the attributes the cards depend on, so an attribute that stops being
+published fails a test instead of quietly becoming `undefined` on screen.
+
 ## [3.8.0] - 2026-08-17
 
 ### The hub card
