@@ -830,6 +830,75 @@ class IrrigationRuntime:
             has_flow_meter=self.zone_flow_meter_usable(zone),
         )
 
+    def zone_next_run_verdict(self, zone: ZoneRuntime) -> dict[str, Any]:
+        """Whether this zone would water if its programs fired right now.
+
+        Deliberately about NOW, and not about the instant ``zone_next_run``
+        reports. That sensor already resolves every gate that can be projected
+        forward -- calendar, season, suspension, pause, skip-today. The layer
+        this adds exists only in the present: the immediate weather skips, the
+        water budget against the skip threshold, the consumption budget. A
+        future day's weather is not knowable, so every surface rendering this
+        must word it in the present tense and must never present it as a
+        promise about the reported instant.
+
+        The decision comes from ``build_session_plan``, the one place that
+        decides run-or-skip, rather than from a second derivation over the same
+        inputs: two implementations of one decision are two answers that drift.
+
+        Pure and synchronous -- the cached evaluation, the zone's spec, and the
+        silent consumption gate. No I/O, and nothing here notifies.
+        """
+        cached = self._last_evaluation
+        if cached is None:
+            # Nothing has been evaluated yet: start-up, before the first
+            # session or `evaluate` call. This is NOT weather_unavailable,
+            # which means an evaluation ran and could not reach the weather.
+            # Asserting either verdict on no information would be an answer
+            # nobody has earned.
+            return {
+                "verdict": "unknown",
+                "reason_key": None,
+                "evaluated_at": None,
+                "programs": [],
+            }
+
+        evaluated_at, evaluation = cached
+        factor, suspend_all = self._consumption_gate()
+        if suspend_all:
+            evaluation = replace(evaluation, skip_reason=SkipReason.CONSUMPTION_BUDGET)
+        plan = build_session_plan(
+            self.hub.engine_params,
+            evaluation,
+            [self._zone_spec(zone, list(zone.config.cycles))],
+            now=dt_util.now(),
+            duration_factor=factor,
+        )
+
+        blocked = {item.cycle_id: str(item.reason) for item in plan.skipped}
+        programs = [
+            {
+                "cycle_id": cycle.cycle_id,
+                "verdict": "blocked" if cycle.cycle_id in blocked else "would_run",
+                "reason_key": blocked.get(cycle.cycle_id),
+            }
+            for cycle in zone.config.cycles
+        ]
+        would_run = any(program["verdict"] == "would_run" for program in programs)
+        reasons = {program["reason_key"] for program in programs}
+        return {
+            "verdict": "would_run" if would_run else "blocked",
+            # Named only when every program agrees. A zone with a morning
+            # program blocked by the calendar and an evening one blocked by the
+            # budget is not "blocked because of the calendar", and a compact
+            # card that said so would send the user to the wrong setting. A
+            # zone with no programs at all lands here too: blocked, unnamed,
+            # because no SkipReason describes "there is nothing to run".
+            "reason_key": reasons.pop() if not would_run and len(reasons) == 1 else None,
+            "evaluated_at": evaluated_at.isoformat(),
+            "programs": programs,
+        }
+
     # Session entry points ----------------------------------------------------------
 
     async def async_handle_trigger(self, zone_id: str, cycle_id: str) -> None:

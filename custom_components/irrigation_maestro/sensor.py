@@ -244,6 +244,11 @@ class ZoneStateSensor(MaestroZoneEntity, SensorEntity):
             "suspended_until": suspended.isoformat() if suspended else None,
             "cycles": [self._cycle_dict(cycle) for cycle in config.cycles],
             "capabilities": self._capabilities(config),
+            # Published here rather than on zone_next_run: Home Assistant emits
+            # no attributes at all while an entity is unavailable, and that
+            # sensor is unavailable for a disabled zone -- the case where the
+            # explanation is the only thing left to say.
+            "next_run": runtime.zone_next_run_verdict(runtime.zones[self._zone_id]),
         }
         active = runtime.session.active_runs.get(self._zone_id)
         if active is not None:
