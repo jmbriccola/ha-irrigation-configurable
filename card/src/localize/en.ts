@@ -439,4 +439,24 @@ export const en = {
   "program_editor.volume_safety_timeout": "Volume safety timeout",
   "program_editor.volume_safety_timeout_hint": "Minutes after which a volume-target run stops even if the meter has not reached the target.",
   "settings.advanced_note": "Advanced parameters (engine, safety, notifications) live in Settings",
+
+  // Program calendar, rendered in words. Diagnostic #5 from the brief: "Mon
+  // and Thu" and "every 3 days with a retry" are very different behaviours
+  // and were distinguishable only by reading the stored JSON. Weekday names
+  // live here rather than coming from toLocaleDateString, so the card's
+  // language wins over the browser's.
+  "weekday.0": "Mon",
+  "weekday.1": "Tue",
+  "weekday.2": "Wed",
+  "weekday.3": "Thu",
+  "weekday.4": "Fri",
+  "weekday.5": "Sat",
+  "weekday.6": "Sun",
+  "list.and": "and",
+  "calendar.every_day": "every day",
+  "calendar.interval": "every {n} days",
+  "calendar.parity_odd": "odd days",
+  "calendar.parity_even": "even days",
+  "calendar.last_completed": "last completed {date}",
+  "calendar.never_completed": "never completed",
 } as const;
